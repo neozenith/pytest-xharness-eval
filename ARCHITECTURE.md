@@ -174,7 +174,7 @@ that proves nothing.
 | session log | The JSONL file the CLI writes for one session; the evidence a verdict is tied to |
 | RunResult | The normalised record of one cell: identity, usage, tool calls, files written, cost |
 | captured | `evals/captured/<case>/`, where each run's log and `RunResult` are written; git-ignored |
-| history | `evals/history.jsonl`, one flat metrics line per live cell (turns, tool calls, duration, wall clock, USD, tokens); committed |
+| history | `evals/captured/history.jsonl`, one flat metrics line per live cell (turns, tool calls, duration, wall clock, USD, tokens); git-ignored with the rest of `captured/` |
 
 ### How the terms relate
 
@@ -209,7 +209,7 @@ flowchart TB
 
     subgraph kept["Kept after the run"]
         CAP["captured/&lt;case&gt;/<br/>log and result, git-ignored"]:::out
-        HIST["history.jsonl<br/>one metrics line per cell, committed"]:::out
+        HIST["captured/history.jsonl<br/>one metrics line per cell"]:::out
         REP["report.json<br/>under the work directory"]:::out
     end
 

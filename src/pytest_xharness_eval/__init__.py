@@ -13,4 +13,4 @@ from pytest_xharness_eval.matrix import DEFAULT_MATRIX, Cell
 from pytest_xharness_eval.runresult import RunResult, Usage
 
 __all__ = ["DEFAULT_MATRIX", "Cell", "EvalCase", "RunResult", "Usage", "evalcase"]
-__version__ = "0.1.0"
+__version__ = "0.1.1"

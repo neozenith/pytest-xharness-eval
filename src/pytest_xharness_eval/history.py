@@ -2,8 +2,8 @@
 
 Every live cell produces one flat metrics record. It is shown in the verbose status
 word, attached to the JUnit ``user_properties``, and appended as one JSON line to
-``<skill>/evals/history.jsonl``, a file meant to be committed so the history of a
-skill's evals lives beside the skill.
+``<skill>/evals/captured/history.jsonl``, beside the other run output (git-ignored);
+derive anything longer-lived from it.
 """
 
 from __future__ import annotations

@@ -51,7 +51,7 @@ All source lives under `src/pytest_xharness_eval/`.
 Evals themselves do not live here. They live beside the skill they grade, in the
 consuming repository: `skills/<skill>/evals/eval_<suite>.py`, seed trees under
 `evals/fixtures/<name>/`, evidence under `evals/captured/<case>/` (git-ignored), and
-one metrics line per live cell in `evals/history.jsonl` (committed). Per-cell metrics
+one metrics line per live cell in `evals/captured/history.jsonl`. Per-cell metrics
 are built in `history.py`.
 
 ## Hard boundaries

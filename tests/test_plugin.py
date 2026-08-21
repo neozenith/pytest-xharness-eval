@@ -159,7 +159,7 @@ def test_dry_run_writes_report_and_summary(pytester: pytest.Pytester) -> None:
 def test_dry_run_does_not_touch_history(pytester: pytest.Pytester) -> None:
     evals = make_tree(pytester)
     pytester.runpytest("--dry-run").assert_outcomes(skipped=2)
-    assert not (evals / "history.jsonl").exists()
+    assert not (evals / "captured" / "history.jsonl").exists()
     assert not (evals / "captured").exists()
 
 

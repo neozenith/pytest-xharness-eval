@@ -69,8 +69,8 @@ with `--dry-run` before a sweep. The design rationale lives in
 
 3. Add an eval beside the skill. Files and functions both carry the `eval_` prefix,
    as `test_` does for pytest. Fixtures are seed workspaces copied fresh for every
-   cell; `captured/` is written by each run (git-ignore it); `history.jsonl` gains
-   one metrics line per live cell (commit it):
+   cell; `captured/` is written by each run and git-ignored; its `history.jsonl` gains
+   one metrics line per live cell:
 
    ```text
    skills/<skill>/
@@ -79,7 +79,7 @@ with `--dry-run` before a sweep. The design rationale lives in
        eval_<suite>.py
        fixtures/<name>/
        captured/<case>/
-       history.jsonl
+       captured/history.jsonl
    ```
 
    ```python
@@ -123,7 +123,7 @@ with `--dry-run` before a sweep. The design rationale lives in
    ```
 
    Each cell leaves its verbatim session log and a normalised `.result.json` under
-   `captured/<case>/`, appends one metrics line to `evals/history.jsonl`, and the
+   `captured/<case>/`, appends one metrics line to `captured/history.jsonl`, and the
    sweep writes `tmp/evals/report.json` with USD per cell.
 
 `run` is a `RunResult`: session id, log path, token usage by tier, tool calls, files

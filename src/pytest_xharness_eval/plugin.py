@@ -8,7 +8,7 @@ Layout the plugin expects, relative to the pytest rootdir::
     <skills root>/<skill>/evals/eval_<suite>.py        # the suite: eval_* functions
     <skills root>/<skill>/evals/fixtures/<name>/       # seed workspaces, copied per cell
     <skills root>/<skill>/evals/captured/<case>/       # each run's log and result; git-ignore it
-    <skills root>/<skill>/evals/history.jsonl          # one metrics line per live cell; commit it
+    <skills root>/<skill>/evals/captured/history.jsonl # one metrics line per live cell
 
 Four ini options tune the paths and the project matrix; see ``pytest_addoption``.
 
@@ -288,7 +288,7 @@ class EvalItem(pytest.Item):
         finally:
             record = history.metrics_of(result, node=self.node, verdict=verdict, wall_ms=wall_ms, started_at=started_at)
             self.stash[RECORD_KEY] = record
-            history.append(self.evals_dir / "history.jsonl", record)
+            history.append(self.captured_dir.parent / "history.jsonl", record)
 
     def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:  # type: ignore[override]
         return f"[{self.cell.id}] {excinfo.getrepr(style='short')}"
