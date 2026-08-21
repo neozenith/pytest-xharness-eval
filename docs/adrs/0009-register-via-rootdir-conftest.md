@@ -1,0 +1,34 @@
+# 0009: Register the plugin from the rootdir conftest.py
+
+Status: superseded by
+[0014](0014-register-through-the-pytest11-entry-point.md) on 2026-08-21, the day it
+was accepted. Replaced an earlier draft that chose `addopts = -p <package>.plugin`.
+Kept because its Lens still applies to any uninstalled plugin.
+
+## Context
+
+A `conftest.py` inside the plugin's own package directory cannot hook collection
+under `skills/*/evals/`: conftest hooks apply only to their own subtree.
+`addopts = -p <package>.plugin` was tried next. Verified 2026-08-21, it is
+invocation-dependent for an uninstalled package: `python -m pytest` puts the cwd
+on `sys.path` and it works; the bare `pytest` console script does not, and it
+fails with `ImportError: No module named '<package>'`.
+
+## Decision
+
+A one-line repository-root `conftest.py` declares
+`pytest_plugins = ["<package>.plugin"]`. Importing that file is what puts the root
+on `sys.path`, so it works under every invocation, and since pytest 7 the rootdir
+conftest is the one place `pytest_plugins` is honoured. The eventual target is a
+PyPI package registering the same module through a `pytest11` entry point.
+
+## Consequences
+
+One file lives outside the plugin package. The package keeps an importable,
+package-shaped layout so extraction later is a packaging change. `pytest.ini` carries only a comment
+explaining why it does not register the plugin.
+
+## Lens
+
+Test a registration mechanism under both `python -m pytest` and the console
+script before adopting it; the two differ in what is importable.

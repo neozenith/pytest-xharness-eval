@@ -1,116 +1,317 @@
-"""Behavioural tests for the xharness-eval plugin, run through ``pytester``."""
+"""Behavioural tests for the plugin, run through ``pytester`` as real nested sessions.
+
+Nothing here invokes an agent CLI. Every path that would spend money is reached
+only up to the ``--dry-run`` skip; the live path is exercised by paid evals in a
+consuming repository (ADR 0002).
+"""
 
 # Standard Library
+import json
 import textwrap
+from pathlib import Path
 
 # Third Party
 import pytest
 
-# Our Libraries
-from pytest_xharness_eval import Harness, __version__
-
-PARAMETRIZED_TEST = textwrap.dedent(
+CASE = textwrap.dedent(
     """
-    def test_per_harness(xharness):
-        assert xharness.name
+    from pytest_xharness_eval import evalcase
+
+    @evalcase(prompt="say hi", skill="demo", fixture="seed"{models})
+    def eval_demo(run, workspace):
+        assert run.exit_code == 0
     """
 )
 
 
-def test_version_is_exposed() -> None:
-    assert __version__ == "0.1.0"
+def make_tree(pytester: pytest.Pytester, *, models: str = "", skills_dir: str = "skills", ini: str = "") -> Path:
+    """Lay out ``<skills_dir>/demo/evals/eval_demo.py`` with ``fixtures/seed/`` and return the evals dir."""
+    pytester.makeini(f"[pytest]\n{ini}\n")
+    skill = pytester.path / skills_dir / "demo"
+    (skill / "evals" / "fixtures" / "seed").mkdir(parents=True)
+    (skill / "SKILL.md").write_text("# demo skill\n", encoding="utf-8")
+    (skill / "evals" / "fixtures" / "seed" / "README.md").write_text("seed\n", encoding="utf-8")
+    (skill / "evals" / "eval_demo.py").write_text(CASE.format(models=models), encoding="utf-8")
+    return skill / "evals"
 
 
-def test_harness_str_is_its_name() -> None:
-    assert str(Harness("claude-code")) == "claude-code"
+def cell_ids(result: pytest.RunResult) -> list[str]:
+    """The ``harness/model`` part of every collected eval node id, in order."""
+    return [line.split("[", 1)[1].rstrip("]") for line in result.stdout.lines if "::eval_demo[" in line]
 
 
-def test_plugin_registers_cli_option(pytester: pytest.Pytester) -> None:
+# -- options and headers -------------------------------------------------------
+
+
+def test_help_lists_options_and_ini_keys(pytester: pytest.Pytester) -> None:
     result = pytester.runpytest("--help")
-    result.stdout.fnmatch_lines(["*--xharness=NAME*"])
+    result.stdout.fnmatch_lines(["*--harness=*", "*--model=SUBSTRING*", "*--dry-run*"])
+    result.stdout.fnmatch_lines(
+        ["*xharness_skills_dir*", "*xharness_workdir*", "*xharness_prices*", "*xharness_matrix*"]
+    )
 
 
-def test_marker_is_registered_for_strict_mode(pytester: pytest.Pytester) -> None:
-    result = pytester.runpytest("--markers")
-    result.stdout.fnmatch_lines(["*@pytest.mark.xharness(*names)*"])
-
-
-def test_report_header_with_no_harnesses(pytester: pytest.Pytester) -> None:
-    pytester.makepyfile("def test_noop(): pass")
-    result = pytester.runpytest()
-    result.stdout.fnmatch_lines(["xharness-eval: harnesses = (none selected)"])
-
-
-def test_cli_harnesses_parametrize_fixture(pytester: pytest.Pytester) -> None:
-    pytester.makepyfile(PARAMETRIZED_TEST)
-    result = pytester.runpytest("-v", "--xharness", "alpha", "--xharness", "beta")
-    result.assert_outcomes(passed=2)
+def test_header_names_the_skills_root_and_matrix_source(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    result = pytester.runpytest("--collect-only")
     result.stdout.fnmatch_lines(
         [
-            "xharness-eval: harnesses = alpha, beta",
-            "*test_per_harness?alpha? PASSED*",
-            "*test_per_harness?beta? PASSED*",
+            "xharness-eval: skills root = *skills, workdir = *tmp?evals",
+            "xharness-eval: matrix = plugin default (2 entries)*",
         ]
     )
 
 
-def test_ini_harnesses_are_the_default(pytester: pytest.Pytester) -> None:
-    pytester.makeini(
-        textwrap.dedent(
-            """
-            [pytest]
-            xharness =
-                alpha
-                beta
-                gamma
-            """
-        )
-    )
-    pytester.makepyfile(PARAMETRIZED_TEST)
+def test_missing_skills_root_is_named_in_the_header_without_warning(pytester: pytest.Pytester) -> None:
+    pytester.makeini("[pytest]\n")
+    pytester.makepyfile(test_plain="def test_plain(): pass")
     result = pytester.runpytest()
-    result.assert_outcomes(passed=3)
+    result.assert_outcomes(passed=1, warnings=0)
+    result.stdout.fnmatch_lines(["xharness-eval: skills root = *skills (missing: no eval cells will be collected)*"])
 
 
-def test_cli_overrides_ini(pytester: pytest.Pytester) -> None:
-    pytester.makeini("[pytest]\nxharness =\n    alpha\n    beta\n")
-    pytester.makepyfile(PARAMETRIZED_TEST)
-    result = pytester.runpytest("-v", "--xharness", "gamma")
-    result.assert_outcomes(passed=1)
-    result.stdout.fnmatch_lines(["*test_per_harness?gamma? PASSED*"])
+# -- matrix scopes: case > project ini > plugin default (ADR 0015) ---------------
 
 
-def test_duplicate_and_blank_harnesses_are_dropped(pytester: pytest.Pytester) -> None:
-    pytester.makepyfile(PARAMETRIZED_TEST)
-    result = pytester.runpytest("--xharness", "alpha", "--xharness", " alpha ", "--xharness", "  ")
-    result.assert_outcomes(passed=1)
+def test_plugin_default_matrix_when_nothing_else_is_set(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    result = pytester.runpytest("--collect-only", "-q")
+    assert cell_ids(result) == ["claude/claude-opus-5", "codex/gpt-5.6-sol"]
 
 
-def test_marker_restricts_to_named_harnesses(pytester: pytest.Pytester) -> None:
-    pytester.makepyfile(
-        textwrap.dedent(
-            """
-            import pytest
+def test_project_matrix_ini_replaces_the_plugin_default(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, ini="xharness_matrix =\n    claude/claude-sonnet-5\n    codex/gpt-5.6-luna\n")
+    result = pytester.runpytest("--dry-run")
+    result.assert_outcomes(skipped=2)
+    assert cell_ids(result) == ["claude/claude-sonnet-5", "codex/gpt-5.6-luna"]
+    result.stdout.fnmatch_lines(["xharness-eval: matrix = xharness_matrix (2 entries)*"])
 
-            @pytest.mark.xharness("beta")
-            def test_only_beta(xharness):
-                assert xharness.name == "beta"
 
-            def test_everywhere(xharness):
-                assert xharness.name in {"alpha", "beta"}
-            """
-        )
+def test_case_models_override_the_project_matrix(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, models=', models=["claude/claude-sonnet-5"]', ini="xharness_matrix =\n    codex/gpt-5.6-luna\n")
+    result = pytester.runpytest("--collect-only", "-q")
+    assert cell_ids(result) == ["claude/claude-sonnet-5"]
+
+
+# -- narrowing -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected_ids"),
+    [
+        (["--harness", "codex"], ["codex/gpt-5.6-sol"]),
+        (["--model", "opus"], ["claude/claude-opus-5"]),
+        (["--model", "codex/gpt-5.6-sol"], ["codex/gpt-5.6-sol"]),
+        (["--harness", "claude", "--model", "gpt"], []),
+        (["-k", "opus or sol"], ["claude/claude-opus-5", "codex/gpt-5.6-sol"]),
+        (["-k", "codex and not sol"], []),
+    ],
+)
+def test_harness_model_and_k_flags_narrow_the_matrix(
+    pytester: pytest.Pytester, flags: list[str], expected_ids: list[str]
+) -> None:
+    make_tree(pytester)
+    result = pytester.runpytest("--collect-only", "-q", *flags)
+    assert cell_ids(result) == expected_ids
+
+
+def test_unknown_harness_is_rejected_by_argparse(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    result = pytester.runpytest("--harness", "gemini")
+    assert result.ret != 0
+    result.stderr.fnmatch_lines(["*--harness: invalid choice: 'gemini'*"])
+
+
+# -- visibility: verbose status words and the report -----------------------------
+
+
+def test_verbose_dry_run_shows_dry_run_per_cell(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    result = pytester.runpytest("--dry-run", "-v")
+    result.assert_outcomes(skipped=2)
+    result.stdout.fnmatch_lines(
+        [
+            "*eval_demo?claude/claude-opus-5? DRY-RUN*",
+            "*eval_demo?codex/gpt-5.6-sol? DRY-RUN*",
+        ]
     )
-    result = pytester.runpytest("--xharness", "alpha", "--xharness", "beta", "--strict-markers")
-    result.assert_outcomes(passed=3)
 
 
-def test_no_selected_harness_skips_parametrized_tests(pytester: pytest.Pytester) -> None:
-    pytester.makepyfile(PARAMETRIZED_TEST)
-    result = pytester.runpytest()
+def test_dry_run_writes_report_and_summary(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    result = pytester.runpytest("--dry-run")
+    result.assert_outcomes(skipped=2)
+    result.stdout.fnmatch_lines(
+        [
+            "*agent eval report*",
+            # fnmatch treats [...] as a character class, hence ? for the brackets.
+            "*dry-run * -  skills/demo/evals/eval_demo.py::eval_demo?claude/claude-opus-5?",
+            "*dry-run * -  skills/demo/evals/eval_demo.py::eval_demo?codex/gpt-5.6-sol?",
+            "*total spend: $0.0000 across 2 cell(s)",
+        ]
+    )
+    report = json.loads((pytester.path / "tmp" / "evals" / "report.json").read_text(encoding="utf-8"))
+    assert report["total_usd"] == 0
+    assert [c["verdict"] for c in report["cells"]] == ["dry-run", "dry-run"]
+    assert {c["harness"] for c in report["cells"]} == {"claude", "codex"}
+
+
+def test_dry_run_does_not_touch_history(pytester: pytest.Pytester) -> None:
+    evals = make_tree(pytester)
+    pytester.runpytest("--dry-run").assert_outcomes(skipped=2)
+    assert not (evals / "history.jsonl").exists()
+    assert not (evals / "captured").exists()
+
+
+def test_no_report_when_every_cell_is_deselected(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    pytester.makepyfile(test_plain="def test_plain(): pass")
+    result = pytester.runpytest("-m", "not eval")
+    result.assert_outcomes(passed=1, deselected=2)
+    assert "agent eval report" not in result.stdout.str()
+
+
+def test_junitxml_carries_the_cell_record(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    result = pytester.runpytest("--dry-run", "--junitxml=junit.xml")
+    result.assert_outcomes(skipped=2)
+    xml = (pytester.path / "junit.xml").read_text(encoding="utf-8")
+    assert 'name="xharness_harness" value="claude"' in xml
+    assert 'name="xharness_verdict" value="dry-run"' in xml
+
+
+# -- xdist: records travel on the report, cells group by harness (ADR 0016) -------
+
+
+def test_xdist_keeps_status_words_and_report(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    result = pytester.runpytest("--dry-run", "-v", "-n", "2")
+    result.assert_outcomes(skipped=2)
+    # xdist puts the status word before the node id: "[gw0] [ 50%] DRY-RUN skills/...".
+    out = result.stdout.str()
+    assert "DRY-RUN skills/demo/evals/eval_demo.py::eval_demo[claude/claude-opus-5]" in out
+    assert "DRY-RUN skills/demo/evals/eval_demo.py::eval_demo[codex/gpt-5.6-sol]" in out
+    result.stdout.fnmatch_lines(["*total spend: $0.0000 across 2 cell(s)"])
+
+
+def test_xdist_loadgroup_puts_each_harness_on_one_worker(pytester: pytest.Pytester) -> None:
+    make_tree(
+        pytester, ini="xharness_matrix =\n    claude/claude-opus-5\n    claude/claude-sonnet-5\n    codex/gpt-5.6-sol\n"
+    )
+    result = pytester.runpytest("--dry-run", "-v", "-n", "2", "--dist", "loadgroup")
+    result.assert_outcomes(skipped=3)
+    # xdist prints the worker id in front of each verbose line: "[gw0] ... DRY-RUN".
+    workers: dict[str, set[str]] = {}
+    for line in result.stdout.lines:
+        if "::eval_demo[" in line and "DRY-RUN" in line:
+            harness = line.split("::eval_demo[")[1].split("/")[0]
+            workers.setdefault(harness, set()).add(line.split("]")[0].lstrip("["))
+    assert all(len(ws) == 1 for ws in workers.values()), workers
+    assert set(workers) == {"claude", "codex"}
+
+
+def test_cells_carry_an_xdist_group_marker_named_for_the_harness(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    result = pytester.runpytest("--strict-markers", "-m", "xdist_group", "--dry-run")
+    result.assert_outcomes(skipped=2)
+
+
+# -- failure modes that must stay loud -----------------------------------------
+
+
+def test_evalcase_function_without_eval_prefix_is_a_usage_error(pytester: pytest.Pytester) -> None:
+    evals = make_tree(pytester)
+    (evals / "eval_demo.py").write_text(CASE.format(models="").replace("def eval_demo(", "def check_demo("), "utf-8")
+    result = pytester.runpytest("--dry-run")
+    assert result.ret != 0
+    out = result.stdout.str() + result.stderr.str()
+    assert "@evalcase functions must be named eval_*, got ['check_demo']" in out
+
+
+def test_unpriced_model_aborts_at_collection_before_any_spend(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, models=', models=["claude/claude-unknown-99"]')
+    result = pytester.runpytest("--dry-run")
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(["*PricingError*unpriced models in matrix*claude/claude-unknown-99*"])
+
+
+def test_rootdir_prices_toml_adds_rows_to_the_bundled_table(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, models=', models=["codex/gpt-house-blend"]')
+    pytester.makefile(".toml", prices='["gpt-house-blend"]\ninput = 1.0e-6\noutput = 2.0e-6\n')
+    result = pytester.runpytest("--dry-run")
     result.assert_outcomes(skipped=1)
 
 
-def test_tests_without_fixture_are_untouched(pytester: pytest.Pytester) -> None:
-    pytester.makepyfile("def test_plain(): assert True")
-    result = pytester.runpytest("--xharness", "alpha", "--xharness", "beta")
-    result.assert_outcomes(passed=1)
+def test_module_without_evalcase_is_a_usage_error(pytester: pytest.Pytester) -> None:
+    evals = make_tree(pytester)
+    (evals / "eval_demo.py").write_text("X = 1\n", encoding="utf-8")
+    result = pytester.runpytest("--dry-run")
+    assert result.ret != 0
+    assert "eval_demo.py matched the evals layout but defines no @evalcase" in result.stdout.str() + result.stderr.str()
+
+
+def test_import_error_in_case_module_fails_collection(pytester: pytest.Pytester) -> None:
+    evals = make_tree(pytester)
+    (evals / "eval_demo.py").write_text("import does_not_exist_anywhere\n", encoding="utf-8")
+    result = pytester.runpytest("--dry-run")
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(["*ModuleNotFoundError*does_not_exist_anywhere*"])
+
+
+def test_missing_skill_directory_fails_even_in_dry_run(pytester: pytest.Pytester) -> None:
+    evals = make_tree(pytester)
+    (evals / "eval_demo.py").write_text(CASE.format(models="").replace('skill="demo"', 'skill="ghost"'), "utf-8")
+    result = pytester.runpytest("--dry-run")
+    result.assert_outcomes(failed=2)
+    result.stdout.fnmatch_lines(["*RunError*skill under test not found*ghost*"])
+
+
+def test_missing_fixture_fails_even_in_dry_run(pytester: pytest.Pytester) -> None:
+    evals = make_tree(pytester)
+    (evals / "eval_demo.py").write_text(CASE.format(models="").replace('fixture="seed"', 'fixture="nope"'), "utf-8")
+    result = pytester.runpytest("--dry-run", "--harness", "claude")
+    result.assert_outcomes(failed=1)
+    result.stdout.fnmatch_lines(["*RunError*fixture directory not found*fixtures/nope*"])
+
+
+# -- layout rules ----------------------------------------------------------------
+
+
+def test_eval_modules_outside_the_skills_root_are_ignored(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    stray = pytester.path / "elsewhere" / "demo" / "evals"
+    stray.mkdir(parents=True)
+    (stray / "eval_stray.py").write_text("raise RuntimeError('must never be imported')\n", encoding="utf-8")
+    result = pytester.runpytest("--collect-only", "-q")
+    assert "eval_stray" not in result.stdout.str()
+    assert cell_ids(result) == ["claude/claude-opus-5", "codex/gpt-5.6-sol"]
+
+
+def test_custom_skills_dir_ini(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, skills_dir="agent_skills", ini="xharness_skills_dir = agent_skills")
+    result = pytester.runpytest("--collect-only", "-q")
+    result.stdout.fnmatch_lines(["agent_skills/demo/evals/eval_demo.py::eval_demo[claude/claude-opus-5]"])
+
+
+def test_custom_workdir_ini_relocates_the_report(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, ini="xharness_workdir = build/eval-runs")
+    result = pytester.runpytest("--dry-run")
+    result.assert_outcomes(skipped=2)
+    assert (pytester.path / "build" / "eval-runs" / "report.json").is_file()
+
+
+def test_cells_carry_the_eval_marker(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    pytester.makepyfile(test_plain="def test_plain(): pass")
+    selected = pytester.runpytest("--strict-markers", "-m", "eval", "--dry-run")
+    selected.assert_outcomes(skipped=2, deselected=1)
+    deselected = pytester.runpytest("--strict-markers", "-m", "not eval", "--dry-run")
+    deselected.assert_outcomes(passed=1, deselected=2)
+
+
+def test_xdist_loadgroup_suffix_is_stripped_from_recorded_node_ids(pytester: pytest.Pytester) -> None:
+    make_tree(pytester)
+    result = pytester.runpytest("--dry-run", "-n", "2", "--dist", "loadgroup")
+    result.assert_outcomes(skipped=2)
+    report = json.loads((pytester.path / "tmp" / "evals" / "report.json").read_text(encoding="utf-8"))
+    assert all(not c["node"].endswith(("@claude", "@codex")) for c in report["cells"]), report

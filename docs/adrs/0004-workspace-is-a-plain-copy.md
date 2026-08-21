@@ -1,0 +1,30 @@
+# 0004: A workspace is a plain copy of the fixture tree, with no git context
+
+Status: accepted, 2026-08-20. The project `tmp/` location is now
+the `xharness_workdir` ini key, default `tmp/evals`
+([0014](0014-register-through-the-pytest11-entry-point.md)).
+
+## Context
+
+Several skills a consuming project may want to evaluate reason about diffs and
+history. Giving every
+workspace a git repository costs setup time and forces fixtures to be committed
+subtrees. The user ruled git-dependent skills out of scope for this iteration.
+
+## Decision
+
+Each cell's workspace is `shutil.copytree` of the fixture into the project `tmp/`,
+discarded and rebuilt per cell. No `git init`, no worktree. A case that needs git
+must fail loudly rather than run in a git-less workspace and report a score.
+
+## Consequences
+
+Materialisation is fast and trivially resettable, and keeps run artefacts under
+the project's `tmp/`. Code-review, change-walkthrough, refactoring and similar
+diff-reading skills cannot be evaluated yet. The `workspace` fixture is the seam where a git strategy is added
+later, without a rewrite.
+
+## Lens
+
+Do not give a workspace capabilities no in-scope skill reads; add them at the
+workspace seam when a skill that needs them enters scope.

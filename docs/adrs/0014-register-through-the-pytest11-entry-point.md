@@ -1,0 +1,45 @@
+# 0014: Register through the pytest11 entry point of an extracted package
+
+Status: accepted, 2026-08-21. Supersedes
+[0009](0009-register-via-rootdir-conftest.md). Refined by
+[0017](0017-distributed-through-pypi-with-trusted-publishing.md): distribution moved
+from an editable path dependency to PyPI.
+
+## Context
+
+The harness began as an uninstalled package inside the repository whose skills it
+evaluated, registered by a rootdir `conftest.py` (ADR 0009). That made the plugin and
+the evals it runs one undifferentiated change set, and tied three paths to
+`__file__`: the skills root found by walking up the tree, the `tmp/evals` work
+directory, and the `report.json` path inside the package. The brief
+always named extraction as the end state; the trigger was wanting to review plugin
+changes apart from eval changes.
+
+## Decision
+
+The plugin is its own distribution, `pytest-xharness-eval`, with the module
+`pytest_xharness_eval`. Its `pyproject.toml` declares
+`[project.entry-points.pytest11] xharness_eval = "pytest_xharness_eval.plugin"`, and
+installing the package is the whole registration. During development the consuming
+repository installs it as an editable path dependency.
+
+Every location the plugin needs is an ini key resolved against pytest's `rootpath`:
+`xharness_skills_dir` (default `skills`), `xharness_workdir` (default `tmp/evals`),
+and `xharness_prices` (default `prices.toml`, optional, layered over the bundled
+table). The single `__file__`-relative path that remains is the bundled
+`prices.toml`.
+
+## Consequences
+
+Consumers carry no `conftest.py` or `pytest.ini` for the plugin. They do need a
+config file at the repository root (an empty `[tool.pytest.ini_options]` suffices) so
+the rootdir is the repository and not the common ancestor of the arguments; the
+report header names the resolved skills root and marks it missing when it is not
+there. The plugin's own test suite runs through `pytester` as real nested sessions,
+and the functions that spawn a CLI are excluded from coverage with a stated reason
+rather than faked, which keeps ADR 0002 intact inside the package.
+
+## Lens
+
+When a plugin leaves its birthplace, every path it derived from `__file__` becomes a
+rootdir-relative option, and the registration becomes the entry point.

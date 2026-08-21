@@ -1,0 +1,32 @@
+# 0001: Ship as a pytest plugin with per-skill opt-in evals
+
+Status: accepted, 2026-08-20. The in-repository package location named in the
+Decision is superseded by [0014](0014-register-through-the-pytest11-entry-point.md);
+the choice of a pytest plugin over a standalone CLI stands.
+
+## Context
+
+The brief asked for a lightweight, portable harness that runs both agent CLIs
+headlessly, across a model matrix, with fixtures, goldens, and custom verifiers.
+A standalone CLI would re-implement discovery, selection, and reporting that pytest
+already provides. The surrounding toolchain and test conventions were Python-first,
+with `uv` already the package manager in use.
+
+## Decision
+
+The harness is a custom pytest plugin, first housed as a package inside the
+repository whose skills it evaluated. It supplies shared fixtures and extends
+collection to find eval structures under `skills/<skill>/evals/`. A skill opts in by adopting that layout and nothing else.
+
+## Consequences
+
+Bare pytest mechanics work unmodified: path arguments target one skill, `-k` and
+node ids select cells, the terminal report is pytest's. The cost is that the
+harness inherits pytest's collection rules, which forced ADR 0008 and ADR 0009.
+Rejected: a standalone argparse CLI (second surface to keep in step), TypeScript
+with bun and Go (neither had test conventions to lean on for a pytest-shaped matrix).
+
+## Lens
+
+When a capability already lives in pytest, reuse it; add a plugin option only when
+pytest has no equivalent.

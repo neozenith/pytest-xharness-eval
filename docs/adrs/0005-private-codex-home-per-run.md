@@ -1,0 +1,29 @@
+# 0005: A private per-run CODEX_HOME, seeded with the credential files
+
+Status: accepted, 2026-08-20; verified live 2026-08-21.
+
+## Context
+
+`codex exec` has no caller-chosen session id. Rollouts land under
+`$CODEX_HOME/sessions/YYYY/MM/DD/`. Picking the newest file by modification time
+races any concurrent Codex session, which is exactly the grading-the-wrong-
+transcript failure this harness exists to prevent.
+
+## Decision
+
+Each Codex cell runs with `CODEX_HOME` pointed at a private directory into which
+the harness first copies `auth.json` and `.credentials.json` from the real home.
+Exactly one rollout can then exist under that directory, so correlation is
+structural. The `session_meta` id in the rollout is the cell's session id.
+
+## Consequences
+
+One mechanism serves three needs: log correlation, ambient-config isolation, and
+the skill-injection path (`$CODEX_HOME/skills`). The accepted risk is that
+`CODEX_HOME` is also the credential store; the first live run proved seeding
+works. Rejected: newest-by-mtime (races), stdout id alone (depends on flush order).
+
+## Lens
+
+When a tool offers no identity lever, isolate its whole state store so only one
+artefact can exist; never search for the newest one.

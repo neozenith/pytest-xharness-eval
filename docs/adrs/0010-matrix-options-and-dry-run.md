@@ -1,0 +1,30 @@
+# 0010: Global default matrix, per-case override, and --model / --cli / --dry-run
+
+Status: accepted, 2026-08-20. Refined by
+[0015](0015-harness-is-the-axis-and-the-project-owns-the-matrix.md): `--cli` is
+`--harness`, and a project-scope `xharness_matrix` sits between the case and the
+plugin default.
+
+## Context
+
+Every cell is paid (ADR 0002), so the matrix is the spend dial. `-k` string
+matching against node ids can narrow a run but cannot price one in advance, and
+hides the cost control behind a substring.
+
+## Decision
+
+A default matrix lives in `matrix.py`; a case may override it. The plugin adds
+three options: `--model` and `--cli` narrow the sweep, and `--dry-run` enumerates
+the cells that would run, with estimated USD, without invoking anything.
+
+## Consequences
+
+Widening the repository-wide sweep is a single edit. A sweep can be priced before
+it is paid for, which stock pytest cannot do. The plugin owns three options
+beyond stock pytest, against the spirit of ADR 0001; each exists because pytest
+has no equivalent.
+
+## Lens
+
+Expose spend controls as explicit, discoverable options; never make the cost of
+a run depend on remembering a substring.
