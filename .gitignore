@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-local (mirrors neozenith/injinja)
+tmp/
+*.lcov
+coverage.json
+
+
+.*_cache/
+.claude/
+.agents/

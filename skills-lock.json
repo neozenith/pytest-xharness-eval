@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "skills": {
+    "concise-decisions": {
+      "source": "neozenith/agentic-dotfiles",
+      "sourceType": "github",
+      "skillPath": "skills/concise-decisions/SKILL.md",
+      "computedHash": "655254d53b92975b0866046017b529da83b6fb21ed2df9e95e39017a04b8ffa4"
+    },
+    "gooddocs": {
+      "source": "neozenith/agentic-dotfiles",
+      "sourceType": "github",
+      "skillPath": "skills/gooddocs/SKILL.md",
+      "computedHash": "c50ca52b5629947c67a7ed757cdb8d79b2017acef1e604c6aaa4ac18ed1018d4"
+    },
+    "librarian": {
+      "source": "neozenith/agentic-dotfiles",
+      "sourceType": "github",
+      "skillPath": "skills/librarian/SKILL.md",
+      "computedHash": "370c10045867d79c68aca16f5567982002a5eba52ea463e5d580f1ae911d285f"
+    },
+    "mermaidjs-diagrams": {
+      "source": "neozenith/agentic-dotfiles",
+      "sourceType": "github",
+      "skillPath": "skills/mermaidjs-diagrams/SKILL.md",
+      "computedHash": "bdac9d49253697dac58c2795b715ff4eb66cfb6af3da87272ffa5abdbae1c461"
+    },
+    "prwalkthrough": {
+      "source": "neozenith/agentic-dotfiles",
+      "sourceType": "github",
+      "skillPath": "skills/prwalkthrough/SKILL.md",
+      "computedHash": "48792c2a47ae7c87fc55adc80415cf544b8a883b1ae1190e4f691aa3439a1253"
+    },
+    "refactor": {
+      "source": "neozenith/agentic-dotfiles",
+      "sourceType": "github",
+      "skillPath": "skills/refactor/SKILL.md",
+      "computedHash": "4e828383b73e1dfa36a2a2ab92bd4dd67a3fbe40de98e4b0a7f2e71515eba766"
+    }
+  }
+}
