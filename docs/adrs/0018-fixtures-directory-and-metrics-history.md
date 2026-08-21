@@ -1,6 +1,6 @@
 # 0018: Fixtures live under evals/fixtures/, and every live cell appends to a metrics history
 
-Status: accepted, 2026-08-21. Refines [0004](0004-workspace-is-a-plain-copy.md)
+Status: accepted, 2026-08-21; revised the same day: `history.jsonl` lives under `captured/` and is not version-controlled. Refines [0004](0004-workspace-is-a-plain-copy.md)
 and [0016](0016-results-travel-on-the-test-report.md).
 
 ## Context

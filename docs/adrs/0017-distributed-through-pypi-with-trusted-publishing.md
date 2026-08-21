@@ -1,7 +1,7 @@
 # 0017: Distribute through PyPI with trusted publishing, released from a GitHub Release
 
-Status: accepted, 2026-08-21; first release (0.1.0) not yet
-published. Refines [0014](0014-register-through-the-pytest11-entry-point.md).
+Status: accepted, 2026-08-21; first release (0.1.0) published to PyPI the same
+day from GitHub Release `v0.1.0`. Refines [0014](0014-register-through-the-pytest11-entry-point.md).
 
 ## Context
 

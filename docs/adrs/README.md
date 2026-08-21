@@ -28,5 +28,5 @@ record ends in a **Lens**: the reusable rule it leaves behind.
 | [0014](0014-register-through-the-pytest11-entry-point.md) | Register through the pytest11 entry point of an extracted package | accepted, supersedes 0009, refined by 0017 |
 | [0015](0015-harness-is-the-axis-and-the-project-owns-the-matrix.md) | Harness is the axis name, and the project owns the default matrix | accepted, refines 0010 |
 | [0016](0016-results-travel-on-the-test-report.md) | Results travel on the test report, and cells group by harness | accepted, refines 0008 |
-| [0017](0017-distributed-through-pypi-with-trusted-publishing.md) | Distribute through PyPI with trusted publishing, released from a GitHub Release | accepted, first release pending |
+| [0017](0017-distributed-through-pypi-with-trusted-publishing.md) | Distribute through PyPI with trusted publishing, released from a GitHub Release | accepted; 0.1.0 published 2026-08-21 |
 | [0018](0018-fixtures-directory-and-metrics-history.md) | Fixtures live under evals/fixtures/, and every live cell appends to a metrics history | accepted, refines 0004 and 0016 |
