@@ -34,7 +34,7 @@ import pytest
 # Our Libraries
 from pytest_xharness_eval import history
 from pytest_xharness_eval import matrix as mx
-from pytest_xharness_eval import pricing, runner
+from pytest_xharness_eval import pricing, report, runner, skillcov
 from pytest_xharness_eval import workspace as ws
 from pytest_xharness_eval.case import EvalCase
 
@@ -50,6 +50,9 @@ INI_SKILLS_DIR = "xharness_skills_dir"
 INI_WORKDIR = "xharness_workdir"
 INI_PRICES = "xharness_prices"
 INI_MATRIX = "xharness_matrix"
+INI_SKILL_IGNORE = "xharness_skill_ignore"
+INI_REPORT_TOKENS = "xharness_report_design_tokens"
+INI_REPORT_INLINE = "xharness_report_inline"
 
 # The user_properties key a cell's record travels under, worker to controller.
 PROPERTY = "xharness_eval"
@@ -101,6 +104,33 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=[],
         help="project matrix: harness/model entries, one per line; a case's models= overrides it",
     )
+    g.addoption(
+        "--xharness-report-design-tokens",
+        dest="xharness_report_design_tokens",
+        default=None,
+        metavar="FILE",
+        help="design tokens JSON that themes captured/report.html (overrides the ini key)",
+    )
+    g.addoption(
+        "--xharness-report-inline",
+        dest="xharness_report_inline",
+        action="store_true",
+        default=False,
+        help="write captured/report.html with every result, log and the tokens embedded (opens over file://)",
+    )
+    parser.addini(
+        INI_REPORT_TOKENS, default="", help="design tokens JSON for captured/report.html, relative to rootdir"
+    )
+    parser.addini(INI_REPORT_INLINE, type="bool", default=False, help="embed all data into captured/report.html")
+    parser.addini(
+        INI_SKILL_IGNORE,
+        type="linelist",
+        default=[],
+        help=(
+            "gitignore-style patterns for skill files that are not part of the decision surface; "
+            "a bare pattern applies to every skill, '<skill>: <pattern>' to the skills matching the selector"
+        ),
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -110,6 +140,11 @@ def pytest_configure(config: pytest.Config) -> None:
     # --strict-markers happy when it is not.
     config.addinivalue_line("markers", "xdist_group(name): cells of one harness share a worker under --dist loadgroup")
     config.stash[RESULTS_KEY] = {}
+    # ADR 0026: a malformed ignore line stops the session here, before any cell is collected.
+    try:
+        skillcov.patterns_for("", [str(p) for p in config.getini(INI_SKILL_IGNORE)])
+    except ValueError as exc:
+        raise pytest.UsageError(str(exc)) from exc
     config.pluginmanager.register(_ResultCollector(config), "xharness-eval-results")
 
 
@@ -202,17 +237,28 @@ class EvalFile(pytest.File):
             models = _matrix_for(case, self.config)
             # ADR 0007: an unpriced model stops the sweep at collection, before any spend.
             pricing.validate_matrix(models, table)
+            # ADR 0022: the skill's file tree is catalogued here, before any cell runs, so every
+            # cell of the sweep is measured against the same inventory.
+            skill_dir = _skills_root(self.config) / case.skill
+            ignore = [str(p) for p in self.config.getini(INI_SKILL_IGNORE)]
+            files = skillcov.catalog(skill_dir, ignore=ignore) if skill_dir.is_dir() else []
             for cell in mx.narrow(mx.expand(models), opts.model, opts.harness):
-                yield EvalItem.from_parent(self, name=f"{case.name}[{cell.id}]", case=case, cell=cell)
+                yield EvalItem.from_parent(
+                    self, name=f"{case.name}[{cell.id}]", case=case, cell=cell, skill_files=files
+                )
 
 
 class EvalItem(pytest.Item):
     """One cell: run the CLI in a fresh workspace, price it, capture evidence, grade."""
 
-    def __init__(self, *, case: EvalCase, cell: mx.Cell, **kw: Any) -> None:
+    def __init__(
+        self, *, case: EvalCase, cell: mx.Cell, skill_files: list[dict[str, Any]] | None = None, **kw: Any
+    ) -> None:
         super().__init__(**kw)
         self.case = case
         self.cell = cell
+        # The skill's catalogued files (ADR 0022), taken at collection.
+        self.skill_files = list(skill_files or [])
         self.add_marker("eval")
         # Optional lever: `-n N --dist loadgroup` keeps one harness's cells on one worker
         # (parallel across harnesses, serial within one). Plain `-n N` is also fine.
@@ -251,7 +297,7 @@ class EvalItem(pytest.Item):
                 "harness": self.cell.harness,
                 "model": self.cell.model,
                 "verdict": "dry-run",
-                "cost_usd": None,
+                "estimated_cost_usd": None,
             }
             pytest.skip(f"dry-run: would invoke {self.cell.id}")
 
@@ -268,6 +314,19 @@ class EvalItem(pytest.Item):
         )
         wall_ms = int((time.monotonic() - t0) * 1000)
         result = pricing.price(result, _price_table(self.config))
+        result.skill_coverage = skillcov.annotate(self.case.skill, self.skill_files, result)
+        # Which suite file and case produced this run, and the prompt it sent (ADR 0025).
+        try:
+            suite = str(self.path.relative_to(self.config.rootpath))
+        except ValueError:
+            suite = str(self.path)
+        result.case = {
+            "suite": suite,
+            "name": self.case.name,
+            "skill": self.case.skill,
+            "fixture": self.case.fixture,
+            "prompt": self.case.prompt,
+        }
 
         # Never inside fixtures/: a fixture is copied into every workspace, so logs
         # placed there would leak into the next agent's cwd.
@@ -287,6 +346,8 @@ class EvalItem(pytest.Item):
             raise
         finally:
             record = history.metrics_of(result, node=self.node, verdict=verdict, wall_ms=wall_ms, started_at=started_at)
+            # Where this cell's evidence landed, so the controller can build the captured report (ADR 0020).
+            record["captured"] = str(self.captured_dir.parent)
             self.stash[RECORD_KEY] = record
             history.append(self.captured_dir.parent / "history.jsonl", record)
 
@@ -367,13 +428,22 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: int,
     if not results:
         return
     tr = terminalreporter
-    total = sum(r["cost_usd"] or 0.0 for r in results)
+    total = sum(r.get("estimated_cost_usd") or 0.0 for r in results)
     tr.section("agent eval report")
     for r in results:
-        cost = f"${r['cost_usd']:.4f}" if r.get("cost_usd") is not None else "-"
+        cost = f"${r['estimated_cost_usd']:.4f}" if r.get("estimated_cost_usd") is not None else "-"
         tr.write_line(f"  {r['verdict']:<8} {cost:>9}  {r['node']}")
-    tr.write_line(f"  total spend: ${total:.4f} across {len(results)} cell(s)")
+    tr.write_line(f"  total estimated spend: ${total:.4f} across {len(results)} cell(s)")
     report_path = _workdir(config) / "report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps({"cells": results, "total_usd": round(total, 6)}, indent=2), encoding="utf-8")
     tr.write_line(f"  report: {report_path}")
+    # One browsable report per captured/ directory a live cell wrote into (ADR 0020, 0024).
+    tokens_opt = config.option.xharness_report_design_tokens or str(config.getini(INI_REPORT_TOKENS) or "")
+    tokens = (config.rootpath / tokens_opt) if tokens_opt else None
+    inline = bool(config.option.xharness_report_inline or config.getini(INI_REPORT_INLINE))
+    for captured in sorted({str(r["captured"]) for r in results if r.get("captured")}):
+        page = report.write(Path(captured), design_tokens=tokens, inline=inline)
+        tr.write_line(f"  captured report: {page}{' (inline, opens over file://)' if inline else ''}")
+        if not inline:
+            tr.write_line(f"  serve it: {report.serve_hint(Path(captured))}")

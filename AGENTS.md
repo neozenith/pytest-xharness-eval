@@ -15,6 +15,7 @@ Run everything from the repository root.
 | Lint and type-check (`ruff`, `isort`, `mypy --strict`) | `make check` | free |
 | Run the plugin's own tests with coverage | `make test` | free |
 | Build a wheel | `make build` | free |
+| Work on the report page (`report-ui/`, ADR 0028) | `make ui-dev CAPTURED=<skill>/evals/captured`, then `make ui-check`, `make ui-test`, `make ui-smoke CAPTURED=…`, and `make ui-promote` to ship the build (CI fails if the asset is stale) | free |
 | Release to PyPI | bump `version` and `__version__` together, `make test`, then publish a GitHub Release tagged `vX.Y.Z`; `publish.yml` does the rest (ADR 0017) | free |
 
 In a consuming repository with the plugin installed:
@@ -27,6 +28,7 @@ In a consuming repository with the plugin installed:
 | Run cells in parallel | `pytest skills/*/evals -v -n 4`; add `--dist loadgroup` to keep each harness serial | paid |
 | Run one harness or model only | `pytest skills/<skill>/evals --harness codex`, `--model opus`, `-k "opus or sol"` | paid |
 | Read the last report | `cat tmp/evals/report.json` | free |
+| Rebuild results, history and `report.html` from captured logs after a plugin change | `uv run -m pytest_xharness_eval.replay skills/<skill>/evals/captured` | free |
 
 Never `pytest skills` from the root: it collects every skill's `scripts/` unit tests.
 
@@ -43,7 +45,17 @@ All source lives under `src/pytest_xharness_eval/`.
 | A new field on the run record | `runresult.py`, then `normalise.py` for both CLIs |
 | A bundled model price | `prices.toml` only |
 | The plugin-default matrix, a known harness, or narrowing | `matrix.py` |
-| A plugin option, ini key (including `xharness_matrix`), collection rule, or the report | `plugin.py` |
+| A plugin option, ini key (including `xharness_matrix`), collection rule, or `report.json` | `plugin.py` |
+| The per-cell metrics record or the verbose status word | `history.py` |
+| `captured/index.json` | `report.py` |
+| The browsable `captured/report.html` | `report-ui/src/` (the SPA, ADR 0028), then `make ui-promote`; `assets/report.html` is the built artifact, never edited by hand |
+| A page component, its id or its data contract | `report-ui/src/components/` or `views/`, `report-ui/src/lib/types.ts` (mirrors the JSON `report.py` writes), then the glossary |
+| The report's colours, fonts or chart palette | `assets/report.tokens.json` (the bundled design tokens); a project overrides them with `xharness_report_design_tokens` |
+| Context window, TTFT or tokens-per-second figures | `runresult.py` (the properties) and `normalise.py` (where each harness reports them); the derivation and its provider sources are `docs/token-accounting.md`, update it with them |
+| A name, metric definition or id on the report | `assets/XHARNESS-REPORT-GLOSSARY.md` (shipped beside the page), then the element ids in `report-ui/src/` and the checklist in `report-ui/scripts/smoke.mjs` |
+| A session-log record kind, its category or pill colour | `records.py`, then the mirrored tables in `report-ui/src/lib/records.ts` (and the local map in `report-ui/src/components/panels/helpers.ts`), then the glossary |
+| Which skill files count as loaded or run, or how `xharness_skill_ignore` lines (`<pattern>` or `<skill>: <pattern>`) match | `skillcov.py` |
+| Rebuilding captured results without a paid run | `replay.py` (`uv run -m pytest_xharness_eval.replay <captured dir>`) |
 | How a workspace is built or diffed | `workspace.py` |
 | The `@evalcase` contract | `case.py` |
 | A behaviour of the plugin | `tests/test_plugin.py` (pytester), `tests/test_units.py` (pure modules) |
@@ -90,6 +102,8 @@ that table in the same change.
 | A plugin option or ini key | `README.md` tables and `tests/test_plugin.py` |
 | The default matrix | `README.md` Quickstart expected output, `tests/test_plugin.py` |
 | A decision recorded in an ADR | Write a new ADR that supersedes it; do not edit the old one |
+| A key `report.py` or `history.py` writes | `report-ui/src/lib/types.ts`, the glossary's metric table, and the `SessionTable` column definitions if it is shown |
+| `report-ui/src/` | `make ui-check`, `make ui-test`; never hand-edit `report-ui/src/components/ui/` (shadcn-generated) |
 
 ## Out of scope this iteration
 

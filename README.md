@@ -5,7 +5,7 @@
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml/badge.svg" alt="CICD Checks"></a>
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml/badge.svg" alt="Build Status"></a>
     <!-- coverage-badge -->
-    <img src="https://img.shields.io/badge/coverage-97%25-brightgreen.svg" alt="Coverage">
+    <img src="https://img.shields.io/badge/coverage-94%25-brightgreen.svg" alt="Coverage">
     <!-- coverage-badge -->
 </p>
 <p align="center">
@@ -110,7 +110,7 @@ with `--dry-run` before a sweep. The design rationale lives in
      report: /repo/tmp/evals/report.json
    ```
 
-5. Run it live, with `-v` so every cell reports its verdict, USD, tokens, wall
+5. Run it live, with `-v` so every cell reports its verdict, USD, context, wall
    clock, turns, and tool calls as it lands. Add `-n 2` to run cells in parallel.
    This spends money:
 
@@ -119,12 +119,21 @@ with `--dry-run` before a sweep. The design rationale lives in
    ```
 
    ```text
-   skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-haiku-4-5-20251001] PASSED  $0.1201  609,324 tok  67.3s  16 turns  15 tools
+   skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-opus-5] PASSED  est $0.5762 (harness $0.5773)  352,451 accumulative_billed_tokens  23,898 baseline_tokens  76.0s  9 turns  8 tools
    ```
 
-   Each cell leaves its verbatim session log and a normalised `.result.json` under
-   `captured/<case>/`, appends one metrics line to `captured/history.jsonl`, and the
-   sweep writes `tmp/evals/report.json` with USD per cell.
+   Read the status word as: this plugin's estimate from its price table (and the
+   harness CLI's own figure, where it reports one), every billed token summed over
+   all turns (the cached prefix is re-read each turn), the harness's own prompt on
+   turn 1, wall clock, model calls, tool calls. Every estimate records the rates it
+   used and where they came from (`rates_applied`).
+
+   Each cell leaves its verbatim session log and a normalised `.result.json` with a
+   per-turn ledger under `captured/<case>/`, appends one metrics line to
+   `captured/history.jsonl`, and the sweep writes `tmp/evals/report.json` with USD
+   per cell plus a browsable `captured/report.html` with its glossary
+   (`XHARNESS-REPORT-GLOSSARY.md`) beside it. Serve it with
+   `python3 -m http.server --directory <captured dir>`; it fetches the JSON beside it.
 
 `run` is a `RunResult`: session id, log path, token usage by tier, tool calls, files
 written, and USD cost. The reference case, with its assertions written as a tutorial,
@@ -168,6 +177,9 @@ Four ini keys, paths relative to pytest's rootdir:
 | `xharness_matrix` | (plugin default) | Project matrix: `harness/model` entries every case sweeps unless it sets `models=` |
 | `xharness_skills_dir` | `skills` | Directory holding `<skill>/evals/` trees |
 | `xharness_workdir` | `tmp/evals` | Per-cell workspaces and `report.json` |
+| `xharness_skill_ignore` | (none) | gitignore-style patterns for skill files that are not decision surface; a bare pattern applies to every skill, `<skill>: <pattern>` to the skills matching the selector (ADR 0026) |
+| `xharness_report_design_tokens` | bundled | design tokens JSON that themes `captured/report.html` (flag: `--xharness-report-design-tokens FILE`) |
+| `xharness_report_inline` | `false` | embed every result, log and the tokens into `captured/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
 | `xharness_prices` | `prices.toml` | Optional file whose rows add to or override the bundled price table |
 
 ```toml
@@ -256,10 +268,25 @@ rather than faked. They are exercised by the paid evals in a consuming repositor
 Publishing happens from GitHub Releases via `.github/workflows/publish.yml` (PyPI
 trusted publishing).
 
+### The report page
+
+`captured/report.html` is built from `report-ui/`, a bun workspace (Vite, React,
+TypeScript, Tailwind, shadcn/ui, Vitest) that emits one self-contained HTML file
+(ADR 0028). bun is needed only to change the page; the plugin ships the built file.
+
+```sh
+make ui-dev CAPTURED=path/to/<skill>/evals/captured    # hot reload against real captured data
+make ui-check                                          # tsc + eslint + prettier
+make ui-test                                           # vitest component tests
+make ui-smoke CAPTURED=path/to/<skill>/evals/captured  # build, populate inline, render headlessly
+make ui-promote                                        # ship the build as assets/report.html (CI checks it is current)
+```
+
 ----
 
 ## Read next
 
+- [docs/token-accounting.md](docs/token-accounting.md): how `accumulative_billed_tokens` (billed across turns) and `peak_context_tokens` (the largest prompt) are derived from what each provider reports, with a worked session
 - [ARCHITECTURE.md](ARCHITECTURE.md): why the two CLIs need different capture
   contracts, how pricing works, and the vocabulary the code uses.
 - [AGENTS.md](AGENTS.md): operating instructions and hard boundaries for agents.

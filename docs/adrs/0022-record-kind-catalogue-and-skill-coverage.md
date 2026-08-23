@@ -1,0 +1,59 @@
+# 0022: A catalogued record kind per log line, and skill file coverage per run
+
+Status: accepted, 2026-08-22. Refines [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md)
+and [0021](0021-metric-names-carry-unit-and-provenance.md). The detection rule
+is refined by [0027](0027-coverage-follows-the-shells-working-directory.md):
+shell commands are read at the working directory the shell actually had.
+
+## Context
+
+The detailed view from 0021 rendered every raw session-log line as pretty JSON,
+which proved to be the part of the report worth keeping: the summaries beside it
+(tool calls, results, text, thinking) were re-renderings of the same lines with
+less information. Raw JSON, though, gives no visual cue when the kind of
+information changes from one line to the next: a 23k-character tool result, a
+five-token usage event and the user's prompt all look the same.
+
+Separately, a skill is a tree of files an agent loads hierarchically (`SKILL.md`,
+then the resources it points at, then the scripts it is told to run), and nothing
+measured which of those files a run actually touched. Whether a skill's decision
+paths fork the way its author intended was unobservable.
+
+## Decision
+
+**Record kinds.** `records.py` is the catalogue: `classify(harness, record)` maps a
+log line to a kind (`harness/type[/subtype]`, 33 seen in the 2026-08-22 census of
+21 logs across claude 2.1.237-2.1.239 and codex 0.148-0.149) and every kind has a
+category (prompt, assistant text, thinking, tool call, tool result, tool execution,
+file change, usage, harness context, harness meta, session meta, lifecycle). Each
+category has one pill colour, chosen so white text passes WCAG AA on it. An unseen
+shape classifies as `<harness>/unknown` rather than failing. Every result carries
+`record_kinds`, a census of its log, so a new kind appearing after a CLI upgrade is
+visible in the next sweep. The report mirrors the catalogue in JavaScript: one
+component per kind that flips between its rendered view and the raw JSON, the
+pill coloured by category, and the turn detail is those components and nothing
+else.
+
+**Skill coverage.** `skillcov.py` catalogues the skill's files at collection time
+(path, kind, size, hash; `evals/`, `node_modules/`, caches and dotfiles excluded;
+kinds `doc`, `script`, `test`, `asset`), so every cell of a sweep is measured
+against the same inventory. After a run it walks the per-turn ledger: a tool call
+whose arguments contain `<skill>/<path>` loads that file, a shell call that runs a
+script through an interpreter runs it, and a `Skill` tool invocation loads
+`SKILL.md`. The result carries `skill_coverage` with per-file `loaded` and `run`
+turns and the derived `not_loaded` and `not_run` sets; the history line and the
+status word carry the counts.
+
+## Consequences
+
+Detection is textual. A file read through an alias the harness resolves itself,
+or a script run by a wrapper that never names the path, is a miss; the raw records
+are beside the coverage table so such a miss can be seen and the detector
+extended. `not_run` excludes tests by construction. The census and the coverage
+are per run, so sweeps over several models can be diffed: a resource that one
+model loads and another never does is a decision fork worth a case of its own.
+
+## Lens
+
+Colour the kind of information, not the information; and measure which paths were
+taken before arguing about which should have been.

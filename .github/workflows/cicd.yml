@@ -31,3 +31,22 @@ jobs:
 
       - name: Run tests
         run: make test
+
+  report-ui:
+    # The captured/report.html SPA (ADR 0028): types, lint, format, component tests, and a
+    # single-file build. bun is build-time only; the Python package never needs it.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: report-ui
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run test
+      - run: bun run build
+      # The committed asset is the build (ADR 0028); a stale promotion fails here.
+      - run: cmp dist/index.html ../src/pytest_xharness_eval/assets/report.html

@@ -1,0 +1,114 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * shadcn/ui's semantic colour variables are filled from the report's design tokens at runtime
+ * (see src/lib/tokens.ts and ADR 0024): `--xh-*` are the raw token values, and the shadcn names
+ * below alias them so every shadcn component is themed by report.tokens.json without a rebuild.
+ * The literal values here are only the fallback for the moment before the tokens load.
+ */
+:root {
+  --xh-bg: #f7f7fa;
+  --xh-panel: #ffffff;
+  --xh-ink: #1b1d23;
+  --xh-muted: #5b6070;
+  --xh-line: #e2e4ea;
+  --xh-accent: #4f46e5;
+  --xh-good: #047857;
+  --xh-bad: #b91c1c;
+  --xh-warn: #b45309;
+  --xh-code: #f1f2f6;
+  --xh-grid: #e6e8ee;
+  --xh-plot: #ffffff;
+  --xh-font-body: ui-sans-serif, system-ui, sans-serif;
+  --xh-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius: 0.5rem;
+  --background: var(--xh-bg);
+  --foreground: var(--xh-ink);
+  --card: var(--xh-panel);
+  --card-foreground: var(--xh-ink);
+  --popover: var(--xh-panel);
+  --popover-foreground: var(--xh-ink);
+  --primary: var(--xh-accent);
+  --primary-foreground: var(--xh-panel);
+  --secondary: var(--xh-code);
+  --secondary-foreground: var(--xh-ink);
+  --muted: var(--xh-code);
+  --muted-foreground: var(--xh-muted);
+  --accent: var(--xh-code);
+  --accent-foreground: var(--xh-ink);
+  --destructive: var(--xh-bad);
+  --border: var(--xh-line);
+  --input: var(--xh-line);
+  --ring: var(--xh-accent);
+  --chart-1: var(--xh-series-1, var(--xh-accent));
+  --chart-2: var(--xh-series-2, var(--xh-warn));
+  --chart-3: var(--xh-series-3, var(--xh-good));
+  --chart-4: var(--xh-series-4, var(--xh-bad));
+  --chart-5: var(--xh-series-5, var(--xh-muted));
+}
+
+.dark {
+  --xh-bg: #0f1117;
+  --xh-panel: #171a23;
+  --xh-ink: #e6e8ef;
+  --xh-muted: #9aa0b0;
+  --xh-line: #2a2e3a;
+  --xh-accent: #a5b4fc;
+  --xh-good: #34d399;
+  --xh-bad: #f87171;
+  --xh-warn: #fbbf24;
+  --xh-code: #1f2330;
+  --xh-grid: #262a36;
+  --xh-plot: #171a23;
+  --primary-foreground: var(--xh-bg);
+}
+
+@theme inline {
+  --font-sans: var(--xh-font-body);
+  --font-mono: var(--xh-font-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-good: var(--xh-good);
+  --color-bad: var(--xh-bad);
+  --color-warn: var(--xh-warn);
+  --color-grid: var(--xh-grid);
+  --color-plot: var(--xh-plot);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}

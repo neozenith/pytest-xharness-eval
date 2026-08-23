@@ -1,0 +1,72 @@
+# 0027: Skill coverage follows the shell's working directory
+
+Status: accepted, 2026-08-23. Refines [0022](0022-record-kind-catalogue-and-skill-coverage.md)
+(its detection rule) and [0023](0023-turn-boundaries-skill-ignore-and-replay.md)
+(replay re-annotates under the new rule).
+
+## Context
+
+0022 detects that a tool call touched a skill file when the call's arguments
+contain `<skill>/<path>`, and 0022's consequences already named the blind spot:
+a file reached through something the harness resolves itself is a miss. The
+first paid run of the second suite (`eval_dual_density`, Claude Opus 5,
+2026-08-23) hit that blind spot squarely. The agent did
+`cd …/skills/mermaidjs-diagrams && cat SKILL.md`, then `cat
+resources/diagram_organization.md`, then `bun run scripts/mermaid_complexity.ts
+…`, relying on the one thing Claude Code's `Bash` tool promises and Codex's
+`exec` does not: the shell is persistent, so a `cd` in one call is the working
+directory of the next. None of those commands contains the literal
+`mermaidjs-diagrams/SKILL.md`. The run was scored `skill 0/18 loaded 0/4 run`,
+the grader's "did the agent run the gates it was told are mandatory" check
+failed, and $1.95 bought a wrong verdict. Replaying the same log under a detector
+that follows the shell gives `7/18 loaded 3/4 run`, and re-grading the unchanged
+workspace passes every check.
+
+The session log holds everything needed to do better. The harness announces
+when it moves the shell back (`Shell cwd was reset to <dir>` inside the tool
+result), Codex carries an explicit `workdir` on every exec, and the result
+records the workspace the run started in.
+
+## Decision
+
+`annotate` models the shell per result. The working directory starts at the
+run's workspace; a `cd` segment in a persistent-shell tool call (`Bash`) moves it
+for the rest of that command and for the calls after it; a `Shell cwd was reset
+to <dir>` in a tool result moves it back; a `cd` whose target cannot be known
+(`~`, `$VAR`, a bare `cd`) makes it unknown until the next absolute `cd` or
+reset. Codex's exec tools run each call at their own `workdir` and a `cd` there
+does not persist.
+
+Detection itself is unchanged. A shell command is split at `&&`, `||`, `;`, `|`
+and newlines; in every segment whose working directory is the skill's root or a
+directory under it, each relative token that looks like a file (it contains a
+`.` or a `/`, does not start with `/`, `-`, `$` or a redirection, and is not
+already qualified) is rewritten to `<skill>/<sub>/<token>`, and the rewritten
+command is matched by 0022's rule. `bun run scripts/gate.ts` after `cd <skill>`
+becomes `bun run <skill>/scripts/gate.ts` and is a run; `cat SKILL.md` becomes
+`cat <skill>/SKILL.md` and is a load; `echo done` stays a word.
+
+The shell state lives inside `annotate`, derived from `result.calls` in order,
+so the plugin's live path and replay produce the same coverage from the same
+log, and nothing is shared between results.
+
+## Consequences
+
+Coverage from a captured log can change when the detector improves; that is
+what replay is for, and it is why a verdict that depends on coverage should be
+re-graded rather than re-bought. Replay keeps the verdict a cell was given at
+the time, so a run scored under the old rule still reads `fail` in the history
+until it is re-run or a regrade step exists; the report's raw records beside
+the coverage table show the difference.
+
+The model is a heuristic over text: a `cd` inside a subshell or a function is
+taken as persisting, a heredoc's body is split like a command (its tokens are
+rewritten but match no file), and a token with a `.` in a segment under the
+skill that happens to name a real skill file is counted. Each of those errs
+toward counting a file, which is the cheaper error for a tool whose purpose is
+to show the decision paths an agent never took.
+
+## Lens
+
+Read the log the way the harness executed it, not the way it was typed: state
+that the tool keeps between calls is part of every call's meaning.

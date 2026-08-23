@@ -1,0 +1,82 @@
+# 0024: Context window consumption and timing are first-class metrics; injected messages are not prompts; the report is themed by design tokens and can be written standalone
+
+Status: accepted, 2026-08-23. Refines [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md),
+[0020](0020-captured-report-is-a-static-microsite.md) and [0022](0022-record-kind-catalogue-and-skill-coverage.md).
+
+## Context
+
+Three gaps in the report after 0023.
+
+Nothing said how close a run came to its model's context window, although both
+harnesses report the window (Claude: `modelUsage[<model>].contextWindow`; Codex:
+`model_context_window` on `task_started` and every `token_count`) and both time
+their runs (Claude: `ttft_ms`, `duration_api_ms`; Codex:
+`time_to_first_token_ms`, `duration_ms`). Thinking complicates the question of
+"how full is the context": the provider withholds thinking text server-side and
+may drop earlier turns' thinking from later prompts, so a reader cannot add up
+what they see.
+
+Codex writes its environment and plugin notes as *user*-role messages
+(`<environment_context>`, `<recommended_plugins>`) and its policies as developer
+messages (`<permissions>`, `<skills_instructions>`, ...). The catalogue of 0022
+coloured the user-role ones as the prompt under test; they are harness context.
+
+The page's colours lived in its CSS; there was no way to brand a report, and no
+way to hand one file to someone without a web server.
+
+## Decision
+
+**Context window.** `RunResult.context_window` is the window the harness reported
+for the model. Per turn, `context_tokens` (`input + cache_read + cache_write`) is
+the prompt the provider says it processed, and `context_pct` is that over the
+window. These are *measured*: whatever the server retained or dropped of earlier
+thinking is already inside the provider's count, so no estimate is layered on
+top. `context_window_pct` (peak turn) and `final_context_pct` (last prompt plus
+its output) are top-level metrics, always qualified by the window size, on the
+history line, the status word (`ctx 7.2%`), the session table and
+`SessionMetaTable`. A line of the log is annotated with the measured figure of the
+turn it belongs to; a tool result is annotated with the next turn's figure,
+because that is the prompt it became part of. When the harness reports no
+window, percentages are `null`, never guessed.
+
+**Timing.** `ttft_ms` and `api_duration_ms` come from the harness;
+`output_tokens_per_sec` is output tokens over API time (else agent time). Per
+turn, `latency_ms` is the wall time from the previous log record to the turn's
+first record (request plus generation) and `output_tokens_per_sec` follows.
+
+**Injected messages.** A user-role message whose text opens with an XML-style tag
+classifies as `.../injected` (category `harness_context`):
+`codex/response_item/message/user/injected`,
+`codex/event_msg/item_completed/UserMessage/injected`, `claude/user/injected`.
+The report renders every tagged message, whatever its role, as titled blocks per
+top-level element rather than as prose.
+
+**Design tokens.** The page's palette (per-theme colours, chart series, waterfall
+colours, category pill colours, fonts, highlight style) lives in
+`report.tokens.json`, bundled with the package and copied beside every report so
+it can be edited in place and refreshed. A project points at its own file with
+the ini key `xharness_report_design_tokens` or the flag
+`--xharness-report-design-tokens FILE` (the replay command takes
+`--design-tokens`); a missing or malformed file is an error, not a fallback. The
+CSS keeps a fallback palette only for the moment before the tokens load.
+
+**Standalone report.** `xharness_report_inline` / `--xharness-report-inline`
+(replay: `--inline`) writes `report.html` with the index, every result, every
+session log and the tokens embedded on `window.__XH_DATA__`, so the one file opens
+over `file://` and can be attached or mailed. `</` inside embedded data is written
+`<\/` so a log cannot terminate the script.
+
+## Consequences
+
+Results and history written before this decision have no window or timing
+fields; the replay command fills them from the captured logs and envelopes.
+Inline reports are large (they carry every log) and go stale the moment a cell
+re-runs; the fetching form stays the default. Per-turn latency on Claude includes
+the harness's own time between receiving a tool result and sending the next
+request; it is an upper bound on model time, which is why the session-level
+figure uses the harness's `duration_api_ms` where available.
+
+## Lens
+
+Report what the provider measured, qualify every percentage by its denominator,
+and let the owner of the report own its palette.

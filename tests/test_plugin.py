@@ -49,6 +49,39 @@ def test_help_lists_options_and_ini_keys(pytester: pytest.Pytester) -> None:
     result.stdout.fnmatch_lines(
         ["*xharness_skills_dir*", "*xharness_workdir*", "*xharness_prices*", "*xharness_matrix*"]
     )
+    result.stdout.fnmatch_lines(["*--xharness-report-design-tokens=FILE*", "*--xharness-report-inline*"])
+    # Ini keys print in registration order: the report keys are registered before the ignore key.
+    result.stdout.fnmatch_lines(
+        ["*xharness_report_design_tokens*", "*xharness_report_inline*", "*xharness_skill_ignore*"]
+    )
+
+
+def test_a_malformed_skill_ignore_line_stops_the_session_before_collection(pytester: pytest.Pytester) -> None:
+    """ADR 0026: '<skill>:' with nothing after it ignores nothing and is a typo, not a no-op."""
+    make_tree(pytester, ini="xharness_skill_ignore =\n    README.md\n    demo:\n")
+    result = pytester.runpytest("--collect-only")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*xharness_skill_ignore: expected '<skill>: <pattern>' or '<pattern>', got 'demo:'*"])
+
+
+def test_skill_ignore_lines_scope_by_skill_name(pytester: pytest.Pytester) -> None:
+    """A bare line applies to every skill; a '<skill>: <pattern>' line only to the skills it names."""
+    evals = make_tree(pytester, ini="xharness_skill_ignore =\n    assets/\n    demo: README.md\n    other: SKILL.md\n")
+    skill = evals.parent
+    (skill / "assets").mkdir()
+    (skill / "assets" / "icon.png").write_bytes(b"png")
+    (skill / "README.md").write_text("readme\n", encoding="utf-8")
+    pytester.makeconftest(
+        "import pytest\n"
+        "from pytest_xharness_eval.plugin import EvalItem\n\n"
+        "def pytest_collection_modifyitems(items):\n"
+        "    for item in items:\n"
+        "        if isinstance(item, EvalItem):\n"
+        "            for f in item.skill_files:\n"
+        "                print('FILE', f['path'], f['ignored'])\n"
+    )
+    result = pytester.runpytest("--collect-only", "-s")
+    result.stdout.fnmatch_lines(["FILE SKILL.md False", "FILE assets/icon.png True", "FILE README.md True"])
 
 
 def test_header_names_the_skills_root_and_matrix_source(pytester: pytest.Pytester) -> None:
@@ -147,7 +180,7 @@ def test_dry_run_writes_report_and_summary(pytester: pytest.Pytester) -> None:
             # fnmatch treats [...] as a character class, hence ? for the brackets.
             "*dry-run * -  skills/demo/evals/eval_demo.py::eval_demo?claude/claude-opus-5?",
             "*dry-run * -  skills/demo/evals/eval_demo.py::eval_demo?codex/gpt-5.6-sol?",
-            "*total spend: $0.0000 across 2 cell(s)",
+            "*total estimated spend: $0.0000 across 2 cell(s)",
         ]
     )
     report = json.loads((pytester.path / "tmp" / "evals" / "report.json").read_text(encoding="utf-8"))
@@ -191,7 +224,7 @@ def test_xdist_keeps_status_words_and_report(pytester: pytest.Pytester) -> None:
     out = result.stdout.str()
     assert "DRY-RUN skills/demo/evals/eval_demo.py::eval_demo[claude/claude-opus-5]" in out
     assert "DRY-RUN skills/demo/evals/eval_demo.py::eval_demo[codex/gpt-5.6-sol]" in out
-    result.stdout.fnmatch_lines(["*total spend: $0.0000 across 2 cell(s)"])
+    result.stdout.fnmatch_lines(["*total estimated spend: $0.0000 across 2 cell(s)"])
 
 
 def test_xdist_loadgroup_puts_each_harness_on_one_worker(pytester: pytest.Pytester) -> None:

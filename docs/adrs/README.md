@@ -25,8 +25,19 @@ record ends in a **Lens**: the reusable rule it leaves behind.
 | [0011](0011-inject-skill-through-each-cli-path.md) | The skill loads through each CLI's own path | accepted |
 | [0012](0012-grading-is-composable-not-prescribed.md) | Grading is composable, not prescribed | accepted, primitives pending |
 | [0013](0013-verifiers-are-python-beside-the-case.md) | Custom verifiers are Python beside the case | accepted, helper pending |
-| [0014](0014-register-through-the-pytest11-entry-point.md) | Register through the pytest11 entry point of an extracted package | accepted, supersedes 0009, refined by 0017 |
+| [0014](0014-register-through-the-pytest11-entry-point.md) | Register through the pytest11 entry point of an extracted package | accepted, supersedes 0009, refined by 0017 and 0026 |
 | [0015](0015-harness-is-the-axis-and-the-project-owns-the-matrix.md) | Harness is the axis name, and the project owns the default matrix | accepted, refines 0010 |
 | [0016](0016-results-travel-on-the-test-report.md) | Results travel on the test report, and cells group by harness | accepted, refines 0008 |
 | [0017](0017-distributed-through-pypi-with-trusted-publishing.md) | Distribute through PyPI with trusted publishing, released from a GitHub Release | accepted; 0.1.0 published 2026-08-21 |
-| [0018](0018-fixtures-directory-and-metrics-history.md) | Fixtures live under evals/fixtures/, and every live cell appends to a metrics history | accepted, refines 0004 and 0016 |
+| [0018](0018-fixtures-directory-and-metrics-history.md) | Fixtures live under evals/fixtures/, and every live cell appends to a metrics history | accepted, refines 0004 and 0016; refined by 0019 and 0020 |
+| [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) | Every run carries a per-call ledger; tokens are reported as context and billed; cache writes price by TTL | accepted, refines 0003, 0006 and 0018; names refined by 0021 |
+| [0020](0020-captured-report-is-a-static-microsite.md) | `captured/report.html` is a static microsite over the captured JSON | accepted, refines 0018; vocabulary and ids in 0021; built from a component workspace since 0028 |
+| [0021](0021-metric-names-carry-unit-and-provenance.md) | Metric names carry their unit and their source; the report has a named vocabulary and addressable ids | accepted, refines 0019 and 0020; refined by 0022 and 0028; `total_tokens` row superseded by 0029 |
+| [0022](0022-record-kind-catalogue-and-skill-coverage.md) | A catalogued record kind per log line, and skill file coverage per run | accepted, refines 0019 and 0021; refined by 0023; detection rule refined by 0027 |
+| [0023](0023-turn-boundaries-skill-ignore-and-replay.md) | A turn owns its tools' results; skills declare what is not decision surface; captures replay without spend | accepted, refines 0019 and 0022; skill ignore refined by 0026; replay coverage under 0027 |
+| [0024](0024-context-window-metrics-injected-messages-and-design-tokens.md) | Context window consumption and timing are first-class metrics; injected messages are not prompts; the report is themed by design tokens and can be written standalone | accepted, refines 0019, 0020 and 0022; tokens theme shadcn since 0028 |
+| [0025](0025-results-name-their-case-and-charts-have-a-log-line-axis.md) | A result names the case that produced it, and the per-turn charts have a session-log-line axis | accepted, refines 0018 and 0024 |
+| [0026](0026-skill-ignore-lives-in-the-pytest-config.md) | What is not decision surface is declared in the project's pytest config, not in a dotfile beside the skill | accepted, refines 0014 and 0023 |
+| [0027](0027-coverage-follows-the-shells-working-directory.md) | Skill coverage follows the shell's working directory | accepted, refines 0022 and 0023 |
+| [0028](0028-report-is-built-from-a-component-workspace.md) | The report page is built from a component workspace and shipped as one file | accepted, refines 0020, 0021 and 0024; the build was promoted to `assets/report.html` on 2026-08-23 |
+| [0029](0029-the-billed-sum-is-named-accumulative-billed-tokens.md) | The billed sum is named `accumulative_billed_tokens` | accepted, supersedes one row of 0021, refines 0019 |

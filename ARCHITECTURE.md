@@ -84,7 +84,8 @@ its log is established in two different ways.
 | Caller-chosen id | `--session-id <uuid>` | none |
 | Correlation contract | derive the path from the UUID the harness minted | point `CODEX_HOME` at a private directory so exactly one rollout can exist |
 | Cost in output | `total_cost_usd` on stdout, absent from the log | absent everywhere |
-| Token accounting | per assistant message `usage` block | cumulative `token_count` events; the last one wins |
+| Token accounting | per assistant message `usage` block, repeated on every content-block record of that message | one `token_count` event per model call: `last_token_usage` for the call, `total_token_usage` cumulative |
+| Cache-write TTL | `usage.cache_creation.ephemeral_1h_input_tokens` / `ephemeral_5m_input_tokens` | not billed |
 
 Two facts were learned from live runs and are encoded in `runner.py` and
 `normalise.py`. First, Claude's cwd slug replaces every non-alphanumeric character
@@ -175,6 +176,17 @@ that proves nothing.
 | RunResult | The normalised record of one cell: identity, usage, tool calls, files written, cost |
 | captured | `evals/captured/<case>/`, where each run's log and `RunResult` are written; git-ignored |
 | history | `evals/captured/history.jsonl`, one flat metrics line per live cell (turns, tool calls, duration, wall clock, USD, tokens); git-ignored with the rest of `captured/` |
+| call, turn | One model API call inside a cell's session (a *SessionTurn* in the report); `RunResult.calls` is the ledger of them, each with its usage, tools issued, results fed in, text, thinking, and the log lines it came from (ADR 0019, 0021). `turns` counts them; the CLI's own count is `reported_turns` |
+| estimated cost | `estimated_cost_usd`: this plugin's price-table estimate; `rates_applied` records the rates, row and file behind it (ADR 0021) |
+| harness reported cost | `harness_reported_cost_usd`: what the harness CLI itself said the run cost; Claude only |
+| total tokens | Every priced token summed over all turns; the cached prefix counts once per turn |
+| baseline tokens | The first turn's context: the harness's own prompt before the agent acts |
+| report | `evals/captured/report.html` with `index.json` and `XHARNESS-REPORT-GLOSSARY.md` beside it: a static page over the captured JSON, served over HTTP (ADR 0020, 0021) |
+| SessionId, SessionTurnId | How the report addresses a session (the harness-minted session id, a unique prefix accepted) and a turn (`<SessionId>/t<N>`); both copyable from the page and carried in its URL fragment |
+| record kind | The catalogued shape of one session-log line, `harness/type[/subtype]`, with a category that colours its pill in the report; `records.py` is the catalogue and `record_kinds` the per-run census (ADR 0022) |
+| skill coverage | Which of the skill's catalogued files a run loaded or ran, per turn, and the `not_loaded` / `not_run` sets; `skillcov.py` (ADR 0022) |
+| context window | The model's window as the harness reported it; `context_window_pct` (peak turn) and `final_context_pct` are measured prompt sizes over it, never estimates (ADR 0024) |
+| design tokens | `report.tokens.json`: the palette, series, pill colours and fonts the report is themed with; bundled, copied beside every report, overridable per project (ADR 0024) |
 
 ### How the terms relate
 

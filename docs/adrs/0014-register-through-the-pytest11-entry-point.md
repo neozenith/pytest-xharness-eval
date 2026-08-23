@@ -3,7 +3,9 @@
 Status: accepted, 2026-08-21. Supersedes
 [0009](0009-register-via-rootdir-conftest.md). Refined by
 [0017](0017-distributed-through-pypi-with-trusted-publishing.md): distribution moved
-from an editable path dependency to PyPI.
+from an editable path dependency to PyPI; and by
+[0026](0026-skill-ignore-lives-in-the-pytest-config.md): the per-skill `.skillignore`,
+the one location read outside the ini keys, is gone.
 
 ## Context
 

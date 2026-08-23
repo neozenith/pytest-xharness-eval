@@ -1,0 +1,71 @@
+# 0023: A turn owns its tools' results; skills declare what is not decision surface; captures replay without spend
+
+Status: accepted, 2026-08-22. Refines [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md)
+and [0022](0022-record-kind-catalogue-and-skill-coverage.md). The skill-ignore
+decision is refined by [0026](0026-skill-ignore-lives-in-the-pytest-config.md):
+`.skillignore` is no longer read. Replay re-annotates coverage under
+[0027](0027-coverage-follows-the-shells-working-directory.md), which follows
+the shell's working directory.
+
+## Context
+
+Three things surfaced from reading the first reports built on 0022.
+
+The per-turn line ranges in a Claude session interleaved (turn 2: lines 12-18, 20,
+22; turn 3: 19, 21, 23-29). Claude Code writes each content block of a message as
+its own record and appends a tool's result record the moment that tool finishes,
+so the results of a turn's early tools land between that turn's later blocks. The
+ledger attributed every non-assistant record to the *next* call, which was a rule
+about file order, not about what happened.
+
+The skill coverage table listed 56 files for a skill whose decision surface is a
+dozen: example galleries, lockfiles, linter configs and the skill's own unit tests
+were all "not loaded". Which files matter is the skill author's call, and there was
+nowhere to say it.
+
+Every report change so far was verified by re-running the paid matrix, although a
+captured cell already holds everything a result is derived from: its session log
+and the CLI's envelope.
+
+## Decision
+
+**Turn boundaries.** A record belongs to the turn that caused it. A tool result
+belongs to the turn whose `tool_use` it answers (matched by `tool_use_id`); any
+other record belongs to the turn in progress; records before the first call belong
+to the first call. Each turn's `records` is therefore one contiguous, monotonic
+line range. `results_in` is unchanged: it still names the results that entered a
+call's context, which are the previous turn's results. Codex rollouts already
+satisfy the rule (a call's items, then its outputs, then its `token_count`).
+
+**Skill ignore.** A skill may carry a `.skillignore` at its root and a project may
+set `xharness_skill_ignore` in its pytest config; both are gitignore-style globs
+(`**`, `*`, `?`, `{a,b}`, trailing `/` for a directory, no-slash patterns match at
+any depth). Ignored files stay in the catalogue flagged `ignored` and are excluded
+from every coverage denominator and from `not_loaded` / `not_run`. The hard
+exclusions of 0022 (`evals/`, `node_modules/`, caches, dotfiles) still apply first.
+
+**Replay.** `uv run -m pytest_xharness_eval.replay <captured dir>` rebuilds every
+`.result.json` from its log and stored envelope, re-prices with the current tables,
+re-annotates coverage against the skill's current tree and ignore rules, rewrites
+the matching `history.jsonl` lines (verdict, timestamps and wall clock kept; metrics
+recomputed), and regenerates the report. It invokes no CLI. A result whose log is
+missing is an error, not a skip.
+
+The report's record cards show the kind pill, the log line number, the record's
+timestamp and its size in every header; each renders through one component
+library built bottom-up (values, blocks, tool payloads, messages, records), so a
+command is a highlighted shell block whether it came from Claude's `Bash` tool or
+Codex's `exec` wrapper, an edit is a diff, and a JSON payload is JSON.
+
+## Consequences
+
+Old results are not rewritten by a sweep; run the replay once after upgrading to
+bring them onto the current schema. Replay re-prices with *today's* table, so a
+dated override (an introductory price) changes historical estimates when it is
+removed; `rates_applied` records which table each estimate used. `.skillignore`
+semantics are a subset of gitignore: no negation, no nested braces.
+
+## Lens
+
+Attribute evidence by cause, not by position; let the owner of a surface declare
+its edges; and never pay to recompute what is already on disk.
