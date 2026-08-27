@@ -132,7 +132,7 @@ visible on the first line of output.
 
 Neither session log carries cost. Claude reports `total_cost_usd` on its stdout
 envelope; Codex reports nothing. The plugin therefore prices every run itself from
-its bundled `prices.toml`, layered with any rows from the consumer's own file, using
+its bundled `prices.toml`, layered with the project's `xharness_prices` ini rows, using
 four rates per model: input, output, cache read, and cache write.
 
 Keeping the cache tiers separate matters. In the reference Codex run, 174,336 of
@@ -203,7 +203,7 @@ flowchart TB
         SKILL["skill<br/>the directory under test"]:::declare
         CASE["case<br/>@evalcase in eval_*.py"]:::declare
         FIX["fixture<br/>committed seed tree"]:::declare
-        PRICES["price table<br/>prices.toml, ini override"]:::cfg
+        PRICES["price table<br/>bundled prices.toml + ini rows"]:::cfg
     end
 
     subgraph expanded["Expanded by the plugin at collection"]
@@ -266,7 +266,7 @@ back up: grading closes the loop between evidence and the case that asked for it
 
 ## Known limits
 
-- Absolute USD figures lag the providers' real rates; `prices.toml` is maintained by
+- Absolute USD figures lag the providers' real rates; the price table is maintained by
   hand and the `--seed-prices` refresh described in ADR 0006 is not yet built.
 - The `runresult.schema.json` and golden-comparison primitives described in ADR 0003
   and ADR 0012 are not yet shipped; parity between the two adapters is currently

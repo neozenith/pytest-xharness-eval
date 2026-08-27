@@ -95,8 +95,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
     parser.addini(
         INI_PRICES,
-        default="prices.toml",
-        help="prices.toml under rootdir whose rows add to or override the bundled table",
+        type="linelist",
+        default=[],
+        help=(
+            "price rows that add to or override the bundled table: "
+            "'<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..]'"
+        ),
     )
     parser.addini(
         INI_MATRIX,
@@ -140,10 +144,12 @@ def pytest_configure(config: pytest.Config) -> None:
     # --strict-markers happy when it is not.
     config.addinivalue_line("markers", "xdist_group(name): cells of one harness share a worker under --dist loadgroup")
     config.stash[RESULTS_KEY] = {}
-    # ADR 0026: a malformed ignore line stops the session here, before any cell is collected.
+    # ADR 0026 / ADR 0030: a malformed ignore or price line stops the session here,
+    # before any cell is collected.
     try:
         skillcov.patterns_for("", [str(p) for p in config.getini(INI_SKILL_IGNORE)])
-    except ValueError as exc:
+        pricing.parse_price_lines([str(line) for line in config.getini(INI_PRICES)])
+    except (ValueError, pricing.PricingError) as exc:
         raise pytest.UsageError(str(exc)) from exc
     config.pluginmanager.register(_ResultCollector(config), "xharness-eval-results")
 
@@ -175,7 +181,7 @@ def _workdir(config: pytest.Config) -> Path:
 
 
 def _price_table(config: pytest.Config) -> dict[str, pricing.Rates]:
-    return pricing.load_table(overrides=config.rootpath / str(config.getini(INI_PRICES)))
+    return pricing.load_table(rows=[str(line) for line in config.getini(INI_PRICES)])
 
 
 def _project_matrix(config: pytest.Config) -> list[str]:

@@ -17,7 +17,7 @@ record ends in a **Lens**: the reusable rule it leaves behind.
 | [0003](0003-runresult-is-a-stdlib-dataclass.md) | RunResult is a stdlib dataclass serialised to JSON | accepted, schema pending |
 | [0004](0004-workspace-is-a-plain-copy.md) | A workspace is a plain copy of the fixture tree | accepted; work directory is an ini key since 0014 |
 | [0005](0005-private-codex-home-per-run.md) | A private per-run CODEX_HOME, seeded with credentials | accepted |
-| [0006](0006-local-price-table-is-authoritative.md) | A local prices.toml is authoritative | accepted, seed pending; bundled table plus override since 0014 |
+| [0006](0006-local-price-table-is-authoritative.md) | A local prices.toml is authoritative | accepted, seed pending; bundled table plus override since 0014; the override moved into the pytest config by 0030 |
 | [0007](0007-unpriced-model-aborts-before-spend.md) | An unpriced model aborts before spend | accepted |
 | [0008](0008-evals-are-eval-prefixed-modules.md) | Evals are `eval_*.py` modules, directory-scoped | accepted, refined by 0016 |
 | [0009](0009-register-via-rootdir-conftest.md) | Register the plugin from the rootdir conftest.py | superseded by 0014 |
@@ -41,3 +41,4 @@ record ends in a **Lens**: the reusable rule it leaves behind.
 | [0027](0027-coverage-follows-the-shells-working-directory.md) | Skill coverage follows the shell's working directory | accepted, refines 0022 and 0023 |
 | [0028](0028-report-is-built-from-a-component-workspace.md) | The report page is built from a component workspace and shipped as one file | accepted, refines 0020, 0021 and 0024; the build was promoted to `assets/report.html` on 2026-08-23 |
 | [0029](0029-the-billed-sum-is-named-accumulative-billed-tokens.md) | The billed sum is named `accumulative_billed_tokens` | accepted, supersedes one row of 0021, refines 0019 |
+| [0030](0030-price-rows-live-in-the-pytest-config.md) | Project price rows live in the pytest config, not in a prices.toml beside it | accepted, refines 0006, 0014 and 0026 |

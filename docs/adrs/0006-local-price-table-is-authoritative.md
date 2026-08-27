@@ -3,6 +3,9 @@
 Status: accepted, 2026-08-21; `--seed-prices` not yet built. The table is now
 bundled inside the package and layered with the consumer's optional
 `xharness_prices` file ([0014](0014-register-through-the-pytest11-entry-point.md)).
+The project-level override moved from a rootdir `prices.toml` into `xharness_prices`
+ini lines with [0030](0030-price-rows-live-in-the-pytest-config.md); the bundled
+table is unchanged.
 
 ## Context
 

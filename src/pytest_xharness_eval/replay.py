@@ -50,8 +50,8 @@ def skill_dir_of(captured: Path) -> Path:
 _CONFIG_FILES = ("pytest.ini", ".pytest.ini", "pyproject.toml", "tox.ini", "setup.cfg")
 
 
-def ignore_lines_of(captured: Path, key: str = "xharness_skill_ignore") -> list[str]:
-    """The project's ``xharness_skill_ignore`` lines, read from its pytest config file.
+def config_lines_of(captured: Path, key: str) -> list[str]:
+    """A linelist ini key's lines, read from the project's pytest config file.
 
     Replay runs outside a pytest session, so it resolves the key the way pytest
     would: the first ancestor of ``captured`` holding a ``pytest.ini``,
@@ -149,19 +149,19 @@ def _load_suite(path: Path) -> ModuleType:
 
 def rebuild(
     captured: Path,
-    prices: Path | None = None,
+    prices: list[str] | None = None,
     ignore: list[str] | None = None,
     design_tokens: Path | None = None,
     inline: bool = False,
 ) -> list[Path]:
     """Rebuild every result under ``captured``; rewrite history lines and the report. Returns the rewritten results.
 
-    ``ignore`` lines are added to the project's ``xharness_skill_ignore`` lines (see
-    ``ignore_lines_of``), in the same ``<pattern>`` or ``<skill>: <pattern>`` form.
+    ``ignore`` and ``prices`` lines are added to the project's ``xharness_skill_ignore``
+    and ``xharness_prices`` lines (see ``config_lines_of``), in the same ini-line forms.
     """
-    table = pricing.load_table(overrides=prices)
+    table = pricing.load_table(rows=config_lines_of(captured, "xharness_prices") + list(prices or []))
     skill_dir = skill_dir_of(captured)
-    ignore_lines = ignore_lines_of(captured) + list(ignore or [])
+    ignore_lines = config_lines_of(captured, "xharness_skill_ignore") + list(ignore or [])
     files = skillcov.catalog(skill_dir, ignore=ignore_lines) if skill_dir.is_dir() else []
     skill = skill_dir.name
     history_path = captured / "history.jsonl"
@@ -204,10 +204,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("captured", type=Path, help="a <skill>/evals/captured directory")
     parser.add_argument(
-        "--prices",
-        type=Path,
-        default=Path("prices.toml"),
-        help="project prices.toml layered over the bundled table (default: ./prices.toml)",
+        "--price",
+        action="append",
+        default=[],
+        metavar="LINE",
+        help=(
+            "extra xharness_prices line, '<model>: input=<usd/MTok> output=<usd/MTok> ...' "
+            "(repeatable; the project's pytest config lines apply as well)"
+        ),
     )
     parser.add_argument(
         "--ignore",
@@ -234,7 +238,7 @@ def main() -> None:
         raise SystemExit(f"not a directory: {args.captured}")
     rebuilt = rebuild(
         args.captured,
-        prices=args.prices if args.prices.is_file() else None,
+        prices=args.price,
         ignore=args.ignore,
         design_tokens=args.design_tokens,
         inline=args.inline,

@@ -268,11 +268,22 @@ def test_unpriced_model_aborts_at_collection_before_any_spend(pytester: pytest.P
     result.stdout.fnmatch_lines(["*PricingError*unpriced models in matrix*claude/claude-unknown-99*"])
 
 
-def test_rootdir_prices_toml_adds_rows_to_the_bundled_table(pytester: pytest.Pytester) -> None:
-    make_tree(pytester, models=', models=["codex/gpt-house-blend"]')
-    pytester.makefile(".toml", prices='["gpt-house-blend"]\ninput = 1.0e-6\noutput = 2.0e-6\n')
+def test_price_lines_in_the_ini_add_rows_to_the_bundled_table(pytester: pytest.Pytester) -> None:
+    make_tree(
+        pytester,
+        models=', models=["codex/gpt-house-blend"]',
+        ini="xharness_prices =\n    gpt-house-blend: input=1.00 output=2.00\n",
+    )
     result = pytester.runpytest("--dry-run")
     result.assert_outcomes(skipped=1)
+
+
+def test_a_malformed_price_line_stops_the_session_before_collection(pytester: pytest.Pytester) -> None:
+    """ADR 0030: a per-token value pasted from the bundled table must not under-price by 1e6."""
+    make_tree(pytester, ini="xharness_prices =\n    gpt-house-blend: input=1.0e-6 output=2.0e-6\n")
+    result = pytester.runpytest("--collect-only")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*looks like a per-token rate*USD per million tokens*"])
 
 
 def test_module_without_evalcase_is_a_usage_error(pytester: pytest.Pytester) -> None:

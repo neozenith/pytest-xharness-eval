@@ -180,7 +180,7 @@ Four ini keys, paths relative to pytest's rootdir:
 | `xharness_skill_ignore` | (none) | gitignore-style patterns for skill files that are not decision surface; a bare pattern applies to every skill, `<skill>: <pattern>` to the skills matching the selector (ADR 0026) |
 | `xharness_report_design_tokens` | bundled | design tokens JSON that themes `captured/report.html` (flag: `--xharness-report-design-tokens FILE`) |
 | `xharness_report_inline` | `false` | embed every result, log and the tokens into `captured/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
-| `xharness_prices` | `prices.toml` | Optional file whose rows add to or override the bundled price table |
+| `xharness_prices` | (none) | Price rows that add to or override the bundled table: `<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..]` (ADR 0030) |
 
 ```toml
 [tool.pytest.ini_options]
@@ -194,15 +194,13 @@ xharness_matrix = [
 ]
 ```
 
-An unpriced model stops the sweep at collection, before any spend. Add a row to a
-`prices.toml` at the rootdir:
+An unpriced model stops the sweep at collection, before any spend. Add a price row
+to the same ini block, in USD per million tokens (ADR 0030):
 
 ```toml
-["gpt-5.6-luna"]
-input       = 1.25e-6
-output      = 1.0e-5
-cache_read  = 1.25e-7
-cache_write = 1.25e-6
+xharness_prices = [
+    "gpt-5.6-luna: input=1.25 output=10.00 cache_read=0.125 cache_write=1.25",
+]
 ```
 
 ----

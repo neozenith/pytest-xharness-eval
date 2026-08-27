@@ -133,7 +133,7 @@ def test_bundled_table_prices_each_tier_separately() -> None:
     }
 
 
-def test_cache_writes_price_by_ttl(tmp_path: Path) -> None:
+def test_cache_writes_price_by_ttl() -> None:
     """Claude Code writes 1-hour cache entries at 2x input; the log says so and the price follows (ADR 0019)."""
     table = pricing.load_table()
     one_hour = Usage(cache_write_tokens=1_000_000, cache_write_1h_tokens=1_000_000)
@@ -143,10 +143,9 @@ def test_cache_writes_price_by_ttl(tmp_path: Path) -> None:
     # 400k at 1h, 100k tagged 5m plus 500k untagged at the 5m rate.
     assert r.cost_by_tier["cache_write_1h"] == pytest.approx(4.0)
     assert r.cost_by_tier["cache_write_5m"] == pytest.approx(600_000 * 6.25e-6)
-    # A row without cache_write_1h gets the Anthropic 2.0 / 1.25 ratio.
-    local = tmp_path / "prices.toml"
-    local.write_text('["m"]\ninput = 1.0\noutput = 1.0\ncache_write = 2.0\n', "utf-8")
-    assert pricing.load_table(overrides=local)["m"].cache_write_1h == pytest.approx(3.2)
+    # A row without cache_write_1h gets the Anthropic 2.0 / 1.25 ratio (per-MTok line -> per-token rate).
+    table = pricing.load_table(rows=["m: input=1.0 output=1.0 cache_write=2.0"])
+    assert table["m"].cache_write_1h == pytest.approx(3.2e-6)
 
 
 def test_cache_reads_are_not_billed_at_the_input_rate() -> None:
@@ -173,18 +172,36 @@ def test_unknown_model_raises_rather_than_pricing_zero() -> None:
         pricing.validate_matrix(["claude/claude-opus-5", "codex/mystery-model"], table)
 
 
-def test_overrides_layer_on_top_of_the_bundled_table(tmp_path: Path) -> None:
-    local = tmp_path / "prices.toml"
-    local.write_text(
-        '["claude-opus-5"]\ninput = 1.0\noutput = 1.0\n\n["new-model"]\ninput = 2.0\noutput = 3.0\n', "utf-8"
+def test_price_lines_layer_on_top_of_the_bundled_table() -> None:
+    """`xharness_prices` lines are USD per MTok in pytest's `name: text` idiom (ADR 0030)."""
+    table = pricing.load_table(
+        rows=["# a comment", "", "claude-opus-5: input=1.0 output=1.0", "new-model: input=2.0 output=3.0"]
     )
-    table = pricing.load_table(overrides=local)
-    # Cache tiers default to input; every row remembers its key and the file it came from.
-    assert table["claude-opus-5"] == pricing.Rates(1.0, 1.0, 1.0, 1.0, 1.6, model="claude-opus-5", source=str(local))
-    assert table["gpt-5.6-sol"].source == str(pricing.PRICES_PATH)
-    assert table["new-model"].output == 3.0
-    assert "gpt-5.6-sol" in table  # bundled rows survive
-    assert pricing.load_table(overrides=tmp_path / "absent.toml") == pricing.load_table()
+    # Cache tiers default to input; every row remembers its key and that the ini supplied it.
+    assert table["claude-opus-5"] == pricing.Rates(
+        1.0e-6, 1.0e-6, 1.0e-6, 1.0e-6, 1.6e-6, model="claude-opus-5", source="xharness_prices"
+    )
+    assert table["gpt-5.6-sol"].source == str(pricing.PRICES_PATH)  # bundled rows survive
+    assert table["new-model"].output == 3.0e-6
+    assert pricing.load_table(rows=[]) == pricing.load_table()
+
+
+@pytest.mark.parametrize(
+    ("line", "match"),
+    [
+        ("claude-opus-5 input=1 output=1", "expected"),
+        ("claude-opus-5:", "expected"),
+        (": input=1 output=1", "expected"),
+        ("m: input=1 output=1 turbo=9", "unknown tier"),
+        ("m: input=one output=1", "not a number"),
+        ("m: input=1 cache_read=2", r"missing required tier\(s\) \['output'\]"),
+        ("m: input=5.0e-6 output=25", "looks like a per-token rate"),
+        ("m: input=1 output=-3", "looks like a per-token rate"),
+    ],
+)
+def test_malformed_price_lines_stop_before_any_spend(line: str, match: str) -> None:
+    with pytest.raises(pricing.PricingError, match=match):
+        pricing.parse_price_lines([line])
 
 
 # -- runresult -----------------------------------------------------------------------
@@ -1263,18 +1280,20 @@ def test_replay_reads_skill_ignore_from_the_projects_pytest_config(tmp_path: Pat
     captured = tmp_path / "skills" / "demo" / "evals" / "captured"
     captured.mkdir(parents=True)
     (tmp_path / name).write_text(body, encoding="utf-8")
-    assert replay.ignore_lines_of(captured) == ["README.md", "demo: assets/"]
+    assert replay.config_lines_of(captured, "xharness_skill_ignore") == ["README.md", "demo: assets/"]
 
 
 def test_replay_ignores_a_pyproject_without_pytest_options_and_a_missing_config(tmp_path: Path) -> None:
     captured = tmp_path / "skills" / "demo" / "evals" / "captured"
     captured.mkdir(parents=True)
-    assert replay.ignore_lines_of(captured) == []
+    assert replay.config_lines_of(captured, "xharness_skill_ignore") == []
     (tmp_path / "skills" / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
     (tmp_path / "pyproject.toml").write_text(
         '[tool.pytest.ini_options]\nxharness_skill_ignore = ["assets/"]\n', encoding="utf-8"
     )
-    assert replay.ignore_lines_of(captured) == ["assets/"]  # the nearer pyproject is not pytest's config file
+    assert replay.config_lines_of(captured, "xharness_skill_ignore") == [
+        "assets/"
+    ]  # the nearer pyproject is not pytest's config file
 
 
 def test_replay_refuses_a_result_without_its_log(tmp_path: Path) -> None:

@@ -43,7 +43,7 @@ All source lives under `src/pytest_xharness_eval/`.
 | How a CLI is invoked or its log is found | `runner.py` |
 | How a session log maps to `RunResult` fields | `normalise.py` |
 | A new field on the run record | `runresult.py`, then `normalise.py` for both CLIs |
-| A bundled model price | `prices.toml` only |
+| A bundled model price | `prices.toml` only; a project overrides with `xharness_prices` ini lines, USD per MTok (ADR 0030) |
 | The plugin-default matrix, a known harness, or narrowing | `matrix.py` |
 | A plugin option, ini key (including `xharness_matrix`), collection rule, or `report.json` | `plugin.py` |
 | The per-cell metrics record or the verbose status word | `history.py` |
@@ -73,8 +73,8 @@ are built in `history.py`.
   stated reason instead (ADR 0002).
 - Never make a cell pass without a real session log. A missing log, a mismatched
   session id, or zero tokens is a failure, not a skip.
-- Never price an unknown model as zero or `None` and continue. Add the row or let the
-  sweep stop at collection (ADR 0007).
+- Never price an unknown model as zero or `None` and continue. Add the bundled row or
+  an `xharness_prices` ini line, or let the sweep stop at collection (ADR 0007, ADR 0030).
 - Never write run output under `evals/fixtures/`. A fixture is copied into every
   workspace, so anything placed there leaks into the next agent's working directory.
 - Never add a runtime dependency beyond pytest and the standard library (ADR 0003).

@@ -296,7 +296,7 @@ bills about 1.5M tokens; it is arithmetic.
 
 ### The cost, as a cross-check of the tiers
 
-`rates_applied` for the run (from `prices.toml`, `claude-sonnet-5`): input $2/M,
+`rates_applied` for the run (the project's `claude-sonnet-5` override row; since ADR 0030 an `xharness_prices` ini line): input $2/M,
 output $10/M, cache read $0.20/M, cache write (1h) $4/M.
 
 ```text
