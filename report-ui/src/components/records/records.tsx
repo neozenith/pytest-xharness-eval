@@ -290,9 +290,9 @@ const R: Record<string, (r: Rec) => ReactNode> = {
     const i = obj(p.info);
     return (
       <>
-        <b className="text-muted-foreground text-[0.8rem]">this call</b>
+        <b className="sublabel">this call</b>
         <Usage usage={i.last_token_usage} />
-        <b className="text-muted-foreground text-[0.8rem]">cumulative</b>
+        <b className="sublabel">cumulative</b>
         <Usage usage={i.total_token_usage} />
         <Kvs pairs={[["context window", fmt(num(i.model_context_window))]]} />
         <Details summary="rate limits">{p.rate_limits ? <Json value={p.rate_limits} /> : null}</Details>

@@ -1,33 +1,43 @@
-import * as React from "react"
-import { Switch as SwitchPrimitive } from "radix-ui"
+/**
+ * The toggle switch, built on Tamagui; keeps the radix-style `checked`/`onCheckedChange` surface.
+ * The styling props sit *after* the spread on purpose: Tamagui applies props in insertion order.
+ * The checked track is the one thing that still cannot be won that way — Tamagui's own `checked`
+ * variant repaints it — so `.XhSwitch` in index.css pins it, like the other Tamagui overrides.
+ */
+import type { ComponentProps } from "react";
+import { Switch as TamaguiSwitch } from "tamagui";
 
-import { cn } from "@/lib/utils"
-
-function Switch({
-  className,
-  size = "default",
-  ...props
-}: React.ComponentProps<typeof SwitchPrimitive.Root> & {
-  size?: "sm" | "default"
-}) {
+export function Switch({ className, ...props }: ComponentProps<typeof TamaguiSwitch>) {
+  const on = Boolean(props.checked);
   return (
-    <SwitchPrimitive.Root
-      data-slot="switch"
-      data-size={size}
-      className={cn(
-        "peer group/switch inline-flex shrink-0 items-center rounded-full border border-transparent shadow-xs transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-[1.15rem] data-[size=default]:w-8 data-[size=sm]:h-3.5 data-[size=sm]:w-6 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input dark:data-[state=unchecked]:bg-input/80",
-        className
-      )}
+    <TamaguiSwitch
+      size="$2"
       {...props}
+      className={["XhSwitch", className].filter(Boolean).join(" ")}
+      width={34}
+      height={20}
+      padding={2}
+      cursor="pointer"
+      // Off is a recessed slot, a shade deeper than the panel it sits on, so the knob reads as
+      // a knob in a track rather than a filled dot floating on a card.
+      backgroundColor={on ? "$accent" : "color-mix(in srgb, var(--xh-muted) 12%, var(--xh-code))"}
+      borderWidth={1}
+      borderColor={on ? "$accent" : "$line"}
+      transition="100ms"
+      hoverStyle={{ borderColor: on ? "$accent" : "color-mix(in srgb, var(--xh-muted) 45%, var(--xh-line))" }}
+      focusVisibleStyle={{ outlineColor: "$accent", outlineStyle: "solid", outlineWidth: 2, outlineOffset: 2 }}
     >
-      <SwitchPrimitive.Thumb
-        data-slot="switch-thumb"
-        className={cn(
-          "pointer-events-none block rounded-full bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0 dark:data-[state=checked]:bg-primary-foreground dark:data-[state=unchecked]:bg-foreground"
-        )}
+      <TamaguiSwitch.Thumb
+        width={14}
+        height={14}
+        borderRadius={999}
+        borderWidth={0}
+        // Off, the knob is muted pulled back toward the panel: it stays legible against the
+        // track in both themes without the full-strength dot reading as an "on" state.
+        backgroundColor={on ? "$panel" : "color-mix(in srgb, var(--xh-muted) 72%, var(--xh-panel))"}
+        boxShadow="0 1px 2px var(--xh-shadow)"
+        transition="200ms"
       />
-    </SwitchPrimitive.Root>
-  )
+    </TamaguiSwitch>
+  );
 }
-
-export { Switch }

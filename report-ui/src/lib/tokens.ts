@@ -6,7 +6,7 @@ import type { DesignTokens, ThemeTokens } from "./types";
 
 export type Mode = "light" | "dark";
 
-const SCALARS: (keyof ThemeTokens)[] = ["bg", "panel", "ink", "muted", "line", "accent", "good", "bad", "warn", "code", "grid", "plot"];
+const SCALARS: (keyof ThemeTokens)[] = ["bg", "panel", "ink", "muted", "line", "accent", "good", "bad", "warn", "code", "grid", "axis", "plot"];
 
 export function applyTokens(tokens: DesignTokens, mode: Mode, root: HTMLElement = document.documentElement) {
   const theme = tokens.themes[mode];

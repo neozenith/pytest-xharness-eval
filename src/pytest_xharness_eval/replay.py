@@ -1,35 +1,45 @@
-"""Rebuild captured results from their session logs without re-running anything (ADR 0023).
+"""Rebuild cached results from their session logs without re-running anything (ADR 0023, ADR 0032).
 
 A captured cell is its session log plus the CLI's envelope, both kept verbatim.
-Everything else in a ``.result.json`` (the ledger, usage, pricing, record census,
+Everything else in a ``result.json`` (the ledger, usage, pricing, record census,
 skill coverage) is derived, so it can be derived again after the plugin changes:
 
-    uv run -m pytest_xharness_eval.replay skills/<skill>/evals/captured
+    uv run -m pytest_xharness_eval.replay .xharness_eval_cache
 
-rewrites every ``.result.json`` under the directory from its log, re-prices it
-with the current price tables, re-annotates skill coverage against the skill's
-current tree and ignore rules, rewrites the matching ``history.jsonl`` lines
-(verdict, timestamps and wall clock are kept; metrics are recomputed), and
-regenerates ``index.json`` and ``report.html``. No CLI is invoked and nothing
-is spent.
+rewrites every ``results/{skill}/{harness}/{model}/{run}/{session}/result.json``
+from its ``log.jsonl``, re-prices it with the current price tables, re-annotates
+skill coverage against the skill's current tree and ignore rules, rewrites each
+session's ``history.json`` (verdict, timestamps and wall clock are kept; metrics
+are recomputed), and runs the combine step (``report/``). No CLI is invoked and
+nothing is spent.
+
+Pointed at a legacy ``<skill>/evals/captured`` directory instead, it migrates that
+evidence into the project's cache root (the original directory is left untouched)
+and then rebuilds.
 """
 
 from __future__ import annotations
 
 # Standard Library
 import argparse
-import configparser
 import hashlib
 import importlib.util
 import json
 import logging
-import tomllib
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 # Our Libraries
-from pytest_xharness_eval import history, normalise, pricing, report, skillcov
+from pytest_xharness_eval import harness, pipeline, pricing, report, skillcov
 from pytest_xharness_eval.case import EvalCase
+from pytest_xharness_eval.settings import (
+    DEFAULT_CACHE_DIR,
+    INI_CACHE_DIR,
+    Settings,
+    find_rootpath,
+    ini_value,
+)
 
 if TYPE_CHECKING:
     # Standard Library
@@ -41,80 +51,50 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-def skill_dir_of(captured: Path) -> Path:
-    """``<skills root>/<skill>/evals/captured`` -> ``<skills root>/<skill>``."""
-    return captured.resolve().parent.parent
-
-
-# pytest's own config files, in the order it consults them (rootdir discovery).
-_CONFIG_FILES = ("pytest.ini", ".pytest.ini", "pyproject.toml", "tox.ini", "setup.cfg")
-
-
-def config_lines_of(captured: Path, key: str) -> list[str]:
-    """A linelist ini key's lines, read from the project's pytest config file.
-
-    Replay runs outside a pytest session, so it resolves the key the way pytest
-    would: the first ancestor of ``captured`` holding a ``pytest.ini``,
-    ``pyproject.toml`` (``[tool.pytest.ini_options]``), ``tox.ini`` (``[pytest]``)
-    or ``setup.cfg`` (``[tool:pytest]``) wins. A missing file or key is no lines, so
-    a replay and a live sweep agree on what is decision surface.
-    """
-    for directory in (captured.resolve(), *captured.resolve().parents):
-        for name in _CONFIG_FILES:
-            path = directory / name
-            if not path.is_file():
-                continue
-            if name == "pyproject.toml":
-                section = tomllib.loads(path.read_text(encoding="utf-8")).get("tool", {}).get("pytest", {})
-                options = section.get("ini_options")
-                if options is None:
-                    continue  # a pyproject.toml without pytest options is not pytest's config file
-                value = options.get(key, [])
-                return [str(v) for v in value] if isinstance(value, list) else str(value).splitlines()
-            parser = configparser.ConfigParser(interpolation=None)
-            parser.read(path, encoding="utf-8")
-            section_name = "tool:pytest" if name == "setup.cfg" else "pytest"
-            if not parser.has_section(section_name):
-                continue
-            return [line.strip() for line in parser.get(section_name, key, fallback="").splitlines() if line.strip()]
-    return []
-
-
 def rebuild_result(
-    result_path: Path, table: dict[str, pricing.Rates], files: list[dict[str, Any]], skill: str
+    session_dir: Path,
+    table: dict[str, pricing.Rates],
+    files: list[dict[str, Any]],
+    skill: str,
+    settings: Settings | None = None,
 ) -> RunResult:
-    """Re-derive one result from its captured log and stored envelope; returns the new RunResult."""
+    """Re-derive one session's result from its captured log and stored envelope."""
+    result_path = session_dir / pipeline.RESULT_NAME
     old = json.loads(result_path.read_text(encoding="utf-8"))
-    stem = result_path.name.removesuffix(".result.json")
-    log_path = result_path.with_name(f"{stem}.jsonl")
+    log_path = session_dir / pipeline.LOG_NAME
     if not log_path.is_file():
-        raise FileNotFoundError(f"no captured session log beside {result_path.name}: {log_path.name}")
+        raise FileNotFoundError(f"no captured session log beside {result_path}: {log_path.name}")
     workspace = Path(old.get("workspace") or "")
     files_written = list(old.get("files_written") or [])
-    if old.get("harness") == "claude":
-        envelope = dict(old.get("envelope") or {})
-        envelope.setdefault("session_id", old.get("session_id"))
-        envelope.setdefault("total_cost_usd", old.get("harness_reported_cost_usd"))
-        envelope.setdefault("duration_ms", old.get("duration_ms"))
-        envelope["result"] = old.get("final_text") or ""
-        result = normalise.from_claude(log_path, envelope, workspace, files_written)
-    else:
-        result = normalise.from_codex(log_path, int(old.get("exit_code") or 0), workspace, files_written)
-    pricing.price(result, table)
-    result.skill_coverage = skillcov.annotate(skill, files, result)
-    # The case that produced the run is not in the log: carry it forward, or derive it from the suite
-    # that defines a case named after the captured directory (ADR 0025).
-    result.case = dict(old.get("case") or {}) or case_meta(result_path.parent.parent, result_path.parent.name)
-    return result
+    # Each dialect knows what its own log is missing and recovers it from the stored result:
+    # replay no longer reconstructs a Claude envelope, and an unregistered harness raises
+    # rather than being read as Codex (ADR 0034).
+    agent = harness.get(str(old.get("harness") or ""))
+    result = agent.session_from_capture(session_dir, old).to_result(workspace, files_written)
+    # The same derivations the live cell runs, in the same order (ADR 0034). The case that
+    # produced the run is not in the log: carry it forward, or derive it from the suite
+    # that defines a case with the recorded name (ADR 0025).
+    case = dict(old.get("case") or {}) or case_meta(session_dir, skill, settings or Settings.from_cache(session_dir))
+    return pipeline.derive(result, table=table, skill=skill, skill_files=files, case=case)
 
 
-def case_meta(captured: Path, name: str) -> dict[str, Any]:
-    """``{suite, name, skill, fixture, prompt}`` for the ``@evalcase`` called ``name`` in ``<evals>/eval_*.py``.
+def case_meta(session_dir: Path, skill: str, settings: Settings) -> dict[str, Any]:
+    """``{suite, name, skill, fixture, prompt}`` recovered from the skill's suites, else empty.
 
-    ``captured`` is ``<skill>/evals/captured``; the suites sit beside it. An empty
-    mapping when no suite defines the case (the file may have been renamed).
+    The case name comes from the session's ``history.json``; the suites sit at
+    ``<skills root>/<skill>/evals/eval_*.py``.
     """
-    evals_dir = captured.resolve().parent
+    hist = {}
+    hist_path = session_dir / "history.json"
+    if hist_path.is_file():
+        try:
+            hist = json.loads(hist_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            hist = {}
+    name = str(hist.get("case") or "")
+    if not name:
+        return {}
+    evals_dir = settings.skill_dir(skill) / "evals"
     for suite_path in sorted(evals_dir.glob("eval_*.py")):
         try:
             module = _load_suite(suite_path)
@@ -147,62 +127,139 @@ def _load_suite(path: Path) -> ModuleType:
     return module
 
 
+def _run_ts_of(value: str) -> str:
+    """An ISO ``at`` timestamp as the path-safe run stamp (``20260826T042617Z``)."""
+    digits = re.sub(r"[^0-9T]", "", value.split("+")[0].split(".")[0])
+    return f"{digits}Z" if re.fullmatch(r"\d{8}T\d{6}", digits) else "00000000T000000Z"
+
+
+def is_legacy_captured(path: Path) -> bool:
+    """A pre-0032 ``<skill>/evals/captured`` directory: ``<case>/<harness>-<session>.result.json`` rows."""
+    return path.name == "captured" and any(path.glob("*/*.result.json"))
+
+
+def _legacy_history(path: Path) -> dict[str, dict[str, Any]]:
+    """The latest legacy ``history.jsonl`` record per session id."""
+    by_session: dict[str, dict[str, Any]] = {}
+    if not path.is_file():
+        return by_session
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        if not raw.strip():
+            continue
+        try:
+            rec = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        sid = str(rec.get("session_id") or "")
+        if sid:
+            by_session[sid] = rec
+    return by_session
+
+
+def migrate_legacy(captured: Path, cache: Path) -> int:
+    """Copy a legacy captured directory into the cache's ``results/`` tree; the original is untouched.
+
+    Returns the number of sessions migrated. Already-migrated sessions are skipped, so
+    the migration is idempotent.
+    """
+    skill = captured.resolve().parent.parent.name
+    by_session = _legacy_history(captured / "history.jsonl")
+
+    migrated = 0
+    for result_path in sorted(captured.glob("*/*.result.json")):
+        try:
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        sid = str(result.get("session_id") or "")
+        harness = str(result.get("harness") or "unknown")
+        model = str(result.get("model") or "unknown")
+        hist = dict(by_session.get(sid) or {})
+        hist.pop("captured", None)
+        run_ts = _run_ts_of(str(hist.get("at") or ""))
+        session_dir = cache / report.RESULTS_DIR / skill / harness / model / run_ts / sid
+        if (session_dir / "result.json").is_file():
+            continue
+        session_dir.mkdir(parents=True, exist_ok=True)
+        (session_dir / "result.json").write_text(json.dumps(result, indent=1, sort_keys=True), encoding="utf-8")
+        stem = result_path.name.removesuffix(".result.json")
+        legacy_log = result_path.with_name(f"{stem}.jsonl")
+        if legacy_log.is_file():
+            (session_dir / "log.jsonl").write_bytes(legacy_log.read_bytes())
+        if hist:
+            hist["cache"] = str(cache)
+            (session_dir / "history.json").write_text(json.dumps(hist, sort_keys=True) + "\n", encoding="utf-8")
+        migrated += 1
+        log.info("migrated %s -> %s", result_path.relative_to(captured), session_dir.relative_to(cache))
+    return migrated
+
+
 def rebuild(
-    captured: Path,
+    cache: Path,
     prices: list[str] | None = None,
     ignore: list[str] | None = None,
     design_tokens: Path | None = None,
     inline: bool = False,
 ) -> list[Path]:
-    """Rebuild every result under ``captured``; rewrite history lines and the report. Returns the rewritten results.
+    """Rebuild every result under ``<cache>/results/``, rewrite each ``history.json``, run the combine step.
 
     ``ignore`` and ``prices`` lines are added to the project's ``xharness_skill_ignore``
-    and ``xharness_prices`` lines (see ``config_lines_of``), in the same ini-line forms.
+    and ``xharness_prices`` lines, in the same ini-line forms. The project's config is
+    resolved through the same :class:`Settings` a live sweep uses (ADR 0034).
     """
-    table = pricing.load_table(rows=config_lines_of(captured, "xharness_prices") + list(prices or []))
-    skill_dir = skill_dir_of(captured)
-    ignore_lines = config_lines_of(captured, "xharness_skill_ignore") + list(ignore or [])
-    files = skillcov.catalog(skill_dir, ignore=ignore_lines) if skill_dir.is_dir() else []
-    skill = skill_dir.name
-    history_path = captured / "history.jsonl"
-    lines: list[dict[str, Any]] = []
-    if history_path.is_file():
-        for raw in history_path.read_text(encoding="utf-8").splitlines():
-            if raw.strip():
-                lines.append(json.loads(raw))
-    by_session = {str(rec.get("session_id")): rec for rec in lines}
+    settings = Settings.from_cache(cache, prices=prices, ignore=ignore)
+    table = settings.price_table()
+    catalogs: dict[str, list[dict[str, Any]]] = {}
 
     rewritten: list[Path] = []
-    for result_path in sorted(captured.glob("*/*.result.json")):
-        result = rebuild_result(result_path, table, files, skill)
+    for result_path in sorted((cache / report.RESULTS_DIR).glob("*/*/*/*/*/result.json")):
+        session_dir = result_path.parent
+        skill = session_dir.relative_to(cache / report.RESULTS_DIR).parts[0]
+        if skill not in catalogs:
+            skill_dir = settings.skill_dir(skill)
+            catalogs[skill] = skillcov.catalog(skill_dir, ignore=settings.skill_ignore) if skill_dir.is_dir() else []
+        result = rebuild_result(session_dir, table, catalogs[skill], skill, settings)
         result.write(result_path)
         rewritten.append(result_path)
-        old = by_session.get(result.session_id)
-        if old is not None:
-            fresh = history.metrics_of(
+
+        hist_path = session_dir / pipeline.HISTORY_NAME
+        if hist_path.is_file():
+            try:
+                old = json.loads(hist_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                old = {}
+            # The verdict, node and clock are the live run's and cannot be re-derived; the
+            # metrics around them are rebuilt by the same call the live cell makes.
+            pipeline.record_metrics(
                 result,
+                session_dir,
                 node=str(old.get("node") or ""),
                 verdict=str(old.get("verdict") or ""),
                 wall_ms=int(old.get("wall_ms") or 0),
                 started_at=str(old.get("at") or ""),
+                cache=cache,
             )
-            fresh["captured"] = old.get("captured") or str(captured)
-            old.clear()
-            old.update(fresh)
-        log.info("rebuilt %s: %d turns, %s", result_path.name, result.turns, result.skill_coverage.get("summary"))
+        log.info(
+            "rebuilt %s: %d turns, %s",
+            session_dir.relative_to(cache),
+            result.turns,
+            result.skill_coverage.get("summary"),
+        )
 
-    if lines:
-        history_path.write_text("".join(json.dumps(rec, sort_keys=True) + "\n" for rec in lines), encoding="utf-8")
-    page = report.write(captured, design_tokens=design_tokens, inline=inline)
+    page = report.write(cache, design_tokens=design_tokens, inline=inline)
     log.info("report: %s%s", page, " (inline)" if inline else "")
     return rewritten
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Rebuild captured eval results from their session logs; no CLI runs, nothing is spent."
+        description="Rebuild cached eval results from their session logs; no CLI runs, nothing is spent."
     )
-    parser.add_argument("captured", type=Path, help="a <skill>/evals/captured directory")
+    parser.add_argument(
+        "cache",
+        type=Path,
+        help="the project's cache root (.xharness_eval_cache), or a legacy <skill>/evals/captured directory to migrate",
+    )
     parser.add_argument(
         "--price",
         action="append",
@@ -234,16 +291,22 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(message)s")
-    if not args.captured.is_dir():
-        raise SystemExit(f"not a directory: {args.captured}")
+    target = args.cache
+    if not target.is_dir():
+        raise SystemExit(f"not a directory: {target}")
+    if is_legacy_captured(target):
+        cache = find_rootpath(target) / str(ini_value(target, INI_CACHE_DIR) or DEFAULT_CACHE_DIR)
+        count = migrate_legacy(target, cache)
+        log.info("migrated %d session(s) from %s into %s", count, target, cache)
+        target = cache
     rebuilt = rebuild(
-        args.captured,
+        target,
         prices=args.price,
         ignore=args.ignore,
         design_tokens=args.design_tokens,
         inline=args.inline,
     )
-    log.info("rebuilt %d result(s) under %s", len(rebuilt), args.captured)
+    log.info("rebuilt %d result(s) under %s", len(rebuilt), target)
 
 
 if __name__ == "__main__":

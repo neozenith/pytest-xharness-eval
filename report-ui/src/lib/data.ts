@@ -7,16 +7,36 @@ import type { Cell, DesignTokens, Index, RunResult } from "./types";
 
 const inline = () => (typeof window === "undefined" ? undefined : window.__XH_DATA__);
 
+/**
+ * In-flight load counter, exposed as `window.__XH_PENDING__` so an end-to-end test can
+ * wait for "every fetch this route started has settled" instead of guessing with sleeps.
+ */
+function track<T>(p: Promise<T>): Promise<T> {
+  if (typeof window === "undefined") return p;
+  window.__XH_PENDING__ = (window.__XH_PENDING__ ?? 0) + 1;
+  return p.finally(() => {
+    window.__XH_PENDING__ = (window.__XH_PENDING__ ?? 1) - 1;
+  });
+}
+
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(path, { cache: "no-store" });
-  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
-  return (await res.json()) as T;
+  return track(
+    (async () => {
+      const res = await fetch(path, { cache: "no-store" });
+      if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
+      return (await res.json()) as T;
+    })(),
+  );
 }
 
 async function getText(path: string): Promise<string> {
-  const res = await fetch(path, { cache: "no-store" });
-  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
-  return res.text();
+  return track(
+    (async () => {
+      const res = await fetch(path, { cache: "no-store" });
+      if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
+      return res.text();
+    })(),
+  );
 }
 
 export const loadIndex = (): Promise<Index> => {

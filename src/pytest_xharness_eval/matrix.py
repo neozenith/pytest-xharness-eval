@@ -10,8 +10,18 @@ from __future__ import annotations
 # Standard Library
 from dataclasses import dataclass
 
-# The harnesses this plugin can drive. ``runner.RUNNERS`` must have exactly these keys.
-KNOWN_HARNESSES: tuple[str, ...] = ("claude", "codex")
+# Our Libraries
+from pytest_xharness_eval import harness as harnesses_pkg
+
+
+def known_harnesses() -> tuple[str, ...]:
+    """The harnesses this plugin can drive: whatever is registered, never a second list.
+
+    Read through the registry rather than copied beside it, so registering a harness is
+    the only edit a new CLI needs (ADR 0034).
+    """
+    return harnesses_pkg.names()
+
 
 # The plugin-scope fallback sweep, used when neither the project nor the case sets one.
 DEFAULT_MATRIX: list[str] = [
@@ -36,10 +46,11 @@ class Cell:
 def expand(models: list[str]) -> list[Cell]:
     """Parse ``harness/model`` entries into cells; an unknown harness or empty model is an error."""
     cells = []
+    known = known_harnesses()
     for entry in models:
         harness, _, model = entry.partition("/")
-        if harness not in KNOWN_HARNESSES or not model:
-            options = " or ".join(f"'{h}/<model>'" for h in KNOWN_HARNESSES)
+        if harness not in known or not model:
+            options = " or ".join(f"'{h}/<model>'" for h in known)
             raise ValueError(f"matrix entry must be {options}: {entry!r}")
         cells.append(Cell(harness=harness, model=model))
     return cells

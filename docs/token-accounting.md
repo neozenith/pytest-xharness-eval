@@ -180,6 +180,19 @@ This is the same definition both harnesses use for their own totals:
 - Codex's `total_token_usage.total_tokens` is its own running sum. For the Codex
   session below it is 527,801, and the plugin's `total_tokens` is 527,801.
 
+**Subagents (ADR 0033).** A session that spawns parallel threads (Claude's Agent
+tool, Codex's thread forks) produces one transcript per thread, and every one of
+those threads' calls is billed by the provider exactly like the primary's. The
+plugin folds each subagent's per-call sum into the run's `usage`, so the run's
+`accumulative_billed_tokens` and `estimated_cost_usd` are the whole bill; each
+thread's own ledger lives on `result.subagents[*].calls`, attributed to the
+primary turn that spawned it (`parent_turn`). The harness aggregates do **not**
+fold: measured on the discovery sweep (2026-08-28), Claude's envelope `usage`
+equals the primary ledger's sum exactly and Codex's `total_token_usage` is the
+primary rollout's own sum — so on a spawning run the reconciliation delta
+between the run's `usage` and the harness's figure is the subagents' bill, not
+a ledger error, and the report says so beside the comparison.
+
 ## 6. Worked example: `eval_dual_density`, `claude-sonnet-5`, session `1feb573f…`
 
 From `claude-1feb573f-….result.json`; the harness reported `contextWindow: 1000000`.

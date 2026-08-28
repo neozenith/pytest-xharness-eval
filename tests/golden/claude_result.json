@@ -1,0 +1,319 @@
+{
+  "api_duration_ms": 7200,
+  "baseline_tokens": 2112,
+  "calls": [
+    {
+      "at": "2026-08-22T00:00:02Z",
+      "context_pct": 0.21,
+      "context_tokens": 2112,
+      "latency_ms": 2000,
+      "n": 1,
+      "output_tokens_per_sec": 20.0,
+      "records": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "results_in": [],
+      "stop_reason": "tool_use",
+      "text": "",
+      "thinking": "read the skill first",
+      "tools": [
+        {
+          "id": "t1",
+          "input": {
+            "file_path": "demo/SKILL.md"
+          },
+          "name": "Read",
+          "summary": "demo/SKILL.md"
+        },
+        {
+          "id": "t2",
+          "input": {
+            "command": "cd demo && uv run scripts/check.py"
+          },
+          "name": "Bash",
+          "summary": "cd demo && uv run scripts/check.py"
+        },
+        {
+          "id": "t3",
+          "input": {
+            "description": "sub work"
+          },
+          "name": "Agent",
+          "summary": "{\"description\": \"sub work\"}"
+        }
+      ],
+      "usage": {
+        "cache_read_tokens": 1800,
+        "cache_write_1h_tokens": 200,
+        "cache_write_5m_tokens": 100,
+        "cache_write_tokens": 300,
+        "input_tokens": 12,
+        "output_tokens": 40,
+        "reasoning_tokens": 15
+      }
+    },
+    {
+      "at": "2026-08-22T00:00:09Z",
+      "context_pct": 0.21,
+      "context_tokens": 2109,
+      "latency_ms": 2000,
+      "n": 2,
+      "output_tokens_per_sec": 11.0,
+      "records": [
+        8
+      ],
+      "results_in": [
+        {
+          "chars": 12,
+          "content": "# demo skill",
+          "tool": "Read"
+        },
+        {
+          "chars": 2,
+          "content": "ok",
+          "tool": "Bash"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "text": "done",
+      "thinking": "",
+      "tools": [],
+      "usage": {
+        "cache_read_tokens": 2100,
+        "cache_write_1h_tokens": 0,
+        "cache_write_5m_tokens": 0,
+        "cache_write_tokens": 0,
+        "input_tokens": 9,
+        "output_tokens": 22,
+        "reasoning_tokens": 0
+      }
+    }
+  ],
+  "case": {
+    "fixture": "seed",
+    "name": "eval_claude",
+    "prompt": "grade the skill",
+    "skill": "demo",
+    "suite": "skills/demo/evals/eval_claude.py"
+  },
+  "context_window": 1000000,
+  "context_window_pct": 0.21,
+  "cost_by_tier": {
+    "cache_read": 0.0066,
+    "cache_write_1h": 0.006,
+    "cache_write_5m": 0.001875,
+    "input": 0.000375,
+    "output": 0.005475
+  },
+  "cost_status": "priced",
+  "duration_ms": 9000,
+  "envelope": {
+    "duration_api_ms": 7200,
+    "duration_ms": 9000,
+    "is_error": false,
+    "model": "claude-opus-5",
+    "modelUsage": {
+      "claude-opus-5": {
+        "contextWindow": 1000000,
+        "costUSD": 0.51
+      }
+    },
+    "num_turns": 4,
+    "session_id": "claude-sid-1",
+    "total_cost_usd": 0.51,
+    "ttft_ms": 950,
+    "usage": {
+      "cache_creation_input_tokens": 300,
+      "cache_read_input_tokens": 3900,
+      "input_tokens": 21,
+      "output_tokens": 62
+    }
+  },
+  "estimated_cost_usd": 0.020325,
+  "exit_code": 0,
+  "files_written": [
+    "out.md"
+  ],
+  "final_context_pct": 0.21,
+  "final_context_tokens": 2131,
+  "final_text": "done",
+  "harness": "claude",
+  "harness_reported_cost_usd": 0.51,
+  "model": "claude-opus-5",
+  "output_tokens_per_sec": 10.14,
+  "peak_context_tokens": 2112,
+  "rates_applied": {
+    "applied_at": "<stamp>",
+    "cache_read": 1.5e-06,
+    "cache_write": 1.875e-05,
+    "cache_write_1h": 3e-05,
+    "input": 1.5e-05,
+    "model": "claude-opus-5",
+    "output": 7.5e-05,
+    "source": "xharness_prices"
+  },
+  "record_kinds": {
+    "claude/assistant/text": 1,
+    "claude/assistant/tool_use": 2,
+    "claude/attachment/skill_listing": 1,
+    "claude/system": 1,
+    "claude/user/prompt": 1,
+    "claude/user/tool_result": 2
+  },
+  "reported_model_usage": {
+    "claude-opus-5": {
+      "contextWindow": 1000000,
+      "costUSD": 0.51
+    }
+  },
+  "reported_turns": 4,
+  "reported_usage": {
+    "cache_creation_input_tokens": 300,
+    "cache_read_input_tokens": 3900,
+    "input_tokens": 21,
+    "output_tokens": 62
+  },
+  "session_id": "claude-sid-1",
+  "session_log": "<tmp>/results/claude/sid/log.jsonl",
+  "skill_coverage": {
+    "files": [
+      {
+        "bytes": 35,
+        "ignored": false,
+        "kind": "doc",
+        "loaded": [
+          1
+        ],
+        "path": "SKILL.md",
+        "run": [],
+        "sha256": "cc6abc65d3ecc4cd882be1605d56ffaa6c49a74b48e9a560e0e4a27982bb2a55"
+      },
+      {
+        "bytes": 19,
+        "ignored": false,
+        "kind": "doc",
+        "loaded": [],
+        "path": "resources/evidence.md",
+        "run": [],
+        "sha256": "f65acd7558b132bda301033b82c6f424431b86a8e5db01195c354fe3cd03377e"
+      },
+      {
+        "bytes": 12,
+        "ignored": false,
+        "kind": "script",
+        "loaded": [],
+        "path": "scripts/check.py",
+        "run": [
+          1
+        ],
+        "sha256": "ad64355106bb158b020ecf9702be48f7730fc091dd4bb6a2f092b40393495b3d"
+      },
+      {
+        "bytes": 19,
+        "ignored": false,
+        "kind": "script",
+        "loaded": [],
+        "path": "scripts/unused.py",
+        "run": [],
+        "sha256": "980523aafc2a0862eedafb70e17ab38f4b8231d2f6a628dbc8e5d1ac1a358980"
+      }
+    ],
+    "loaded": [
+      "SKILL.md",
+      "scripts/check.py"
+    ],
+    "not_loaded": [
+      "resources/evidence.md",
+      "scripts/unused.py"
+    ],
+    "not_run": [
+      "scripts/unused.py"
+    ],
+    "run": [
+      "scripts/check.py"
+    ],
+    "skill": "demo",
+    "summary": {
+      "assets": 0,
+      "docs": 2,
+      "files": 4,
+      "ignored": 0,
+      "loaded": 2,
+      "run": 1,
+      "scripts": 2,
+      "tests": 0
+    }
+  },
+  "subagents": [
+    {
+      "agent": "Explore",
+      "calls": [
+        {
+          "at": "2026-08-22T00:00:06Z",
+          "context_pct": 0.05,
+          "context_tokens": 504,
+          "latency_ms": 1000,
+          "n": 1,
+          "output_tokens_per_sec": 11.0,
+          "records": [
+            1,
+            2
+          ],
+          "results_in": [],
+          "stop_reason": "end_turn",
+          "text": "sub done",
+          "thinking": "",
+          "tools": [],
+          "usage": {
+            "cache_read_tokens": 500,
+            "cache_write_1h_tokens": 0,
+            "cache_write_5m_tokens": 0,
+            "cache_write_tokens": 0,
+            "input_tokens": 4,
+            "output_tokens": 11,
+            "reasoning_tokens": 0
+          }
+        }
+      ],
+      "description": "sub work",
+      "id": "sub1",
+      "log": "<tmp>/results/claude/sid/subagents/agent-sub1.jsonl",
+      "parent_turn": 1,
+      "turns": 1,
+      "usage": {
+        "accumulative_billed_tokens": 515,
+        "cache_read_tokens": 500,
+        "cache_write_1h_tokens": 0,
+        "cache_write_5m_tokens": 0,
+        "cache_write_tokens": 0,
+        "input_tokens": 4,
+        "output_tokens": 11,
+        "reasoning_tokens": 0
+      }
+    }
+  ],
+  "tool_calls": {
+    "Agent": 1,
+    "Bash": 1,
+    "Read": 1
+  },
+  "ttft_ms": 950,
+  "turns": 2,
+  "usage": {
+    "accumulative_billed_tokens": 4798,
+    "cache_read_tokens": 4400,
+    "cache_write_1h_tokens": 200,
+    "cache_write_5m_tokens": 100,
+    "cache_write_tokens": 300,
+    "input_tokens": 25,
+    "output_tokens": 73,
+    "reasoning_tokens": 15
+  },
+  "workspace": "<tmp>/ws"
+}

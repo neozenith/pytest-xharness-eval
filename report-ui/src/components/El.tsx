@@ -4,7 +4,7 @@
  */
 export function El({ name }: { name: string }) {
   return (
-    <span className="el text-muted-foreground ml-2 font-mono text-[0.7rem] font-medium tracking-normal normal-case" data-el={name}>
+    <span className="el" data-el={name}>
       {name}
     </span>
   );

@@ -1,14 +1,15 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-
-@custom-variant dark (&:is(.dark *));
-
 /*
- * shadcn/ui's semantic colour variables are filled from the report's design tokens at runtime
- * (see src/lib/tokens.ts and ADR 0024): `--xh-*` are the raw token values, and the shadcn names
- * below alias them so every shadcn component is themed by report.tokens.json without a rebuild.
- * The literal values here are only the fallback for the moment before the tokens load.
+ * The page's one stylesheet (ADR 0031, ADR 0024). Tamagui is the UI framework — layout,
+ * chrome and interactivity are components with props, never utility classes. What lives
+ * here is the rest:
+ *
+ *   1. the `--xh-*` design tokens (filled from report.tokens.json by lib/tokens.ts;
+ *      the literals below are only the pre-load fallback),
+ *   2. document content — tables, record cards, code blocks, key/value grids — which is
+ *      semantic HTML styled by the classes below, and
+ *   3. the few places Tamagui's runtime-injected classes must be overruled (`!important`).
  */
+
 :root {
   --xh-bg: #f7f7fa;
   --xh-panel: #ffffff;
@@ -21,34 +22,24 @@
   --xh-warn: #b45309;
   --xh-code: #f1f2f6;
   --xh-grid: #e6e8ee;
+  /*
+   * The chart's baseline, spine and ticks. A rule that anchors the data has to outrank the
+   * ladder of gridlines behind it, so this sits a clear step darker than `--xh-grid` — at the
+   * same weight they read as one more gridline. It is an opaque hue that has to relate to the
+   * rest of the palette, so a theme file supplies it alongside `grid` and a project can move
+   * the two together; the literal here is only the pre-load fallback.
+   */
+  --xh-axis: #c8ccd6;
   --xh-plot: #ffffff;
+  /* elevation: the one colour a theme file does not supply, because it is a shadow, not ink */
+  --xh-shadow: rgb(20 22 33 / 9%);
+  /*
+   * Ink for a `.pill`, whose background is a fixed per-category colour (`--xh-category-*`),
+   * not a theme surface — so this is deliberately the same value in both themes.
+   */
+  --xh-on-category: #ffffff;
   --xh-font-body: ui-sans-serif, system-ui, sans-serif;
   --xh-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  --radius: 0.5rem;
-  --background: var(--xh-bg);
-  --foreground: var(--xh-ink);
-  --card: var(--xh-panel);
-  --card-foreground: var(--xh-ink);
-  --popover: var(--xh-panel);
-  --popover-foreground: var(--xh-ink);
-  --primary: var(--xh-accent);
-  --primary-foreground: var(--xh-panel);
-  --secondary: var(--xh-code);
-  --secondary-foreground: var(--xh-ink);
-  --muted: var(--xh-code);
-  --muted-foreground: var(--xh-muted);
-  --accent: var(--xh-code);
-  --accent-foreground: var(--xh-ink);
-  --destructive: var(--xh-bad);
-  --border: var(--xh-line);
-  --input: var(--xh-line);
-  --ring: var(--xh-accent);
-  --chart-1: var(--xh-series-1, var(--xh-accent));
-  --chart-2: var(--xh-series-2, var(--xh-warn));
-  --chart-3: var(--xh-series-3, var(--xh-good));
-  --chart-4: var(--xh-series-4, var(--xh-bad));
-  --chart-5: var(--xh-series-5, var(--xh-muted));
 }
 
 .dark {
@@ -63,52 +54,1390 @@
   --xh-warn: #fbbf24;
   --xh-code: #1f2330;
   --xh-grid: #262a36;
+  /* One step lighter than the dark grid: see the note beside the `:root` declaration. */
+  --xh-axis: #3a3f4e;
   --xh-plot: #171a23;
-  --primary-foreground: var(--xh-bg);
+  --xh-shadow: rgb(0 0 0 / 45%);
+  /* Same value as the light theme on purpose: see the note beside the `:root` declaration. */
+  --xh-on-category: #ffffff;
 }
 
-@theme inline {
-  --font-sans: var(--xh-font-body);
-  --font-mono: var(--xh-font-mono);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-good: var(--xh-good);
-  --color-bad: var(--xh-bad);
-  --color-warn: var(--xh-warn);
-  --color-grid: var(--xh-grid);
-  --color-plot: var(--xh-plot);
+/* -- base ------------------------------------------------------------------------ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
+body {
+  margin: 0;
+  background: var(--xh-bg);
+  color: var(--xh-ink);
+  font-family: var(--xh-font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--xh-font-mono);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+/* One disabled look for every control on the page: dimmed, and the cursor says so. */
+button:disabled,
+button[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/*
+ * One focus ring for the whole page. `:where()` keeps the specificity at zero, so any
+ * component that wants its own ring (Tamagui's `focusVisibleStyle`) still wins.
+ */
+:where(a[href], button, summary, input, select, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--xh-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* -- text helpers (document content only; chrome uses Tamagui props) -------------- */
+
+.muted {
+  color: var(--xh-muted);
+}
+.good {
+  color: var(--xh-good);
+}
+.bad {
+  color: var(--xh-bad);
+}
+.warn {
+  color: var(--xh-warn);
+}
+.accentc {
+  color: var(--xh-accent);
+}
+.mono {
+  font-family: var(--xh-font-mono);
+}
+.wrap-anywhere {
+  overflow-wrap: anywhere;
+}
+
+/* -- tables (components/ui/table.tsx) --------------------------------------------- */
+
+/*
+ * A wide table (SessionTable is eighteen columns) has to say that it scrolls, and an overlay
+ * scrollbar only appears once you have already guessed. A wash painted behind the cells was
+ * not enough: it signalled the clip but left the glyphs on top of it whole, so the right edge
+ * read `$0.069` for a value of `$0.0695` — a shorter, still-plausible number, which is a
+ * misread rather than a rough edge. So the clipped edge now fades the *content* out over
+ * 28px. A masked half-glyph cannot be mistaken for a complete one, and the fade doubles as
+ * the depth cue the wash used to carry.
+ *
+ * The two ramp lengths are zero until `table.tsx` measures real overflow and sets
+ * `data-edge-start` / `data-edge-end`, so a table that fits is untouched — no fade, no
+ * reserved gutter. `black`/`transparent` in the gradient are mask alpha stops, not colours:
+ * a mask keeps only the alpha channel, so no token applies.
+ */
+.table-scroll {
+  --xh-fade-start: 0px;
+  --xh-fade-end: 0px;
+  /* the width a pinned detail panel measures itself against — see `tr.detail-row` below */
+  container-type: inline-size;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  /* Keyboard focus lands clear of the ramp instead of arriving half faded out. */
+  scroll-padding-inline: 32px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--xh-muted) 32%, transparent) transparent;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--xh-fade-start), black calc(100% - var(--xh-fade-end)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, black var(--xh-fade-start), black calc(100% - var(--xh-fade-end)), transparent 100%);
+}
+
+.table-scroll[data-edge-start="true"] {
+  --xh-fade-start: 28px;
+}
+
+.table-scroll[data-edge-end="true"] {
+  --xh-fade-end: 28px;
+}
+
+/*
+ * The `SessionTable` is the landing table and the one long one: twenty-four rows of seventeen
+ * columns is 1,000px of table in a 900px viewport, so the last third of the sweep could only be
+ * read once the header row had left the screen — at which point the metrics half is seventeen
+ * anonymous numeric columns.
+ *
+ * A page-level sticky header cannot fix that here. `.table-scroll` sets `overflow-x: auto`,
+ * which forces `overflow-y` to `auto` as well, so a sticky `thead` resolves against *the box*
+ * rather than the page: measured with `top: 62px` injected, the head's top still ran to −107px
+ * at full page scroll. So this one box is given a real height instead. The rows scroll inside
+ * it against a header pinned to its top edge, which is strictly better than pinning under the
+ * app bar would have been — the header is present for every row, not only the ones below the
+ * fold. `:has()` keeps it to this table; every other `.table-scroll` on the page is untouched.
+ */
+.table-scroll:has(#SessionTable) {
+  max-height: max(320px, calc(100dvh - 12rem));
+  overflow-y: auto;
+  /* Keyboard focus on a row lands clear of the pinned header, not behind it. */
+  scroll-padding-block-start: 2.25rem;
+}
+
+#SessionTable thead th {
+  position: sticky;
+  top: 0;
+  /* Above the rows passing beneath it, and opaque, or they show through. */
+  z-index: 2;
+  background: var(--xh-panel);
+  /*
+   * A collapsed table border is painted by the table, not the cell, so it does not travel with
+   * a stuck head — the rule under the header vanished the moment it pinned. The same hairline
+   * is drawn as an inset shadow, which does.
+   */
+  border-bottom-color: transparent;
+  box-shadow: inset 0 -1px 0 var(--xh-line);
+}
+
+.xh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  caption-side: bottom;
+}
+
+/*
+ * Column heads recede: 11px, muted, tracked out. The data is what the eye should land on,
+ * so the only full-strength rule on the table is the one under the header.
+ */
+.xh-table th {
+  text-align: left;
+  vertical-align: bottom;
+  color: var(--xh-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.375rem 0.625rem 0.5rem;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--xh-line);
+}
+
+/*
+ * A sortable head is a button filling its cell, so the hover affordance covers the target.
+ * The negative margins pull it out over the cell's padding, and a plain `width: 100%` — which
+ * resolves against the cell's *content* box — then leaves the whole button sitting 10px left
+ * of the cell: hover wash and focus ring both landed off their own label. The two paddings it
+ * swallows are added back here, and taken off again on the flush outer columns below.
+ */
+.xh-table thead th button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-direction: row;
+  width: calc(100% + 1.25rem);
+  margin: -0.375rem -0.625rem -0.5rem;
+  padding: 0.375rem 0.625rem 0.5rem;
+  border-radius: 6px 6px 0 0;
+  color: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+/*
+ * On a numeric head the label has to stay flush right, above the digits it names — so the
+ * arrow goes to its *left* rather than pushing it off the column's edge. `row-reverse` packs
+ * from the right, which is why `justify-content` is start here and not end.
+ */
+.xh-table thead th.num button {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+/*
+ * The sort arrow is in the DOM on every head, at zero opacity: rendering it only on the
+ * active column meant clicking a head widened it and shoved every column to its right, and
+ * meant a head gave no sign it was sortable until something moved. Inactive arrows point the
+ * way a click would sort, so the hover is a promise rather than decoration.
+ */
+.xh-table thead th .sort-ico {
+  flex: none;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
+}
+
+.xh-table thead th button:hover .sort-ico,
+.xh-table thead th button:focus-visible .sort-ico {
+  opacity: 0.45;
+}
+
+.xh-table thead th .sort-ico[data-active] {
+  opacity: 1;
+  color: var(--xh-accent);
+}
+
+/*
+ * The column the table is actually sorted by is the one head at full ink — and, across
+ * seventeen columns, ink alone was too quiet to find: a reader arriving at a sorted link had
+ * to read every head to learn what it was sorted by. A faint accent wash answers it from the
+ * far side of the table without adding a colour the page does not already use.
+ */
+.xh-table thead th[aria-sort="ascending"] button,
+.xh-table thead th[aria-sort="descending"] button {
+  color: var(--xh-ink);
+  background: color-mix(in srgb, var(--xh-accent) 9%, transparent);
+}
+
+/*
+ * The table divides in two — who ran what, then how it went — and after seven identity
+ * columns a reader scrolling right needs to know which half they are in. One hairline at the
+ * seam says it without a second header row.
+ */
+.xh-table th[data-group="metrics"],
+.xh-table td[data-group="metrics"] {
+  border-left: 1px solid color-mix(in srgb, var(--xh-line) 75%, transparent);
+}
+
+/*
+ * Row and header hovers are a wash of the muted ink rather than the flat `code` surface: it
+ * composites over whatever the row already sits on (panel, or an open row's accent tint) and
+ * lands at the same perceived strength in a light theme and a dark one.
+ */
+.xh-table thead th button:hover {
+  background: color-mix(in srgb, var(--xh-muted) 10%, transparent);
+  color: var(--xh-ink);
+}
+
+/* Hovering the sorted head deepens its own wash rather than swapping it for the neutral one. */
+.xh-table thead th[aria-sort="ascending"] button:hover,
+.xh-table thead th[aria-sort="descending"] button:hover {
+  background: color-mix(in srgb, var(--xh-accent) 17%, transparent);
+}
+
+/*
+ * The page's focus ring is drawn *outside* the target, and `overflow-x: auto` on the scroll
+ * box forces `overflow-y` to `auto` too — so on a header button, which fills its cell right up
+ * against the top of that box, the ring came back as an open-topped "U" (and lost its outer
+ * edge on the first and last columns as well). Drawing the same 2px ring inboard puts every
+ * side of it inside the scroll box, on every column.
+ */
+.xh-table thead th button:focus-visible {
+  outline: 2px solid var(--xh-accent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--xh-muted) 10%, transparent);
+  color: var(--xh-ink);
+}
+
+.xh-table td {
+  padding: 0.375rem 0.625rem;
+  vertical-align: middle;
+  border-bottom: 1px solid color-mix(in srgb, var(--xh-line) 55%, transparent);
+  white-space: nowrap;
+}
+
+/*
+ * A detail row carries prose and record cards, not a datum, so it is the one cell that must
+ * wrap. `white-space: normal` alone only *permits* wrapping: under auto table layout the cell
+ * still contributes its max-content width, `width: 100%` on the table acts as a floor rather
+ * than a cap, and the turn table grew to 6,897px — six viewports of horizontal scrolling, with
+ * the edge fade politely disguising it as an intentional soft edge. `max-width: 0` is the
+ * auto-layout idiom that caps that contribution; `width: 100%` then re-fills the row. The
+ * table's real columns are unaffected, so a genuinely wide table still scrolls.
+ */
+.xh-table tr.detail-row > td {
+  max-width: 0;
+  width: 100%;
+  white-space: normal;
+}
+
+/*
+ * With that cap in place the table is back to the width its *data* columns need — but a
+ * sixteen-column ledger still overruns the card by a couple of hundred pixels, and the detail
+ * panel, being one cell of that table, was rendered that wide too: the right edge of every
+ * record card sat off-screen until you scrolled. So the panel is pinned instead. It is sized
+ * to the scroll box rather than the table (`cqw`, against the container declared on
+ * `.table-scroll`) and stuck to the box's left edge, so scrolling moves the *columns* and
+ * leaves the reading matter still. `--xh-fade-end` keeps it clear of the edge ramp, and is
+ * itself 0 whenever the table is not clipping — so a table that fits gets no inset.
+ */
+.xh-table tr.detail-row > td > * {
+  position: sticky;
+  left: 0;
+  width: calc(100cqw - var(--xh-fade-end, 0px));
+}
+
+/* A hair more air under the header rule than between two data rows. */
+.xh-table tbody tr:first-child > td {
+  padding-top: 0.5rem;
+}
+
+/* Flush outer edges so the first column lines up with the card title above it. */
+.xh-table th:first-child,
+.xh-table td:first-child {
+  padding-left: 0;
+}
+
+.xh-table th:last-child,
+.xh-table td:last-child {
+  padding-right: 0;
+}
+
+.xh-table thead th:first-child button,
+.xh-table thead th:last-child button {
+  width: calc(100% + 0.625rem);
+}
+
+.xh-table thead th:first-child:last-child button {
+  width: 100%;
+}
+
+.xh-table thead th:first-child button {
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.xh-table thead th:last-child button {
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.xh-table tbody tr:last-child > td {
+  border-bottom: none;
+}
+
+.xh-table tbody tr {
+  transition: background-color 100ms ease;
+}
+
+.xh-table tbody tr:hover:not(.detail-row) {
+  background: color-mix(in srgb, var(--xh-muted) 10%, transparent);
+}
+
+/*
+ * A `SessionRow` is the only way into a `SessionView`, so it is focusable and answers Enter.
+ * The ring is drawn inboard for the same reason the header's is: `overflow-x: auto` on the
+ * scroll box clips anything an outline draws outside the row.
+ */
+.xh-table tbody tr.SessionRow {
+  cursor: pointer;
+}
+
+.xh-table tbody tr.SessionRow:focus-visible {
+  outline: 2px solid var(--xh-accent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--xh-accent) 8%, transparent);
+}
+
+.xh-table .row-open {
+  background: color-mix(in srgb, var(--xh-accent) 9%, transparent);
+}
+
+.xh-table tbody tr.row-open:hover {
+  background: color-mix(in srgb, var(--xh-accent) 15%, transparent);
+}
+
+.xh-table caption {
+  padding-top: 0.625rem;
+  color: var(--xh-muted);
+  font-size: 0.75rem;
+}
+
+.xh-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The key column is top-aligned so a multi-line value (a prompt) keeps its label at the top.
+ * Its line box is pinned to the *value's* — 0.8125rem × 1.45 — so the smaller mono label still
+ * sits on the same baseline as the text beside it instead of riding a pixel high.
+ */
+.xh-table .key {
+  color: var(--xh-muted);
+  font-family: var(--xh-font-mono);
+  font-size: 0.75rem;
+  line-height: calc(0.8125rem * 1.45);
+  white-space: nowrap;
+  vertical-align: top;
+  width: 14rem;
+}
+
+.xh-table .strong {
+  font-weight: 600;
+}
+
+.xh-table code {
+  font-size: 0.75rem;
+}
+
+/* -- chips and pills --------------------------------------------------------------- */
+
+/*
+ * The five small chips — `Badge`, `.pill`, `.tag`, `.code-chip` and the head's `.ctx` — sit
+ * beside one another in record-card heads and in table cells, and each used to derive its own
+ * height from its own font and padding: 20, 18.6, 19.4, 20.2 and 18px, five values close
+ * enough to read as a misalignment rather than a scale. They share the kit's 20px chip tier
+ * here, so only the *shape* (radius, fill, ink) distinguishes them. `min-height` rather than
+ * `height` so a chip long enough to wrap grows instead of clipping.
+ */
+.code-chip,
+.pill,
+.tag,
+.rec-head .ctx {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding-block: 0;
+}
+
+.code-chip {
+  background: var(--xh-code);
+  border-radius: 5px;
+  padding-inline: 0.375rem;
+  margin-right: 0.25rem;
+  font-family: var(--xh-font-mono);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.pill {
+  border-radius: 999px;
+  padding-inline: 0.5rem;
+  font-family: var(--xh-font-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--xh-on-category);
+}
+
+/*
+ * A chip is a control, so it joins the kit's control scale rather than emerging from its own
+ * padding: 28px, the same tier as `Button size="sm"` and a segmented-control segment, which is
+ * what it sits beside. (Its height used to fall out of padding + line-height at 29.55px —
+ * off the 4px rhythm the button frame climbs, and a hair taller than the controls around it.)
+ * `min-height` rather than `height` so a chip long enough to wrap grows instead of clipping.
+ */
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  max-width: 100%;
+  background: var(--xh-code);
+  border: 1px solid var(--xh-line);
+  border-radius: 8px;
+  padding: 0 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  /* Every chip ends in a count; tabular figures keep a column of them from wobbling. */
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 90ms ease;
+}
+
+button.filter-chip {
+  cursor: pointer;
+}
+
+button.filter-chip:hover {
+  border-color: color-mix(in srgb, var(--xh-muted) 55%, var(--xh-line));
+  background: color-mix(in srgb, var(--xh-muted) 8%, var(--xh-code));
+  color: var(--xh-ink);
+}
+
+/* The chip is a filter, so it takes a real press — the same 0.97 snap the buttons use. */
+button.filter-chip:active {
+  transform: scale(0.97);
+}
+
+.filter-chip[data-on="true"] {
+  border-color: var(--xh-accent);
+  background: color-mix(in srgb, var(--xh-accent) 13%, transparent);
+}
+
+/*
+ * `button.filter-chip:hover` (0,2,1) outranks `.filter-chip[data-on="true"]` (0,2,0), so
+ * without restating it here the selected chip lost its accent border to the grey hover border
+ * at the same moment its fill went *more* accent — the selection visibly degraded under the
+ * pointer. The border is restated at matching specificity.
+ */
+button.filter-chip[data-on="true"]:hover {
+  border-color: var(--xh-accent);
+  background: color-mix(in srgb, var(--xh-accent) 20%, transparent);
+}
+
+.filter-chip[data-on="true"] b {
+  color: var(--xh-ink);
+}
+
+.filter-chip b {
+  color: var(--xh-muted);
+  font-weight: 600;
+  margin-right: 0.3rem;
+}
+
+.tag {
+  background: var(--xh-code);
+  color: var(--xh-muted);
+  border: 1px solid color-mix(in srgb, var(--xh-line) 70%, transparent);
+  border-radius: 5px;
+  padding-inline: 0.375rem;
+  font-family: var(--xh-font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+.tag.added {
+  color: var(--xh-good);
+}
+.tag.removed {
+  color: var(--xh-bad);
+}
+
+/* -- the record-card library (components/records/) --------------------------------- */
+
+.comp {
+  position: relative;
+}
+
+/*
+ * The glossary name of the renderer that drew this subtree, in its corner (ADR 0021). Every
+ * level of the library wraps its output in a `.comp`, so on a rendered card three or four of
+ * these anchor to the *same* corner — `R.claude/attachment/…`, `V.xmlish` and `V.text` all at
+ * `top: 0`, painting one illegible pile of overlapping glyphs over the record's first line of
+ * text. So a name is asked for rather than broadcast: hovering a `.comp` names it, and only
+ * it, as a chip that reads against whatever it lands on. `pointer-events: none` keeps it out
+ * of the way of selecting the text underneath, and the `data-el` attribute is untouched — the
+ * HTML still reads in the vocabulary whether or not a pointer is anywhere near it.
+ */
+.comp-label {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--xh-panel);
+  border: 1px solid var(--xh-line);
+  border-radius: 5px;
+  padding: 0 0.3125rem;
+  color: var(--xh-muted);
+  font-family: var(--xh-font-mono);
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1.6;
+  transition: opacity 120ms ease;
+}
+
+/*
+ * The exception: a `fallback` name is not trivia, it is the report telling you no renderer
+ * claimed this shape and you are looking at raw JSON. That one stays on the page.
+ */
+.comp[data-el$="fallback"] > .comp-label,
+.comp:hover > .comp-label {
+  opacity: 1;
+}
+
+/* A hovered descendant is the more specific answer, so the outer names step aside. */
+.comp:has(.comp:hover) > .comp-label {
+  opacity: 0;
+}
+
+/*
+ * A card is a container in its own right: its head has to lay itself out against the width of
+ * the *card*, which is set by the sticky detail panel or the session view and has little to do
+ * with the viewport (the sidebar collapses under it, the table scrolls beside it). The width is
+ * handed down from the panel, never measured from the cards inside it, so declaring the
+ * containment here costs the layout nothing and buys the head a real breakpoint.
+ */
+.rec {
+  container-type: inline-size;
+  background: var(--xh-panel);
+  border: 1px solid var(--xh-line);
+  border-radius: 8px;
+  margin: 0.5rem 0;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+/*
+ * A turn is dozens of cards deep, so the hover is a whisper — enough to tell you which card
+ * the pointer is in (and which permalink you are about to click), not enough to strobe as you
+ * scroll past a hundred of them.
+ */
+.rec:hover {
+  border-color: color-mix(in srgb, var(--xh-muted) 28%, var(--xh-line));
+}
+
+/*
+ * The head is a band, not just a row above a hairline: a card is one log line among hundreds
+ * and the eye needs a repeating horizontal beat to count them by. Diluted to 55% of `code` the
+ * band measured 1.06:1 against the card body — in dark it was indistinguishable from it, and
+ * the beat was carried entirely by the bottom hairline. Undiluted `code` is the recessed
+ * surface `.xh-pre` and `.code-head` already sit on, so the head reads as the same material.
+ *
+ * The band is the head's own controls (28px, the kit's small-control tier) with 4px of air
+ * above and below, over its 1px hairline, and the 10px inset is the one `.rec-body` uses — the pill, the body's prose and a
+ * block's code head all start on one left edge, and the flip button and a code block's right
+ * edge end on one right edge.
+ *
+ * The band is one line, always. Allowed to wrap it made a 61px two-line head whose second line
+ * was a label at one end and two buttons at the other — and it did that on *every* card at
+ * once, because every card in a session carries the same run of metadata. A head is a caption:
+ * when it runs out of room the kind elides and, further down, the least load-bearing data step
+ * out (see the container queries below), which is a decision the page can make card by card.
+ */
+.rec-head {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 36px;
+  padding: 0.25rem 0.625rem;
+  border-bottom: 1px solid var(--xh-line);
+  border-radius: 7px 7px 0 0;
+  background: var(--xh-code);
+  font-size: 0.75rem;
+}
+
+/* Every datum and control in the head is fixed; the kind pill is the only item that gives. */
+.rec-head > :not(.pill) {
+  flex: none;
+}
+
+.rec-head .meta {
+  color: var(--xh-muted);
+  font-family: var(--xh-font-mono);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* `L11` is the record's address — the thing the permalink points at — so it leads the run. */
+.rec-head .line {
+  color: color-mix(in srgb, var(--xh-ink) 65%, var(--xh-muted));
+  font-weight: 600;
+}
+
+/*
+ * One dot between the meta items, so the run reads as a sentence instead of a scatter. It
+ * hangs off the *preceding* item rather than the following one: as a `::before` it was the
+ * first glyph of a `white-space: nowrap` span, so a head that wrapped opened its second line
+ * with an orphaned separator. Carried on the item it follows, a dot can only ever end a line.
+ * The flex gap supplies the space after it, as it did before it.
+ */
+.rec-head .meta:has(+ .meta)::after {
+  content: "·";
+  margin-left: 0.5rem;
+  color: color-mix(in srgb, var(--xh-muted) 42%, transparent);
+}
+
+/*
+ * The context annotation is not more metadata: it is the one measured quantity on the head,
+ * and it carries a tooltip explaining itself. A tinted chip and `cursor: help` say both.
+ */
+.rec-head .ctx {
+  padding-inline: 0.375rem;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--xh-accent) 12%, transparent);
+  color: var(--xh-accent);
+  cursor: help;
+  font-family: var(--xh-font-mono);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/*
+ * Permalink and flip are one cluster at the end of the head — 4px apart from each other, a
+ * clear step away from the glossary name they used to sit evenly between. The `auto` margin is
+ * what pushes the cluster right; a `flex: 1` spacer used to do it as well, and it ate the free
+ * space the head needs to give the pill. It is also the one thing in the head that never
+ * yields: the controls stay put and full size at every width.
+ */
+.rec-head .rec-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: none;
+  margin-left: auto;
+}
+
+/*
+ * A control in the head is on the kit's 28px tier, not the 26px `xs` frame it inherits: these
+ * are the two smallest hit targets on the page and they repeat on every one of a hundred
+ * cards. (The `xs` frame's 11.5px type — half a pixel off the card's 13/12/11/10 scale, on the
+ * most-repeated control in the report — is corrected at the call site instead: the button
+ * frame writes its size as an inline style, which no stylesheet rule can outrank.)
+ */
+.rec-head .rec-actions button {
+  min-height: 28px;
+}
+
+/*
+ * `raw` and `nice` are three and four characters wide, so a column of these buttons used to
+ * shift sideways as cards flipped. The width is pinned to the wider word.
+ */
+.rec-head .flip {
+  min-width: 3.125rem;
+  min-height: 28px;
+  justify-content: center;
+  font-family: var(--xh-font-mono);
+}
+
+/*
+ * The kind is the one elastic thing in the head — everything else is a fixed datum or a
+ * control — so it is the one allowed to give. `min-width: 0` lets the pill shrink below the
+ * width of its own text; the inner span is what actually elides, because `text-overflow`
+ * needs a box and the pill is a flex container.
+ */
+.rec-head .pill {
+  min-width: 0;
+}
+
+.rec-head .pill-kind {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * A card is not always 1,000px wide: in a detail panel beside an open sidebar it is nearer
+ * 500, and a head that keeps every datum there has nothing left to show of the kind. So below
+ * the width where the run stops fitting, the head sheds in priority order: the size (a number
+ * the body carries anyway) and the glossary name (a hover chip everywhere else in the record
+ * library) go first, leaving the record's identity, its address, its clock, its context share
+ * and its controls.
+ */
+@container (max-width: 640px) {
+  .rec-head .chars,
+  .rec-head .el {
+    display: none;
   }
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
+
+  /* With `chars` gone the clock ends the run, and a run does not end on a separator. */
+  .rec-head .meta.clock::after {
+    content: none;
   }
+}
+
+/* Narrower still, the clock goes the way of the size and the pill keeps the width. */
+@container (max-width: 420px) {
+  .rec-head .clock {
+    display: none;
+  }
+
+  .rec-head .meta.line::after {
+    content: none;
+  }
+}
+
+.rec-body {
+  padding: 0.5rem 0.625rem;
+}
+
+/*
+ * The first thing in a card body owns no leading of its own — the body's padding is the
+ * leading. Two levels deep covers the usual `R.<kind>` › message › block chain; the same at
+ * the bottom, so a card does not end with a doubled gap under its last code block.
+ */
+.rec-body > .comp > .comp-label + *,
+.rec-body > .comp > .comp-label + .comp > .comp-label + * {
+  margin-top: 0;
+}
+
+.rec-body > .comp > *:last-child,
+.rec-body > .comp > .comp-label + .comp > *:last-child {
+  margin-bottom: 0;
+}
+
+.txt {
+  margin: 0.375rem 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/*
+ * A card stacks two or three of these grids (a tool's fields, then the message's, then usage),
+ * and each used to size its own key column from its own longest key — three ragged left edges
+ * one under another. A fixed key column gives the whole card one alignment axis; a long key
+ * wraps inside it rather than pushing the values across. Baselines, not boxes, are aligned, so
+ * the smaller key sits on the same line as its value.
+ */
+.kvs {
+  display: grid;
+  grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 0.75rem;
+  row-gap: 0.1875rem;
+  margin: 0.375rem 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.kvs b {
+  color: var(--xh-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.kvs .val {
+  min-width: 0;
+  word-break: break-word;
+  /* A usage grid is a column of token counts; tabular figures keep their digits in line. */
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * ...and the fixed key column only buys that axis if every grid in the card starts at the same
+ * x. On a message card two of them did not: a tool's grid sits inside a `.block` and inherits
+ * its 12px gutter (2px rule + 10px), while the message's own model/stop/id grid and its usage
+ * grid sit flush in the body — a 12px jog down the card's spine. A card that stacks blocks has
+ * one gutter, so the flush grids adopt it; a card with no blocks has no gutter to adopt and
+ * stays flush. The two contexts that are already on the gutter — a block, and what a
+ * disclosure opened — are exempted rather than double-indented.
+ */
+.rec:has(.block) .kvs,
+.rec:has(.block) .sublabel {
+  margin-left: 0.75rem;
+}
+
+.rec:has(.block) .block .kvs,
+.rec:has(.block) .block .sublabel,
+.rec:has(.block) .env-trigger + * .kvs {
+  margin-left: 0;
+}
+
+/*
+ * The title of a code block belongs *to* the block: it is the block's top edge, sharing its
+ * border and joining its radius, the way a code panel reads in an editor. Detached above the
+ * pre it read as a stray caption, and at a glance it was unclear which block it titled.
+ *
+ * Its band is the card surface and the pre below it is the recessed one — the same pair, and
+ * the same step (1.12:1 light, 1.11:1 dark), that separates a card's head from its body.
+ * Diluted to 60% the band was 1.04:1 off the code it headed, which is no band at all.
+ */
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  /* 10px, the inset of the `.xh-pre` it is joined to, so the title sits over its own code. */
+  padding: 0.125rem 0.625rem;
+  border: 1px solid var(--xh-line);
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
+  background: var(--xh-panel);
+  color: var(--xh-muted);
+  font-family: var(--xh-font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.7;
+}
+
+/*
+ * Title and language share the head, so they have to be told apart — but fading the language
+ * to 70% of `muted` put it at 3.1:1 on the band in light and 3.8:1 in dark, under AA at 11px.
+ * It is distinguished by *form* instead: tracked-out small caps against the title's sentence
+ * case, both at the full `muted` ink (6.3:1).
+ */
+.code-head .ch-title {
+  font-weight: 500;
+}
+
+.code-head .ch-lang {
+  color: var(--xh-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.xh-pre {
+  background: var(--xh-code);
+  border: 1px solid var(--xh-line);
+  margin: 0.25rem 0 0.5rem;
+  max-height: 60vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: 7px;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--xh-muted) 32%, transparent) transparent;
+}
+
+.code-head + .xh-pre {
+  margin-top: 0;
+  border-radius: 0 0 7px 7px;
+}
+
+/*
+ * The pre is focusable (it scrolls), so it takes a ring — inset, because drawn outside the
+ * box the ring would straddle the code head joined to its top edge and the card's own border.
+ */
+.xh-pre:focus-visible {
+  outline-offset: -2px;
+}
+
+.final-pre {
+  background: var(--xh-code);
+  max-height: 480px;
+  overflow: auto;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin: 0;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+}
+
+/*
+ * Content blocks nest (an XML section inside a text block inside a message), so the rule that
+ * marks one is 2px, not 3: at three it read as a bar of colour rather than a margin note, and
+ * two of them side by side ate an indent's worth of width. The rule's colour is set inline
+ * from the same category palette the head's pill is drawn from (`CATEGORIES` in lib/records,
+ * overridden per project by `--xh-category-*`), so the two never drift apart.
+ */
+.block {
+  margin: 0.5rem 0;
+  border-left: 2px solid var(--xh-line);
+  padding: 0.0625rem 0 0.0625rem 0.625rem;
+}
+
+/* Block type names are labels, not content: small caps-cased mono, set apart from the prose. */
+.bhead {
+  margin-bottom: 0.25rem;
+  color: var(--xh-muted);
+  font-family: var(--xh-font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* An `<xml_tag>` in a block head is the literal tag from the log; it is not upper-cased. */
+.bhead .tag {
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/*
+ * The `name: description` listing (values.tsx `Listing`) is a nested table, so it walks into
+ * the same auto-layout trap the detail row does — and it was the single element blowing the
+ * turn table out to 6,897px, because every description rendered on one unwrapped line. The
+ * description column takes the width cap; the name column keeps its max-content width.
+ */
+.list {
+  width: 100%;
+  font-size: 0.8125rem;
+  border-collapse: collapse;
+}
+
+.list td {
+  padding: 0.2rem 0.5rem;
+  vertical-align: top;
+  /*
+   * A `.list` is nested *inside* a `.xh-table` detail cell, so it inherits that table's
+   * `white-space: nowrap` — which is right for a datum and wrong for a description. Restated
+   * here, because a nested table is document content, not a data grid.
+   */
+  white-space: normal;
+}
+
+/*
+ * A skill listing runs to fifty rows; a hairline between them is what makes it a table you can
+ * read across rather than a wall of prose.
+ */
+.list tr + tr td {
+  border-top: 1px solid color-mix(in srgb, var(--xh-line) 60%, transparent);
+}
+
+/*
+ * A card can stack a `Kvs` over a `Listing` (`agent_listing_delta`), and two grids sitting
+ * directly on top of one another have to share more than a left edge: the listing's name
+ * column is floored at the `.kvs` axis — 6.5rem of key plus its 0.75rem gutter, 116px in the
+ * border box these cells are sized in — and carries that gutter itself, so a listing whose
+ * names fit the axis lands its descriptions exactly on the value column above them instead of
+ * a few pixels off it. A name wider than the axis still sets its own column: the name is the
+ * thing you scan, and broken across two lines ("general-" / "purpose") it isn't. The gutter is
+ * the name cell's alone — the description added 8px more on top, a 16px trench between two
+ * columns of a card whose every other gutter is 12.
+ */
+.list td:first-child {
+  padding-left: 0;
+  padding-right: 0.75rem;
+  min-width: 7.25rem;
+  white-space: nowrap;
+}
+
+.list td:last-child {
+  max-width: 0;
+  width: 100%;
+  padding-left: 0;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The disclosure that opens a record's envelope. Tamagui's `is_View` base makes every
+ * component a full-width column with centred text, which put the chevron on its own line
+ * above a centred caption in the middle of the card — the control did not read as a control
+ * at all. Restated as a row that is only as wide as its label, and given the hover, press and
+ * focus states a button owes the pointer. 28px is the kit's small-control tier, the same as
+ * the buttons in the card head above it.
+ */
+.env-trigger {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  width: fit-content;
+  min-height: 28px;
+  gap: 0.3125rem;
+  margin-top: 0.5rem;
+  padding: 0 0.4375rem 0 0.3125rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--xh-muted);
+  font-family: var(--xh-font-mono);
+  font-size: 0.6875rem;
+  text-align: left;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 75ms ease;
+}
+
+.env-trigger:hover {
+  background: var(--xh-code);
+  border-color: var(--xh-line);
+  color: var(--xh-ink);
+}
+
+/*
+ * Every other control in the card presses — the button frame and the filter chip both take
+ * the same 0.97 snap — so the disclosure takes it too, on the frame's faster transform curve.
+ */
+.env-trigger:active {
+  transform: scale(0.97);
+}
+
+.env-trigger[aria-expanded="true"] {
+  color: var(--xh-ink);
+}
+
+/*
+ * What the disclosure opened is subordinate to it, so it sits indented under the chevron
+ * behind the same hairline a content block uses — open, it reads as one thing with its
+ * trigger instead of a grid that appeared flush against the card's left edge. 1px rule + 11px
+ * is 12px, the block gutter, so what a disclosure opens lands on the card's one indent rather
+ * than a third of its own.
+ */
+.env-trigger + * {
+  margin: 0.25rem 0 0;
+  padding-left: 0.6875rem;
+  border-left: 1px solid var(--xh-line);
+}
+
+.env-trigger .chev {
+  flex: none;
+  transition: transform 150ms ease;
+}
+
+.env-trigger[aria-expanded="true"] .chev {
+  transform: rotate(90deg);
+}
+
+.el {
+  margin-left: 0.5rem;
+  color: var(--xh-muted);
+  font-family: var(--xh-font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/*
+ * Three sizes inside the record library were set inline, off the scale the rest of the card
+ * keeps to (13 / 12 / 11 / 10px): a `Mono` value at 12.8px, a note at 14px and a caption at
+ * 12.8px. They are classes on the scale here, because document content is styled from the
+ * stylesheet — the components only name what a thing *is*.
+ */
+.mono-sm {
+  font-family: var(--xh-font-mono);
+  font-size: 0.75rem;
+}
+
+/* A one-line remark inside a card, set at the prose size it sits among (`.txt`). */
+.note {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+/* A caption naming the grid under it ("this call", "cumulative"): the grid's own key ink. */
+.sublabel {
+  display: block;
+  margin: 0.5rem 0 0.125rem;
+  color: var(--xh-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* -- nav sidebar links (components/NavSidebar.tsx) --------------------------------- */
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.nav-link:hover,
+.nav-section:hover {
+  background: var(--xh-code);
+}
+
+.nav-link[data-active="true"] {
+  background: var(--xh-code);
+  font-weight: 500;
+}
+
+.nav-link .sid {
+  margin-left: auto;
+  color: var(--xh-muted);
+  font-family: var(--xh-font-mono);
+  font-size: 0.7rem;
+}
+
+.nav-group {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  border-radius: 6px;
+  color: var(--xh-muted);
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nav-group:hover {
+  background: var(--xh-code);
+  color: var(--xh-ink);
+}
+
+.nav-group .chev {
+  flex-shrink: 0;
+  transition: transform 150ms ease;
+}
+
+.nav-group[aria-expanded="true"] .chev {
+  transform: rotate(90deg);
+}
+
+.nav-group .count {
+  margin-left: auto;
+  font-family: var(--xh-font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.nav-group.mono {
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: normal;
+}
+
+.nav-section {
+  display: block;
+  width: 100%;
+  border-radius: 0 8px 8px 0;
+  padding: 0.125rem 0.5rem;
+  text-align: left;
+  color: var(--xh-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.nav-section:hover {
+  color: var(--xh-ink);
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -- Tamagui overrides -------------------------------------------------------------- */
+
+/*
+ * Tamagui injects its atomic classes at runtime, after this stylesheet, so the
+ * segmented-control chrome that must win is pinned with !important. Its *hover* styles need
+ * more than that: they land as `:root:root ._bg-0hover-…:hover { … !important }`, which is
+ * (0,4,0) and important, so a plain `.XhToggleGroup [data-state]:hover` (0,3,0) loses to them
+ * even with !important — and the selected segment used to drop its raised surface and go
+ * transparent the moment the pointer touched it. Every rule below that has to survive a
+ * pointer therefore repeats `:root:root` to reach (0,5,0) and clear them.
+ */
+/*
+ * A recessed track carrying a raised thumb: the selected segment lifts onto the panel
+ * surface with a hairline ring, instead of shouting in full-strength accent.
+ */
+.XhToggleGroup {
+  /*
+   * The three per-state surfaces are named here so a theme only has to restate the values, and
+   * the rules below cannot drift from one another. The invariant they encode: the selected
+   * thumb is always the *lightest* thing in the track, and an off-hover always moves the other
+   * way — it recesses toward the page, a hint of where the thumb is about to land, never a
+   * surface that competes with the thumb itself.
+   */
+  --xh-toggle-thumb: var(--xh-panel);
+  /*
+   * The ring is the selection's outline, so it is held to WCAG 1.4.11's 3:1 against the thumb
+   * it draws around — one mix that clears it in both themes (3.3:1 on the light thumb, 3.2:1
+   * on the dark one). At a plain `--xh-line` it was 1.3:1 in light and 1.03:1 in dark, i.e. no
+   * ring at all, which left the selection resting on a lightness delta alone. It is
+   * deliberately more defined than the track's own border: the selected segment should be the
+   * most sharply drawn thing in the control.
+   */
+  --xh-toggle-ring: color-mix(in srgb, var(--xh-muted) 65%, var(--xh-line));
+  --xh-toggle-off-hover: color-mix(in srgb, var(--xh-muted) 12%, transparent);
+  flex-direction: row !important;
+  width: fit-content;
+  gap: 2px;
+  border: 1px solid var(--xh-line);
+  border-radius: 9px;
+  padding: 2px;
+  background: var(--xh-code);
+  font-family: var(--xh-font-body);
+  font-size: 0.78125rem;
+  font-weight: 500;
+}
+/*
+ * Dark inverts two of the three, because dark has no surface lighter than `code`:
+ *
+ *   - the thumb is mixed up out of the hairline, since `panel` is *darker* than the track;
+ *   - the off-hover wash therefore cannot be a muted lift — over `code` it landed at
+ *     rgb(46,50,63) against a thumb of rgb(39,43,56), i.e. a hovered *unselected* segment read
+ *     brighter than the selected one and the selection went ambiguous under the pointer. It
+ *     sinks toward `--xh-bg` instead, which restores the light theme's polarity;
+ * The ring needs no dark variant — the one mix above clears 3:1 on both thumbs — but it does
+ * carry more weight here: the `0 1px 2px` drop shadow beside it is invisible on a dark ground,
+ * so in dark the ring is the whole of the raised-thumb cue.
+ */
+.dark .XhToggleGroup {
+  --xh-toggle-thumb: color-mix(in srgb, var(--xh-line) 75%, var(--xh-code));
+  --xh-toggle-off-hover: color-mix(in srgb, var(--xh-bg) 55%, transparent);
+}
+.XhToggleGroup [data-state="off"] {
+  color: var(--xh-muted) !important;
+}
+/*
+ * An unselected segment answered the pointer with an ink shift alone, which on a 12.5px label
+ * is close to no answer at all. It now also takes a wash. The ink stops short of full strength
+ * on purpose: muted at rest, three-quarters on hover, full only when selected, so the label
+ * ranks the three states even where the surfaces are a hair apart.
+ */
+:root:root .XhToggleGroup [data-state="off"]:hover {
+  background: var(--xh-toggle-off-hover) !important;
+  color: color-mix(in srgb, var(--xh-ink) 74%, var(--xh-muted)) !important;
+}
+.XhToggleGroup [data-state="on"],
+:root:root .XhToggleGroup [data-state="on"]:hover {
+  background: var(--xh-toggle-thumb) !important;
+  color: var(--xh-ink) !important;
+  box-shadow:
+    0 0 0 1px var(--xh-toggle-ring),
+    0 1px 2px var(--xh-shadow);
+}
+
+/* Tamagui's own `checked` variant repaints the switch track; the report's accent wins here. */
+.XhSwitch[aria-checked="true"] {
+  background: var(--xh-accent) !important;
+}
+
+/*
+ * 34×20 is the right *reading* of a switch, but 20px was the smallest target on the page —
+ * under the kit's 28px floor and under WCAG 2.2 SC 2.5.8's 24px, surviving only on the spacing
+ * exception. The pseudo-element keeps the visual track exactly as it is and pushes the
+ * clickable region out to 28px tall: hit-testing an `::after` resolves to its originating
+ * element, so a press in the 4px above or below the track still toggles the switch.
+ */
+.XhSwitch {
+  position: relative;
+}
+
+.XhSwitch::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+
+/* The record a `line=` deeplink targets flashes once (see views/SessionView.tsx). */
+@keyframes xh-target-flash {
+  0%,
+  60% {
+    box-shadow: 0 0 0 3px var(--xh-accent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+.xh-target {
+  animation: xh-target-flash 2.4s ease-out;
 }

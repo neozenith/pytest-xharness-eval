@@ -12,7 +12,7 @@ export function FinalMessagePanel({ text }: { text: string | null | undefined })
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <pre id="FinalMessage" className="bg-muted max-h-[480px] overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap">
+        <pre id="FinalMessage" className="final-pre">
           {text || "(empty)"}
         </pre>
       </CardContent>

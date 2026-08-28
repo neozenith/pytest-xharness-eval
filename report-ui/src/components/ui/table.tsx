@@ -1,114 +1,59 @@
-import * as React from "react"
+/**
+ * Semantic HTML tables styled by `index.css` (`.xh-table`). Real `<table>` markup stays —
+ * tabular data wants the browser's table semantics — and the cells accept the stylesheet's
+ * class vocabulary (`num`, `key`, `strong`) through `className`.
+ */
+import * as React from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
+
+/**
+ * Flag which horizontal edges of a scroll box are actually clipping, as `data-edge-start` /
+ * `data-edge-end`. `.table-scroll` in index.css fades the content out on exactly those sides,
+ * so a table that fits keeps every glyph at full strength and one that does not can never
+ * show a half-cut number as if it were whole. It has to be measured: the equivalent
+ * background trick relies on `background-attachment: local`, and masks have no attachment.
+ */
+function useClippedEdges<T extends HTMLElement>() {
+  const ref = React.useRef<T>(null);
+  React.useEffect(() => {
+    const box = ref.current;
+    if (!box) return;
+    const measure = () => {
+      // A pixel of slack: sub-pixel layout leaves a fraction of overflow on tables that fit.
+      const remaining = box.scrollWidth - box.clientWidth - box.scrollLeft;
+      box.dataset.edgeStart = String(box.scrollLeft > 1);
+      box.dataset.edgeEnd = String(remaining > 1);
+    };
+    measure();
+    box.addEventListener("scroll", measure, { passive: true });
+    // The table's own width changes when a detail row opens, which the box's size may not.
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : undefined;
+    observer?.observe(box);
+    for (const child of box.children) observer?.observe(child);
+    return () => {
+      box.removeEventListener("scroll", measure);
+      observer?.disconnect();
+    };
+  }, []);
+  return ref;
+}
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
+  const box = useClippedEdges<HTMLDivElement>();
   return (
-    <div
-      data-slot="table-container"
-      className="relative w-full overflow-x-auto"
-    >
-      <table
-        data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
-        {...props}
-      />
+    <div ref={box} data-slot="table-container" className="table-scroll">
+      <table data-slot="table" className={cn("xh-table", className)} {...props} />
     </div>
-  )
+  );
 }
 
-function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return (
-    <thead
-      data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
-      {...props}
-    />
-  )
-}
+const TableHeader = (props: React.ComponentProps<"thead">) => <thead data-slot="table-header" {...props} />;
+const TableBody = (props: React.ComponentProps<"tbody">) => <tbody data-slot="table-body" {...props} />;
+const TableFooter = (props: React.ComponentProps<"tfoot">) => <tfoot data-slot="table-footer" {...props} />;
+const TableRow = (props: React.ComponentProps<"tr">) => <tr data-slot="table-row" {...props} />;
+const TableHead = (props: React.ComponentProps<"th">) => <th data-slot="table-head" {...props} />;
+const TableCell = (props: React.ComponentProps<"td">) => <td data-slot="table-cell" {...props} />;
+const TableCaption = (props: React.ComponentProps<"caption">) => <caption data-slot="table-caption" {...props} />;
 
-function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
-  return (
-    <tbody
-      data-slot="table-body"
-      className={cn("[&_tr:last-child]:border-0", className)}
-      {...props}
-    />
-  )
-}
-
-function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
-  return (
-    <tfoot
-      data-slot="table-footer"
-      className={cn(
-        "border-t bg-muted/50 font-medium [&>tr]:last:border-b-0",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
-  return (
-    <tr
-      data-slot="table-row"
-      className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function TableHead({ className, ...props }: React.ComponentProps<"th">) {
-  return (
-    <th
-      data-slot="table-head"
-      className={cn(
-        "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function TableCell({ className, ...props }: React.ComponentProps<"td">) {
-  return (
-    <td
-      data-slot="table-cell"
-      className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function TableCaption({
-  className,
-  ...props
-}: React.ComponentProps<"caption">) {
-  return (
-    <caption
-      data-slot="table-caption"
-      className={cn("mt-4 text-sm text-muted-foreground", className)}
-      {...props}
-    />
-  )
-}
-
-export {
-  Table,
-  TableHeader,
-  TableBody,
-  TableFooter,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableCaption,
-}
+export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption };

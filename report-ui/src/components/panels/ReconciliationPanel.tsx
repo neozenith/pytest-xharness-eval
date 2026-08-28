@@ -16,11 +16,31 @@ interface ReportedUsage {
 }
 
 const cmp = (a: number | null | undefined, b: number | null | undefined) =>
-  a == null || b == null ? "" : a === b ? <span className="text-good">=</span> : <Notice>Δ {fmt(b - a)}</Notice>;
+  a == null || b == null ? "" : a === b ? <span className="good">=</span> : <Notice>Δ {fmt(b - a)}</Notice>;
 
 /** The ledger built from the session log against the harness's own aggregate, row by row, with the difference. */
 export function ReconciliationPanel({ result }: { result: RunResult }) {
-  const u = result.usage;
+  // The harness aggregate covers only the primary thread (docs/token-accounting.md §5),
+  // so the tier rows compare the primary share of `usage` (the whole bill minus the
+  // subagents' folded tiers); the subagents' bill is its own row.
+  const subs = result.subagents ?? [];
+  const subTier = (
+    key: "input_tokens" | "output_tokens" | "cache_read_tokens" | "cache_write_tokens" | "cache_write_1h_tokens" | "cache_write_5m_tokens" | "reasoning_tokens",
+  ) => subs.reduce((sum, s) => sum + s.usage[key], 0);
+  const u = {
+    input_tokens: result.usage.input_tokens - subTier("input_tokens"),
+    output_tokens: result.usage.output_tokens - subTier("output_tokens"),
+    cache_read_tokens: result.usage.cache_read_tokens - subTier("cache_read_tokens"),
+    cache_write_tokens: result.usage.cache_write_tokens - subTier("cache_write_tokens"),
+    cache_write_1h_tokens: result.usage.cache_write_1h_tokens - subTier("cache_write_1h_tokens"),
+    cache_write_5m_tokens: result.usage.cache_write_5m_tokens - subTier("cache_write_5m_tokens"),
+    reasoning_tokens: result.usage.reasoning_tokens - subTier("reasoning_tokens"),
+  };
+  const subBilled = subs.reduce(
+    (sum, s) =>
+      sum + (s.usage.accumulative_billed_tokens ?? s.usage.input_tokens + s.usage.output_tokens + s.usage.cache_read_tokens + s.usage.cache_write_tokens),
+    0,
+  );
   const ru = (result.reported_usage ?? {}) as ReportedUsage;
   const rRead = ru.cache_read_input_tokens ?? ru.cached_input_tokens;
   // Codex's input_tokens includes the cached tokens; Claude's does not (docs/token-accounting.md).
@@ -40,7 +60,19 @@ export function ReconciliationPanel({ result }: { result: RunResult }) {
     ["cache write", fmt(u.cache_write_tokens), fmt(ru.cache_creation_input_tokens), cmp(u.cache_write_tokens, ru.cache_creation_input_tokens)],
     ["of which 1h / 5m", `${fmt(u.cache_write_1h_tokens)} / ${fmt(u.cache_write_5m_tokens)}`, "", ""],
     ["reasoning (inside output)", fmt(u.reasoning_tokens), fmt(ru.reasoning_output_tokens), ""],
-    ["accumulative_billed_tokens", fmt(u.accumulative_billed_tokens), fmt(ru.total_tokens), ""],
+    ...(subs.length
+      ? ([
+          [
+            `subagents (${subs.length} spawned thread${subs.length === 1 ? "" : "s"})`,
+            fmt(subBilled),
+            <span key="s" className="muted">
+              not in the harness figure
+            </span>,
+            "",
+          ],
+        ] as KvRow[])
+      : []),
+    ["accumulative_billed_tokens", fmt(result.usage.accumulative_billed_tokens), fmt(ru.total_tokens), ""],
     ["baseline_tokens", fmt(result.baseline_tokens), "", ""],
     ["estimated / harness reported cost", usd(result.estimated_cost_usd), usd(result.harness_reported_cost_usd), costDelta],
   ];
@@ -52,8 +84,9 @@ export function ReconciliationPanel({ result }: { result: RunResult }) {
           <El name="ReconciliationPanel" />
         </CardTitle>
         <CardDescription>
-          The ledger built from the session log against the harness's own aggregate. On Claude the harness cost includes a ~$0.001 session-title side call that
-          the ledger does not price.
+          The ledger built from the session log against the harness's own aggregate. The harness figure covers only the primary thread, so spawned subagents
+          appear as their own row inside `accumulative_billed_tokens`. On Claude the harness cost includes a ~$0.001 session-title side call that the ledger
+          does not price.
         </CardDescription>
       </CardHeader>
       <CardContent>

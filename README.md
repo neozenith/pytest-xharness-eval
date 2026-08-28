@@ -5,7 +5,7 @@
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml/badge.svg" alt="CICD Checks"></a>
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml/badge.svg" alt="Build Status"></a>
     <!-- coverage-badge -->
-    <img src="https://img.shields.io/badge/coverage-94%25-brightgreen.svg" alt="Coverage">
+    <img src="https://img.shields.io/badge/coverage-93%25-brightgreen.svg" alt="Coverage">
     <!-- coverage-badge -->
 </p>
 <p align="center">
@@ -69,8 +69,8 @@ with `--dry-run` before a sweep. The design rationale lives in
 
 3. Add an eval beside the skill. Files and functions both carry the `eval_` prefix,
    as `test_` does for pytest. Fixtures are seed workspaces copied fresh for every
-   cell; `captured/` is written by each run and git-ignored; its `history.jsonl` gains
-   one metrics line per live cell:
+   cell; every run output lands under one git-ignored cache root, never in the
+   skills tree (ADR 0032):
 
    ```text
    skills/<skill>/
@@ -78,8 +78,10 @@ with `--dry-run` before a sweep. The design rationale lives in
      evals/
        eval_<suite>.py
        fixtures/<name>/
-       captured/<case>/
-       captured/history.jsonl
+   .xharness_eval_cache/
+     build/                                             # per-cell workspaces
+     results/{skill}/{harness}/{model}/{run}/{session}/ # log.jsonl, result.json, history.json
+     report/                                            # report.json + the aggregated microsite
    ```
 
    ```python
@@ -98,7 +100,7 @@ with `--dry-run` before a sweep. The design rationale lives in
    ```
 
    ```text
-   xharness-eval: skills root = /repo/skills, workdir = /repo/tmp/evals
+   xharness-eval: skills root = /repo/skills, cache = /repo/.xharness_eval_cache
    xharness-eval: matrix = plugin default (2 entries); a case's models= overrides it
    collected 2 items
    skills/<skill>/evals/eval_<case>.py ss
@@ -107,7 +109,7 @@ with `--dry-run` before a sweep. The design rationale lives in
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-opus-5]
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-sol]
      total spend: $0.0000 across 2 cell(s)
-     report: /repo/tmp/evals/report.json
+     report: /repo/.xharness_eval_cache/report/report.json
    ```
 
 5. Run it live, with `-v` so every cell reports its verdict, USD, context, wall
@@ -128,12 +130,15 @@ with `--dry-run` before a sweep. The design rationale lives in
    turn 1, wall clock, model calls, tool calls. Every estimate records the rates it
    used and where they came from (`rates_applied`).
 
-   Each cell leaves its verbatim session log and a normalised `.result.json` with a
-   per-turn ledger under `captured/<case>/`, appends one metrics line to
-   `captured/history.jsonl`, and the sweep writes `tmp/evals/report.json` with USD
-   per cell plus a browsable `captured/report.html` with its glossary
-   (`XHARNESS-REPORT-GLOSSARY.md`) beside it. Serve it with
-   `python3 -m http.server --directory <captured dir>`; it fetches the JSON beside it.
+   Each cell leaves its verbatim session log (`log.jsonl`), a normalised
+   `result.json` with a per-turn ledger, and one `history.json` metrics record in
+   its own `results/{skill}/{harness}/{model}/{run}/{session}/` directory — no two
+   cells share a file, so parallel workers never contend (ADR 0032). At session end
+   the one combine step aggregates everything under `results/` — every skill, every
+   run — into `report/`: `report.json`, the accumulated `history.jsonl`, and a
+   browsable `report.html` with its glossary (`XHARNESS-REPORT-GLOSSARY.md`)
+   beside it. Serve it with `python3 -m http.server --directory .xharness_eval_cache`
+   and open `/report/report.html`; it fetches the JSON beside it.
 
 `run` is a `RunResult`: session id, log path, token usage by tier, tool calls, files
 written, and USD cost. The reference case, with its assertions written as a tutorial,
@@ -176,10 +181,10 @@ Four ini keys, paths relative to pytest's rootdir:
 |-----|---------|---------|
 | `xharness_matrix` | (plugin default) | Project matrix: `harness/model` entries every case sweeps unless it sets `models=` |
 | `xharness_skills_dir` | `skills` | Directory holding `<skill>/evals/` trees |
-| `xharness_workdir` | `tmp/evals` | Per-cell workspaces and `report.json` |
+| `xharness_cache_dir` | `.xharness_eval_cache` | The git-ignored root for build workspaces, results and the report (ADR 0032) |
 | `xharness_skill_ignore` | (none) | gitignore-style patterns for skill files that are not decision surface; a bare pattern applies to every skill, `<skill>: <pattern>` to the skills matching the selector (ADR 0026) |
-| `xharness_report_design_tokens` | bundled | design tokens JSON that themes `captured/report.html` (flag: `--xharness-report-design-tokens FILE`) |
-| `xharness_report_inline` | `false` | embed every result, log and the tokens into `captured/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
+| `xharness_report_design_tokens` | bundled | design tokens JSON that themes `report/report.html` (flag: `--xharness-report-design-tokens FILE`) |
+| `xharness_report_inline` | `false` | embed every result, log and the tokens into `report/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
 | `xharness_prices` | (none) | Price rows that add to or override the bundled table: `<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..]` (ADR 0030) |
 
 ```toml
@@ -212,10 +217,10 @@ flowchart LR
     CASE["eval_*.py case"]
     PLUG["plugin.py<br/>collect, expand matrix"]
     WS["workspace.py<br/>pristine copy"]
-    RUN["runner.py<br/>claude | codex"]
+    RUN["harness/<br/>ClaudeHarness | CodexHarness"]
     LOG["session log<br/>this run's own"]
-    NORM["normalise.py<br/>RunResult"]
-    PRICE["pricing.py<br/>USD"]
+    NORM["SessionLog.to_result<br/>RunResult"]
+    PRICE["pipeline.derive<br/>price, coverage, case"]
     GRADE["case assertions"]
     REP["report.json"]
 
@@ -268,15 +273,17 @@ trusted publishing).
 
 ### The report page
 
-`captured/report.html` is built from `report-ui/`, a bun workspace (Vite, React,
-TypeScript, Tailwind, shadcn/ui, Vitest) that emits one self-contained HTML file
-(ADR 0028). bun is needed only to change the page; the plugin ships the built file.
+`report/report.html` is built from `report-ui/`, a bun workspace (Vite, React,
+TypeScript, Tamagui, Plotly, Tailwind, Vitest, Playwright) that emits one
+self-contained HTML file (ADR 0028, ADR 0031). bun is needed only to change the
+page; the plugin ships the built file.
 
 ```sh
-make ui-dev CAPTURED=path/to/<skill>/evals/captured    # hot reload against real captured data
+make ui-dev CAPTURED=path/to/.xharness_eval_cache      # hot reload against real cached data
 make ui-check                                          # tsc + eslint + prettier
 make ui-test                                           # vitest component tests
-make ui-smoke CAPTURED=path/to/<skill>/evals/captured  # build, populate inline, render headlessly
+make ui-e2e CAPTURED=path/to/.xharness_eval_cache TIER=small  # Playwright permutation sweep
+make ui-smoke CAPTURED=path/to/.xharness_eval_cache    # build, populate inline, boot over file://
 make ui-promote                                        # ship the build as assets/report.html (CI checks it is current)
 ```
 

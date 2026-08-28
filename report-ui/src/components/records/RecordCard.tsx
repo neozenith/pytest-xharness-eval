@@ -2,17 +2,24 @@
  * One session-log line as a card (glossary: `RecordCard`): a header with the
  * category-coloured kind pill, `L<line>`, the record's timestamp, its size, the context
  * annotation and a `raw`/`nice` flip; a body that is either the rendered view or the raw JSON.
+ *
+ * The two harnesses keep different session-log schemas (`claude/*` vs `codex/*` record
+ * kinds, different envelopes), so each gets its own base: `RecordCardClaude` and
+ * `RecordCardCodex` fix the harness and classify/render through that harness's catalogue;
+ * `RecordCard` dispatches on the `harness` prop.
  */
 import { Component, useState, type ReactNode } from "react";
+import { Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { El } from "@/components/El";
 import { fmt } from "@/lib/format";
-import { CATEGORIES, categoryOf, classify, type Rec } from "@/lib/records";
+import { categoryOf, classify, type Rec } from "@/lib/records";
 import { Notice } from "./Comp";
 import { RecordBody } from "./records";
-import { Code, Json } from "./values";
+import { Code, Json, categoryColour } from "./values";
 
-export type RecordView = "nice" | "raw";
+import type { RecordView } from "@/lib/route";
+export type { RecordView };
 
 export interface CtxTag {
   text: string;
@@ -26,19 +33,28 @@ export const clock = (iso: unknown): string => {
   return Number.isNaN(d.getTime()) ? String(iso) : `${d.toLocaleTimeString("en-GB", { hour12: false })}.${String(d.getMilliseconds()).padStart(3, "0")}`;
 };
 
-/** The category pill, coloured from the design tokens (`--xh-category-<category>`). */
+/**
+ * The category pill, coloured from the design tokens (`--xh-category-<category>`). The kind
+ * sits in its own span so a narrow card can cap it with an ellipsis (`.rec-head .pill-kind`):
+ * `text-overflow` needs a box of its own, and the pill itself is a flex container. The full
+ * kind stays readable in the tooltip whether or not it is elided.
+ */
 export function Pill({ kind }: { kind: string }) {
   const category = categoryOf(kind);
   return (
-    <span
-      className="pill inline-block rounded-full px-[0.55rem] py-[0.05rem] font-mono text-[0.72rem] font-semibold whitespace-nowrap text-white"
-      style={{ background: `var(--xh-category-${category}, ${CATEGORIES[category] ?? CATEGORIES.unknown})` }}
-      title={category}
-    >
-      {kind}
+    <span className="pill" style={{ background: categoryColour(category) }} title={`${kind} · ${category}`}>
+      <span className="pill-kind">{kind}</span>
     </span>
   );
 }
+
+/**
+ * The head's two controls sit on the 11px tier the `.meta`, `.el` and `.ctx` beside them use,
+ * not the button frame's 11.5px `xs` default — half a pixel off the card's 13/12/11/10 scale,
+ * repeated on every one of a hundred cards. It is set here rather than in the stylesheet
+ * because the frame writes its type size as an inline style.
+ */
+const HEAD_CONTROL_TYPE = { fontSize: 11, lineHeight: "14px" } as const;
 
 /** The parsed record, or null when the line is not a JSON object. */
 function parseRecord(raw: string): Rec | null {
@@ -50,16 +66,21 @@ function parseRecord(raw: string): Rec | null {
   }
 }
 
-interface Props {
-  harness: string;
+export interface RecordCardProps {
   lineNo: number;
   raw: string;
   ctx?: CtxTag | null;
   /** The view every card follows (`RecordViewToggle`); a card's own flip overrides it until the next change. */
   view: RecordView;
+  /** The `line=` deeplink to this record; renders the permalink button when given. */
+  permalink?: string;
 }
 
-export function RecordCard({ harness, lineNo, raw, ctx, view }: Props) {
+interface BaseProps extends RecordCardProps {
+  harness: string;
+}
+
+function RecordCardBase({ harness, lineNo, raw, ctx, view, permalink }: BaseProps) {
   // A card's own flip lasts until the page-wide view next changes (state derived from a prop).
   const [own, setOwn] = useState<RecordView>(view);
   const [seen, setSeen] = useState<RecordView>(view);
@@ -73,29 +94,57 @@ export function RecordCard({ harness, lineNo, raw, ctx, view }: Props) {
   const ts = rec?.timestamp ?? null;
 
   return (
-    <div className="rec bg-card my-[0.45rem] rounded-lg border" data-kind={kind} data-el="RecordCard" id={`L${lineNo}`}>
-      <div className="rec-head flex flex-wrap items-center gap-[0.6rem] border-b px-[0.6rem] py-[0.35rem] text-[0.8rem]">
+    <div className="rec" data-kind={kind} data-harness={harness} data-el="RecordCard" id={`L${lineNo}`}>
+      <div className="rec-head">
         <Pill kind={kind} />
-        <span className="text-muted-foreground font-mono text-[0.75rem]">L{lineNo}</span>
-        <span className="text-muted-foreground font-mono text-[0.75rem]">{clock(ts)}</span>
-        <span className="text-muted-foreground font-mono text-[0.75rem]">{fmt(raw.length)} chars</span>
+        {/* The meta run is named part by part so a narrow card can drop the least load-bearing of them. */}
+        <span className="meta line">L{lineNo}</span>
+        <span className="meta clock">{clock(ts)}</span>
+        <span className="meta chars">{fmt(raw.length)} chars</span>
         {ctx ? (
-          <span className="ctx text-primary font-mono text-[0.75rem]" title={ctx.title}>
+          <span className="ctx" title={ctx.title}>
             {ctx.text}
           </span>
         ) : null}
-        <span className="flex-1" />
         <El name="RecordCard" />
-        <Button type="button" variant="outline" size="xs" className="flip" data-mode={own} onClick={() => setOwn(own === "nice" ? "raw" : "nice")}>
-          {own === "nice" ? "raw" : "nice"}
-        </Button>
+        {/* The two controls are one cluster: tight to each other, clear of the label beside them. */}
+        <span className="rec-actions">
+          {permalink ? (
+            <Button
+              render={<button type="button" title="link to this record (copies the URL)" />}
+              variant="ghost"
+              size="xs"
+              style={HEAD_CONTROL_TYPE}
+              aria-label={`link to log line ${lineNo}`}
+              onClick={() => {
+                history.replaceState(null, "", permalink);
+                try {
+                  void navigator.clipboard?.writeText(location.href);
+                } catch {
+                  /* clipboard unavailable over plain http; the address bar already has the link */
+                }
+              }}
+            >
+              <LinkIcon size={12} />
+            </Button>
+          ) : null}
+          <Button
+            render={<button type="button" title={own === "nice" ? "show the raw log line" : "show the rendered view"} />}
+            variant="outline"
+            size="xs"
+            style={HEAD_CONTROL_TYPE}
+            className="flip"
+            data-mode={own}
+            onClick={() => setOwn(own === "nice" ? "raw" : "nice")}
+          >
+            {own === "nice" ? "raw" : "nice"}
+          </Button>
+        </span>
       </div>
       {own === "nice" ? (
-        <div className="rec-body rec-nice px-[0.7rem] py-2">
-          {rec ? <SafeBody harness={harness} rec={rec} kind={kind} raw={raw} /> : <Code lang="" text={raw} />}
-        </div>
+        <div className="rec-body rec-nice">{rec ? <SafeBody harness={harness} rec={rec} kind={kind} raw={raw} /> : <Code lang="" text={raw} />}</div>
       ) : (
-        <div className="rec-body rec-raw px-[0.7rem] py-2">
+        <div className="rec-body rec-raw">
           <Json value={rec ?? raw} />
         </div>
       )}
@@ -121,3 +170,12 @@ class SafeBody extends Component<{ harness: string; rec: Rec; kind: string; raw:
     return <RecordBody harness={this.props.harness} rec={this.props.rec} kind={this.props.kind} />;
   }
 }
+
+/** A Claude session-log line: classified and rendered through the `claude/*` record catalogue. */
+export const RecordCardClaude = (props: RecordCardProps) => <RecordCardBase {...props} harness="claude" />;
+
+/** A Codex session-log line: classified and rendered through the `codex/*` record catalogue. */
+export const RecordCardCodex = (props: RecordCardProps) => <RecordCardBase {...props} harness="codex" />;
+
+/** Dispatch by harness; an unknown harness still classifies through its own prefix. */
+export const RecordCard = ({ harness, ...props }: BaseProps) => <RecordCardBase {...props} harness={harness} />;

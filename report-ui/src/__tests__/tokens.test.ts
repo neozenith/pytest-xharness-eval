@@ -13,6 +13,7 @@ const theme = (accent: string) => ({
   warn: "#ff0",
   code: "#333",
   grid: "#444",
+  axis: "#555",
   plot: "#111",
   series: ["#1", "#2"],
   waterfall: { baseline: "#5" },
@@ -24,6 +25,9 @@ test("tokens land as --xh-* custom properties and the dark class follows the mod
   applyTokens(tokens, "dark", root);
   expect(root.style.getPropertyValue("--xh-accent")).toBe("#d");
   expect(root.style.getPropertyValue("--xh-series-2")).toBe("#2");
+  // Every chart colour is project-overridable, the axis included: it is an opaque hue that has
+  // to relate to the palette, so a rebrand that moves `grid` must be able to move it with it.
+  expect(root.style.getPropertyValue("--xh-axis")).toBe("#555");
   expect(root.style.getPropertyValue("--xh-waterfall-baseline")).toBe("#5");
   expect(root.style.getPropertyValue("--xh-category-prompt")).toBe("#p");
   expect(root.style.getPropertyValue("--xh-font-mono")).toBe("Menlo");

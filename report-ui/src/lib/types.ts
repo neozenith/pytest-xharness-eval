@@ -44,6 +44,7 @@ export interface Cell {
   output_tokens_per_sec: number | null;
   turns: number | null;
   reported_turns: number | null;
+  subagents?: number;
   tool_calls: number;
   duration_ms: number | null;
   files_written: string[];
@@ -74,6 +75,8 @@ export interface ToolCall {
   name: string;
   input: unknown;
   summary?: string;
+  /** The harness's tool-use id (Claude `tool_use.id`, Codex `call_id`); a subagent points back at it. */
+  id?: string;
 }
 
 /** A tool result that entered a call's context: the previous turn's output of that tool. */
@@ -100,6 +103,22 @@ export interface Call {
   results_in: ResultIn[];
 }
 
+/**
+ * One parallel thread the session spawned, with its own captured transcript and ledger.
+ * `parent_turn` is the primary turn whose tool call spawned it; its usage is already
+ * folded into the run's `usage` (the whole bill), never double-counted here.
+ */
+export interface Subagent {
+  agent: string;
+  id: string;
+  log: string;
+  parent_turn: number | null;
+  turns: number;
+  description: string;
+  usage: Usage;
+  calls: Call[];
+}
+
 /** A `.result.json`; only the fields the page reads are typed. */
 export interface RunResult {
   harness: string;
@@ -124,6 +143,7 @@ export interface RunResult {
   record_kinds: Record<string, number>;
   skill_coverage: Record<string, unknown>;
   case: { suite?: string; name?: string; skill?: string; fixture?: string; prompt?: string };
+  subagents?: Subagent[];
   [key: string]: unknown;
 }
 
@@ -139,6 +159,8 @@ export interface ThemeTokens {
   warn: string;
   code: string;
   grid: string;
+  /** The chart's baseline, spine and ticks: a step past `grid`, so the anchor outranks the ladder. */
+  axis: string;
   plot: string;
   series: string[];
   waterfall: Record<string, string>;
@@ -165,5 +187,7 @@ export interface InlineData {
 declare global {
   interface Window {
     __XH_DATA__?: InlineData;
+    /** Count of in-flight data loads; `0` means every started fetch has settled (see `lib/data.ts`). */
+    __XH_PENDING__?: number;
   }
 }

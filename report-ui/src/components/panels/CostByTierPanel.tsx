@@ -41,7 +41,7 @@ export function RatesApplied({ rates }: { rates: Rates | null | undefined }) {
     : [["no rates_applied", "this result predates ADR 0021; replay the captured directory"]];
   return (
     <div data-el="RatesApplied">
-      <h3 className="text-muted-foreground mt-4 mb-1 text-[0.8rem]">
+      <h3 className="muted" style={{ margin: "1rem 0 0.25rem", fontSize: "0.8rem", fontWeight: 500 }}>
         rates applied (USD per token)
         <El name="RatesApplied" />
       </h3>
@@ -61,7 +61,7 @@ export function CostByTierPanel({ result }: { result: RunResult }) {
       `harness estimate · ${model}`,
       <span key={model}>
         {usd(m.costUSD)}{" "}
-        <span className="text-muted-foreground">
+        <span className="muted">
           ({fmt(m.inputTokens)} in · {fmt(m.outputTokens)} out · {fmt(m.cacheReadInputTokens)} read · {fmt(m.cacheCreationInputTokens)} write)
         </span>
       </span>,

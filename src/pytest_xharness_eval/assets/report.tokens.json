@@ -9,17 +9,17 @@
     "light": {
       "bg": "#f7f7fa", "panel": "#ffffff", "ink": "#1b1d23", "muted": "#5b6070", "line": "#e2e4ea",
       "accent": "#4f46e5", "good": "#047857", "bad": "#b91c1c", "warn": "#b45309", "code": "#f1f2f6",
-      "grid": "#e6e8ee", "plot": "#ffffff",
+      "grid": "#e6e8ee", "axis": "#c8ccd6", "plot": "#ffffff",
       "series": ["#4f46e5", "#d97706", "#059669", "#db2777", "#0284c7", "#7c3aed", "#dc2626", "#0d9488"],
-      "waterfall": { "baseline": "#64748b", "read": "#94a3b8", "context": "#2563eb", "thinking": "#7c3aed", "output": "#059669", "total": "#1b1d23" },
+      "waterfall": { "baseline": "#64748b", "read": "#94a3b8", "context": "#2563eb", "thinking": "#7c3aed", "output": "#059669", "sub": "#ea580c", "total": "#1b1d23" },
       "hljs": "github"
     },
     "dark": {
       "bg": "#0f1117", "panel": "#171a23", "ink": "#e6e8ef", "muted": "#9aa0b0", "line": "#2a2e3a",
       "accent": "#a5b4fc", "good": "#34d399", "bad": "#f87171", "warn": "#fbbf24", "code": "#1f2330",
-      "grid": "#262a36", "plot": "#171a23",
+      "grid": "#262a36", "axis": "#3a3f4e", "plot": "#171a23",
       "series": ["#a5b4fc", "#fbbf24", "#34d399", "#f9a8d4", "#7dd3fc", "#c4b5fd", "#fca5a5", "#5eead4"],
-      "waterfall": { "baseline": "#94a3b8", "read": "#475569", "context": "#60a5fa", "thinking": "#c4b5fd", "output": "#34d399", "total": "#e6e8ef" },
+      "waterfall": { "baseline": "#94a3b8", "read": "#475569", "context": "#60a5fa", "thinking": "#c4b5fd", "output": "#34d399", "sub": "#fb923c", "total": "#e6e8ef" },
       "hljs": "github-dark"
     }
   },

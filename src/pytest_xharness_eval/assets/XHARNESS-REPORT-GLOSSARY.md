@@ -17,17 +17,30 @@ A unique prefix of a `SessionId` is accepted everywhere a full one is (`87c58138
 Shorthand in conversation: `S:87c58138` for a session, `S:87c58138/t3` for a turn,
 `S:87c58138/t3/L42` for one record of that turn.
 
-## URL fragments (stateful deep links)
+## URL routes (stateful deep links)
 
 ```text
-report.html#session=<SessionId>                       SessionView, summary view
-report.html#session=<SessionId>&view=detailed         every SessionTurnDetails expanded
-report.html#session=<SessionId>&turn=3                turn 3 expanded and scrolled into view
-report.html#session=87c58138&turn=3&view=detailed     prefix form, both at once
+report.html                                           SweepOverview
+report.html?sort=turns&dir=desc                       SweepOverview, table sorted by that column
+report.html?session=<SessionId>                       SessionView, summary view
+report.html?session=<SessionId>&view=detailed         every SessionTurnDetails expanded
+report.html?session=<SessionId>&turn=3                turn 3 expanded and scrolled into view
+report.html?session=87c58138&turn=3&view=detailed     prefix form, both at once
+report.html?session=<SessionId>&axis=line             the four charts on the session-log-line axis
+report.html?session=<SessionId>&rec=raw               every RecordCard as raw JSON
+report.html?session=<SessionId>&line=17               log line 17's RecordCard, its turn opened, flashed
+report.html?…&theme=dark                              forced theme, on any route
 ```
 
-The page rewrites the fragment as you click (`replaceState`), so the address bar
-is always a link to what you are looking at.
+Full History-API routes, no fragment router: navigating pushes a real history entry
+(back/forward walk the pages you visited) and in-place controls rewrite the current
+entry, so the address bar is always a link to what you are looking at. Query
+strings, not path segments, because this one static file must route with zero
+server rewrites and over `file://` (ADR 0020, ADR 0031). A param absent from the
+URL means its default — the URL alone reproduces the whole state — and a legacy
+`#session=…` fragment link is upgraded to its query form on load.
+`lib/permutations.ts` enumerates the covering matrix of these states for the
+Playwright sweep, one deterministic slug per state.
 
 ## Turn boundaries
 
@@ -49,7 +62,7 @@ turn's context, which is the previous turn's results.
 
 `report.tokens.json` sits beside `report.html` and is the page's palette: per-theme
 colours (`bg`, `panel`, `ink`, `muted`, `line`, `accent`, `good`, `bad`, `warn`,
-`code`, `grid`, `plot`), the chart `series`, the `waterfall` colours, the
+`code`, `grid`, `axis`, `plot`), the chart `series`, the `waterfall` colours, the
 highlight.js style, the `fonts`, and the `categories` pill colours. Edit it and
 refresh. To brand every report, point the project at your own file:
 
@@ -149,25 +162,28 @@ xharness_skill_ignore = [
 
 | Element | Contains | Purpose |
 |---------|----------|---------|
-| `Report` | `ReportHeader`, `SweepOverview`, `SessionView` | the page |
+| `Report` | `ReportHeader`, `NavSidebar`, `SweepOverview`, `SessionView` | the page |
+| `NavSidebar` | `NavToggle`, an Overview link, then skill → suite → harness → model → one entry per session (verdict dot, case, short id); the open session lists section jump-links | the collapsible left navigation; every tree level starts collapsed (the reader opts in, and the active session's ancestors open themselves); collapse is remembered locally, never routed |
 | `ReportHeader` | `ReportTitle`, `ReportMeta`, `ThemeToggle` | sticky chrome; `ReportTitle` is the report's name on the sweep and the `eval · session · harness · model` tuple inside a `SessionView` (the tab title follows it) |
-| `SweepOverview` | `TokenAccumulationChart`, `SessionTable` | every captured session at a glance |
+| `SweepOverview` | `TokenAccumulationChart`, `SessionTable` | every captured session at a glance; the header meta names every skill the sweep spans |
 | `SessionTable` | one `SessionRow` per session | sortable; a row opens its `SessionView`; `accumulative_billed_tokens (billed)` is the cross-turn billed sum and `peak context` reads `peak_context_tokens · context_window_pct of window`, two different quantities; the `skill coverage` column reads `loaded/files · run/scripts` |
 | `SessionView` | in order: `SessionHeader`, `TokenWaterfallChart`, `ContextWindowChart`, `ReconciliationPanel`, `CostByTierPanel`, `OutputPerTurnChart`, `TurnTiersChart`, `SkillCoveragePanel`, `RecordKindsPanel`, `SessionTurnTable`, `FinalMessagePanel` | one session |
 | `SessionHeader` | `SessionTitle` (with the `SessionId` badge), `SessionMetaTable` | identity, verdict, the suite file / case / skill / fixture / prompt under test, evidence links, workspace, context window and peak / final consumption, time to first token, output tokens per second, timings, in one key/value table |
-| `ChartAxisToggle` | `per turn` / `per session-log line` | the x-axis of the four charts below; per line, a value holds from the record that measured it until the next measurement (a step), turn starts are marked, nothing is interpolated |
+| `ChartAxisToggle` | `per turn` / `per session-log line` | the x-axis of the four charts below (`axis=` in the fragment); per line, a value holds from the record that measured it until the next measurement (a step), turn starts are marked, nothing is interpolated |
+| `ChartLegend` | one chip per series, coloured by the design tokens | the charts' legend: a right-hand column beside the plot, scrolling past the chart height; a chip toggles its series |
 | `ContextWindowChart` | per turn: one point per turn plus `final_context_pct`; per line: a step of the latest measured `context_pct` | how close the run came to the window, qualified by the window size in the axis title |
 | `ReconciliationPanel` | ledger versus harness aggregate, per tier | proves the ledger matches the CLI's own totals |
 | `CostByTierPanel` | USD per tier, harness per-model estimate, `RatesApplied` | how `estimated_cost_usd` was built and from which rates |
-| `TokenWaterfallChart` | per turn: `baseline_tokens`, then per turn cache read, new context, thinking, visible output, ending at `accumulative_billed_tokens`; per line: the same categories as a stacked step area of cumulative tokens | where the tokens went |
+| `TokenWaterfallChart` | per turn: `baseline_tokens`, then per turn cache read, new context, thinking, visible output and the whole bill of any subagents that turn spawned, ending at `accumulative_billed_tokens`; per line: the same categories as a stacked step area of cumulative tokens; the right-hand axis carries the running `estimated_cost_usd` as a line | where the tokens (and dollars) went |
 | `OutputPerTurnChart` | thinking and visible output stacked, per turn or at each turn's measuring line | how much of each turn's output was reasoning |
 | `TurnTiersChart` | the four billing tiers stacked, per turn or at each turn's measuring line | what each turn was billed for |
 | `SkillCoveragePanel` | `SkillCoverageSummary` chips (the `files`, `loaded`, `run`, `not_loaded`, `not_run`, `ignored` chips are filters; click again to clear), one row per catalogued skill file with its loaded / run turns and status | which decision paths the run took through the skill |
 | `RecordKindsPanel` | one pill per record kind with its count | the census of this session's log |
-| `SessionTurnTable` | `ViewToggle`, `RecordViewToggle`, one `SessionTurnRow` per turn, each with a `SessionTurnDetails` | the ledger; Summary shows rows, Detailed expands every turn |
+| `SessionTurnTable` | `ViewToggle`, `RecordViewToggle`, one `SessionTurnRow` per turn, each with a `SessionTurnDetails`; a turn that spawned subagents is followed by a `SubagentBand` | the ledger; Summary shows rows, Detailed expands every turn. Harness-specific: `SessionTurnTableClaude` carries the explicit cache-write tiers (`cache_write`, `1h`), `SessionTurnTableCodex` drops them (implicit caching) and shows `cached input` / `input (uncached)`; the panel carries `data-harness` |
+| `SubagentBand` | per spawned thread: an agent pill in the waterfall's `sub` colour, its id, the spawn description, its turn/billed-token totals, and one `SubagentTurnRow` per call of its own ledger | the parallel threads a turn spawned (`subagents` in `result.json`); each thread's transcript is captured under `subagents/` beside `log.jsonl` and its bill is folded into the session's `usage` and `estimated_cost_usd`, attributed to the spawning turn (`parent_turn`) |
 | `SessionTurnDetails` | `TurnRawRecords` | the session-log records attributed to that turn, untruncated |
 | `TurnRawRecords` | the turn's line range, then one `RecordCard` per log line (`records` in the ledger) | the evidence itself, line-numbered |
-| `RecordCard` | header: category-coloured kind pill, `L<line>`, the record's timestamp (`HH:MM:SS.mmm`), size, a context annotation (`ctx 7.2%` = the turn's measured prompt; `→ t4 7.5%` on a tool result = the next turn's prompt it became part of), a `raw`/`nice` flip; body: the rendered view or the raw JSON | one log line; `RecordViewToggle` flips every card at once |
+| `RecordCard` | header: category-coloured kind pill, `L<line>`, the record's timestamp (`HH:MM:SS.mmm`), size, a context annotation (`ctx 7.2%` = the turn's measured prompt; `→ t4 7.5%` on a tool result = the next turn's prompt it became part of), a `raw`/`nice` flip and a permalink button (sets `line=` in the fragment and copies the URL); body: the rendered view or the raw JSON | one log line; `RecordViewToggle` flips every card at once. Harness-specific bases: `RecordCardClaude` renders the `claude/*` catalogue, `RecordCardCodex` the `codex/*` one; the card carries `data-harness` |
 
 ### How a `RecordCard` is rendered
 
@@ -293,6 +309,8 @@ treemap-beta
                 "SessionTurnDetails":::details
                     "TurnRawRecords":::details
                         "RecordCard":::details
+                "SubagentBand":::turns
+                    "SubagentTurnRow":::turns
 classDef page fill:#1e3a8a,stroke:#bfdbfe,color:#fff
 classDef chrome fill:#475569,stroke:#e2e8f0,color:#fff
 classDef overview fill:#7c3aed,stroke:#ddd6fe,color:#fff

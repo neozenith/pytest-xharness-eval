@@ -1,47 +1,47 @@
-/**
- * Pieces every per-session chart shares: the panel frame that carries the glossary id and the
- * dotted turn-start markers of the per-line axis (ADR 0025).
- */
-import { ReferenceLine } from "recharts";
+/** The panel frame every chart shares: the glossary id on the root, the name beside the heading, an optional note. */
+import { styled, Text, View, YStack } from "tamagui";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { El } from "@/components/El";
-import { GRID } from "@/components/charts/chartStyle";
 
-/** Dotted vertical lines at each turn's measuring log line, labelled `t<n>` (per-line axis only). */
-export function TurnMarks({ starts }: { starts: number[] }) {
-  return (
-    <>
-      {starts.map((s, i) => (
-        <ReferenceLine
-          key={`t${i + 1}`}
-          x={s}
-          stroke={GRID}
-          strokeDasharray="2 3"
-          ifOverflow="extendDomain"
-          label={{ value: `t${i + 1}`, position: "top", fill: "var(--xh-muted)", fontSize: 10 }}
-        />
-      ))}
-    </>
-  );
-}
+/**
+ * The label on a chart control. Its own step in the scale, between `CardTitle` (15/20, names a
+ * section) and `CardDescription` (12.5/18 muted, explains one): the same size and measure as a
+ * description so a control row keeps the caption rhythm, at full ink and heading weight because
+ * it names the control beside it rather than commenting on it.
+ */
+export const ControlLabel = styled(Text, {
+  name: "XhControlLabel",
+  render: "span",
+  color: "$color",
+  fontFamily: "$body",
+  fontSize: 12.5,
+  lineHeight: 18,
+  fontWeight: "600",
+});
 
 interface PanelProps {
   id: string;
   title: string;
   note?: React.ReactNode;
   children: React.ReactNode;
-  className?: string;
 }
 
-/** The panel frame: the glossary id on the root, the name beside the heading, an optional note. */
-export function ChartPanel({ id, title, note, children, className }: PanelProps) {
+/**
+ * A chart sits inside a `CardContent`, so it cannot use `CardHeader` — that would double the
+ * card's own horizontal padding. It borrows the same title and description styles instead, so
+ * a chart's heading is typographically the same object as a panel's: one size, one measure.
+ */
+export function ChartPanel({ id, title, note, children }: PanelProps) {
   return (
-    <section id={id} data-el={id} className={className}>
-      <h2 className="text-base font-semibold">
-        {title}
-        <El name={id} />
-      </h2>
-      {note ? <p className="text-muted-foreground mb-2 text-sm">{note}</p> : null}
+    <View render="section" id={id} data-el={id} flexDirection="column" gap={16}>
+      <YStack gap={3}>
+        <CardTitle>
+          {title}
+          <El name={id} />
+        </CardTitle>
+        {note ? <CardDescription>{note}</CardDescription> : null}
+      </YStack>
       {children}
-    </section>
+    </View>
   );
 }

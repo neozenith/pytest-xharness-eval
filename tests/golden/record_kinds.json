@@ -1,0 +1,48 @@
+{
+  "claude": {
+    "categories": {
+      "claude/assistant/text": "assistant_text",
+      "claude/assistant/tool_use": "tool_call",
+      "claude/attachment/skill_listing": "harness_context",
+      "claude/system": "harness_meta",
+      "claude/user/prompt": "prompt",
+      "claude/user/tool_result": "tool_result"
+    },
+    "census": {
+      "claude/assistant/text": 1,
+      "claude/assistant/tool_use": 2,
+      "claude/attachment/skill_listing": 1,
+      "claude/system": 1,
+      "claude/user/prompt": 1,
+      "claude/user/tool_result": 2
+    }
+  },
+  "codex": {
+    "categories": {
+      "codex/event_msg/item_completed/CommandExecution": "tool_exec",
+      "codex/event_msg/task_complete": "lifecycle",
+      "codex/event_msg/task_started": "lifecycle",
+      "codex/event_msg/token_count": "usage",
+      "codex/response_item/function_call": "tool_call",
+      "codex/response_item/function_call_output": "tool_result",
+      "codex/response_item/message/assistant": "assistant_text",
+      "codex/response_item/message/user": "prompt",
+      "codex/response_item/reasoning": "thinking",
+      "codex/session_meta": "session_meta",
+      "codex/turn_context": "session_meta"
+    },
+    "census": {
+      "codex/event_msg/item_completed/CommandExecution": 1,
+      "codex/event_msg/task_complete": 1,
+      "codex/event_msg/task_started": 1,
+      "codex/event_msg/token_count": 2,
+      "codex/response_item/function_call": 2,
+      "codex/response_item/function_call_output": 2,
+      "codex/response_item/message/assistant": 1,
+      "codex/response_item/message/user": 1,
+      "codex/response_item/reasoning": 1,
+      "codex/session_meta": 1,
+      "codex/turn_context": 1
+    }
+  }
+}

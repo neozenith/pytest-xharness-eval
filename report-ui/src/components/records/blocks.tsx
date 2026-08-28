@@ -8,7 +8,7 @@ import { fmt } from "@/lib/format";
 import { leadingTag } from "@/lib/records";
 import { Comp, Mono } from "./Comp";
 import { ToolInput } from "./tools";
-import { Details, Json, Kvs, Output, Text, Usage, Xmlish, pretty } from "./values";
+import { Details, Json, Kvs, Output, Text, Usage, Xmlish, categoryColour, pretty } from "./values";
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -60,7 +60,7 @@ const B: Record<string, (b: Obj) => ReactNode> = {
       <Kvs
         pairs={[
           ["tool_use_id", code(b.tool_use_id)],
-          ["is_error", b.is_error ? <span className="text-bad">true</span> : "false"],
+          ["is_error", b.is_error ? <span className="bad">true</span> : "false"],
         ]}
       />
       <Output text={texts(b.content)} title="content" />
@@ -68,11 +68,16 @@ const B: Record<string, (b: Obj) => ReactNode> = {
   ),
 };
 
-const BLOCK_COLOUR: Record<string, string> = {
-  tool_use: "var(--xh-category-tool_call, #4338ca)",
-  tool_result: "var(--xh-category-tool_result, #0f766e)",
-  thinking: "var(--xh-category-thinking, #6d28d9)",
-  text: "var(--xh-category-assistant_text, #065f46)",
+/**
+ * A block's left rule is the same colour as the pill of the category it belongs to, so a
+ * `tool_use` block inside a message reads as the same kind of thing a `tool_call` record does.
+ * The mapping is block type -> category; the colour comes from the catalogue.
+ */
+const BLOCK_CATEGORY: Record<string, string> = {
+  tool_use: "tool_call",
+  tool_result: "tool_result",
+  thinking: "thinking",
+  text: "assistant_text",
 };
 
 /** One content block: a left-ruled section headed by its type. */
@@ -82,8 +87,8 @@ export function Block({ block }: { block: unknown }) {
   const kind = String(b.type ?? "unknown");
   const render = B[kind];
   return (
-    <div className={`block ${kind} my-[0.45rem] border-l-[3px] py-[0.1rem] pl-[0.7rem]`} style={{ borderColor: BLOCK_COLOUR[kind] ?? "var(--xh-line)" }}>
-      <div className="bhead text-muted-foreground mb-[0.15rem] font-mono text-[0.72rem]">{kind}</div>
+    <div className={`block ${kind}`} style={{ borderLeftColor: BLOCK_CATEGORY[kind] ? categoryColour(BLOCK_CATEGORY[kind]) : "var(--xh-line)" }}>
+      <div className="bhead">{kind}</div>
       {render ? (
         <Comp el={`B.${kind}`}>{render(b)}</Comp>
       ) : (
@@ -121,6 +126,12 @@ export function ClaudeMessage({ message }: { message: unknown }) {
           ["message id", code(m.id)],
         ]}
       />
+      {/*
+       * Captioned, as the Codex `token_count` renderer captions its two grids. Uncaptioned,
+       * the three call fields and the six token counts ran together as one nine-row grid on a
+       * single pitch — the most quantitative block in the report reading as continuation rows.
+       */}
+      {isObj(m.usage) ? <b className="sublabel">tokens</b> : null}
       <Usage usage={m.usage} />
     </Comp>
   );

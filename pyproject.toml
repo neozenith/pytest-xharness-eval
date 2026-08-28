@@ -79,10 +79,26 @@ select = [
     "PTH", # flake8-use-pathlib
     "TCH", # flake8-type-checking
     "C90", # mccabe
+    "TID", # flake8-tidy-imports (the harness-boundary fitness function below)
 ]
 ignore = []
 fixable = ["ALL"]
 unfixable = []
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# Architecture fitness function for ADR 0034. A provider module is reachable only through
+# the registry: nothing outside the harness package may name one, or the string-dispatch
+# this replaced grows back one import at a time. Adding a harness must stay a one-file job.
+# Owner: the maintainer of src/pytest_xharness_eval/harness/. Review by: 2027-08-28 --
+# delete this rule if the registry has been abandoned, rather than leaving it to mislead.
+"pytest_xharness_eval.harness.claude".msg = "import pytest_xharness_eval.harness and use harness.get(name); ADR 0034"
+"pytest_xharness_eval.harness.codex".msg = "import pytest_xharness_eval.harness and use harness.get(name); ADR 0034"
+
+[tool.ruff.lint.per-file-ignores]
+# The package's own __init__ is what registers the providers, and the unit tests exercise
+# each dialect's folding directly; both are inside the boundary, not consumers of it.
+"src/pytest_xharness_eval/harness/__init__.py" = ["TID251"]
+"tests/*" = ["TID251"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

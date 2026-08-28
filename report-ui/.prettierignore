@@ -2,3 +2,6 @@ dist
 node_modules
 bun.lock
 src/components/ui
+test-results
+playwright-report
+DESIGN-LOG.md

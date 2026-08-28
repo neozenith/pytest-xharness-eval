@@ -1,48 +1,43 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
+/** The pill badge, built on Tamagui; `tone` colours it from the design tokens. */
+import { styled, Text } from "tamagui";
 
-import { cn } from "@/lib/utils"
+/**
+ * Tone is carried by a tint plus ink of the same hue, never a solid slab: sixteen solid
+ * verdict pills stacked down a table column drown the data they annotate, and ink-on-tint
+ * clears AA in both themes for every semantic colour (solid `warn` did not).
+ */
+const tint = (token: string) => ({
+  backgroundColor: `color-mix(in srgb, var(--xh-${token}) 13%, transparent)`,
+  borderColor: `color-mix(in srgb, var(--xh-${token}) 32%, transparent)`,
+  color: `var(--xh-${token})`,
+});
 
-const badgeVariants = cva(
-  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
-        secondary:
-          "bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
-        destructive:
-          "bg-destructive text-white focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40 [a&]:hover:bg-destructive/90",
-        outline:
-          "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
-        ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 [a&]:hover:underline",
-      },
+export const Badge = styled(Text, {
+  name: "XhBadge",
+  render: "span",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 999,
+  borderWidth: 1,
+  borderColor: "transparent",
+  paddingHorizontal: 8,
+  height: 20,
+  fontSize: 11,
+  lineHeight: 18,
+  fontWeight: "600",
+  letterSpacing: 0.3,
+  whiteSpace: "nowrap",
+
+  variants: {
+    tone: {
+      good: tint("good"),
+      bad: tint("bad"),
+      warn: tint("warn"),
+      accent: tint("accent"),
+      outline: { borderColor: "$line", color: "$muted", backgroundColor: "transparent" },
     },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
+  } as const,
 
-function Badge({
-  className,
-  variant = "default",
-  asChild = false,
-  ...props
-}: React.ComponentProps<"span"> &
-  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : "span"
-
-  return (
-    <Comp
-      data-slot="badge"
-      data-variant={variant}
-      className={cn(badgeVariants({ variant }), className)}
-      {...props}
-    />
-  )
-}
-
-export { Badge, badgeVariants }
+  defaultVariants: { tone: "outline" },
+});

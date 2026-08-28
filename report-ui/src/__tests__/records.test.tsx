@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
+import { renderT as render } from "./render";
 import { RecordCard } from "@/components/records/RecordCard";
 import { TurnRawRecords, ctxFor, ranges, turnId } from "@/components/records/TurnRawRecords";
 import { RecordViewToggle } from "@/components/records/RecordViewToggle";
@@ -115,7 +116,8 @@ test("a RecordCard's HTML reads in the glossary's vocabulary: RecordCard > R.<ki
   expect(container.querySelector('[data-el="V.envelope"]')).not.toBeNull();
   expect(screen.getByText("L12")).toBeInTheDocument();
   expect(screen.getByText("ctx 3.6%")).toBeInTheDocument();
-  expect(screen.getByTitle("tool_call")).toHaveTextContent("claude/assistant/tool_use");
+  // The pill names its category, and its tooltip carries the whole kind — the head elides it on a narrow card.
+  expect(screen.getByTitle("claude/assistant/tool_use · tool_call")).toHaveTextContent("claude/assistant/tool_use");
 });
 
 test("the raw/nice flip swaps the body, and a page-wide view change resets it", () => {

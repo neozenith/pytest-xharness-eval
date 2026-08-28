@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
+import { renderT as render } from "./render";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   CostByTierPanel,
@@ -12,7 +13,7 @@ import {
   turnId,
   type SkillCoverage,
 } from "@/components/panels";
-import type { Call, Cell, RunResult, Usage } from "@/lib/types";
+import type { Call, RunResult, Usage } from "@/lib/types";
 
 const usage = (over: Partial<Usage> = {}): Usage => ({
   input_tokens: 2,
@@ -112,8 +113,6 @@ const result: RunResult = {
   },
 };
 
-const cell = { session_id: result.session_id, case: "eval_dual_density", harness: "claude", model: "claude-sonnet-5" } as Cell;
-
 const mount = (node: React.ReactNode) => render(<TooltipProvider>{node}</TooltipProvider>);
 
 test("ranges and turnId match the legacy page", () => {
@@ -131,7 +130,6 @@ test("SessionTurnTable: one row per call, summary hides details, a click opens a
   const { rerender } = mount(
     <SessionTurnTable
       result={result}
-      cell={cell}
       view="summary"
       onViewChange={() => {}}
       openTurn={null}
@@ -151,13 +149,12 @@ test("SessionTurnTable: one row per call, summary hides details, a click opens a
   expect(row2).toHaveTextContent("4.0%");
   expect(row2).toHaveTextContent("1,716 ms");
   fireEvent.click(row2);
+  // the open turn is reported upward; SessionView owns writing it into the hash (lib/route.ts)
   expect(onOpenTurn).toHaveBeenCalledWith(2);
-  expect(location.hash).toBe(`#session=${result.session_id}&turn=2&view=summary`);
   rerender(
     <TooltipProvider>
       <SessionTurnTable
         result={result}
-        cell={cell}
         view="summary"
         onViewChange={() => {}}
         openTurn={2}
@@ -173,7 +170,6 @@ test("SessionTurnTable: one row per call, summary hides details, a click opens a
     <TooltipProvider>
       <SessionTurnTable
         result={result}
-        cell={cell}
         view="detailed"
         onViewChange={() => {}}
         openTurn={null}
@@ -189,17 +185,7 @@ test("SessionTurnTable: one row per call, summary hides details, a click opens a
 });
 
 test("SessionTurnTable without a ledger says so", () => {
-  mount(
-    <SessionTurnTable
-      result={{ ...result, calls: [] }}
-      cell={cell}
-      view="summary"
-      onViewChange={() => {}}
-      openTurn={null}
-      onOpenTurn={() => {}}
-      recordView="nice"
-    />,
-  );
+  mount(<SessionTurnTable result={{ ...result, calls: [] }} view="summary" onViewChange={() => {}} openTurn={null} onOpenTurn={() => {}} recordView="nice" />);
   expect(screen.getByText(/no per-turn ledger/)).toBeInTheDocument();
 });
 
@@ -273,6 +259,43 @@ test("ReconciliationPanel: ledger vs harness with = and Δ, the billed sum besid
   expect(row("turns (model calls)")).toHaveTextContent("Δ 21");
   expect(row("accumulative_billed_tokens")).toHaveTextContent("1,504,090");
   expect(row("estimated / harness reported cost")).toHaveTextContent("Δ $0.0011");
+});
+
+test("ReconciliationPanel splits a spawning run: tier rows show the primary share, the subagents' bill is its own row", () => {
+  const withSub: RunResult = {
+    ...result,
+    // the whole bill: the fixture usage plus the spawned thread's 100 input / 50 output
+    usage: usage({ input_tokens: 132, output_tokens: 314, accumulative_billed_tokens: undefined }),
+    subagents: [
+      {
+        agent: "Explore",
+        id: "abc",
+        log: "subagents/agent-abc.jsonl",
+        parent_turn: 1,
+        turns: 1,
+        description: "",
+        usage: usage({
+          input_tokens: 100,
+          output_tokens: 50,
+          cache_read_tokens: 0,
+          cache_write_tokens: 0,
+          cache_write_1h_tokens: 0,
+          reasoning_tokens: 0,
+          accumulative_billed_tokens: 150,
+        }),
+        calls: [],
+      },
+    ],
+  };
+  mount(<ReconciliationPanel result={withSub} />);
+  const panel = document.getElementById("ReconciliationPanel")!;
+  const row = (label: string) => within(panel).getByText(label).closest("tr")!;
+  // primary share = whole bill minus the thread's tiers, so the harness comparison still holds
+  expect(row("input (uncached)")).toHaveTextContent("32");
+  expect(row("output")).toHaveTextContent("264");
+  const subRow = row("subagents (1 spawned thread)");
+  expect(subRow).toHaveTextContent("150");
+  expect(subRow).toHaveTextContent("not in the harness figure");
 });
 
 test("ReconciliationPanel on Codex subtracts cached from the vendor's inclusive input", () => {

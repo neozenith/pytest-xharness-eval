@@ -1,3 +1,4 @@
+import { XStack } from "tamagui";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { El } from "@/components/El";
 import { fmt } from "@/lib/format";
@@ -15,7 +16,7 @@ export function RecordKindsPanel({ recordKinds }: { recordKinds: Record<string, 
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div id="RecordKindsPanel" className="flex flex-wrap gap-2">
+        <XStack id="RecordKindsPanel" flexWrap="wrap" gap={8}>
           {entries.length ? (
             entries.map(([k, n]) => (
               <Chip key={k}>
@@ -25,7 +26,7 @@ export function RecordKindsPanel({ recordKinds }: { recordKinds: Record<string, 
           ) : (
             <Notice>no record_kinds on this result (predates ADR 0022)</Notice>
           )}
-        </div>
+        </XStack>
       </CardContent>
     </Card>
   );

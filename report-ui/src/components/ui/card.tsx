@@ -1,92 +1,56 @@
-import * as React from "react"
+/** The panel card, built on Tamagui: the frame every chart, table and panel sits in. */
+import { styled, Text, View } from "tamagui";
 
-import { cn } from "@/lib/utils"
+export const Card = styled(View, {
+  name: "XhCard",
+  render: "section",
+  flexDirection: "column",
+  backgroundColor: "$panel",
+  borderColor: "$line",
+  borderWidth: 1,
+  borderRadius: 12,
+  paddingVertical: 20,
+  gap: 16,
+  // A card is a surface, not a box: one hairline plus a shadow barely above the paper.
+  // `--xh-shadow` is near-invisible in light and a real void in dark, so both themes read.
+  boxShadow: "0 1px 2px -1px var(--xh-shadow), 0 8px 20px -12px var(--xh-shadow)",
+  transition: "200ms",
+  enterStyle: { opacity: 0, y: 4 },
+});
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card"
-      className={cn(
-        "flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+export const CardHeader = styled(View, {
+  name: "XhCardHeader",
+  render: "header",
+  flexDirection: "column",
+  gap: 3,
+  paddingHorizontal: 20,
+});
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-header"
-      className={cn(
-        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+export const CardTitle = styled(Text, {
+  name: "XhCardTitle",
+  render: "h2",
+  color: "$color",
+  fontFamily: "$body",
+  fontSize: 15,
+  lineHeight: 20,
+  fontWeight: "600",
+  letterSpacing: -0.1,
+  margin: 0,
+});
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
-      {...props}
-    />
-  )
-}
+export const CardDescription = styled(Text, {
+  name: "XhCardDescription",
+  render: "p",
+  color: "$muted",
+  fontFamily: "$body",
+  fontSize: 12.5,
+  lineHeight: 18,
+  maxWidth: "78ch",
+  margin: 0,
+});
 
-function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-description"
-      className={cn("text-sm text-muted-foreground", className)}
-      {...props}
-    />
-  )
-}
-
-function CardAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-action"
-      className={cn(
-        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-content"
-      className={cn("px-6", className)}
-      {...props}
-    />
-  )
-}
-
-function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn("flex items-center px-6 [.border-t]:pt-6", className)}
-      {...props}
-    />
-  )
-}
-
-export {
-  Card,
-  CardHeader,
-  CardFooter,
-  CardTitle,
-  CardAction,
-  CardDescription,
-  CardContent,
-}
+export const CardContent = styled(View, {
+  name: "XhCardContent",
+  flexDirection: "column",
+  paddingHorizontal: 20,
+});

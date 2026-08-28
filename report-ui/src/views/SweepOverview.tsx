@@ -1,3 +1,4 @@
+import { Text, View } from "tamagui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TokenAccumulationChart } from "@/components/charts";
 import { El } from "@/components/El";
@@ -9,7 +10,7 @@ import type { Index } from "@/lib/types";
 export function SweepOverview({ index }: { index: Index }) {
   const results = useResults(index.cells);
   return (
-    <section id="SweepOverview" className="space-y-4" data-el="SweepOverview">
+    <View render="section" id="SweepOverview" gap={16} data-el="SweepOverview">
       <Card>
         <CardContent>
           <TokenAccumulationChart cells={index.cells} results={results} />
@@ -19,9 +20,9 @@ export function SweepOverview({ index }: { index: Index }) {
         <CardHeader>
           <CardTitle>
             Sessions{" "}
-            <span id="SessionCount" className="text-muted-foreground font-normal">
+            <Text render={<span id="SessionCount" />} color="$muted" fontWeight="400">
               ({index.cells.length})
-            </span>
+            </Text>
             <El name="SessionTable" />
           </CardTitle>
           <CardDescription>One row per captured session. Click a row to open its SessionView; a header to sort; an id to copy it.</CardDescription>
@@ -30,6 +31,6 @@ export function SweepOverview({ index }: { index: Index }) {
           <SessionTable cells={index.cells} />
         </CardContent>
       </Card>
-    </section>
+    </View>
   );
 }

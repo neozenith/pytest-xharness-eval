@@ -15,10 +15,10 @@ flowchart LR
     CASE["eval_*.py case"]
     PLUG["plugin.py<br/>collect, expand matrix"]
     WS["workspace.py<br/>pristine copy"]
-    RUN["runner.py<br/>claude | codex"]
+    RUN["harness/<br/>ClaudeHarness | CodexHarness"]
     LOG["session log<br/>this run's own"]
-    NORM["normalise.py<br/>RunResult"]
-    PRICE["pricing.py<br/>USD"]
+    NORM["SessionLog.to_result<br/>RunResult"]
+    PRICE["pipeline.derive<br/>price, coverage, case"]
     GRADE["case assertions"]
     REP["report.json"]
 
@@ -33,8 +33,12 @@ flowchart LR
 ```
 
 One cell flows left to right: a case is expanded into cells, each cell gets a fresh
-workspace, the CLI runs, its own log is located and normalised, priced, graded, and
-reported.
+workspace, the harness runs its CLI, its own log is located and folded into a
+`RunResult`, then priced, graded, and reported.
+
+Everything from the `RunResult` rightwards is `pipeline.py`, and a replay
+(`python -m pytest_xharness_eval.replay`) rejoins the same flow at the session log
+rather than repeating it -- one sequence, two entry points (ADR 0034).
 
 <details>
 <summary>Detailed flow, including the two capture contracts</summary>
@@ -43,14 +47,14 @@ reported.
 sequenceDiagram
     participant P as plugin.py
     participant W as workspace.py
-    participant R as runner.py
+    participant R as harness/
     participant C as claude CLI
     participant X as codex CLI
     participant S as session log store
 
     P->>W: materialise(fixture, cell_id, workdir)
     W-->>P: tmp/evals/<cell>/
-    P->>R: run_claude or run_codex
+    P->>R: harness.get(cell.harness).run(...)
     alt claude
         R->>R: mint UUID
         R->>C: claude -p --session-id UUID (cwd=workspace)
@@ -87,8 +91,8 @@ its log is established in two different ways.
 | Token accounting | per assistant message `usage` block, repeated on every content-block record of that message | one `token_count` event per model call: `last_token_usage` for the call, `total_token_usage` cumulative |
 | Cache-write TTL | `usage.cache_creation.ephemeral_1h_input_tokens` / `ephemeral_5m_input_tokens` | not billed |
 
-Two facts were learned from live runs and are encoded in `runner.py` and
-`normalise.py`. First, Claude's cwd slug replaces every non-alphanumeric character
+Two facts were learned from live runs and are encoded in `harness/claude.py` and
+`harness/codex.py`, each beside the dialect it belongs to. First, Claude's cwd slug replaces every non-alphanumeric character
 with `-`, including underscores. Second, Codex's `input_tokens` already includes
 `cached_input_tokens`, so the cached share is subtracted before pricing.
 
@@ -173,17 +177,22 @@ that proves nothing.
 | fixture | A committed seed directory under `evals/fixtures/<name>/` that a workspace is copied from; several cases may share one |
 | workspace | The per-cell copy of the fixture under the work directory that the agent works in |
 | session log | The JSONL file the CLI writes for one session; the evidence a verdict is tied to |
+| Harness | The class behind a harness name: how its CLI is invoked, how its log correlates back to the run, how its records classify, and what its shell tools mean for coverage. `harness.get(name)` is the only way to reach one; an unregistered name raises rather than defaulting (ADR 0034) |
+| SessionLog | One captured session in a provider's dialect *plus the side-channel that dialect needs* -- Claude's stdout envelope, Codex's exit code -- so every caller gets one uniform `to_result` (ADR 0034) |
 | RunResult | The normalised record of one cell: identity, usage, tool calls, files written, cost |
+| pipeline | The single sequence run over a `RunResult` by both a live cell and a replay: derive (price, coverage, case), capture (log, subagents, result), record metrics; `pipeline.py` (ADR 0034) |
+| settings | One resolved view of a project's configuration, built either from the live `pytest.Config` or, for a replay, from the pytest config on disk; `settings.py` (ADR 0034) |
 | captured | `evals/captured/<case>/`, where each run's log and `RunResult` are written; git-ignored |
 | history | `evals/captured/history.jsonl`, one flat metrics line per live cell (turns, tool calls, duration, wall clock, USD, tokens); git-ignored with the rest of `captured/` |
 | call, turn | One model API call inside a cell's session (a *SessionTurn* in the report); `RunResult.calls` is the ledger of them, each with its usage, tools issued, results fed in, text, thinking, and the log lines it came from (ADR 0019, 0021). `turns` counts them; the CLI's own count is `reported_turns` |
+| subagent | A parallel thread the session spawned (Claude's Agent tool sidecars under `subagents/`, Codex's forked rollouts), captured beside `log.jsonl` and folded through the same ledger; `RunResult.subagents` lists them, each attributed to the primary turn that spawned it (`parent_turn`), and their usage is inside the run's `usage` and estimate (ADR 0033) |
 | estimated cost | `estimated_cost_usd`: this plugin's price-table estimate; `rates_applied` records the rates, row and file behind it (ADR 0021) |
 | harness reported cost | `harness_reported_cost_usd`: what the harness CLI itself said the run cost; Claude only |
 | total tokens | Every priced token summed over all turns; the cached prefix counts once per turn |
 | baseline tokens | The first turn's context: the harness's own prompt before the agent acts |
 | report | `evals/captured/report.html` with `index.json` and `XHARNESS-REPORT-GLOSSARY.md` beside it: a static page over the captured JSON, served over HTTP (ADR 0020, 0021) |
 | SessionId, SessionTurnId | How the report addresses a session (the harness-minted session id, a unique prefix accepted) and a turn (`<SessionId>/t<N>`); both copyable from the page and carried in its URL fragment |
-| record kind | The catalogued shape of one session-log line, `harness/type[/subtype]`, with a category that colours its pill in the report; `records.py` is the catalogue and `record_kinds` the per-run census (ADR 0022) |
+| record kind | The catalogued shape of one session-log line, `harness/type[/subtype]`, with a category that colours its pill in the report; each harness's `classify_record` names the kind, `records.py` is the catalogue, and `record_kinds` is the per-run census (ADR 0022, ADR 0034) |
 | skill coverage | Which of the skill's catalogued files a run loaded or ran, per turn, and the `not_loaded` / `not_run` sets; `skillcov.py` (ADR 0022) |
 | context window | The model's window as the harness reported it; `context_window_pct` (peak turn) and `final_context_pct` are measured prompt sizes over it, never estimates (ADR 0024) |
 | design tokens | `report.tokens.json`: the palette, series, pill colours and fonts the report is themed with; bundled, copied beside every report, overridable per project (ADR 0024) |
@@ -216,6 +225,7 @@ flowchart TB
     subgraph produced["Produced by one live cell run"]
         WS["workspace<br/>per-cell copy of the fixture"]:::data
         LOG["session log<br/>the CLI's own JSONL"]:::data
+        SUB["subagent transcripts<br/>one JSONL per spawned thread"]:::data
         RR["RunResult<br/>normalised, priced record"]:::data
     end
 
@@ -235,10 +245,13 @@ flowchart TB
     FIX -->|"copied per cell into"| WS
     HARNESS -->|"works inside"| WS
     HARNESS -->|"writes"| LOG
+    HARNESS -->|"forks per subagent"| SUB
     LOG -->|"normalised into"| RR
+    SUB -->|"folded into, billed by"| RR
     PRICES -->|"prices"| RR
     RR -.->|"graded by the case fn,<br/>with the workspace"| CASE
     LOG -->|"copied to"| CAP
+    SUB -->|"copied to subagents/ in"| CAP
     RR -->|"written to"| CAP
     RR -->|"metrics appended to"| HIST
     RR -->|"appended to"| REP

@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderT as render } from "./render";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SessionTable } from "@/components/SessionTable";
 import type { Cell } from "@/lib/types";
@@ -59,6 +60,25 @@ test("skill coverage reads loaded/files · run/scripts and a missing catalogue i
   mount([cell({}), cell({ session_id: "other", skill_coverage: {} })]);
   expect(screen.getByText("6/18 · 2/4")).toBeInTheDocument();
   expect(screen.getAllByRole("row")).toHaveLength(3);
+});
+
+test("skill coverage sorts on the share it prints, not on the raw loaded count", () => {
+  // Two skills, two catalogue sizes: sorting on `loaded` put 6/18 (33%) above 5/5 (100%).
+  history.replaceState(null, "", "/?sort=coverage&dir=desc");
+  try {
+    mount([
+      cell({ session_id: "third-of-eighteen", skill_coverage: { files: 18, loaded: 6, scripts: 4, run: 2 } }),
+      cell({ session_id: "all-five", skill_coverage: { files: 5, loaded: 5, scripts: 2, run: 2 } }),
+      cell({ session_id: "no-catalogue", skill_coverage: {} }),
+    ]);
+    const order = screen
+      .getAllByRole("row")
+      .slice(1)
+      .map((r) => r.getAttribute("data-sid"));
+    expect(order).toEqual(["all-five", "third-of-eighteen", "no-catalogue"]);
+  } finally {
+    history.replaceState(null, "", "/");
+  }
 });
 
 test("rows are sorted newest first and a row links to its session", () => {

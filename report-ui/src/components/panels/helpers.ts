@@ -89,5 +89,4 @@ const PREFIX_CATEGORY: [string, string][] = [
 
 export const categoryOfKind = (kind: string): string => KIND_CATEGORY[kind] ?? PREFIX_CATEGORY.find(([p]) => kind.startsWith(p))?.[1] ?? "unknown";
 
-export type TurnView = "summary" | "detailed";
-export type RecordView = "nice" | "raw";
+export type { RecordView, TurnView } from "@/lib/route";

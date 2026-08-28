@@ -1,0 +1,87 @@
+# 0031: The report draws with Plotly on a Tamagui base, every state deeplinks, and a Playwright matrix sweeps them all
+
+Status: accepted, 2026-08-27. Refines
+[0020](0020-captured-report-is-a-static-microsite.md),
+[0024](0024-context-window-metrics-injected-messages-and-design-tokens.md),
+[0025](0025-results-name-their-case-and-charts-have-a-log-line-axis.md) and
+[0028](0028-report-is-built-from-a-component-workspace.md); supersedes 0028's
+shadcn/recharts component stack and 0024's fold-onto-the-last-colour series rule.
+
+## Context
+
+0028 built the report page from a Vite workspace on shadcn/ui (radix) with recharts,
+smoke-tested by rendering the bundle in jsdom. Three pressures outgrew that stack:
+
+- The charts are the product. recharts composes primitives well but tops out early:
+  its legends overflowed the card on sweeps with many sessions, and unified hover,
+  SI ticks and step-stacked areas each needed hand-rolling.
+- The page's quality bar is "AAA for every permutation of the results data" — which
+  is only checkable if every state is addressable by URL and something sweeps them
+  all. jsdom cannot render the real page (no layout, no canvas), so the smoke proved
+  boot, not behaviour.
+- Two component systems (radix primitives styled by Tailwind classes) meant every
+  interactive state was styled twice and animated nowhere.
+
+## Decision
+
+Three moves, one per pressure.
+
+**Plotly.js draws every chart.** `plotly.js-basic-dist-min` (scatter, bar — all the
+page needs) through one mount point, `components/charts/Plot.tsx`. Layouts are built
+from `useChartTheme()`, which resolves the `--xh-*` custom properties to concrete
+values and re-resolves when the theme flips, so 0024's design tokens still own every
+colour. Legends are DOM (`ChartLegend`): flexbox chips that wrap instead of
+overflowing and toggle a trace by re-rendering it as `legendonly`. Series past the
+eight-colour token palette cycle through it with a different line dash per lap —
+superseding 0024's rule that a ninth session folds onto the last colour, which made
+nine of sixteen lines identical.
+
+**Tamagui is the base UI and animation framework.** `components/ui/*` are hand-written
+Tamagui components now, not shadcn output; radix and Tailwind are both gone. Layout,
+chrome and interactivity are Tamagui components with props; the Tamagui themes hold
+`var(--xh-*)` references — both light and dark on purpose, because 0024's `.dark`
+class flip on the root already swaps the underlying values. Document content —
+tables, record cards, code blocks, key/value grids — is semantic HTML styled by one
+hand-written stylesheet (`index.css`), token-driven like everything else. One trap
+is load-bearing: Tamagui injects its atomic classes at runtime, after the
+stylesheet, so chrome that must overrule it (the segmented control) is pinned with
+`!important`, and positioning on Tamagui components is set through props, never
+classes.
+
+**Every state deeplinks, and one Playwright test sweeps the matrix.** The URL is
+the single source of truth — real History-API routes as query strings (no fragment
+router; query, not path segments, because the one static file must route with zero
+server rewrites and over `file://`): `session`, `turn`, `view` keep their 0020
+meanings, and
+`axis` (0025's log-line axis), `rec` (raw/nice records), `line` (a record-level
+permalink that opens its owning turn and flashes the card), `sort`/`dir` (overview
+table) and `theme` join them. A param absent from the URL means its default — state
+never sticks across navigations, navigations push history entries, and legacy
+`#…` links upgrade to their query form on load. `lib/permutations.ts` enumerates the covering
+matrix from the captured data itself (every turn of every session in both views,
+plus one permutation per remaining param per view type) and gives each state a
+deterministic filesystem-safe slug. The matrix is tiered — `small` constrains every
+dimension to one representative value (one session per harness, one mid turn,
+detailed view only), `medium` to a few (one session per harness×model,
+first/middle/last turns, every variant), `large` to all — so the inner loop stays
+seconds long and the full-cost sweep is absorbed less frequently; tiers nest by
+slug, so a faster run refreshes a subset of the same artifact tree. The singular `e2e/matrix.spec.ts` full-loads
+each permutation in a real browser, asserts zero console errors, and saves
+screenshot, console transcript and network timings under
+`tmp/e2e/matrix/<slug>/` — the shared, precise language for "this exact state is
+broken". The jsdom smoke is replaced by `e2e/inline.spec.ts`, which opens the
+inline-populated build over `file://` and checks the glossary-id parity list in a
+real browser.
+
+## Consequences
+
+- `make ui-e2e CAPTURED=<dir> TIER=small|medium|large` sweeps the matrix
+  (`SAMPLE=<n>` for an evenly spaced sample, `E2E_TARGET=dev` against the dev
+  server); `make ui-smoke` needs a browser,
+  not jsdom. Playwright's chromium must be installed once
+  (`bunx playwright install chromium`).
+- The bundle grows to ~1.7 MB (Plotly basic inlined); still one file, still offline.
+- A new route param must be added to `lib/permutations.ts` in the same change, or
+  the matrix silently stops covering it.
+- `window.__XH_PENDING__` (in-flight loads) and `[data-xh-loading]` markers are the
+  page's settledness contract with the e2e suite.

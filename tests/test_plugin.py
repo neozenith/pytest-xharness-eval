@@ -47,7 +47,7 @@ def test_help_lists_options_and_ini_keys(pytester: pytest.Pytester) -> None:
     result = pytester.runpytest("--help")
     result.stdout.fnmatch_lines(["*--harness=*", "*--model=SUBSTRING*", "*--dry-run*"])
     result.stdout.fnmatch_lines(
-        ["*xharness_skills_dir*", "*xharness_workdir*", "*xharness_prices*", "*xharness_matrix*"]
+        ["*xharness_skills_dir*", "*xharness_cache_dir*", "*xharness_prices*", "*xharness_matrix*"]
     )
     result.stdout.fnmatch_lines(["*--xharness-report-design-tokens=FILE*", "*--xharness-report-inline*"])
     # Ini keys print in registration order: the report keys are registered before the ignore key.
@@ -89,7 +89,7 @@ def test_header_names_the_skills_root_and_matrix_source(pytester: pytest.Pyteste
     result = pytester.runpytest("--collect-only")
     result.stdout.fnmatch_lines(
         [
-            "xharness-eval: skills root = *skills, workdir = *tmp?evals",
+            "xharness-eval: skills root = *skills, cache = *.xharness_eval_cache",
             "xharness-eval: matrix = plugin default (2 entries)*",
         ]
     )
@@ -183,16 +183,20 @@ def test_dry_run_writes_report_and_summary(pytester: pytest.Pytester) -> None:
             "*total estimated spend: $0.0000 across 2 cell(s)",
         ]
     )
-    report = json.loads((pytester.path / "tmp" / "evals" / "report.json").read_text(encoding="utf-8"))
+    report = json.loads((pytester.path / ".xharness_eval_cache" / "report" / "report.json").read_text(encoding="utf-8"))
     assert report["total_usd"] == 0
     assert [c["verdict"] for c in report["cells"]] == ["dry-run", "dry-run"]
     assert {c["harness"] for c in report["cells"]} == {"claude", "codex"}
 
 
-def test_dry_run_does_not_touch_history(pytester: pytest.Pytester) -> None:
+def test_dry_run_writes_no_results(pytester: pytest.Pytester) -> None:
     evals = make_tree(pytester)
     pytester.runpytest("--dry-run").assert_outcomes(skipped=2)
-    assert not (evals / "captured" / "history.jsonl").exists()
+    # No evidence and no aggregated page for a run that invoked nothing (ADR 0032);
+    # only report.json (the run summary) is written. Nothing lands in the skills tree.
+    cache = pytester.path / ".xharness_eval_cache"
+    assert not (cache / "results").exists()
+    assert not (cache / "report" / "report.html").exists()
     assert not (evals / "captured").exists()
 
 
@@ -337,11 +341,11 @@ def test_custom_skills_dir_ini(pytester: pytest.Pytester) -> None:
     result.stdout.fnmatch_lines(["agent_skills/demo/evals/eval_demo.py::eval_demo[claude/claude-opus-5]"])
 
 
-def test_custom_workdir_ini_relocates_the_report(pytester: pytest.Pytester) -> None:
-    make_tree(pytester, ini="xharness_workdir = build/eval-runs")
+def test_custom_cache_dir_ini_relocates_the_report(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, ini="xharness_cache_dir = build/eval-cache")
     result = pytester.runpytest("--dry-run")
     result.assert_outcomes(skipped=2)
-    assert (pytester.path / "build" / "eval-runs" / "report.json").is_file()
+    assert (pytester.path / "build" / "eval-cache" / "report" / "report.json").is_file()
 
 
 def test_cells_carry_the_eval_marker(pytester: pytest.Pytester) -> None:
@@ -357,5 +361,5 @@ def test_xdist_loadgroup_suffix_is_stripped_from_recorded_node_ids(pytester: pyt
     make_tree(pytester)
     result = pytester.runpytest("--dry-run", "-n", "2", "--dist", "loadgroup")
     result.assert_outcomes(skipped=2)
-    report = json.loads((pytester.path / "tmp" / "evals" / "report.json").read_text(encoding="utf-8"))
+    report = json.loads((pytester.path / ".xharness_eval_cache" / "report" / "report.json").read_text(encoding="utf-8"))
     assert all(not c["node"].endswith(("@claude", "@codex")) for c in report["cells"]), report

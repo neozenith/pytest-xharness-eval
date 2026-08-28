@@ -5,12 +5,18 @@ package is the whole setup; no ``conftest.py`` or ``-p`` flag is needed.
 
 Layout the plugin expects, relative to the pytest rootdir::
 
-    <skills root>/<skill>/evals/eval_<suite>.py        # the suite: eval_* functions
-    <skills root>/<skill>/evals/fixtures/<name>/       # seed workspaces, copied per cell
-    <skills root>/<skill>/evals/captured/<case>/       # each run's log and result; git-ignore it
-    <skills root>/<skill>/evals/captured/history.jsonl # one metrics line per live cell
+    <skills root>/<skill>/evals/eval_<suite>.py    # the suite: eval_* functions
+    <skills root>/<skill>/evals/fixtures/<name>/   # seed workspaces, copied per cell
 
-Four ini options tune the paths and the project matrix; see ``pytest_addoption``.
+Every run output consolidates under one git-ignored cache root (ADR 0032)::
+
+    <cache>/build/                                             # per-cell workspaces
+    <cache>/results/{skill}/{harness}/{model}/{run}/{session}/ # log.jsonl, result.json, history.json
+    <cache>/report/                                            # report.json + the aggregated microsite
+
+A cell writes only inside its own ``{run}/{session}/`` directory, so parallel
+workers never contend; the report step at session end is the one combine step.
+Ini options tune the paths and the project matrix; see ``pytest_addoption``.
 
 Per-cell results travel on ``TestReport.user_properties`` (ADR 0016). That is the
 one channel pytest-xdist serialises from a worker to the controller, so the verbose
@@ -23,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -32,11 +39,21 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 # Our Libraries
-from pytest_xharness_eval import history
+from pytest_xharness_eval import harness, history
 from pytest_xharness_eval import matrix as mx
-from pytest_xharness_eval import pricing, report, runner, skillcov
+from pytest_xharness_eval import pipeline, pricing, report, skillcov
 from pytest_xharness_eval import workspace as ws
 from pytest_xharness_eval.case import EvalCase
+from pytest_xharness_eval.settings import (
+    INI_CACHE_DIR,
+    INI_MATRIX,
+    INI_PRICES,
+    INI_REPORT_INLINE,
+    INI_REPORT_TOKENS,
+    INI_SKILL_IGNORE,
+    INI_SKILLS_DIR,
+    Settings,
+)
 
 if TYPE_CHECKING:
     # Standard Library
@@ -46,13 +63,6 @@ if TYPE_CHECKING:
     # Third Party
     from _pytest.terminal import TerminalReporter
 
-INI_SKILLS_DIR = "xharness_skills_dir"
-INI_WORKDIR = "xharness_workdir"
-INI_PRICES = "xharness_prices"
-INI_MATRIX = "xharness_matrix"
-INI_SKILL_IGNORE = "xharness_skill_ignore"
-INI_REPORT_TOKENS = "xharness_report_design_tokens"
-INI_REPORT_INLINE = "xharness_report_inline"
 
 # The user_properties key a cell's record travels under, worker to controller.
 PROPERTY = "xharness_eval"
@@ -73,7 +83,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--harness",
         action="append",
         default=None,
-        choices=list(mx.KNOWN_HARNESSES),
+        choices=list(mx.known_harnesses()),
         help="narrow the matrix to one harness (repeatable)",
     )
     g.addoption(
@@ -91,7 +101,9 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
     parser.addini(INI_SKILLS_DIR, default="skills", help="directory under rootdir holding <skill>/evals/ trees")
     parser.addini(
-        INI_WORKDIR, default="tmp/evals", help="directory under rootdir for per-cell workspaces and report.json"
+        INI_CACHE_DIR,
+        default=".xharness_eval_cache",
+        help="git-ignored root under rootdir for build workspaces, results and the report (ADR 0032)",
     )
     parser.addini(
         INI_PRICES,
@@ -144,6 +156,10 @@ def pytest_configure(config: pytest.Config) -> None:
     # --strict-markers happy when it is not.
     config.addinivalue_line("markers", "xdist_group(name): cells of one harness share a worker under --dist loadgroup")
     config.stash[RESULTS_KEY] = {}
+    # One UTC stamp per pytest session, path-safe and sortable; the env var makes xdist
+    # workers (child processes) agree with the controller, so a run's cells share one
+    # results/{...}/{run}/ directory level and repeated runs accumulate (ADR 0032).
+    os.environ.setdefault("XHARNESS_EVAL_RUN_TS", time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()))
     # ADR 0026 / ADR 0030: a malformed ignore or price line stops the session here,
     # before any cell is collected.
     try:
@@ -160,37 +176,26 @@ def pytest_report_header(config: pytest.Config) -> list[str]:
     A missing skills root is reported here rather than as a warning: the plugin is
     installed in environments that have no evals at all, and must stay silent there.
     """
-    root = _skills_root(config)
+    settings = _settings(config)
+    root = settings.skills_root
     state = "" if root.is_dir() else " (missing: no eval cells will be collected)"
-    project = _project_matrix(config)
+    project = settings.matrix_lines
     source = (
         f"{INI_MATRIX} ({len(project)} entries)" if project else f"plugin default ({len(mx.DEFAULT_MATRIX)} entries)"
     )
     return [
-        f"xharness-eval: skills root = {root}{state}, workdir = {_workdir(config)}",
+        f"xharness-eval: skills root = {root}{state}, cache = {settings.cache_dir}",
         f"xharness-eval: matrix = {source}; a case's models= overrides it",
     ]
 
 
-def _skills_root(config: pytest.Config) -> Path:
-    return (config.rootpath / str(config.getini(INI_SKILLS_DIR))).resolve()
+def _settings(config: pytest.Config) -> Settings:
+    """This session's resolved configuration; the replay path builds the same object."""
+    return Settings.from_config(config)
 
 
-def _workdir(config: pytest.Config) -> Path:
-    return config.rootpath / str(config.getini(INI_WORKDIR))
-
-
-def _price_table(config: pytest.Config) -> dict[str, pricing.Rates]:
-    return pricing.load_table(rows=[str(line) for line in config.getini(INI_PRICES)])
-
-
-def _project_matrix(config: pytest.Config) -> list[str]:
-    return [str(entry).strip() for entry in config.getini(INI_MATRIX) if str(entry).strip()]
-
-
-def _matrix_for(case: EvalCase, config: pytest.Config) -> list[str]:
-    """Case > project ini > plugin default (ADR 0015)."""
-    return case.models or _project_matrix(config) or list(mx.DEFAULT_MATRIX)
+def _run_ts() -> str:
+    return os.environ.get("XHARNESS_EVAL_RUN_TS") or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 
 
 # -- collection (ADR 0008: eval_*.py files, eval_* functions, under <skills root>/*/evals/)
@@ -202,7 +207,7 @@ def pytest_collect_file(file_path: Path, parent: pytest.Collector) -> pytest.Col
         file_path.suffix == ".py"
         and file_path.name.startswith("eval_")
         and file_path.parent.name == "evals"
-        and file_path.parent.parent.parent.resolve() == _skills_root(parent.config)
+        and file_path.parent.parent.parent.resolve() == _settings(parent.config).skills_root
     ):
         return EvalFile.from_parent(parent, path=file_path)
     return None
@@ -237,16 +242,17 @@ class EvalFile(pytest.File):
                 f"{self.path}: @evalcase functions must be named eval_*, got {misnamed}; "
                 "the eval_ prefix is the collection rule for files and functions alike, as test_ is for pytest"
             )
-        table = _price_table(self.config)
+        settings = _settings(self.config)
+        table = settings.price_table()
         opts = self.config.option
         for case in cases:
-            models = _matrix_for(case, self.config)
+            models = settings.matrix_for(case)
             # ADR 0007: an unpriced model stops the sweep at collection, before any spend.
             pricing.validate_matrix(models, table)
             # ADR 0022: the skill's file tree is catalogued here, before any cell runs, so every
             # cell of the sweep is measured against the same inventory.
-            skill_dir = _skills_root(self.config) / case.skill
-            ignore = [str(p) for p in self.config.getini(INI_SKILL_IGNORE)]
+            skill_dir = settings.skill_dir(case.skill)
+            ignore = settings.skill_ignore
             files = skillcov.catalog(skill_dir, ignore=ignore) if skill_dir.is_dir() else []
             for cell in mx.narrow(mx.expand(models), opts.model, opts.harness):
                 yield EvalItem.from_parent(
@@ -286,16 +292,17 @@ class EvalItem(pytest.Item):
         return self.evals_dir / "fixtures" / self.case.fixture
 
     @property
-    def captured_dir(self) -> Path:
-        """``evals/captured/<case>/``: this case's logs and results, git-ignored."""
-        return self.evals_dir / "captured" / self.case.name
+    def results_dir(self) -> Path:
+        """``<cache>/results/{skill}/{harness}/{model}/{run}/``: a per-session dir under it holds the evidence."""
+        root = _settings(self.config).results_root()
+        return root / self.case.skill / self.cell.harness / self.cell.model / _run_ts()
 
     def runtest(self) -> None:
-        skill_dir = _skills_root(self.config) / self.case.skill
+        skill_dir = _settings(self.config).skill_dir(self.case.skill)
         if not skill_dir.is_dir():
-            raise runner.RunError(f"skill under test not found: {skill_dir}")
+            raise harness.RunError(f"skill under test not found: {skill_dir}")
         if not self.fixture_dir.is_dir():
-            raise runner.RunError(f"fixture directory not found: {self.fixture_dir}")
+            raise harness.RunError(f"fixture directory not found: {self.fixture_dir}")
 
         if self.config.option.eval_dry_run:
             self.stash[RECORD_KEY] = {
@@ -309,37 +316,35 @@ class EvalItem(pytest.Item):
 
         self._run_live(skill_dir)
 
+    @property
+    def suite(self) -> str:
+        """This suite file, relative to the project root when it is under one (ADR 0025)."""
+        try:
+            return str(self.path.relative_to(self.config.rootpath))
+        except ValueError:
+            return str(self.path)
+
     def _run_live(self, skill_dir: Path) -> None:  # pragma: no cover - invokes a paid CLI (ADR 0002)
         cell_id = f"{self.case.name}-{self.cell.harness}-{self.cell.model}"
-        workspace = ws.materialise(self.fixture_dir, cell_id, _workdir(self.config))
+        settings = _settings(self.config)
+        workspace = ws.materialise(self.fixture_dir, cell_id, settings.cache_dir / "build")
 
         started_at = history.now_iso()
         t0 = time.monotonic()
-        result = runner.RUNNERS[self.cell.harness](
+        result = harness.get(self.cell.harness).run(
             prompt=self.case.prompt, model=self.cell.model, workspace=workspace, skill_dir=skill_dir
         )
         wall_ms = int((time.monotonic() - t0) * 1000)
-        result = pricing.price(result, _price_table(self.config))
-        result.skill_coverage = skillcov.annotate(self.case.skill, self.skill_files, result)
-        # Which suite file and case produced this run, and the prompt it sent (ADR 0025).
-        try:
-            suite = str(self.path.relative_to(self.config.rootpath))
-        except ValueError:
-            suite = str(self.path)
-        result.case = {
-            "suite": suite,
-            "name": self.case.name,
-            "skill": self.case.skill,
-            "fixture": self.case.fixture,
-            "prompt": self.case.prompt,
-        }
 
-        # Never inside fixtures/: a fixture is copied into every workspace, so logs
-        # placed there would leak into the next agent's cwd.
-        self.captured_dir.mkdir(parents=True, exist_ok=True)
-        stem = f"{self.cell.harness}-{result.session_id}"
-        (self.captured_dir / f"{stem}.jsonl").write_bytes(Path(result.session_log).read_bytes())
-        result.write(self.captured_dir / f"{stem}.result.json")
+        # Everything from here is the same sequence a replay runs, in the same order.
+        pipeline.derive(
+            result,
+            table=settings.price_table(),
+            skill=self.case.skill,
+            skill_files=self.skill_files,
+            case=pipeline.case_record(self.case, self.suite),
+        )
+        session_dir = pipeline.capture(result, self.results_dir / result.session_id)
 
         verdict = "pass"
         try:
@@ -351,11 +356,15 @@ class EvalItem(pytest.Item):
             verdict = "error"
             raise
         finally:
-            record = history.metrics_of(result, node=self.node, verdict=verdict, wall_ms=wall_ms, started_at=started_at)
-            # Where this cell's evidence landed, so the controller can build the captured report (ADR 0020).
-            record["captured"] = str(self.captured_dir.parent)
-            self.stash[RECORD_KEY] = record
-            history.append(self.captured_dir.parent / "history.jsonl", record)
+            self.stash[RECORD_KEY] = pipeline.record_metrics(
+                result,
+                session_dir,
+                node=self.node,
+                verdict=verdict,
+                wall_ms=wall_ms,
+                started_at=started_at,
+                cache=settings.cache_dir,
+            )
 
     def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:  # type: ignore[override]
         return f"[{self.cell.id}] {excinfo.getrepr(style='short')}"
@@ -440,16 +449,16 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: int,
         cost = f"${r['estimated_cost_usd']:.4f}" if r.get("estimated_cost_usd") is not None else "-"
         tr.write_line(f"  {r['verdict']:<8} {cost:>9}  {r['node']}")
     tr.write_line(f"  total estimated spend: ${total:.4f} across {len(results)} cell(s)")
-    report_path = _workdir(config) / "report.json"
+    settings = _settings(config)
+    report_path = settings.cache_dir / "report" / "report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps({"cells": results, "total_usd": round(total, 6)}, indent=2), encoding="utf-8")
     tr.write_line(f"  report: {report_path}")
-    # One browsable report per captured/ directory a live cell wrote into (ADR 0020, 0024).
-    tokens_opt = config.option.xharness_report_design_tokens or str(config.getini(INI_REPORT_TOKENS) or "")
-    tokens = (config.rootpath / tokens_opt) if tokens_opt else None
-    inline = bool(config.option.xharness_report_inline or config.getini(INI_REPORT_INLINE))
-    for captured in sorted({str(r["captured"]) for r in results if r.get("captured")}):
-        page = report.write(Path(captured), design_tokens=tokens, inline=inline)
-        tr.write_line(f"  captured report: {page}{' (inline, opens over file://)' if inline else ''}")
+    # The one combine step (ADR 0032): aggregate everything under results/ - every skill,
+    # every run - into one browsable report, when this run wrote any evidence.
+    tokens, inline = settings.report_tokens, settings.report_inline
+    for cache in sorted({str(r["cache"]) for r in results if r.get("cache")}):
+        page = report.write(Path(cache), design_tokens=tokens, inline=inline)
+        tr.write_line(f"  aggregated report: {page}{' (inline, opens over file://)' if inline else ''}")
         if not inline:
-            tr.write_line(f"  serve it: {report.serve_hint(Path(captured))}")
+            tr.write_line(f"  serve it: {report.serve_hint(Path(cache))}")

@@ -54,11 +54,16 @@ class Usage:
 
 @dataclass
 class ToolCall:
-    """One tool invocation the model issued in a turn; ``input`` is the full argument payload."""
+    """One tool invocation the model issued in a turn; ``input`` is the full argument payload.
+
+    ``id`` is the harness's tool-use id (Claude ``tool_use.id``, Codex ``call_id``): the key a
+    tool result — or a subagent transcript — points back at.
+    """
 
     name: str
     summary: str
     input: Any = None
+    id: str = ""
 
 
 @dataclass
@@ -109,6 +114,29 @@ class Call:
 
 
 @dataclass
+class Subagent:
+    """One parallel thread the primary session spawned, with its own captured transcript.
+
+    Claude writes each subagent to ``<session>/subagents/agent-<id>.jsonl`` beside the
+    session log; Codex forks one rollout per spawned thread. Both fold through the same
+    ledger machinery as the primary, so a subagent carries its own :class:`Call` list and
+    :class:`Usage`. ``parent_turn`` is the primary turn whose tool call spawned it
+    (matched by tool-use id on Claude, by spawn timestamp on Codex). ``log`` is the
+    captured transcript path relative to the session directory (``subagents/<name>``),
+    absolute only before capture.
+    """
+
+    agent: str
+    id: str
+    log: str
+    parent_turn: int | None = None
+    turns: int = 0
+    description: str = ""
+    usage: Usage = field(default_factory=Usage)
+    calls: list[Call] = field(default_factory=list)
+
+
+@dataclass
 class RunResult:
     """One eval cell's outcome: what the agent did, cost, and where the proof is."""
 
@@ -131,7 +159,8 @@ class RunResult:
     cost_status: str = "unpriced"
     cost_by_tier: dict[str, float] = field(default_factory=dict)
     rates_applied: dict[str, Any] = field(default_factory=dict)
-    # The per-call ledger. ``turns`` is its length; ``usage`` is its sum.
+    # The per-call ledger of the primary thread. ``turns`` is its length; ``usage`` is its
+    # sum plus every subagent's, so pricing bills the whole run.
     calls: list[Call] = field(default_factory=list)
     # The CLI's own aggregates, kept verbatim so a sweep can show how far they sit from the ledger.
     reported_usage: dict[str, int] = field(default_factory=dict)
@@ -151,6 +180,9 @@ class RunResult:
     api_duration_ms: int | None = None
     # The case that produced this run: suite file, case name, skill, fixture, prompt (ADR 0025).
     case: dict[str, Any] = field(default_factory=dict)
+    # Parallel threads the session spawned, each with its own ledger. Their usage is folded
+    # into ``usage`` (the run's billed total); ``turns`` and ``calls`` stay the primary's.
+    subagents: list[Subagent] = field(default_factory=list)
 
     @property
     def baseline_tokens(self) -> int:
@@ -205,6 +237,12 @@ class RunResult:
             raw["context_tokens"] = call.context_tokens
             raw["context_pct"] = self.pct_of_window(call.context_tokens)
             raw["output_tokens_per_sec"] = call.output_tokens_per_sec
+        for sub, raw_sub in zip(self.subagents, d["subagents"], strict=True):
+            raw_sub["usage"]["accumulative_billed_tokens"] = sub.usage.accumulative_billed_tokens
+            for call, raw in zip(sub.calls, raw_sub["calls"], strict=True):
+                raw["context_tokens"] = call.context_tokens
+                raw["context_pct"] = self.pct_of_window(call.context_tokens)
+                raw["output_tokens_per_sec"] = call.output_tokens_per_sec
         return d
 
     def write(self, path: Path) -> Path:

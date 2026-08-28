@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Text, View, XStack } from "tamagui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
@@ -20,52 +21,86 @@ import { VerdictBadge } from "@/components/VerdictBadge";
 import { useLog } from "@/hooks/useLog";
 import { useResult } from "@/hooks/useResult";
 import { fmt, pct, secs, usd, when, windowLabel } from "@/lib/format";
-import { sessionHash } from "@/lib/route";
+import { navigateOnClick, replaceRoute, type SessionRoute } from "@/lib/route";
 import type { AxisMode } from "@/lib/series";
 import type { Cell } from "@/lib/types";
 
 interface Props {
   cell: Cell | undefined;
-  sessionId: string;
-  turn: number | null;
-  turnView: TurnView | null;
+  route: SessionRoute;
 }
 
 /** One captured session: metadata, the per-turn charts, the panels, the turn table and its records (glossary: `SessionView`). */
-export function SessionView({ cell, sessionId, turn, turnView }: Props) {
+export function SessionView({ cell, route }: Props) {
+  const { sessionId } = route;
   const { result, error } = useResult(cell);
   const { lines } = useLog(cell);
-  const [axis, setAxis] = useState<AxisMode>("turn");
-  const [view, setView] = useState<TurnView>(turnView ?? "summary");
-  const [openTurn, setOpenTurn] = useState<number | null>(turn);
-  const [recordView, setRecordView] = useState<RecordView>("nice");
+  const [axis, setAxis] = useState<AxisMode>(route.axis ?? "turn");
+  const [view, setView] = useState<TurnView>(route.turnView ?? "summary");
+  const [openTurn, setOpenTurn] = useState<number | null>(route.turn);
+  const [recordView, setRecordView] = useState<RecordView>(route.rec ?? "nice");
 
-  // The hash is the source of truth for which turn is open and which view is shown: when the
-  // route changes, the local state resets to it (state derived from props, reset during render).
-  const [seen, setSeen] = useState({ turn, turnView });
-  if (seen.turn !== turn || seen.turnView !== turnView) {
-    setSeen({ turn, turnView });
-    setOpenTurn(turn);
-    if (turnView) setView(turnView);
+  // The hash is the source of truth for every control here: when the route changes, the
+  // local state resets to it (state derived from props, reset during render).
+  const [seen, setSeen] = useState(route);
+  if (seen !== route) {
+    setSeen(route);
+    setOpenTurn(route.turn);
+    // an absent param means its default: the hash alone reproduces the whole state
+    setView(route.turnView ?? "summary");
+    setAxis(route.axis ?? "turn");
+    setRecordView(route.rec ?? "nice");
   }
+
+  // Every control writes the whole route back, so a copied URL reproduces exactly this state.
+  const write = (next: Partial<SessionRoute>) => {
+    replaceRoute({
+      view: "session",
+      sessionId,
+      turn: openTurn,
+      turnView: view,
+      axis: axis === "turn" ? null : axis,
+      rec: recordView === "nice" ? null : recordView,
+      line: null,
+      theme: route.theme,
+      ...next,
+    });
+  };
 
   // Scroll to the opened turn once its details row (and the log it renders) exist.
   useEffect(() => {
-    if (openTurn == null || !cell || !lines) return;
+    if (openTurn == null || route.line != null || !cell || !lines) return;
     const el = document.getElementById(turnId(cell.session_id, openTurn));
     if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "start", behavior: "smooth" });
-  }, [openTurn, cell, lines, result]);
+  }, [openTurn, route.line, cell, lines, result]);
+
+  // `line=` targets one record: its owning turn opens (derived, not stored), and once the
+  // card exists it is scrolled to and flashed.
+  const lineOwner = useMemo(
+    () => (route.line != null && result ? (result.calls.find((k) => (k.records ?? []).includes(route.line!))?.n ?? null) : null),
+    [route.line, result],
+  );
+  const shownTurn = openTurn ?? lineOwner;
+  useEffect(() => {
+    if (route.line == null || !result || !lines) return;
+    const el = document.getElementById(`L${route.line}`);
+    if (!el) return;
+    if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center" });
+    el.classList.add("xh-target");
+    const timer = setTimeout(() => el.classList.remove("xh-target"), 2400);
+    return () => clearTimeout(timer);
+  }, [route.line, result, lines, shownTurn]);
 
   if (!cell) {
     return (
-      <section id="SessionView" className="space-y-4" data-el="SessionView">
-        <p className="text-destructive">
+      <View render="section" id="SessionView" gap={16} data-el="SessionView">
+        <Text render="p" color="$bad" fontFamily="$body" fontSize={14}>
           No captured session <code>{sessionId}</code> in this index.
-        </p>
-        <Button asChild variant="outline">
-          <a href="#">← all sessions</a>
+        </Text>
+        <Button render={<a href="?" onClick={navigateOnClick("?")} />} variant="outline">
+          ← all sessions
         </Button>
-      </section>
+      </View>
     );
   }
 
@@ -78,7 +113,7 @@ export function SessionView({ cell, sessionId, turn, turnView }: Props) {
     [
       "prompt",
       cell.prompt ? (
-        <span key="p" className="whitespace-pre-wrap">
+        <span key="p" style={{ whiteSpace: "pre-wrap" }}>
           {cell.prompt}
         </span>
       ) : (
@@ -101,24 +136,32 @@ export function SessionView({ cell, sessionId, turn, turnView }: Props) {
 
   const changeView = (v: TurnView) => {
     setView(v);
-    history.replaceState(null, "", sessionHash(cell.session_id, openTurn, v));
+    write({ turnView: v });
   };
   const changeOpenTurn = (n: number | null) => {
     setOpenTurn(n);
-    history.replaceState(null, "", sessionHash(cell.session_id, n, view));
+    write({ turn: n });
+  };
+  const changeAxis = (a: AxisMode) => {
+    setAxis(a);
+    write({ axis: a === "turn" ? null : a });
+  };
+  const changeRecordView = (r: RecordView) => {
+    setRecordView(r);
+    write({ rec: r === "nice" ? null : r });
   };
 
   return (
-    <section id="SessionView" className="space-y-4" data-el="SessionView">
-      <header id="SessionHeader" className="flex flex-wrap items-center gap-3">
-        <Button asChild variant="ghost" size="sm">
-          <a href="#">← all sessions</a>
+    <View render="section" id="SessionView" gap={16} data-el="SessionView">
+      <XStack render={<header id="SessionHeader" />} flexWrap="wrap" alignItems="center" gap={12}>
+        <Button render={<a href="?" onClick={navigateOnClick("?")} />} variant="ghost" size="sm">
+          ← all sessions
         </Button>
-        <h2 id="SessionTitle" className="text-base font-semibold">
+        <Text render={<h2 id="SessionTitle" />} fontFamily="$body" fontSize={16} fontWeight="600" margin={0}>
           {cell.case} · {cell.harness}/{cell.model} <CopyId id={cell.session_id} />
           <El name="SessionView" />
-        </h2>
-      </header>
+        </Text>
+      </XStack>
 
       <Card>
         <CardHeader>
@@ -129,12 +172,12 @@ export function SessionView({ cell, sessionId, turn, turnView }: Props) {
           {error ? <CardDescription className="text-destructive">{error}</CardDescription> : null}
         </CardHeader>
         <CardContent>
-          <Table id="SessionMetaTable" className="text-sm">
+          <Table id="SessionMetaTable">
             <TableBody>
               {rows.map(([k, v]) => (
                 <TableRow key={k}>
-                  <TableCell className="text-muted-foreground w-56 font-mono text-xs">{k}</TableCell>
-                  <TableCell>{v}</TableCell>
+                  <TableCell className="key">{k}</TableCell>
+                  <TableCell style={{ whiteSpace: "normal" }}>{v}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -144,20 +187,22 @@ export function SessionView({ cell, sessionId, turn, turnView }: Props) {
 
       {result ? (
         <>
-          <ChartAxisToggle mode={axis} onChange={setAxis} />
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <Card className="xl:col-span-2">
-              <CardContent>
-                <TokenWaterfallChart result={result} lines={lines} mode={axis} />
-              </CardContent>
-            </Card>
-            <Card className="xl:col-span-2">
-              <CardContent>
-                <ContextWindowChart result={result} lines={lines} mode={axis} />
-              </CardContent>
-            </Card>
-            <ReconciliationPanel result={result} />
-            <CostByTierPanel result={result} />
+          <ChartAxisToggle mode={axis} onChange={changeAxis} />
+          <View style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(560px, 100%), 1fr))", gap: 16 }}>
+            <View style={{ gridColumn: "1 / -1" }}>
+              <Card>
+                <CardContent>
+                  <TokenWaterfallChart result={result} lines={lines} mode={axis} />
+                </CardContent>
+              </Card>
+            </View>
+            <View style={{ gridColumn: "1 / -1" }}>
+              <Card>
+                <CardContent>
+                  <ContextWindowChart result={result} lines={lines} mode={axis} />
+                </CardContent>
+              </Card>
+            </View>
             <Card>
               <CardContent>
                 <OutputPerTurnChart result={result} lines={lines} mode={axis} />
@@ -168,30 +213,33 @@ export function SessionView({ cell, sessionId, turn, turnView }: Props) {
                 <TurnTiersChart result={result} lines={lines} mode={axis} />
               </CardContent>
             </Card>
-            <div className="xl:col-span-2">
+            <ReconciliationPanel result={result} />
+            <CostByTierPanel result={result} />
+            <View style={{ gridColumn: "1 / -1" }}>
               <SkillCoveragePanel coverage={result.skill_coverage as unknown as SkillCoverage} />
-            </div>
-            <div className="xl:col-span-2">
+            </View>
+            <View style={{ gridColumn: "1 / -1" }}>
               <RecordKindsPanel recordKinds={result.record_kinds} />
-            </div>
-          </div>
+            </View>
+          </View>
           <SessionTurnTable
             result={result}
-            cell={cell}
             view={view}
             onViewChange={changeView}
-            openTurn={openTurn}
+            openTurn={shownTurn}
             onOpenTurn={changeOpenTurn}
             recordView={recordView}
-            onRecordViewChange={setRecordView}
-            toolbarExtra={<RecordViewToggle view={recordView} onChange={setRecordView} />}
+            onRecordViewChange={changeRecordView}
+            toolbarExtra={<RecordViewToggle view={recordView} onChange={changeRecordView} />}
             renderTurnRecords={(call) => <TurnRawRecords result={result} call={call} lines={lines} view={recordView} />}
           />
           <FinalMessagePanel text={result.final_text} />
         </>
       ) : error ? null : (
-        <p className="text-muted-foreground">loading result…</p>
+        <Text render="p" color="$muted" fontFamily="$body" fontSize={14} data-xh-loading="result">
+          loading result…
+        </Text>
       )}
-    </section>
+    </View>
   );
 }

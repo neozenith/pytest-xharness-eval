@@ -9,10 +9,19 @@ import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { fmt } from "@/lib/format";
+import { CATEGORIES } from "@/lib/records";
 import { Comp, Mono } from "./Comp";
 import { ensureTheme, highlight } from "./hljs";
 
 export { extLang } from "./hljs";
+
+/**
+ * The colour of a record category, as the page paints it: the project's `--xh-category-*`
+ * token when `lib/tokens` has set one, otherwise the catalogue's own value. Every surface that
+ * carries a category — the head's pill, a block's left rule — draws from this one function, so
+ * an overridden palette moves them together instead of leaving a rule on a stale literal.
+ */
+export const categoryColour = (category: string): string => `var(--xh-category-${category}, ${CATEGORIES[category] ?? CATEGORIES.unknown})`;
 
 export const pretty = (v: unknown): string => (typeof v === "string" ? v : JSON.stringify(v, null, 1));
 
@@ -26,19 +35,29 @@ export type Pair = [string, ReactNode | undefined | null];
 
 const present = (v: ReactNode | undefined | null): boolean => v !== undefined && v !== null && v !== "";
 
+/** The top edge of a code block: what it is on the left, what language it is set in on the right. */
 const CodeHead = ({ title, lang }: { title?: string; lang?: string }) =>
   title ? (
-    <div className="text-muted-foreground mt-[0.4rem] flex items-center gap-[0.6rem] font-mono text-[0.72rem]">
-      {title}
-      {lang ? <span>· {lang}</span> : null}
+    <div className="code-head">
+      <span className="ch-title">{title}</span>
+      {lang ? <span className="ch-lang">{lang}</span> : null}
     </div>
   ) : null;
 
-const Pre = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <pre className={`bg-muted mt-[0.15rem] mb-2 max-h-[60vh] overflow-auto rounded-md p-2 text-[0.8rem] leading-snug whitespace-pre-wrap ${className ?? ""}`}>
+/**
+ * The scroll box every code-like value is set in. `.xh-pre` caps itself at 60vh and scrolls,
+ * and a scrollable region that cannot be focused is a region a keyboard cannot read (WCAG
+ * 2.1.1), so it takes the tab order and an accessible name — its own title and language, the
+ * two things the head above it shows a pointer.
+ */
+const Pre = ({ children, className, label }: { children: ReactNode; className?: string; label?: string }) => (
+  <pre className={`xh-pre ${className ?? ""}`} tabIndex={0} role="region" aria-label={label ? `${label} (scrollable)` : "code (scrollable)"}>
     {children}
   </pre>
 );
+
+/** The accessible name of a code block: what it is, and what it is set in. */
+const preLabel = (title?: string, lang?: string): string => [title, lang].filter(Boolean).join(" · ") || "code";
 
 /** Terminal output with colour codes, rendered in colour through ansi_up; nothing is stripped. */
 export function Ansi({ text, title }: { text: unknown; title?: string }) {
@@ -46,8 +65,8 @@ export function Ansi({ text, title }: { text: unknown; title?: string }) {
   return (
     <Comp el="V.ansi">
       <CodeHead title={title} lang="ansi" />
-      <Pre>
-        <code className="ansi text-foreground" dangerouslySetInnerHTML={{ __html: html }} />
+      <Pre label={preLabel(title, "ansi")}>
+        <code className="ansi" dangerouslySetInnerHTML={{ __html: html }} />
       </Pre>
     </Comp>
   );
@@ -62,7 +81,7 @@ function CodeBlock({ lang, text, title }: { lang: string; text: unknown; title?:
   return (
     <>
       <CodeHead title={title} lang={lang || undefined} />
-      <Pre className="xh-code">
+      <Pre className="xh-code" label={preLabel(title, lang)}>
         {html == null ? (
           <code className={`hljs language-${lang || "text"}`}>{src}</code>
         ) : (
@@ -78,7 +97,7 @@ export function Text({ text }: { text: unknown }) {
   if (hasAnsi(text)) return <Ansi text={text} />;
   return (
     <Comp el="V.text">
-      <div className="txt my-1 text-[0.9rem] break-words whitespace-pre-wrap">{String(text)}</div>
+      <div className="txt">{String(text)}</div>
     </Comp>
   );
 }
@@ -88,11 +107,11 @@ export function Kvs({ pairs }: { pairs: Pair[] }) {
   if (!rows.length) return null;
   return (
     <Comp el="V.kvs">
-      <div className="kvs my-1 grid grid-cols-[max-content_1fr] gap-x-[0.8rem] gap-y-[0.15rem] text-[0.82rem]">
+      <div className="kvs">
         {rows.map(([k, v]) => (
-          <div key={k} className="contents">
-            <b className="text-muted-foreground font-semibold">{k}</b>
-            <span className="min-w-0 break-words">{v}</span>
+          <div key={k} style={{ display: "contents" }}>
+            <b>{k}</b>
+            <span className="val">{v}</span>
           </div>
         ))}
       </div>
@@ -131,9 +150,9 @@ export function Details({ summary, children }: { summary: string; children?: Rea
   if (children == null || children === false || children === "") return null;
   return (
     <Comp el="V.details">
-      <Collapsible className="env mt-[0.4rem]">
-        <CollapsibleTrigger className="text-muted-foreground group flex cursor-pointer items-center gap-1 font-mono text-[0.75rem]">
-          <ChevronRight className="size-3 transition-transform group-data-[state=open]:rotate-90" />
+      <Collapsible>
+        <CollapsibleTrigger className="env-trigger">
+          <ChevronRight className="chev" size={12} />
           {summary}
         </CollapsibleTrigger>
         <CollapsibleContent>{children}</CollapsibleContent>
@@ -147,13 +166,13 @@ export function Flag({ value }: { value: unknown }) {
   if (value === true)
     return (
       <>
-        <span className="text-good">✓</span> true
+        <span className="good">✓</span> true
       </>
     );
   if (value === false)
     return (
       <>
-        <span className="text-muted-foreground">✗</span> false
+        <span className="muted">✗</span> false
       </>
     );
   return <>{String(value)}</>;
@@ -233,11 +252,8 @@ export function Xmlish({ text }: { text: unknown }) {
     const nested = inner.includes("<") && /<([A-Za-z_][\w.-]*)[\s>]/.test(inner);
     const body = nested ? <Xmlish text={inner} /> : looksMarkdown(inner) ? <Code lang="markdown" text={inner} /> : <Text text={inner} />;
     out.push(
-      <div
-        key={`x${m.index}`}
-        className="xml my-[0.45rem] block border-l-[3px] border-[color:var(--xh-category-harness_context,#3f6212)] py-[0.1rem] pl-[0.7rem]"
-      >
-        <div className="bhead text-muted-foreground mb-[0.15rem] font-mono text-[0.72rem]">
+      <div key={`x${m.index}`} className="block xml" style={{ borderLeftColor: categoryColour("harness_context") }}>
+        <div className="bhead">
           <span className="tag">&lt;{m[1]}&gt;</span>
           {m[2] ? (
             <>
@@ -265,14 +281,14 @@ export function Listing({ text }: { text: unknown }) {
   if (!rows.length) return <Code lang="markdown" text={text} />;
   return (
     <Comp el="V.listing">
-      <table className="list text-[0.82rem]">
+      <table className="list">
         <tbody>
           {rows.map((r, i) => (
             <tr key={i}>
-              <td className="px-2 py-[0.2rem] align-top">
+              <td>
                 <Mono>{r[1]!.trim()}</Mono>
               </td>
-              <td className="px-2 py-[0.2rem]">{r[2]}</td>
+              <td>{r[2]}</td>
             </tr>
           ))}
         </tbody>

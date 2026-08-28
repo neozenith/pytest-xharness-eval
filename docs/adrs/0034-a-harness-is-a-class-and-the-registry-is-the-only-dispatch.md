@@ -1,0 +1,114 @@
+# 0034: A harness is a class, the registry is the only dispatch, and the layers are named
+
+Status: accepted, 2026-08-28. Refines
+[0002](0002-every-cell-invokes-the-real-cli.md) (the real CLI),
+[0014](0014-register-through-the-pytest11-entry-point.md) (locations are ini keys),
+[0015](0015-harness-is-the-axis-and-the-project-owns-the-matrix.md) (harness is
+the axis) and [0023](0023-turn-boundaries-skill-ignore-and-replay.md) (replay).
+Structural only: no record's shape and no metric's value changes.
+
+## Context
+
+0015 named *harness* as the first matrix axis, but the axis stayed a bare string.
+The behaviour behind it had accumulated across six modules in four unrelated
+dispatch idioms:
+
+| Site | Idiom | What a third harness did |
+| --- | --- | --- |
+| `matrix.KNOWN_HARNESSES` | tuple literal | failed loudly |
+| `runner.RUNNERS` | dict lookup | failed loudly |
+| `normalise.from_claude` / `from_codex` | no dispatch; different signatures | failed loudly |
+| `records.classify` | `if harness == "claude" else _classify_codex` | **read as Codex, silently** |
+| `replay.rebuild_result` | `if old["harness"] == "claude": ... else:` | **read as Codex, silently** |
+| `skillcov._SHELL_TOOLS` | one set unioning both providers' tool names | mis-attributed coverage, silently |
+
+Two of the six defaulted rather than failing, which is the opposite of the
+evidence contract this plugin is built on (0002: never grade a run whose evidence
+is missing or ambiguous).
+
+The signature asymmetry was the load-bearing defect. A Claude session log is
+*incomplete* — the session id, `total_cost_usd` and the aggregate usage exist
+only on the `-p --output-format json` stdout envelope — while a Codex rollout is
+self-contained but records no process exit code. Because that asymmetry was
+exposed through the interface rather than encapsulated, `replay.py` had to
+fabricate a synthetic Claude envelope out of a stored `result.json`: eight lines
+of Claude-specific knowledge in the module that otherwise knows nothing about
+Claude.
+
+Separately, three layers were interleaved. `plugin.py` was simultaneously the
+pytest interface, the config resolver, the cell execution sequence and the
+evidence writer; `replay.py` independently reimplemented the config resolver
+(a second pytest-rootdir walker, with `configparser`) and the execution sequence
+(price, annotate, name the case, write the metrics record). Nothing failed when
+those two copies drifted — a replay would simply produce a record a live run
+never would.
+
+## Decision
+
+**A harness is a class.** `Harness` (in `harness/base.py`) is the extension
+point, and a provider implements five members: `name`, `run`,
+`session_from_capture`, `classify_record`, and the `shell_tools` /
+`persistent_shells` its coverage attribution needs. `register()` puts it in the
+registry; `get(name)` is the only way to reach one, and an unregistered name
+raises `UnknownHarness` rather than falling through to a default.
+
+**A session log is a class.** `SessionLog` holds the log *plus the side-channel
+its dialect needs* — `ClaudeSessionLog` carries the stdout envelope,
+`CodexSessionLog` the exit code and the forked rollouts — so every caller gets
+one uniform `to_result(workspace, files_written)` and none has to know which
+dialect needs what. The Claude envelope reconstruction moves to
+`ClaudeHarness.session_from_capture`, beside the dialect that requires it.
+
+**The layers are named modules.** `settings.py` resolves configuration once, for
+both entry points: `Settings.from_config` for a live sweep,
+`Settings.from_cache` for a replay running outside any pytest session.
+`pipeline.py` owns the sequence that both paths run over a `RunResult` — derive
+(price, annotate coverage, name the case), capture (log, subagent transcripts,
+result), record metrics. `plugin.py` keeps only pytest hooks and collection;
+`report.py` and `replay.py` keep only curation. `normalise.py` keeps the shared
+folding primitives and knows about no provider at all.
+
+**The boundary is enforced, not just documented.** A ruff `TID251` banned-api
+rule fails the build if anything outside the harness package imports
+`harness.claude` or `harness.codex` by name. It carries an owner and a
+2027-08-28 review date in `pyproject.toml`; if the registry is ever abandoned the
+rule is deleted rather than left to mislead.
+
+`runner.py` is gone. Its shared half (`RunError`, `spawn`, the default timeout)
+is `harness/base.py`; each provider's half is its own module. The `pragma: no
+cover` markers move with the code they justify: spawning a CLI is still never
+mocked or faked (0002).
+
+## Consequences
+
+Adding a third CLI is one new module under `harness/` and one `register()` call.
+`matrix.known_harnesses()` reads the registry, so a harness cannot be runnable
+but unmatrixable. The two silent Codex defaults are now `UnknownHarness`.
+
+Behaviour is unchanged, and that is checked rather than asserted:
+`tests/test_characterization.py` pins the whole serialised `RunResult` for a rich
+capture of each dialect against a golden, and pins that a replay reproduces the
+live result from the captured directory alone. Those goldens did not move across
+any step of this change. They normalise out the tmp path and the `rates_applied`
+wall-clock stamp — pinning either would pin noise.
+
+Two coverage cases had been sharing one fixture that put Claude's `Bash` and
+Codex's `exec` on a single run, which only type-checked because `_SHELL_TOOLS`
+unioned both vocabularies. A result comes from exactly one harness, so that test
+is now two.
+
+Extraction made previously unreachable code testable: the evidence-capture and
+metrics-record steps used to sit inside `plugin.EvalItem._run_live`, behind the
+`pragma: no cover` that the paid CLI call requires. In `pipeline.py` they are
+ordinary functions, tested without invoking anything.
+
+`report.py` and the report UI are untouched: no key of `result.json`,
+`index.json` or `history.jsonl` changes, so `report-ui/src/lib/types.ts` and the
+glossary stay valid.
+
+## Lens
+
+When one axis is named but stays a string, its behaviour spreads into every
+module that has to ask what it is — and the branches that *default* are worse
+than the ones that fail. Give the axis a type, make the registry the only way to
+reach an implementation, and let a linter keep the boundary you just drew.

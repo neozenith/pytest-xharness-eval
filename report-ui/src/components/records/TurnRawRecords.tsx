@@ -6,10 +6,11 @@
  */
 import { El } from "@/components/El";
 import { fmt, pct, windowLabel } from "@/lib/format";
+import { sessionSearch } from "@/lib/route";
 import { categoryOf, classify } from "@/lib/records";
 import type { Call, RunResult } from "@/lib/types";
 import { Muted } from "./Comp";
-import { RecordCard, type CtxTag, type RecordView } from "./RecordCard";
+import { RecordCardClaude, RecordCardCodex, type CtxTag, type RecordView } from "./RecordCard";
 
 /** `<session_id>/t<n>`: the id of a turn's details block, the target of `#session=…&turn=n`. */
 export const turnId = (sessionId: string, n: number): string => `${sessionId}/t${n}`;
@@ -63,11 +64,12 @@ export function TurnRawRecords({ result, call, lines, view }: Props) {
   const records = call.records ?? [];
   return (
     <div
-      className="detail SessionTurnDetails rounded-md bg-[color-mix(in_srgb,var(--xh-accent)_5%,transparent)] px-[0.8rem] pt-[0.6rem] pb-4"
+      className="detail SessionTurnDetails"
+      style={{ borderRadius: 8, background: "color-mix(in srgb, var(--xh-accent) 5%, transparent)", padding: "0.6rem 0.8rem 1rem" }}
       id={turnId(result.session_id, call.n)}
       data-el="TurnRawRecords"
     >
-      <h4 className="text-muted-foreground my-[0.6rem] text-[0.8rem] font-medium tracking-[0.04em] uppercase">
+      <h4 className="muted" style={{ margin: "0.6rem 0", fontSize: "0.75rem", fontWeight: 500, letterSpacing: "0.04em", textTransform: "uppercase" }}>
         Session-log records for this turn · lines {ranges(records)} · context {pct(call.context_pct)} of {windowLabel(result.context_window)}
         <El name="TurnRawRecords" />
       </h4>
@@ -88,7 +90,17 @@ export function TurnRawRecords({ result, call, lines, view }: Props) {
           } catch {
             /* unparseable stays unparseable */
           }
-          return <RecordCard key={n} harness={result.harness} lineNo={n} raw={raw} ctx={ctxFor(result, call, kind)} view={view} />;
+          const Card = result.harness === "codex" ? RecordCardCodex : RecordCardClaude;
+          return (
+            <Card
+              key={n}
+              lineNo={n}
+              raw={raw}
+              ctx={ctxFor(result, call, kind)}
+              view={view}
+              permalink={sessionSearch(result.session_id, null, null, { line: n })}
+            />
+          );
         })
       )}
     </div>

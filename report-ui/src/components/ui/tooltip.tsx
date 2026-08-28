@@ -1,57 +1,42 @@
-"use client"
+/**
+ * Tooltips, built on Tamagui; keeps the radix-style Provider/Root/Trigger/Content surface.
+ * Tamagui needs no provider, so `TooltipProvider` only passes children through (kept so
+ * call sites and tests read the same).
+ */
+import type { ReactNode } from "react";
+import { Text, Tooltip as TamaguiTooltip, type TooltipProps } from "tamagui";
 
-import * as React from "react"
-import { Tooltip as TooltipPrimitive } from "radix-ui"
+export function TooltipProvider({ children }: { children: ReactNode; delayDuration?: number }) {
+  return <>{children}</>;
+}
 
-import { cn } from "@/lib/utils"
+export function Tooltip(props: TooltipProps) {
+  return <TamaguiTooltip delay={200} restMs={150} placement="top" {...props} />;
+}
 
-function TooltipProvider({
-  delayDuration = 0,
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
+export const TooltipTrigger = TamaguiTooltip.Trigger;
+
+export function TooltipContent({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <TooltipPrimitive.Provider
-      data-slot="tooltip-provider"
-      delayDuration={delayDuration}
-      {...props}
-    />
-  )
-}
-
-function Tooltip({
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
-}
-
-function TooltipTrigger({
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
-}
-
-function TooltipContent({
-  className,
-  sideOffset = 0,
-  children,
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
-  return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Content
-        data-slot="tooltip-content"
-        sideOffset={sideOffset}
-        className={cn(
-          "z-50 w-fit origin-(--radix-tooltip-content-transform-origin) animate-in rounded-md bg-foreground px-3 py-1.5 text-xs text-balance text-background fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
-          className
-        )}
-        {...props}
-      >
+    <TamaguiTooltip.Content
+      className={className}
+      backgroundColor="$color"
+      borderRadius={7}
+      paddingHorizontal={10}
+      paddingVertical={6}
+      // Without an explicit `max-content`, the popper shrink-wraps to its narrowest possible
+      // box and every tooltip renders one word per line; `maxWidth` then caps the long ones.
+      width="max-content"
+      maxWidth={280}
+      zIndex={100}
+      boxShadow="0 4px 12px -2px var(--xh-shadow), 0 2px 4px -2px var(--xh-shadow)"
+      transition="100ms"
+      enterStyle={{ opacity: 0, y: 2 }}
+      exitStyle={{ opacity: 0, y: 2 }}
+    >
+      <Text color="$panel" fontSize={12} lineHeight={16} fontFamily="$body">
         {children}
-        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
-      </TooltipPrimitive.Content>
-    </TooltipPrimitive.Portal>
-  )
+      </Text>
+    </TamaguiTooltip.Content>
+  );
 }
-
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }

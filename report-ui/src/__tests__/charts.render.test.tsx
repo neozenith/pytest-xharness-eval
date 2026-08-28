@@ -1,17 +1,12 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderT as render } from "./render";
 import { ChartAxisToggle, ContextWindowChart, OutputPerTurnChart, TokenAccumulationChart, TokenWaterfallChart, TurnTiersChart } from "@/components/charts";
 import type { Cell } from "@/lib/types";
 import { result } from "./charts.series.test";
 
-// Recharts' ResponsiveContainer measures itself; jsdom has no layout, so give it a stub observer.
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-beforeAll(() => {
-  (globalThis as unknown as { ResizeObserver: typeof ResizeObserverStub }).ResizeObserver = ResizeObserverStub;
-});
+// Plotly renders into a real browser only; under jsdom the mount point and the traces
+// passed to it are what the components are accountable for.
+vi.mock("plotly.js-basic-dist-min", () => ({ default: { react: vi.fn(), purge: vi.fn() } }));
 
 const cell: Cell = {
   case: "eval_x",
@@ -53,14 +48,16 @@ test("ChartAxisToggle offers the two axes and reports a change", () => {
   const onChange = vi.fn();
   render(<ChartAxisToggle mode="turn" onChange={onChange} />);
   expect(document.getElementById("ChartAxisToggle")).toHaveAttribute("data-el", "ChartAxisToggle");
-  screen.getByRole("radio", { name: "per session-log line" }).click();
+  screen.getByRole("button", { name: "per session-log line" }).click();
   expect(onChange).toHaveBeenCalledWith("line");
 });
 
 test("TokenAccumulationChart mounts with its glossary id and one series per ledgered session", () => {
   const { container } = render(<TokenAccumulationChart cells={[cell, { ...cell, session_id: "other", has_ledger: false }]} results={{ s: result }} />);
   expect(document.getElementById("TokenAccumulationChart")).toHaveAttribute("data-el", "TokenAccumulationChart");
-  expect(container.querySelector("[data-chart]")).toBeInTheDocument();
+  expect(container.querySelector("[role='img']")).toBeInTheDocument();
+  // one legend chip for the ledgered session, none for the ledgerless one
+  expect(container.querySelectorAll("[data-el='ChartLegend'] button")).toHaveLength(1);
   expect(screen.getByText("accumulative_billed_tokens accumulating per turn")).toBeInTheDocument();
 });
 

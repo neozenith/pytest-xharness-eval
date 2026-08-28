@@ -1,0 +1,299 @@
+{
+  "api_duration_ms": 10000,
+  "baseline_tokens": 2200,
+  "calls": [
+    {
+      "at": "2026-08-22T00:00:05Z",
+      "context_pct": 0.55,
+      "context_tokens": 2200,
+      "latency_ms": 5000,
+      "n": 1,
+      "output_tokens_per_sec": 9.0,
+      "records": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "results_in": [],
+      "stop_reason": "tool_use",
+      "text": "",
+      "thinking": "read the skill",
+      "tools": [
+        {
+          "id": "c1",
+          "input": {
+            "command": [
+              "bash",
+              "-lc",
+              "cat demo/SKILL.md"
+            ],
+            "workdir": "/w"
+          },
+          "name": "shell",
+          "summary": "['bash', '-lc', 'cat demo/SKILL.md']"
+        }
+      ],
+      "usage": {
+        "cache_read_tokens": 1800,
+        "cache_write_1h_tokens": 0,
+        "cache_write_5m_tokens": 0,
+        "cache_write_tokens": 100,
+        "input_tokens": 300,
+        "output_tokens": 45,
+        "reasoning_tokens": 20
+      }
+    },
+    {
+      "at": "2026-08-22T00:00:09Z",
+      "context_pct": 0.65,
+      "context_tokens": 2600,
+      "latency_ms": 4000,
+      "n": 2,
+      "output_tokens_per_sec": 7.5,
+      "records": [
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "results_in": [
+        {
+          "chars": 12,
+          "content": "# demo skill",
+          "tool": "shell"
+        }
+      ],
+      "stop_reason": "tool_use",
+      "text": "done",
+      "thinking": "",
+      "tools": [
+        {
+          "id": "c2",
+          "input": {
+            "command": [
+              "bash",
+              "-lc",
+              "uv run demo/scripts/check.py"
+            ],
+            "workdir": "/w"
+          },
+          "name": "shell",
+          "summary": "['bash', '-lc', 'uv run demo/scripts/check.py']"
+        }
+      ],
+      "usage": {
+        "cache_read_tokens": 2400,
+        "cache_write_1h_tokens": 0,
+        "cache_write_5m_tokens": 0,
+        "cache_write_tokens": 0,
+        "input_tokens": 200,
+        "output_tokens": 30,
+        "reasoning_tokens": 5
+      }
+    }
+  ],
+  "case": {
+    "fixture": "seed",
+    "name": "eval_codex",
+    "prompt": "grade the skill",
+    "skill": "demo",
+    "suite": "skills/demo/evals/eval_codex.py"
+  },
+  "context_window": 400000,
+  "context_window_pct": 0.65,
+  "cost_by_tier": {
+    "cache_read": 0.000588,
+    "cache_write_1h": 0.0,
+    "cache_write_5m": 0.000125,
+    "input": 0.00075,
+    "output": 0.00087
+  },
+  "cost_status": "priced",
+  "duration_ms": 10000,
+  "envelope": {},
+  "estimated_cost_usd": 0.002333,
+  "exit_code": 0,
+  "files_written": [
+    "out.md"
+  ],
+  "final_context_pct": 0.66,
+  "final_context_tokens": 2630,
+  "final_text": "done",
+  "harness": "codex",
+  "harness_reported_cost_usd": null,
+  "model": "gpt-5.6-sol",
+  "output_tokens_per_sec": 8.7,
+  "peak_context_tokens": 2600,
+  "rates_applied": {
+    "applied_at": "<stamp>",
+    "cache_read": 1.25e-07,
+    "cache_write": 1.25e-06,
+    "cache_write_1h": 2.0000000000000003e-06,
+    "input": 1.25e-06,
+    "model": "gpt-5.6-sol",
+    "output": 1e-05,
+    "source": "xharness_prices"
+  },
+  "record_kinds": {
+    "codex/event_msg/item_completed/CommandExecution": 1,
+    "codex/event_msg/task_complete": 1,
+    "codex/event_msg/task_started": 1,
+    "codex/event_msg/token_count": 2,
+    "codex/response_item/function_call": 2,
+    "codex/response_item/function_call_output": 2,
+    "codex/response_item/message/assistant": 1,
+    "codex/response_item/message/user": 1,
+    "codex/response_item/reasoning": 1,
+    "codex/session_meta": 1,
+    "codex/turn_context": 1
+  },
+  "reported_model_usage": {},
+  "reported_turns": 1,
+  "reported_usage": {
+    "input_tokens": 4800,
+    "output_tokens": 75
+  },
+  "session_id": "codex-sid-1",
+  "session_log": "<tmp>/results/codex/sid/log.jsonl",
+  "skill_coverage": {
+    "files": [
+      {
+        "bytes": 35,
+        "ignored": false,
+        "kind": "doc",
+        "loaded": [
+          1
+        ],
+        "path": "SKILL.md",
+        "run": [],
+        "sha256": "cc6abc65d3ecc4cd882be1605d56ffaa6c49a74b48e9a560e0e4a27982bb2a55"
+      },
+      {
+        "bytes": 19,
+        "ignored": false,
+        "kind": "doc",
+        "loaded": [],
+        "path": "resources/evidence.md",
+        "run": [],
+        "sha256": "f65acd7558b132bda301033b82c6f424431b86a8e5db01195c354fe3cd03377e"
+      },
+      {
+        "bytes": 12,
+        "ignored": false,
+        "kind": "script",
+        "loaded": [],
+        "path": "scripts/check.py",
+        "run": [
+          2
+        ],
+        "sha256": "ad64355106bb158b020ecf9702be48f7730fc091dd4bb6a2f092b40393495b3d"
+      },
+      {
+        "bytes": 19,
+        "ignored": false,
+        "kind": "script",
+        "loaded": [],
+        "path": "scripts/unused.py",
+        "run": [],
+        "sha256": "980523aafc2a0862eedafb70e17ab38f4b8231d2f6a628dbc8e5d1ac1a358980"
+      }
+    ],
+    "loaded": [
+      "SKILL.md",
+      "scripts/check.py"
+    ],
+    "not_loaded": [
+      "resources/evidence.md",
+      "scripts/unused.py"
+    ],
+    "not_run": [
+      "scripts/unused.py"
+    ],
+    "run": [
+      "scripts/check.py"
+    ],
+    "skill": "demo",
+    "summary": {
+      "assets": 0,
+      "docs": 2,
+      "files": 4,
+      "ignored": 0,
+      "loaded": 2,
+      "run": 1,
+      "scripts": 2,
+      "tests": 0
+    }
+  },
+  "subagents": [
+    {
+      "agent": "scout",
+      "calls": [
+        {
+          "at": "2026-08-22T00:00:04Z",
+          "context_pct": 0.15,
+          "context_tokens": 600,
+          "latency_ms": null,
+          "n": 1,
+          "output_tokens_per_sec": null,
+          "records": [
+            1,
+            2,
+            3
+          ],
+          "results_in": [],
+          "stop_reason": "end_turn",
+          "text": "",
+          "thinking": "",
+          "tools": [],
+          "usage": {
+            "cache_read_tokens": 500,
+            "cache_write_1h_tokens": 0,
+            "cache_write_5m_tokens": 0,
+            "cache_write_tokens": 0,
+            "input_tokens": 100,
+            "output_tokens": 12,
+            "reasoning_tokens": 0
+          }
+        }
+      ],
+      "description": "agents/scout.md",
+      "id": "codex-sub-1",
+      "log": "<tmp>/results/codex/sid/subagents/rollout-sub1.jsonl",
+      "parent_turn": 1,
+      "turns": 1,
+      "usage": {
+        "accumulative_billed_tokens": 612,
+        "cache_read_tokens": 500,
+        "cache_write_1h_tokens": 0,
+        "cache_write_5m_tokens": 0,
+        "cache_write_tokens": 0,
+        "input_tokens": 100,
+        "output_tokens": 12,
+        "reasoning_tokens": 0
+      }
+    }
+  ],
+  "tool_calls": {
+    "CommandExecution": 1
+  },
+  "ttft_ms": 1100,
+  "turns": 2,
+  "usage": {
+    "accumulative_billed_tokens": 5487,
+    "cache_read_tokens": 4700,
+    "cache_write_1h_tokens": 0,
+    "cache_write_5m_tokens": 0,
+    "cache_write_tokens": 100,
+    "input_tokens": 600,
+    "output_tokens": 87,
+    "reasoning_tokens": 25
+  },
+  "workspace": "<tmp>/ws"
+}

@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { Text, XStack } from "tamagui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { El } from "@/components/El";
 import { fmt } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { Chip, Notice } from "./shared";
 
 export interface CoverageFile {
@@ -51,7 +51,7 @@ const Turns = ({ list }: { list: number[] }) =>
   list.length ? (
     <>
       {list.map((n) => (
-        <code key={n} className="bg-muted mr-1 rounded px-1 font-mono text-xs">
+        <code key={n} className="code-chip">
           t{n}
         </code>
       ))}
@@ -59,12 +59,12 @@ const Turns = ({ list }: { list: number[] }) =>
   ) : null;
 
 function status(f: CoverageFile) {
-  if (f.ignored) return <span className="text-muted-foreground">ignored</span>;
-  if (f.run.length) return <span className="text-primary">run</span>;
-  if (f.loaded.length) return <span className="text-good">loaded</span>;
-  if (f.kind === "script") return <span className="text-bad">not run · not loaded</span>;
-  if (f.kind === "test") return <span className="text-muted-foreground">test (not expected)</span>;
-  return <span className="text-bad">not loaded</span>;
+  if (f.ignored) return <span className="muted">ignored</span>;
+  if (f.run.length) return <span className="accentc">run</span>;
+  if (f.loaded.length) return <span className="good">loaded</span>;
+  if (f.kind === "script") return <span className="bad">not run · not loaded</span>;
+  if (f.kind === "test") return <span className="muted">test (not expected)</span>;
+  return <span className="bad">not loaded</span>;
 }
 
 /**
@@ -103,7 +103,7 @@ export function SkillCoveragePanel({ coverage }: { coverage: SkillCoverage | nul
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div id="SkillCoverageSummary" data-el="SkillCoverageSummary" className="mb-3 flex flex-wrap gap-2">
+        <XStack id="SkillCoverageSummary" data-el="SkillCoverageSummary" flexWrap="wrap" gap={8} marginBottom={12}>
           {rows.length ? (
             [
               chip("skill", <code>{cov.skill}</code>),
@@ -115,61 +115,61 @@ export function SkillCoveragePanel({ coverage }: { coverage: SkillCoverage | nul
               chip(
                 "loaded",
                 <>
-                  <span className="text-good">{fmt(s.loaded)}</span> / {fmt(s.files)}
+                  <span className="good">{fmt(s.loaded)}</span> / {fmt(s.files)}
                 </>,
                 "loaded",
               ),
               chip(
                 "run",
                 <>
-                  <span className="text-primary">{fmt(s.run)}</span> / {fmt(s.scripts)} scripts
+                  <span className="accentc">{fmt(s.run)}</span> / {fmt(s.scripts)} scripts
                 </>,
                 "run",
               ),
-              chip("not_loaded", <span className="text-bad">{fmt((cov.not_loaded ?? []).length)}</span>, "not_loaded"),
-              chip("not_run", <span className="text-bad">{fmt((cov.not_run ?? []).length)}</span>, "not_run"),
+              chip("not_loaded", <span className="bad">{fmt((cov.not_loaded ?? []).length)}</span>, "not_loaded"),
+              chip("not_run", <span className="bad">{fmt((cov.not_run ?? []).length)}</span>, "not_run"),
               chip("ignored", fmt(s.ignored), "ignored"),
             ]
           ) : (
             <Notice>no skill coverage on this result (predates ADR 0022); re-run or replay the cell</Notice>
           )}
-        </div>
-        <label className="text-muted-foreground mb-3 flex items-center gap-2 text-sm">
+        </XStack>
+        <XStack render={<label />} alignItems="center" gap={8} marginBottom={12}>
           <Switch id="ShowIgnored" checked={showIgnored} onCheckedChange={setShowIgnored} aria-label="show ignored files" />
-          show ignored files
-        </label>
-        <div className="overflow-x-auto">
-          <Table id="SkillCoveragePanel" className="text-sm">
-            <TableHeader>
-              <TableRow>
-                <TableHead>path</TableHead>
-                <TableHead>kind</TableHead>
-                <TableHead className="text-right">bytes</TableHead>
-                <TableHead>loaded at turns</TableHead>
-                <TableHead>run at turns</TableHead>
-                <TableHead>status</TableHead>
+          <Text color="$muted" fontSize={14} fontFamily="$body">
+            show ignored files
+          </Text>
+        </XStack>
+        <Table id="SkillCoveragePanel">
+          <TableHeader>
+            <TableRow>
+              <TableHead>path</TableHead>
+              <TableHead>kind</TableHead>
+              <TableHead className="num">bytes</TableHead>
+              <TableHead>loaded at turns</TableHead>
+              <TableHead>run at turns</TableHead>
+              <TableHead>status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visible.map((f) => (
+              <TableRow key={f.path} className={f.ignored ? "muted" : undefined}>
+                <TableCell>
+                  <code>{f.path}</code>
+                </TableCell>
+                <TableCell>{f.kind}</TableCell>
+                <TableCell className="num">{fmt(f.bytes)}</TableCell>
+                <TableCell>
+                  <Turns list={f.loaded} />
+                </TableCell>
+                <TableCell>
+                  <Turns list={f.run} />
+                </TableCell>
+                <TableCell>{status(f)}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visible.map((f) => (
-                <TableRow key={f.path} className={cn(f.ignored && "text-muted-foreground")}>
-                  <TableCell>
-                    <code className="font-mono text-xs">{f.path}</code>
-                  </TableCell>
-                  <TableCell>{f.kind}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(f.bytes)}</TableCell>
-                  <TableCell>
-                    <Turns list={f.loaded} />
-                  </TableCell>
-                  <TableCell>
-                    <Turns list={f.run} />
-                  </TableCell>
-                  <TableCell>{status(f)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+            ))}
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   );

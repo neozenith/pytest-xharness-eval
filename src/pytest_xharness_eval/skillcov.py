@@ -34,6 +34,9 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+# Our Libraries
+from pytest_xharness_eval import harness
+
 if TYPE_CHECKING:
     # Our Libraries
     from pytest_xharness_eval.runresult import RunResult
@@ -44,7 +47,6 @@ SCRIPT_SUFFIXES = {".py", ".ts", ".js", ".sh", ".bash", ".zsh", ".mjs", ".cjs"}
 DOC_SUFFIXES = {".md", ".mdx", ".txt", ".rst"}
 
 # Tools whose arguments are commands rather than paths; a script named in one may be *run*.
-_SHELL_TOOLS = {"Bash", "exec", "shell", "CommandExecution", "bash", "exec_command"}
 _RUNNERS = r"(?:bun|bunx|uv|uvx|python3?|node|bash|sh|zsh|deno|npx)(?:\s+\S+)*?\s+"
 _TEST_NAMES = re.compile(r"^(test_.*\.py|.*_test\.py|conftest\.py|.*\.test\.[cm]?[jt]s)$")
 
@@ -211,7 +213,6 @@ def _call_text(name: str, arguments: Any) -> str:
 _SEGMENTS = re.compile(r"\s*(?:&&|\|\||;|\||\n)\s*")
 _CD = re.compile(r"^\s*cd(?:\s+(\S+))?\s*$")
 _CWD_RESET = re.compile(r"Shell cwd was reset to (\S+)")
-_PERSISTENT_SHELLS = {"Bash"}  # Codex runs every exec in its own process at ``workdir``
 
 
 def _chdir(cwd: str | None, target: str | None) -> str | None:
@@ -288,14 +289,14 @@ def _command_of(arguments: Any) -> tuple[str, str | None]:
     return str(arguments or ""), None
 
 
-def _access(tool: str, text: str, skill: str, entry: dict[str, Any]) -> str | None:
+def _access(tool: str, text: str, skill: str, entry: dict[str, Any], shell_tools: frozenset[str]) -> str | None:
     """``run``, ``loaded`` or None for one tool call against one catalogued file."""
     needle = f"{skill}/{entry['path']}"
     if tool == "Skill" and entry["path"] == "SKILL.md" and skill in text:
         return "loaded"
     if needle not in text:
         return None
-    if entry["kind"] == "script" and tool in _SHELL_TOOLS:
+    if entry["kind"] == "script" and tool in shell_tools:
         pattern = _RUNNERS + r"\S*" + re.escape(needle)
         if re.search(pattern, text) or re.search(r"(?:^|[\s;&|(])\./?\S*" + re.escape(needle) + r"(?:\s|$)", text):
             return "run"
@@ -308,6 +309,10 @@ def annotate(skill: str, files: list[dict[str, Any]], result: RunResult) -> dict
     Ignored files are still annotated (a run may well touch them) but never count
     toward the missed sets or the summary's denominators.
     """
+    # Which tool names mean "ran a shell command", and which of those keep their cwd, is a
+    # property of the harness that produced this run -- not a union of every provider's names
+    # (ADR 0027, ADR 0034).
+    agent = harness.get(result.harness)
     rows = [{**f, "ignored": bool(f.get("ignored")), "loaded": [], "run": []} for f in files]
     # The persistent shell's working directory, per result: it starts in the workspace
     # and follows every ``cd`` of a persistent shell tool until the harness resets it.
@@ -315,15 +320,15 @@ def annotate(skill: str, files: list[dict[str, Any]], result: RunResult) -> dict
     for call in result.calls:
         for tool in call.tools:
             text = _call_text(tool.name, tool.input)
-            if tool.name in _SHELL_TOOLS:
+            if tool.name in agent.shell_tools:
                 command, workdir = _command_of(tool.input)
-                start = cwd if tool.name in _PERSISTENT_SHELLS else (workdir or (str(result.workspace) or None))
+                start = cwd if tool.name in agent.persistent_shells else (workdir or (str(result.workspace) or None))
                 resolved, after = resolve_command(command, skill, start)
-                if tool.name in _PERSISTENT_SHELLS:
+                if tool.name in agent.persistent_shells:
                     cwd = after
                 text = f"{text}\n{resolved}"
             for row in rows:
-                access = _access(tool.name, text, skill, row)
+                access = _access(tool.name, text, skill, row, agent.shell_tools)
                 if access and call.n not in row[access]:
                     row[access].append(call.n)
         for res in call.results_in:

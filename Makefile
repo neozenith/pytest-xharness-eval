@@ -45,8 +45,8 @@ docs:
 # Python package keeps its zero runtime dependencies.
 ######################################################################
 
-# Serve the SPA with hot reload against a real captured directory.
-#   make ui-dev CAPTURED=../agentic-dotfiles/skills/mermaidjs-diagrams/evals/captured
+# Serve the SPA with hot reload against a real cache root (ADR 0032).
+#   make ui-dev CAPTURED=../agentic-dotfiles/.xharness_eval_cache
 CAPTURED ?=
 
 report-ui/node_modules: report-ui/package.json report-ui/bun.lock
@@ -56,7 +56,7 @@ report-ui/node_modules: report-ui/package.json report-ui/bun.lock
 ui-install: report-ui/node_modules
 
 ui-dev: report-ui/node_modules
-	@test -n "$(CAPTURED)" || { echo "usage: make ui-dev CAPTURED=<skill>/evals/captured"; exit 1; }
+	@test -n "$(CAPTURED)" || { echo "usage: make ui-dev CAPTURED=<project>/.xharness_eval_cache"; exit 1; }
 	cd report-ui && XH_CAPTURED=$(abspath $(CAPTURED)) bun run dev
 
 ui-format: report-ui/node_modules
@@ -72,12 +72,22 @@ ui-test: report-ui/node_modules
 ui-build: report-ui/node_modules
 	cd report-ui && bun run build
 
-# Build, inject a captured directory the way `report.py --inline` does, and render the
-# result headlessly: proves the bundle boots and the data binds without opening a browser.
+# Build, inject a captured directory the way `report.py --inline` does, and open the result
+# over file:// in a real headless browser: proves the bundle boots with zero network, the
+# data binds, and every glossary element id is present (e2e/inline.spec.ts).
 ui-smoke: ui-build
-	@test -n "$(CAPTURED)" || { echo "usage: make ui-smoke CAPTURED=<skill>/evals/captured"; exit 1; }
+	@test -n "$(CAPTURED)" || { echo "usage: make ui-smoke CAPTURED=<project>/.xharness_eval_cache"; exit 1; }
 	uv run report-ui/scripts/inline.py $(abspath $(CAPTURED)) report-ui/dist/index.html report-ui/dist/inline.html
-	cd report-ui && node scripts/smoke.mjs dist/inline.html
+	cd report-ui && XH_INLINE_HTML=dist/inline.html bunx playwright test e2e/inline.spec.ts
+
+# Playwright matrix sweep of the built page against a captured directory: one full page
+# load, screenshot, console assertion and network timing per deeplink permutation, saved
+# under tmp/e2e/<test>/<slug>/. TIER=small|medium|large (default large) constrains each
+# matrix dimension for faster inner loops; SAMPLE=<n> downsamples further;
+# E2E_TARGET=dev runs against the hot-reloading dev server.
+ui-e2e: ui-build
+	@test -n "$(CAPTURED)" || { echo "usage: make ui-e2e CAPTURED=<project>/.xharness_eval_cache [TIER=small|medium|large] [SAMPLE=<n>] [E2E_TARGET=dev]"; exit 1; }
+	cd report-ui && XH_CAPTURED=$(abspath $(CAPTURED)) XH_E2E_TIER=$(TIER) XH_E2E_SAMPLE=$(SAMPLE) XH_E2E_TARGET=$(E2E_TARGET) bun run e2e
 
 # Make the built SPA the page report.py ships; the Python tests then gate it, and CI fails
 # when the committed asset is not the current build.
@@ -108,5 +118,8 @@ clean:
 	rm -rf coverage.json
 	rm -rf .*_cache
 	rm -rf .coverage
+	rm -rf tmp/
+	rm -rf .mmdc_cache/
+	rm -rf node_modules/
 
-.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-promote
+.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-e2e ui-promote

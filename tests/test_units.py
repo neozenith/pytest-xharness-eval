@@ -3,7 +3,9 @@
 # Standard Library
 import json
 import tomllib
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 # Third Party
 import pytest
@@ -20,19 +22,15 @@ from pytest_xharness_eval import (
     Usage,
     __version__,
     evalcase,
-    history,
 )
+from pytest_xharness_eval import harness as harnesses
+from pytest_xharness_eval import history
 from pytest_xharness_eval import matrix as mx
-from pytest_xharness_eval import (
-    normalise,
-    pricing,
-    records,
-    replay,
-    report,
-    runner,
-    skillcov,
-)
+from pytest_xharness_eval import pipeline, pricing, records, replay, report, settings, skillcov
 from pytest_xharness_eval import workspace as ws
+from pytest_xharness_eval.harness import claude as claude_harness
+from pytest_xharness_eval.harness import codex as codex_harness
+from pytest_xharness_eval.runresult import Subagent
 
 # -- package surface ---------------------------------------------------------------
 
@@ -43,8 +41,16 @@ def test_version_matches_pyproject(pytestconfig: pytest.Config) -> None:
     assert __version__ == pyproject["project"]["version"]
 
 
-def test_runners_cover_exactly_the_known_harnesses() -> None:
-    assert tuple(sorted(runner.RUNNERS)) == tuple(sorted(mx.KNOWN_HARNESSES))
+def test_the_registry_is_the_only_list_of_known_harnesses() -> None:
+    """The matrix reads the registry, so a harness cannot be runnable but unmatrixable (ADR 0034)."""
+    assert mx.known_harnesses() == harnesses.names() == ("claude", "codex")
+    assert [harnesses.get(n).name for n in harnesses.names()] == list(harnesses.names())
+
+
+def test_an_unregistered_harness_fails_loudly_rather_than_defaulting() -> None:
+    """The dispatch that used to fall through to Codex now raises (ADR 0034)."""
+    with pytest.raises(harnesses.UnknownHarness, match="unknown harness 'gemini'"):
+        harnesses.get("gemini")
 
 
 # -- matrix --------------------------------------------------------------------------
@@ -99,9 +105,11 @@ def test_evalcase_override_is_copied() -> None:
 # -- pricing -------------------------------------------------------------------------
 
 
-def _result(model: str, usage: Usage) -> RunResult:
+def _result(model: str, usage: Usage, harness: str = "claude") -> RunResult:
+    # A real harness name: coverage attribution resolves it to ask which tool names mean
+    # "ran a shell command" and which of those keep their cwd (ADR 0034).
     return RunResult(
-        harness="x",
+        harness=harness,
         model=model,
         session_id="s",
         session_log="l",
@@ -217,7 +225,7 @@ def test_write_round_trips_with_accumulative_billed_tokens(tmp_path: Path) -> No
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data["usage"]["accumulative_billed_tokens"] == 10
     assert data["cost_status"] == "unpriced"
-    assert data["harness"] == "x"
+    assert data["harness"] == "claude"
     assert (data["baseline_tokens"], data["calls"], data["rates_applied"]) == (0, [], {})
     assert "context_tokens" not in data and "cost_usd" not in data and data["estimated_cost_usd"] is None
 
@@ -271,13 +279,13 @@ def test_snapshot_diff_reports_created_and_modified_only(tmp_path: Path) -> None
     assert ws.diff(before, ws.snapshot(tmp_path)) == ["edit.txt", "sub/new.txt"]
 
 
-# -- runner (pure part) --------------------------------------------------------------
+# -- claude: log path correlation --------------------------------------------------------------
 
 
 def test_claude_log_path_slugifies_every_non_alphanumeric_character(tmp_path: Path) -> None:
     workspace = tmp_path / "tmp" / "evals" / "eval_demo-claude-claude-opus-5"
     workspace.mkdir(parents=True)
-    path = runner.claude_log_path(Path("/cfg"), workspace, "abc-123")
+    path = claude_harness.claude_log_path(Path("/cfg"), workspace, "abc-123")
     slug = path.parent.name
     assert path.parent.parent == Path("/cfg/projects")
     assert path.name == "abc-123.jsonl"
@@ -289,6 +297,7 @@ def test_claude_log_path_slugifies_every_non_alphanumeric_character(tmp_path: Pa
 
 
 def _jsonl(path: Path, records: list[dict[str, object]]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(json.dumps(r) for r in records) + "\n\nnot json\n", encoding="utf-8")
     return path
 
@@ -367,7 +376,7 @@ def test_from_claude_builds_one_call_per_message_id_and_keeps_the_envelope_for_r
             "cache_creation_input_tokens": 290,
         },
     }
-    r = normalise.from_claude(log, envelope, tmp_path, ["ARCHITECTURE.md"])
+    r = claude_harness.from_claude(log, envelope, tmp_path, ["ARCHITECTURE.md"])
     assert (r.harness, r.model, r.session_id, r.exit_code, r.final_text) == (
         "claude",
         "claude-opus-5",
@@ -439,7 +448,7 @@ def test_from_claude_turn_boundaries_follow_tool_ownership_not_log_order(tmp_pat
             {"type": "ai-title"},  # 11 -> still turn 2
         ],
     )
-    r = normalise.from_claude(log, {"session_id": "sid"}, tmp_path, [])
+    r = claude_harness.from_claude(log, {"session_id": "sid"}, tmp_path, [])
     assert r.turns == 2
     assert (r.calls[0].records, r.calls[1].records) == ([1, 2, 3, 4, 5, 6, 7, 8], [9, 10, 11])
     # results_in keeps its own meaning: what entered turn 2's context is turn 1's results.
@@ -488,7 +497,7 @@ def test_from_claude_context_window_latency_and_ttft(tmp_path: Path) -> None:
             "claude-opus-5": {"contextWindow": 1_000_000},
         },
     }
-    r = normalise.from_claude(log, envelope, tmp_path, [])
+    r = claude_harness.from_claude(log, envelope, tmp_path, [])
     assert (r.context_window, r.ttft_ms, r.api_duration_ms) == (1_000_000, 1991, 8000)
     assert [c.latency_ms for c in r.calls] == [3500, 2000]
     assert [c.output_tokens_per_sec for c in r.calls] == [pytest.approx(85.71, abs=0.01), 50.0]
@@ -528,7 +537,7 @@ def test_from_codex_context_window_latency_and_ttft(tmp_path: Path) -> None:
             },
         ],
     )
-    r = normalise.from_codex(log, 0, tmp_path, [])
+    r = codex_harness.from_codex(log, 0, tmp_path, [])
     assert (r.context_window, r.ttft_ms, r.api_duration_ms) == (258_400, 1234, 5000)
     assert [c.latency_ms for c in r.calls] == [2000, 3000]
     assert r.context_window_pct == pytest.approx(7.74) and r.final_context_pct == pytest.approx(7.86)
@@ -585,7 +594,7 @@ def test_from_claude_keeps_synthetic_messages_as_evidence_not_turns(tmp_path: Pa
         tmp_path / "s.jsonl",
         [{"type": "assistant", "message": real}, {"type": "assistant", "message": synthetic}],
     )
-    r = normalise.from_claude(log, {"session_id": "sid"}, tmp_path, [])
+    r = claude_harness.from_claude(log, {"session_id": "sid"}, tmp_path, [])
     assert (r.model, r.turns) == ("claude-opus-5", 1)  # the synthetic record names no model and is no turn
     assert r.calls[0].records == [1, 2]  # but its line stays attributed as evidence
     assert r.record_kinds == {"claude/assistant/synthetic": 1, "claude/assistant/text": 1}
@@ -600,7 +609,7 @@ def test_from_claude_without_envelope_usage_still_sums_the_ledger(tmp_path: Path
             {"type": "assistant", "message": {"usage": {"input_tokens": 1, "output_tokens": 1}}},
         ],
     )
-    r = normalise.from_claude(log, {"is_error": True, "model": "claude-sonnet-5"}, tmp_path, [])
+    r = claude_harness.from_claude(log, {"is_error": True, "model": "claude-sonnet-5"}, tmp_path, [])
     assert (r.exit_code, r.turns, r.reported_turns, r.model) == (1, 2, None, "claude-sonnet-5")
     assert r.usage == Usage(6, 8)
     assert r.reported_usage == {}
@@ -643,7 +652,7 @@ def test_from_codex_builds_one_call_per_token_count(tmp_path: Path) -> None:
             {"type": "event_msg", "payload": {"type": "task_complete", "duration_ms": 321, "last_agent_message": "ok"}},
         ],
     )
-    r = normalise.from_codex(log, 0, tmp_path, [])
+    r = codex_harness.from_codex(log, 0, tmp_path, [])
     assert (r.harness, r.model, r.session_id, r.duration_ms, r.final_text) == (
         "codex",
         "gpt-5.6-sol",
@@ -698,7 +707,7 @@ def test_from_codex_diffs_cumulative_counts_when_last_usage_is_absent(tmp_path: 
             {"type": "event_msg", "payload": {"type": "task_complete", "duration_ms": 321, "last_agent_message": "ok"}},
         ],
     )
-    r = normalise.from_codex(log, 0, tmp_path, [])
+    r = codex_harness.from_codex(log, 0, tmp_path, [])
     assert (r.harness, r.model, r.session_id, r.turns, r.reported_turns, r.duration_ms, r.final_text) == (
         "codex",
         "gpt-5.6-sol",
@@ -713,6 +722,127 @@ def test_from_codex_diffs_cumulative_counts_when_last_usage_is_absent(tmp_path: 
     assert [c.context_tokens for c in r.calls] == [1000, 4000]
     assert r.tool_calls == {"CommandExecution": 1, "FileChange": 1}
     assert r.harness_reported_cost_usd is None
+
+
+def test_from_claude_folds_subagent_transcripts_and_bills_them(tmp_path: Path) -> None:
+    """A captured session dir's ``subagents/`` transcripts become Subagent ledgers: the
+    spawning turn is matched by the sidecar's ``toolUseId``, and their usage folds into
+    the run's billed total (a spawned thread's tokens are real spend)."""
+    spawn = {
+        "id": "m1",
+        "model": "claude-opus-5",
+        "usage": {"input_tokens": 10, "output_tokens": 5, "cache_read_input_tokens": 100},
+        "stop_reason": "tool_use",
+        "content": [{"type": "tool_use", "id": "tu_agent", "name": "Agent", "input": {"prompt": "research"}}],
+    }
+    final = {
+        "id": "m2",
+        "model": "claude-opus-5",
+        "usage": {"input_tokens": 2, "output_tokens": 8, "cache_read_input_tokens": 120},
+        "stop_reason": "end_turn",
+        "content": [{"type": "text", "text": "done"}],
+    }
+    log = _jsonl(
+        tmp_path / "log.jsonl",
+        [
+            {"type": "user", "message": {"content": "go"}},
+            {"type": "assistant", "timestamp": "2026-08-28T00:00:01Z", "message": spawn},
+            {"type": "assistant", "timestamp": "2026-08-28T00:00:09Z", "message": final},
+        ],
+    )
+    sub_dir = tmp_path / "subagents"
+    _jsonl(
+        sub_dir / "agent-abc123.jsonl",
+        [
+            {"type": "user", "isSidechain": True, "agentId": "abc123", "message": {"content": "research"}},
+            {
+                "type": "assistant",
+                "isSidechain": True,
+                "agentId": "abc123",
+                "timestamp": "2026-08-28T00:00:03Z",
+                "message": {
+                    "id": "s1",
+                    "model": "claude-opus-5",
+                    "usage": {"input_tokens": 30, "output_tokens": 20, "cache_read_input_tokens": 400},
+                    "stop_reason": "end_turn",
+                    "content": [{"type": "text", "text": "found it"}],
+                },
+            },
+        ],
+    )
+    (sub_dir / "agent-abc123.meta.json").write_text(
+        json.dumps({"agentType": "general-purpose", "description": "External research", "toolUseId": "tu_agent"}),
+        encoding="utf-8",
+    )
+    r = claude_harness.from_claude(log, {"session_id": "sid", "result": "done"}, tmp_path, [])
+    assert r.calls[0].tools[0].id == "tu_agent"
+    (sub,) = r.subagents
+    assert (sub.agent, sub.id, sub.description, sub.parent_turn, sub.turns) == (
+        "general-purpose",
+        "abc123",
+        "External research",
+        1,
+        1,
+    )
+    assert sub.log == str(sub_dir / "agent-abc123.jsonl")
+    assert sub.usage == Usage(input_tokens=30, output_tokens=20, cache_read_tokens=400)
+    # The run's usage is primary (12, 13, 220) plus the subagent: the whole bill.
+    assert r.usage == Usage(input_tokens=42, output_tokens=33, cache_read_tokens=620)
+    assert r.turns == 2  # turns stay the primary thread's own
+
+
+def test_from_codex_folds_forked_rollouts_and_attributes_the_spawning_turn(tmp_path: Path) -> None:
+    """Forked rollouts become Subagent ledgers named by ``agent_nickname``; the parent turn
+    is the first primary call measured at or after the fork's ``session_meta`` timestamp."""
+
+    def count(at: str, last: dict[str, int]) -> dict[str, object]:
+        info = {"last_token_usage": last, "total_token_usage": last}
+        return {"type": "event_msg", "timestamp": at, "payload": {"type": "token_count", "info": info}}
+
+    _jsonl(
+        tmp_path / "log.jsonl",
+        [
+            {"type": "session_meta", "payload": {"id": "01a0-primary"}},
+            {"type": "turn_context", "payload": {"model": "gpt-5.6-sol"}},
+            count("2026-08-28T00:00:05Z", {"input_tokens": 100, "output_tokens": 10}),
+            count("2026-08-28T00:00:20Z", {"input_tokens": 200, "output_tokens": 20}),
+        ],
+    )
+    sub = _jsonl(
+        tmp_path / "subagents" / "rollout-sub.jsonl",
+        [
+            {
+                "type": "session_meta",
+                "timestamp": "2026-08-28T00:00:07Z",  # after t1's count: turn 2 spawned it
+                "payload": {
+                    "id": "01a0-sub",
+                    "forked_from_id": "01a0-primary",
+                    "source": {"subagent": {"thread_spawn": {"agent_nickname": "Curie", "depth": 1}}},
+                    "agent_nickname": "Curie",
+                    "agent_path": "/root/external_research",
+                },
+            },
+            {"type": "turn_context", "payload": {"model": "gpt-5.6-sol"}},
+            count("2026-08-28T00:00:12Z", {"input_tokens": 50, "cached_input_tokens": 40, "output_tokens": 5}),
+        ],
+    )
+    # sub_rollouts=None discovers the captured layout: <session dir>/subagents/*.jsonl
+    r = codex_harness.from_codex(tmp_path / "log.jsonl", 0, tmp_path, [])
+    (agent,) = r.subagents
+    assert (agent.agent, agent.id, agent.description, agent.parent_turn, agent.turns) == (
+        "Curie",
+        "01a0-sub",
+        "/root/external_research",
+        2,
+        1,
+    )
+    assert agent.log == str(sub)
+    assert agent.usage == Usage(input_tokens=10, output_tokens=5, cache_read_tokens=40)
+    assert r.usage == Usage(input_tokens=310, output_tokens=35, cache_read_tokens=40)
+    assert r.turns == 2
+    # The runner path passes the forks explicitly; the ledger is identical either way.
+    explicit = codex_harness.from_codex(tmp_path / "log.jsonl", 0, tmp_path, [], sub_rollouts=[sub])
+    assert explicit.subagents[0].usage == agent.usage
 
 
 # -- history -------------------------------------------------------------------------
@@ -871,7 +1001,7 @@ def test_metrics_record_is_flat_and_complete() -> None:
     ],
 )
 def test_classify_and_category(harness: str, rec: object, kind: str, category: str) -> None:
-    assert records.classify(harness, rec) == kind  # type: ignore[arg-type]
+    assert harnesses.get(harness).classify(rec) == kind  # type: ignore[arg-type]
     assert records.category_of(kind) == category
 
 
@@ -882,7 +1012,7 @@ def test_every_catalogued_kind_has_a_category_with_a_pill_colour() -> None:
 
 def test_census_counts_kinds_in_sorted_order() -> None:
     recs = [{"type": "ai-title"}, {"type": "user", "message": {"content": "x"}}, {"type": "ai-title"}]
-    assert records.census("claude", recs) == {"claude/ai-title": 2, "claude/user/prompt": 1}
+    assert harnesses.get("claude").census(recs) == {"claude/ai-title": 2, "claude/user/prompt": 1}
 
 
 # -- skill coverage (ADR 0022) ----------------------------------------------------------
@@ -1106,9 +1236,10 @@ def test_resolve_command_qualifies_relative_paths_after_a_cd_and_leaves_the_rest
     assert "demo/demo/" not in text
 
 
-def test_annotate_follows_the_persistent_shells_cwd_and_the_harness_reset(tmp_path: Path) -> None:
+def test_annotate_follows_the_claude_shells_cwd_and_the_harness_reset(tmp_path: Path) -> None:
+    """Claude's Bash is one persistent shell, so a ``cd`` sticks until the harness resets it."""
     files = skillcov.catalog(_skill(tmp_path))
-    r = _result("m", Usage())
+    r = _result("m", Usage(), harness="claude")
     r.workspace = "/x/ws"
     r.calls = [
         # Turn 1: cd into the skill and read SKILL.md by its bare name (the Opus pattern).
@@ -1126,9 +1257,28 @@ def test_annotate_follows_the_persistent_shells_cwd_and_the_harness_reset(tmp_pa
         ),
         # Turn 4: the harness reset the shell to the workspace, so the same text no longer touches the skill.
         Call(n=4, at="t", tools=[ToolCall("Bash", "", {"command": "bun run check.ts /x/ws/doc.md; cat SKILL.md"})]),
-        # Turn 5: Codex runs each exec at its own workdir; a cd there does not persist to turn 6.
+    ]
+    cov = skillcov.annotate("demo", files, r)
+    by = {f["path"]: f for f in cov["files"]}
+    assert (by["SKILL.md"]["loaded"], by["SKILL.md"]["run"]) == ([1], [])
+    assert (by["scripts/check.ts"]["loaded"], by["scripts/check.ts"]["run"]) == ([], [2, 3])
+    assert cov["run"] == ["scripts/check.ts"]
+
+
+def test_annotate_resolves_each_codex_exec_at_its_own_workdir(tmp_path: Path) -> None:
+    """Codex runs every exec in a fresh process, so a ``cd`` in one never reaches the next.
+
+    The tool vocabulary is the harness's own (ADR 0034): ``exec`` is a shell for Codex and
+    nothing at all for Claude, so this case cannot be expressed on the same run as the one
+    above -- a result comes from exactly one harness.
+    """
+    files = skillcov.catalog(_skill(tmp_path))
+    r = _result("m", Usage(), harness="codex")
+    r.workspace = "/x/ws"
+    r.calls = [
+        # Turn 1: the exec's own workdir is the skill, so a relative path resolves inside it.
         Call(
-            n=5,
+            n=1,
             at="t",
             tools=[
                 ToolCall(
@@ -1138,16 +1288,15 @@ def test_annotate_follows_the_persistent_shells_cwd_and_the_harness_reset(tmp_pa
                 )
             ],
         ),
-        Call(n=6, at="t", tools=[ToolCall("exec", "", {"command": "cd /x/skills/demo", "workdir": "/x/ws"})]),
-        Call(n=7, at="t", tools=[ToolCall("exec", "", {"command": "cat resources/unused.md", "workdir": "/x/ws"})]),
+        # Turn 2 cds, but turn 3 starts again at its own workdir, so turn 3 never reaches the skill.
+        Call(n=2, at="t", tools=[ToolCall("exec", "", {"command": "cd /x/skills/demo", "workdir": "/x/ws"})]),
+        Call(n=3, at="t", tools=[ToolCall("exec", "", {"command": "cat resources/unused.md", "workdir": "/x/ws"})]),
     ]
     cov = skillcov.annotate("demo", files, r)
     by = {f["path"]: f for f in cov["files"]}
-    assert (by["SKILL.md"]["loaded"], by["SKILL.md"]["run"]) == ([1], [])
-    assert (by["scripts/check.ts"]["loaded"], by["scripts/check.ts"]["run"]) == ([], [2, 3])
-    assert by["resources/guide.md"]["loaded"] == [5]
+    assert by["resources/guide.md"]["loaded"] == [1]
     assert by["resources/unused.md"]["loaded"] == []
-    assert cov["run"] == ["scripts/check.ts"]
+    assert cov["run"] == []
 
 
 def test_codex_usage_splits_openai_inclusive_input_into_disjoint_tiers() -> None:
@@ -1156,23 +1305,213 @@ def test_codex_usage_splits_openai_inclusive_input_into_disjoint_tiers() -> None
     The plugin keeps Anthropic's disjoint shape, so the tiers price once each and their
     sum is the prompt the call processed again (docs/token-accounting.md).
     """
-    u = normalise._codex_call_usage(
+    u = codex_harness._call_usage(
         {"input_tokens": 2600, "cached_input_tokens": 2000, "cache_write_input_tokens": 400, "output_tokens": 30}
     )
     assert (u.input_tokens, u.cache_read_tokens, u.cache_write_tokens) == (200, 2000, 400)
     assert u.input_tokens + u.cache_read_tokens + u.cache_write_tokens == 2600
     # A malformed count can never go negative.
-    assert normalise._codex_call_usage({"input_tokens": 10, "cached_input_tokens": 20}).input_tokens == 0
+    assert codex_harness._call_usage({"input_tokens": 10, "cached_input_tokens": 20}).input_tokens == 0
+
+
+# -- codex: rollout selection ------------------------------------------------
+
+
+def test_primary_rollout_skips_subagent_forks(tmp_path: Path) -> None:
+    """A codex session that spawned subagents writes one rollout per thread; the primary is the log."""
+    meta = {"timestamp": "t", "type": "session_meta", "payload": {"id": "p1", "source": "exec"}}
+    sub = {
+        "timestamp": "t",
+        "type": "session_meta",
+        "payload": {
+            "id": "s1",
+            "source": {"subagent": {"thread_spawn": {"parent_thread_id": "p1", "depth": 1}}},
+            "forked_from_id": "p1",
+        },
+    }
+    primary = tmp_path / "rollout-1-p1.jsonl"
+    primary.write_text(json.dumps(meta) + "\n", encoding="utf-8")
+    (tmp_path / "rollout-2-s1.jsonl").write_text(json.dumps(sub) + "\n", encoding="utf-8")
+    (tmp_path / "rollout-3-s2.jsonl").write_text(json.dumps(sub) + "\n", encoding="utf-8")
+    assert codex_harness.primary_rollout(sorted(tmp_path.glob("rollout-*.jsonl"))) == primary
+    # A lone primary still selects; two primaries or none is a hard failure, never a guess.
+    assert codex_harness.primary_rollout([primary]) == primary
+    second = tmp_path / "rollout-4-p2.jsonl"
+    second.write_text(json.dumps(meta) + "\n", encoding="utf-8")
+    with pytest.raises(harnesses.RunError, match="found 2 of 4"):
+        codex_harness.primary_rollout(sorted(tmp_path.glob("rollout-*.jsonl")))
+    with pytest.raises(harnesses.RunError, match="found 0"):
+        codex_harness.primary_rollout([tmp_path / "rollout-2-s1.jsonl"])
+
+
+# -- the extension point (ADR 0034) ---------------------------------------------------
+
+
+class _ProbeHarness(harnesses.Harness):
+    """A third harness that exists only to prove one is reachable without editing anything.
+
+    It deliberately cannot run: ADR 0002 forbids faking a CLI, its subprocess or its
+    session log, and nothing here does. ``run`` and ``session_from_capture`` raise, and
+    the test asserts they are never reached -- what is exercised is registration and
+    dispatch, which is what a new provider actually has to plug into.
+    """
+
+    name = "probe"
+    shell_tools = frozenset({"Terminal"})
+    persistent_shells = frozenset({"Terminal"})
+
+    def run(self, **kwargs: object) -> RunResult:  # type: ignore[override]
+        raise NotImplementedError("the probe harness never invokes anything")
+
+    def session_from_capture(self, session_dir: Path, stored: dict[str, Any]) -> Any:
+        raise NotImplementedError("the probe harness has no dialect to replay")
+
+    def classify_record(self, rec: dict[str, Any]) -> str:
+        return f"probe/{rec.get('kind') or 'unknown'}"
+
+
+@pytest.fixture
+def probe_harness() -> Iterator[harnesses.Harness]:
+    agent = harnesses.register(_ProbeHarness())
+    try:
+        yield agent
+    finally:
+        harnesses.unregister(agent.name)
+
+
+def test_a_third_harness_needs_no_edit_outside_its_own_module(probe_harness: harnesses.Harness) -> None:
+    """The operational claim ADR 0034 was made for, asserted rather than argued.
+
+    Registering one class is the whole job: the matrix knows it, its records classify as
+    its own, its census counts them, and coverage attribution uses *its* shell vocabulary
+    -- with no branch on the name anywhere between here and those call sites.
+    """
+    assert "probe" in mx.known_harnesses()
+    assert mx.expand(["probe/some-model"]) == [Cell(harness="probe", model="some-model")]
+
+    # Classification is the harness's own, not a fall-through to Codex.
+    assert probe_harness.classify({"kind": "widget"}) == "probe/widget"
+    assert probe_harness.classify("not a record") == "probe/unknown"  # type: ignore[arg-type]
+    assert probe_harness.census([{"kind": "widget"}, {"kind": "widget"}, {}]) == {
+        "probe/unknown": 1,
+        "probe/widget": 2,
+    }
+
+
+def test_coverage_uses_the_new_harnesss_own_shell_vocabulary(tmp_path: Path, probe_harness: harnesses.Harness) -> None:
+    """``Terminal`` is a shell for this harness and for no other; nothing had to learn the name."""
+    files = skillcov.catalog(_skill(tmp_path))
+    r = _result("m", Usage(), harness="probe")
+    r.workspace = "/x/ws"
+    r.calls = [
+        Call(n=1, at="t", tools=[ToolCall("Terminal", "", {"command": "cd /x/skills/demo && cat SKILL.md"})]),
+        # The cwd persisted, because this harness says its Terminal is persistent.
+        Call(n=2, at="t", tools=[ToolCall("Terminal", "", {"command": "bun run scripts/check.ts"})]),
+    ]
+    cov = skillcov.annotate("demo", files, r)
+    by = {f["path"]: f for f in cov["files"]}
+    assert by["SKILL.md"]["loaded"] == [1]
+    assert by["scripts/check.ts"]["run"] == [2]
+
+
+# -- pipeline: the sequence both the live cell and a replay run ------------------------
+
+
+def test_capture_writes_the_log_subagent_transcripts_and_the_result(tmp_path: Path) -> None:
+    """Evidence capture, previously inline in the paid code path and so never exercised.
+
+    The subagent transcripts are copied out of wherever the harness left them -- a private
+    CODEX_HOME that is about to be torn down, or Claude's config dir -- and each
+    ``Subagent.log`` is rewritten to the captured copy, so a replay re-derives the same
+    ledgers from the session directory alone (ADR 0033).
+    """
+    native = tmp_path / "native"
+    native.mkdir()
+    (native / "session.jsonl").write_text('{"type": "user"}\n', encoding="utf-8")
+    (native / "agent-a1.jsonl").write_text('{"type": "user"}\n', encoding="utf-8")
+    (native / "agent-a1.meta.json").write_text('{"agentType": "Explore"}', encoding="utf-8")
+
+    r = _result("m", Usage(1, 2, 3, 4))
+    r.session_log = str(native / "session.jsonl")
+    r.session_id = "sid-1"
+    r.subagents = [
+        Subagent(agent="Explore", id="a1", log=str(native / "agent-a1.jsonl"), turns=1, usage=Usage(1, 1)),
+        # A transcript the harness never wrote is skipped rather than failing the capture.
+        Subagent(agent="ghost", id="a2", log=str(native / "missing.jsonl"), turns=0, usage=Usage()),
+    ]
+
+    session_dir = pipeline.capture(r, tmp_path / "results" / "sid-1")
+
+    assert (session_dir / "log.jsonl").read_text(encoding="utf-8") == '{"type": "user"}\n'
+    assert (session_dir / "subagents" / "agent-a1.jsonl").is_file()
+    assert (session_dir / "subagents" / "agent-a1.meta.json").is_file()
+    assert r.subagents[0].log == "subagents/agent-a1.jsonl"  # rewritten to the captured copy
+    assert r.subagents[1].log == str(native / "missing.jsonl")  # untouched: nothing was copied
+    stored = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
+    assert stored["session_id"] == "sid-1"
+
+
+def test_capture_of_a_run_without_subagents_writes_no_subagents_dir(tmp_path: Path) -> None:
+    r = _result("m", Usage())
+    (tmp_path / "s.jsonl").write_text("{}\n", encoding="utf-8")
+    r.session_log = str(tmp_path / "s.jsonl")
+    session_dir = pipeline.capture(r, tmp_path / "out")
+    assert not (session_dir / "subagents").exists()
+
+
+def test_record_metrics_writes_the_cell_record_beside_its_evidence(tmp_path: Path) -> None:
+    """The live cell and a replay build this record with the same call (ADR 0032, ADR 0034)."""
+    r = _result("claude-opus-5", Usage(10, 20, 30, 40))
+    session_dir = tmp_path / "sid"
+    session_dir.mkdir()
+    record = pipeline.record_metrics(
+        r,
+        session_dir,
+        node="skills/demo/evals/eval_x.py::eval_x[claude/claude-opus-5]",
+        verdict="pass",
+        wall_ms=1234,
+        started_at="2026-08-22T00:00:00+00:00",
+        cache=tmp_path / "cache",
+    )
+    assert record["verdict"] == "pass" and record["wall_ms"] == 1234
+    assert record["cache"] == str(tmp_path / "cache")
+    on_disk = json.loads((session_dir / "history.json").read_text(encoding="utf-8"))
+    assert on_disk == record
+
+
+def test_derive_prices_annotates_and_names_the_case_in_one_order(tmp_path: Path) -> None:
+    """The order matters only in that both paths must use the same one."""
+    files = skillcov.catalog(_skill(tmp_path))
+    r = _result("claude-opus-5", Usage(1_000_000, 0, 0, 0))
+    r.workspace = "/x/ws"
+    r.calls = [Call(n=1, at="t", tools=[ToolCall("Read", "", {"file_path": "/x/skills/demo/SKILL.md"})])]
+    case = pipeline.case_record(
+        evalcase(prompt="go", skill="demo", fixture="seed")(lambda result, workspace: None),
+        "skills/demo/evals/eval_x.py",
+    )
+    out = pipeline.derive(r, table=pricing.load_table(), skill="demo", skill_files=files, case=case)
+    assert out is r
+    assert r.cost_status == "priced" and r.estimated_cost_usd == pytest.approx(5.0)
+    assert r.skill_coverage["loaded"] == ["SKILL.md"]
+    assert r.case == {
+        "suite": "skills/demo/evals/eval_x.py",
+        "name": "<lambda>",
+        "skill": "demo",
+        "fixture": "seed",
+        "prompt": "go",
+    }
 
 
 # -- replay (ADR 0023) --------------------------------------------------------------
 
 
-def test_replay_rebuilds_results_history_and_report_from_captured_logs(tmp_path: Path) -> None:
-    skill = _skill(tmp_path)
-    captured = skill / "evals" / "captured"
-    case = captured / "eval_demo"
-    case.mkdir(parents=True)
+def test_replay_rebuilds_results_history_and_report_from_cached_logs(tmp_path: Path) -> None:
+    skill = _skill(tmp_path)  # tmp_path/demo
+    # The project's pytest config: rootdir discovery anchors here, and the skills root is tmp_path itself.
+    (tmp_path / "pyproject.toml").write_text('[tool.pytest.ini_options]\nxharness_skills_dir = "."\n', encoding="utf-8")
+    cache = tmp_path / ".xharness_eval_cache"
+    session_dir = cache / "results" / "demo" / "claude" / "claude-opus-5" / "20260822T000000Z" / "sid1"
+    session_dir.mkdir(parents=True)
     msg = {
         "id": "m1",
         "model": "claude-opus-5",
@@ -1187,7 +1526,7 @@ def test_replay_rebuilds_results_history_and_report_from_captured_logs(tmp_path:
         ],
     }
     _jsonl(
-        case / "claude-sid1.jsonl",
+        session_dir / "log.jsonl",
         [{"type": "user", "message": {"content": "go"}}, {"type": "assistant", "message": msg}],
     )
     # A stale result: old schema, wrong turn count, no ledger; only the envelope and identity matter.
@@ -1206,31 +1545,32 @@ def test_replay_rebuilds_results_history_and_report_from_captured_logs(tmp_path:
             "usage": {"input_tokens": 5, "output_tokens": 7},
         },
     }
-    (case / "claude-sid1.result.json").write_text(json.dumps(stale), encoding="utf-8")
-    # No `case` on the stale result: replay recovers it from the suite that defines eval_demo.
+    (session_dir / "result.json").write_text(json.dumps(stale), encoding="utf-8")
+    # No `case` on the stale result: replay recovers it from the suite that defines eval_demo,
+    # via the case name recorded on the session's own history.json (ADR 0032).
     (skill / "evals" / "eval_demo.py").write_text(
         'from pytest_xharness_eval import evalcase\n\n@evalcase(prompt="go", skill="demo", fixture="seed")\n'
         "def eval_demo(run, workspace):\n    pass\n",
         encoding="utf-8",
     )
-    history.append(
-        captured / "history.jsonl",
-        {
-            "session_id": "sid1",
-            "verdict": "pass",
-            "at": "2026-08-22T00:00:00+00:00",
-            "node": "n",
-            "wall_ms": 1234,
-            "turns": 99,
-        },
-    )
-    history.append(
-        captured / "history.jsonl", {"session_id": "other", "verdict": "fail", "at": "x", "node": "o", "wall_ms": 1}
+    (session_dir / "history.json").write_text(
+        json.dumps(
+            {
+                "session_id": "sid1",
+                "case": "eval_demo",
+                "verdict": "pass",
+                "at": "2026-08-22T00:00:00+00:00",
+                "node": "n",
+                "wall_ms": 1234,
+                "turns": 99,
+            }
+        ),
+        encoding="utf-8",
     )
 
-    rewritten = replay.rebuild(captured)
-    assert rewritten == [case / "claude-sid1.result.json"]
-    fresh = json.loads((case / "claude-sid1.result.json").read_text(encoding="utf-8"))
+    rewritten = replay.rebuild(cache)
+    assert rewritten == [session_dir / "result.json"]
+    fresh = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
     assert (fresh["turns"], fresh["harness_reported_cost_usd"], fresh["final_text"], fresh["files_written"]) == (
         1,
         0.5,
@@ -1240,7 +1580,7 @@ def test_replay_rebuilds_results_history_and_report_from_captured_logs(tmp_path:
     assert fresh["estimated_cost_usd"] > 0 and fresh["rates_applied"]["model"] == "claude-opus-5"
     assert fresh["skill_coverage"]["skill"] == "demo" and fresh["skill_coverage"]["loaded"] == ["resources/guide.md"]
     assert fresh["calls"][0]["records"] == [1, 2]
-    # Recovered from the suite beside captured/, since the log does not know which case produced it.
+    # Recovered from the suite under the skills root, since the log does not know which case produced it.
     assert fresh["case"]["suite"].endswith("evals/eval_demo.py")
     assert (fresh["case"]["name"], fresh["case"]["skill"], fresh["case"]["fixture"], fresh["case"]["prompt"]) == (
         "eval_demo",
@@ -1248,10 +1588,14 @@ def test_replay_rebuilds_results_history_and_report_from_captured_logs(tmp_path:
         "seed",
         "go",
     )
-    index = json.loads((captured / "index.json").read_text(encoding="utf-8"))
-    assert index["cells"][0]["suite"].endswith("evals/eval_demo.py") and index["cells"][0]["prompt"] == "go"
-    lines = [json.loads(raw) for raw in (captured / "history.jsonl").read_text(encoding="utf-8").splitlines()]
-    mine = next(rec for rec in lines if rec["session_id"] == "sid1")
+    # The combine step (ADR 0032): one index and one aggregated history under report/.
+    index = json.loads((cache / "report" / "index.json").read_text(encoding="utf-8"))
+    row = index["cells"][0]
+    assert row["suite"].endswith("evals/eval_demo.py") and row["prompt"] == "go"
+    assert row["run"] == "20260822T000000Z"
+    assert row["result"] == "../results/demo/claude/claude-opus-5/20260822T000000Z/sid1/result.json"
+    assert row["log"] == "../results/demo/claude/claude-opus-5/20260822T000000Z/sid1/log.jsonl"
+    mine = json.loads((session_dir / "history.json").read_text(encoding="utf-8"))
     assert (mine["turns"], mine["verdict"], mine["at"], mine["wall_ms"], mine["node"]) == (
         1,
         "pass",
@@ -1259,9 +1603,48 @@ def test_replay_rebuilds_results_history_and_report_from_captured_logs(tmp_path:
         1234,
         "n",
     )
-    assert mine["skill_files_loaded"] == 1 and mine["captured"] == str(captured)
-    assert next(rec for rec in lines if rec["session_id"] == "other")["verdict"] == "fail"  # untouched
-    assert (captured / "report.html").is_file() and (captured / "index.json").is_file()
+    assert mine["skill_files_loaded"] == 1 and mine["cache"] == str(cache)
+    aggregated = [
+        json.loads(raw) for raw in (cache / "report" / "history.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [rec["session_id"] for rec in aggregated] == ["sid1"]
+    assert (cache / "report" / "report.html").is_file()
+
+
+def test_replay_migrates_a_legacy_captured_directory(tmp_path: Path) -> None:
+    """ADR 0032: pointed at a pre-cache captured/ dir, replay copies it into results/ and leaves it be."""
+    skill = _skill(tmp_path / "skills")  # skills/demo
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest.ini_options]\n", encoding="utf-8")
+    captured = skill / "evals" / "captured"
+    case = captured / "eval_demo"
+    case.mkdir(parents=True)
+    (case / "claude-sid1.jsonl").write_text('{"type": "user", "message": {"content": "go"}}\n', encoding="utf-8")
+    (case / "claude-sid1.result.json").write_text(
+        json.dumps({"harness": "claude", "model": "claude-opus-5", "session_id": "sid1"}), encoding="utf-8"
+    )
+    history.append(
+        captured / "history.jsonl",
+        {
+            "session_id": "sid1",
+            "case": "eval_demo",
+            "verdict": "pass",
+            "at": "2026-08-22T00:00:00+00:00",
+            "node": "n",
+            "wall_ms": 1,
+            "captured": str(captured),
+        },
+    )
+
+    cache = tmp_path / ".xharness_eval_cache"
+    assert replay.migrate_legacy(captured, cache) == 1
+    session_dir = cache / "results" / "demo" / "claude" / "claude-opus-5" / "20260822T000000Z" / "sid1"
+    assert (session_dir / "result.json").is_file() and (session_dir / "log.jsonl").is_file()
+    hist = json.loads((session_dir / "history.json").read_text(encoding="utf-8"))
+    assert hist["cache"] == str(cache) and "captured" not in hist
+    # The original evidence is untouched, and a second migration is a no-op.
+    assert (case / "claude-sid1.result.json").is_file() and (captured / "history.jsonl").is_file()
+    assert replay.migrate_legacy(captured, cache) == 0
+    assert replay.is_legacy_captured(captured) and not replay.is_legacy_captured(cache)
 
 
 @pytest.mark.parametrize(
@@ -1276,32 +1659,33 @@ def test_replay_rebuilds_results_history_and_report_from_captured_logs(tmp_path:
         ("setup.cfg", "[tool:pytest]\nxharness_skill_ignore =\n    README.md\n    demo: assets/\n"),
     ],
 )
-def test_replay_reads_skill_ignore_from_the_projects_pytest_config(tmp_path: Path, name: str, body: str) -> None:
+def test_settings_read_skill_ignore_from_the_projects_pytest_config(tmp_path: Path, name: str, body: str) -> None:
     captured = tmp_path / "skills" / "demo" / "evals" / "captured"
     captured.mkdir(parents=True)
     (tmp_path / name).write_text(body, encoding="utf-8")
-    assert replay.config_lines_of(captured, "xharness_skill_ignore") == ["README.md", "demo: assets/"]
+    assert settings.ini_lines(captured, "xharness_skill_ignore") == ["README.md", "demo: assets/"]
 
 
-def test_replay_ignores_a_pyproject_without_pytest_options_and_a_missing_config(tmp_path: Path) -> None:
+def test_settings_ignore_a_pyproject_without_pytest_options_and_a_missing_config(tmp_path: Path) -> None:
     captured = tmp_path / "skills" / "demo" / "evals" / "captured"
     captured.mkdir(parents=True)
-    assert replay.config_lines_of(captured, "xharness_skill_ignore") == []
+    assert settings.ini_lines(captured, "xharness_skill_ignore") == []
     (tmp_path / "skills" / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
     (tmp_path / "pyproject.toml").write_text(
         '[tool.pytest.ini_options]\nxharness_skill_ignore = ["assets/"]\n', encoding="utf-8"
     )
-    assert replay.config_lines_of(captured, "xharness_skill_ignore") == [
+    assert settings.ini_lines(captured, "xharness_skill_ignore") == [
         "assets/"
     ]  # the nearer pyproject is not pytest's config file
 
 
 def test_replay_refuses_a_result_without_its_log(tmp_path: Path) -> None:
-    captured = tmp_path / "demo" / "evals" / "captured"
-    (captured / "c").mkdir(parents=True)
-    (captured / "c" / "claude-x.result.json").write_text('{"harness": "claude", "session_id": "x"}', encoding="utf-8")
+    cache = tmp_path / ".xharness_eval_cache"
+    session_dir = cache / "results" / "demo" / "claude" / "m" / "20260101T000000Z" / "x"
+    session_dir.mkdir(parents=True)
+    (session_dir / "result.json").write_text('{"harness": "claude", "session_id": "x"}', encoding="utf-8")
     with pytest.raises(FileNotFoundError, match="no captured session log"):
-        replay.rebuild(captured)
+        replay.rebuild(cache)
 
 
 def test_history_carries_coverage_counts_and_the_status_word_shows_them() -> None:
@@ -1327,41 +1711,50 @@ def test_history_carries_coverage_counts_and_the_status_word_shows_them() -> Non
 
 
 def test_report_indexes_every_captured_result_and_writes_the_page(tmp_path: Path) -> None:
-    captured = tmp_path / "evals" / "captured"
+    cache = tmp_path / ".xharness_eval_cache"
+    claude_dir = cache / "results" / "demo" / "claude" / "claude-opus-5" / "20260822T010000Z" / "9f5f73a0"
     new = _result("claude-opus-5", Usage(26, 5289, 492_998, 28_154, cache_write_1h_tokens=28_154))
     new.harness, new.session_id, new.turns = "claude", "9f5f73a0", 13
     new.harness_reported_cost_usd, new.estimated_cost_usd = 0.66, 0.55
     new.rates_applied = {"model": "claude-opus-5", "source": "/p/prices.toml"}
+    new.case = {"name": "eval_demo", "skill": "demo"}
     new.calls = [
         Call(n=1, at="t", usage=Usage(input_tokens=2, cache_read_tokens=22_954), tools=[ToolCall("Bash", "ls")])
     ]
-    new.write(captured / "eval_demo" / "claude-9f5f73a0.result.json")
-    (captured / "eval_demo" / "claude-9f5f73a0.jsonl").write_text("{}\n", encoding="utf-8")
-    # A result written before ADR 0019: no calls, no history line, no log.
+    new.write(claude_dir / "result.json")
+    (claude_dir / "log.jsonl").write_text("{}\n", encoding="utf-8")
+    (claude_dir / "history.json").write_text(
+        json.dumps(
+            {
+                "session_id": "9f5f73a0",
+                "verdict": "pass",
+                "at": "2026-08-22T01:00:00+00:00",
+                "node": "n",
+                "wall_ms": 87_070,
+            }
+        ),
+        encoding="utf-8",
+    )
+    # A result written before ADR 0019: no calls, no history record, no log, no case meta.
+    codex_dir = cache / "results" / "demo" / "codex" / "gpt-5.6-sol" / "20260821T000000Z" / "01a022dc"
     old = _result("gpt-5.6-sol", Usage(100, 10, 0, 0))
     old.harness, old.session_id = "codex", "01a022dc"
-    old.write(captured / "eval_demo" / "codex-01a022dc.result.json")
-    history.append(
-        captured / "history.jsonl",
-        {
-            "session_id": "9f5f73a0",
-            "verdict": "pass",
-            "at": "2026-08-22T01:00:00+00:00",
-            "node": "n",
-            "wall_ms": 87_070,
-        },
-    )
+    old.write(codex_dir / "result.json")
 
-    page = report.write(captured)
-    assert page == captured / "report.html"
+    page = report.write(cache)
+    assert page == cache / "report" / "report.html"
     html = page.read_text(encoding="utf-8")
     assert "index.json" in html and "window.__XH_DATA__ = " not in html and report.INLINE_MARKER not in html
-    assert "# xharness report glossary" in (captured / "XHARNESS-REPORT-GLOSSARY.md").read_text(encoding="utf-8")
+    report_dir = cache / "report"
+    assert "# xharness report glossary" in (report_dir / "XHARNESS-REPORT-GLOSSARY.md").read_text(encoding="utf-8")
     # The bundled design tokens land beside the page so they can be edited in place (ADR 0024).
-    tokens = json.loads((captured / "report.tokens.json").read_text(encoding="utf-8"))
+    tokens = json.loads((report_dir / "report.tokens.json").read_text(encoding="utf-8"))
     assert set(tokens["themes"]) == {"light", "dark"} and tokens["categories"]["prompt"] == "#1d4ed8"
-    index = json.loads((captured / "index.json").read_text(encoding="utf-8"))
-    assert index["captured"] == str(captured)
+    index = json.loads((report_dir / "index.json").read_text(encoding="utf-8"))
+    assert index["captured"] == str(cache)
+    # The aggregated history is the combine step's other output (ADR 0032).
+    aggregated = [json.loads(raw) for raw in (report_dir / "history.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [rec["session_id"] for rec in aggregated] == ["9f5f73a0"]
     first, second = index["cells"]  # newest first; the one without history sorts last
     assert (first["case"], first["harness"], first["model"], first["session_id"]) == (
         "eval_demo",
@@ -1376,9 +1769,10 @@ def test_report_indexes_every_captured_result_and_writes_the_page(tmp_path: Path
         "n",
     )
     assert (first["result"], first["log"]) == (
-        "eval_demo/claude-9f5f73a0.result.json",
-        "eval_demo/claude-9f5f73a0.jsonl",
+        "../results/demo/claude/claude-opus-5/20260822T010000Z/9f5f73a0/result.json",
+        "../results/demo/claude/claude-opus-5/20260822T010000Z/9f5f73a0/log.jsonl",
     )
+    assert first["run"] == "20260822T010000Z" and second["case"] == "(unknown case)"
     assert (first["estimated_cost_usd"], first["harness_reported_cost_usd"], first["turns"]) == (0.55, 0.66, 13)
     assert first["rates_applied"]["source"] == "/p/prices.toml"
     assert (first["accumulative_billed_tokens"], first["baseline_tokens"]) == (526_467, 22_956)
@@ -1393,29 +1787,28 @@ def test_report_indexes_every_captured_result_and_writes_the_page(tmp_path: Path
         None,
         False,
     )
-    assert "report.html" in report.serve_hint(captured) and str(captured) in report.serve_hint(captured)
+    assert "report/report.html" in report.serve_hint(cache) and str(cache) in report.serve_hint(cache)
 
 
 def test_report_inline_embeds_data_and_user_design_tokens(tmp_path: Path) -> None:
-    captured = tmp_path / "captured"
-    (captured / "case").mkdir(parents=True)
+    cache = tmp_path / ".xharness_eval_cache"
+    session_dir = cache / "results" / "demo" / "claude" / "claude-opus-5" / "20260101T000000Z" / "sid1"
+    session_dir.mkdir(parents=True)
     r = _result("claude-opus-5", Usage(1, 2, 3, 4))
     r.harness, r.session_id = "claude", "sid1"
-    r.write(captured / "case" / "claude-sid1.result.json")
-    (captured / "case" / "claude-sid1.jsonl").write_text(
-        '{"type":"user"}\n<script>alert(1)</script>\n', encoding="utf-8"
-    )
+    r.write(session_dir / "result.json")
+    (session_dir / "log.jsonl").write_text('{"type":"user"}\n<script>alert(1)</script>\n', encoding="utf-8")
     brand = tmp_path / "brand.json"
     brand.write_text(
         json.dumps({"name": "acme", "themes": {"light": {"accent": "#ff0000"}, "dark": {"accent": "#00ff00"}}}),
         encoding="utf-8",
     )
 
-    page = report.write(captured, design_tokens=brand, inline=True)
+    page = report.write(cache, design_tokens=brand, inline=True)
     html = page.read_text(encoding="utf-8")
     assert "window.__XH_DATA__ = {" in html and report.INLINE_MARKER not in html
     assert '"name": "acme"' in json.dumps(
-        json.loads((captured / "report.tokens.json").read_text(encoding="utf-8")), indent=1
+        json.loads((cache / "report" / "report.tokens.json").read_text(encoding="utf-8")), indent=1
     )
     # The payload carries the index, the result, the log and the tokens; a "</script>" in a log cannot end the tag.
     start = html.index("window.__XH_DATA__ = ") + len("window.__XH_DATA__ = ")
@@ -1428,23 +1821,29 @@ def test_report_inline_embeds_data_and_user_design_tokens(tmp_path: Path) -> Non
 
 
 def test_report_refuses_missing_or_malformed_design_tokens(tmp_path: Path) -> None:
-    captured = tmp_path / "captured"
-    captured.mkdir()
+    cache = tmp_path / ".xharness_eval_cache"
+    cache.mkdir()
     with pytest.raises(FileNotFoundError, match="design tokens file not found"):
-        report.write(captured, design_tokens=tmp_path / "absent.json")
+        report.write(cache, design_tokens=tmp_path / "absent.json")
     bad = tmp_path / "bad.json"
     bad.write_text('{"colours": {}}', encoding="utf-8")
     with pytest.raises(ValueError, match="'themes' key"):
-        report.write(captured, design_tokens=bad)
+        report.write(cache, design_tokens=bad)
 
 
-def test_report_tolerates_an_empty_or_corrupt_captured_tree(tmp_path: Path) -> None:
-    captured = tmp_path / "captured"
-    (captured / "case").mkdir(parents=True)
-    (captured / "case" / "x.result.json").write_text("not json", encoding="utf-8")
-    (captured / "history.jsonl").write_text("\nnot json\n", encoding="utf-8")
-    report.write(captured)
-    assert json.loads((captured / "index.json").read_text(encoding="utf-8"))["cells"] == []
+def test_report_tolerates_an_empty_or_corrupt_results_tree(tmp_path: Path) -> None:
+    cache = tmp_path / ".xharness_eval_cache"
+    session_dir = cache / "results" / "s" / "h" / "m" / "20260101T000000Z" / "sid"
+    session_dir.mkdir(parents=True)
+    (session_dir / "result.json").write_text("not json", encoding="utf-8")
+    (session_dir / "history.json").write_text("not json", encoding="utf-8")
+    report.write(cache)
+    assert json.loads((cache / "report" / "index.json").read_text(encoding="utf-8"))["cells"] == []
+    assert (cache / "report" / "history.jsonl").read_text(encoding="utf-8") == ""
+    # A cache with no results/ at all still writes an empty report.
+    empty = tmp_path / "empty-cache"
+    report.write(empty)
+    assert json.loads((empty / "report" / "index.json").read_text(encoding="utf-8"))["cells"] == []
 
 
 def test_history_append_is_one_json_line_per_call(tmp_path: Path) -> None:
