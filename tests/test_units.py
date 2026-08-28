@@ -1071,6 +1071,23 @@ def test_census_counts_kinds_in_sorted_order() -> None:
 # -- skill coverage (ADR 0022) ----------------------------------------------------------
 
 
+def test_a_coverage_row_widens_the_catalogued_file_by_exactly_the_two_access_lists() -> None:
+    """``FileCoverage`` is a ``SkillFile`` plus the turns that touched it (ADR 0035).
+
+    The same silent-drift hole this closes for ``RunResult`` and ``Subagent`` above: the
+    wire format is one flat row per file, so the row *widens* the catalogued record
+    rather than nesting it, and a field added to ``SkillFile`` alone would disappear from
+    every annotated row and from ``result.json``'s ``skill_coverage.files`` with nothing
+    failing. ``FileCoverage.of`` spreads the record, which turns the omission into a
+    ``TypeError``; this pins the other half — that the row adds the two access lists and
+    nothing else, so ``touch`` has a list for every :class:`Access` member.
+    """
+    catalogued = {f.name for f in dataclasses.fields(skillcov.SkillFile)}
+    row = {f.name for f in dataclasses.fields(skillcov.FileCoverage)}
+    assert catalogued <= row
+    assert row - catalogued == {a.value for a in skillcov.Access} == {"loaded", "run"}
+
+
 def _skill(tmp_path: Path) -> Path:
     skill = tmp_path / "demo"
     for rel, body in {

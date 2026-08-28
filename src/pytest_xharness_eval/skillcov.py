@@ -33,7 +33,7 @@ import hashlib
 import json
 import posixpath
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
@@ -99,9 +99,11 @@ class SkillFile:
 class FileCoverage:
     """A catalogued file and the turns that loaded or ran it.
 
-    The extra two fields are the whole difference between the catalogue and the answer,
+    The two access lists are the whole difference between the catalogue and the answer,
     which is why this widens :class:`SkillFile` rather than nesting it: the wire format
-    is one flat row per file.
+    is one flat row per file. That widening is the type's one obligation, and
+    ``tests/test_units.py`` asserts the partition -- every :class:`SkillFile` field, plus
+    exactly the two :class:`Access` lists.
     """
 
     path: str
@@ -114,14 +116,14 @@ class FileCoverage:
 
     @classmethod
     def of(cls, catalogued: SkillFile) -> Self:
-        """An untouched row for a catalogued file."""
-        return cls(
-            path=catalogued.path,
-            kind=catalogued.kind,
-            bytes=catalogued.bytes,
-            sha256=catalogued.sha256,
-            ignored=catalogued.ignored,
-        )
+        """An untouched row for a catalogued file, spread from the record rather than field by field.
+
+        Copying the five fields by hand would let a field added to :class:`SkillFile`
+        vanish from every annotated row and from ``result.json``'s
+        ``skill_coverage.files`` without anything failing. Spreading the record instead
+        makes the omission a ``TypeError`` on the first catalogued file (ADR 0035).
+        """
+        return cls(**asdict(catalogued))
 
     @property
     def touched(self) -> bool:
