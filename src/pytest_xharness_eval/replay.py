@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 # Our Libraries
 from pytest_xharness_eval import harness, pipeline, pricing, report, skillcov
 from pytest_xharness_eval.case import EvalCase
+from pytest_xharness_eval.runresult import CaseRef
 from pytest_xharness_eval.settings import (
     DEFAULT_CACHE_DIR,
     INI_CACHE_DIR,
@@ -54,7 +55,7 @@ log = logging.getLogger(__name__)
 def rebuild_result(
     session_dir: Path,
     table: dict[str, pricing.Rates],
-    files: list[dict[str, Any]],
+    files: list[skillcov.SkillFile],
     skill: str,
     settings: Settings | None = None,
 ) -> RunResult:
@@ -74,12 +75,14 @@ def rebuild_result(
     # The same derivations the live cell runs, in the same order (ADR 0034). The case that
     # produced the run is not in the log: carry it forward, or derive it from the suite
     # that defines a case with the recorded name (ADR 0025).
-    case = dict(old.get("case") or {}) or case_meta(session_dir, skill, settings or Settings.from_cache(session_dir))
+    case = CaseRef.stored(old.get("case")) or case_meta(
+        session_dir, skill, settings or Settings.from_cache(session_dir)
+    )
     return pipeline.derive(result, table=table, skill=skill, skill_files=files, case=case)
 
 
-def case_meta(session_dir: Path, skill: str, settings: Settings) -> dict[str, Any]:
-    """``{suite, name, skill, fixture, prompt}`` recovered from the skill's suites, else empty.
+def case_meta(session_dir: Path, skill: str, settings: Settings) -> CaseRef | None:
+    """The :class:`CaseRef` recovered from the skill's suites, or None when it cannot be.
 
     The case name comes from the session's ``history.json``; the suites sit at
     ``<skills root>/<skill>/evals/eval_*.py``.
@@ -93,7 +96,7 @@ def case_meta(session_dir: Path, skill: str, settings: Settings) -> dict[str, An
             hist = {}
     name = str(hist.get("case") or "")
     if not name:
-        return {}
+        return None
     evals_dir = settings.skill_dir(skill) / "evals"
     for suite_path in sorted(evals_dir.glob("eval_*.py")):
         try:
@@ -107,14 +110,8 @@ def case_meta(session_dir: Path, skill: str, settings: Settings) -> dict[str, An
                     suite = str(suite_path.relative_to(Path.cwd()))
                 except ValueError:
                     suite = str(suite_path)
-                return {
-                    "suite": suite,
-                    "name": name,
-                    "skill": value.skill,
-                    "fixture": value.fixture,
-                    "prompt": value.prompt,
-                }
-    return {}
+                return CaseRef.of(value, suite)
+    return None
 
 
 def _load_suite(path: Path) -> ModuleType:
@@ -209,7 +206,7 @@ def rebuild(
     """
     settings = Settings.from_cache(cache, prices=prices, ignore=ignore)
     table = settings.price_table()
-    catalogs: dict[str, list[dict[str, Any]]] = {}
+    catalogs: dict[str, list[skillcov.SkillFile]] = {}
 
     rewritten: list[Path] = []
     for result_path in sorted((cache / report.RESULTS_DIR).glob("*/*/*/*/*/result.json")):
@@ -239,11 +236,12 @@ def rebuild(
                 started_at=str(old.get("at") or ""),
                 cache=cache,
             )
+        coverage = result.skill_coverage
         log.info(
             "rebuilt %s: %d turns, %s",
             session_dir.relative_to(cache),
             result.turns,
-            result.skill_coverage.get("summary"),
+            coverage.summary if coverage else None,
         )
 
     page = report.write(cache, design_tokens=design_tokens, inline=inline)

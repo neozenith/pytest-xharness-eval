@@ -14,7 +14,9 @@ import pytest
 from pytest_xharness_eval import (
     DEFAULT_MATRIX,
     Call,
+    CaseRef,
     Cell,
+    CostStatus,
     EvalCase,
     RunResult,
     ToolCall,
@@ -24,7 +26,7 @@ from pytest_xharness_eval import (
     evalcase,
 )
 from pytest_xharness_eval import harness as harnesses
-from pytest_xharness_eval import history
+from pytest_xharness_eval import history, ignorerules
 from pytest_xharness_eval import matrix as mx
 from pytest_xharness_eval import pipeline, pricing, records, replay, report, settings, skillcov
 from pytest_xharness_eval import workspace as ws
@@ -122,16 +124,23 @@ def _result(model: str, usage: Usage, harness: str = "claude") -> RunResult:
     )
 
 
+def _applied_rates(model: str = "m", source: str = "/p/prices.toml") -> pricing.AppliedRates:
+    """A provenance block for tests that need one without going through a price table."""
+    return pricing.Rates(1e-6, 1e-6, 1e-6, 1e-6, 1e-6, model=model, source=source).applied("2026-08-22T00:00:00+00:00")
+
+
 def test_bundled_table_prices_each_tier_separately() -> None:
     table = pricing.load_table()
     r = pricing.price(_result("claude-opus-5", Usage(1_000_000, 1_000_000, 1_000_000, 1_000_000)), table)
-    assert r.cost_status == "priced"
+    assert r.cost_status is CostStatus.PRICED and r.cost_status == "priced"  # a StrEnum on the wire
     # An untagged cache write prices at the 5-minute rate.
     assert r.estimated_cost_usd == pytest.approx(5.0 + 25.0 + 0.5 + 6.25)
     # Provenance rides with the estimate (ADR 0021): the row, the file, the rates, the time.
-    assert r.rates_applied["model"] == "claude-opus-5"
-    assert r.rates_applied["source"].endswith("prices.toml")
-    assert r.rates_applied["cache_write_1h"] == 1.0e-5 and r.rates_applied["applied_at"].endswith("+00:00")
+    applied = r.rates_applied
+    assert applied is not None
+    assert applied.model == "claude-opus-5"
+    assert applied.source.endswith("prices.toml")
+    assert applied.cache_write_1h == 1.0e-5 and applied.applied_at.endswith("+00:00")
     assert r.cost_by_tier == {
         "input": 5.0,
         "output": 25.0,
@@ -376,7 +385,7 @@ def test_from_claude_builds_one_call_per_message_id_and_keeps_the_envelope_for_r
             "cache_creation_input_tokens": 290,
         },
     }
-    r = claude_harness.from_claude(log, envelope, tmp_path, ["ARCHITECTURE.md"])
+    r = claude_harness.ClaudeSessionLog(log, envelope).to_result(tmp_path, ["ARCHITECTURE.md"])
     assert (r.harness, r.model, r.session_id, r.exit_code, r.final_text) == (
         "claude",
         "claude-opus-5",
@@ -448,7 +457,7 @@ def test_from_claude_turn_boundaries_follow_tool_ownership_not_log_order(tmp_pat
             {"type": "ai-title"},  # 11 -> still turn 2
         ],
     )
-    r = claude_harness.from_claude(log, {"session_id": "sid"}, tmp_path, [])
+    r = claude_harness.ClaudeSessionLog(log, {"session_id": "sid"}).to_result(tmp_path, [])
     assert r.turns == 2
     assert (r.calls[0].records, r.calls[1].records) == ([1, 2, 3, 4, 5, 6, 7, 8], [9, 10, 11])
     # results_in keeps its own meaning: what entered turn 2's context is turn 1's results.
@@ -497,7 +506,7 @@ def test_from_claude_context_window_latency_and_ttft(tmp_path: Path) -> None:
             "claude-opus-5": {"contextWindow": 1_000_000},
         },
     }
-    r = claude_harness.from_claude(log, envelope, tmp_path, [])
+    r = claude_harness.ClaudeSessionLog(log, envelope).to_result(tmp_path, [])
     assert (r.context_window, r.ttft_ms, r.api_duration_ms) == (1_000_000, 1991, 8000)
     assert [c.latency_ms for c in r.calls] == [3500, 2000]
     assert [c.output_tokens_per_sec for c in r.calls] == [pytest.approx(85.71, abs=0.01), 50.0]
@@ -537,7 +546,7 @@ def test_from_codex_context_window_latency_and_ttft(tmp_path: Path) -> None:
             },
         ],
     )
-    r = codex_harness.from_codex(log, 0, tmp_path, [])
+    r = codex_harness.CodexSessionLog(log, 0).to_result(tmp_path, [])
     assert (r.context_window, r.ttft_ms, r.api_duration_ms) == (258_400, 1234, 5000)
     assert [c.latency_ms for c in r.calls] == [2000, 3000]
     assert r.context_window_pct == pytest.approx(7.74) and r.final_context_pct == pytest.approx(7.86)
@@ -548,13 +557,9 @@ def test_case_metadata_round_trips_and_reaches_history(tmp_path: Path) -> None:
     """The case that produced a run (suite, name, skill, fixture, prompt) rides on the result (ADR 0025)."""
     r = _result("m", Usage(1, 2, 3, 4))
     r.estimated_cost_usd = 0.1
-    r.case = {
-        "suite": "skills/demo/evals/eval_demo.py",
-        "name": "eval_demo",
-        "skill": "demo",
-        "fixture": "seed",
-        "prompt": "say hi",
-    }
+    r.case = CaseRef(
+        suite="skills/demo/evals/eval_demo.py", name="eval_demo", skill="demo", fixture="seed", prompt="say hi"
+    )
     data = json.loads(r.write(tmp_path / "r.json").read_text(encoding="utf-8"))
     assert data["case"]["suite"] == "skills/demo/evals/eval_demo.py" and data["case"]["prompt"] == "say hi"
     rec = history.metrics_of(r, node="n", verdict="pass", wall_ms=1, started_at="t")
@@ -594,7 +599,7 @@ def test_from_claude_keeps_synthetic_messages_as_evidence_not_turns(tmp_path: Pa
         tmp_path / "s.jsonl",
         [{"type": "assistant", "message": real}, {"type": "assistant", "message": synthetic}],
     )
-    r = claude_harness.from_claude(log, {"session_id": "sid"}, tmp_path, [])
+    r = claude_harness.ClaudeSessionLog(log, {"session_id": "sid"}).to_result(tmp_path, [])
     assert (r.model, r.turns) == ("claude-opus-5", 1)  # the synthetic record names no model and is no turn
     assert r.calls[0].records == [1, 2]  # but its line stays attributed as evidence
     assert r.record_kinds == {"claude/assistant/synthetic": 1, "claude/assistant/text": 1}
@@ -609,7 +614,7 @@ def test_from_claude_without_envelope_usage_still_sums_the_ledger(tmp_path: Path
             {"type": "assistant", "message": {"usage": {"input_tokens": 1, "output_tokens": 1}}},
         ],
     )
-    r = claude_harness.from_claude(log, {"is_error": True, "model": "claude-sonnet-5"}, tmp_path, [])
+    r = claude_harness.ClaudeSessionLog(log, {"is_error": True, "model": "claude-sonnet-5"}).to_result(tmp_path, [])
     assert (r.exit_code, r.turns, r.reported_turns, r.model) == (1, 2, None, "claude-sonnet-5")
     assert r.usage == Usage(6, 8)
     assert r.reported_usage == {}
@@ -652,7 +657,7 @@ def test_from_codex_builds_one_call_per_token_count(tmp_path: Path) -> None:
             {"type": "event_msg", "payload": {"type": "task_complete", "duration_ms": 321, "last_agent_message": "ok"}},
         ],
     )
-    r = codex_harness.from_codex(log, 0, tmp_path, [])
+    r = codex_harness.CodexSessionLog(log, 0).to_result(tmp_path, [])
     assert (r.harness, r.model, r.session_id, r.duration_ms, r.final_text) == (
         "codex",
         "gpt-5.6-sol",
@@ -707,7 +712,7 @@ def test_from_codex_diffs_cumulative_counts_when_last_usage_is_absent(tmp_path: 
             {"type": "event_msg", "payload": {"type": "task_complete", "duration_ms": 321, "last_agent_message": "ok"}},
         ],
     )
-    r = codex_harness.from_codex(log, 0, tmp_path, [])
+    r = codex_harness.CodexSessionLog(log, 0).to_result(tmp_path, [])
     assert (r.harness, r.model, r.session_id, r.turns, r.reported_turns, r.duration_ms, r.final_text) == (
         "codex",
         "gpt-5.6-sol",
@@ -774,7 +779,7 @@ def test_from_claude_folds_subagent_transcripts_and_bills_them(tmp_path: Path) -
         json.dumps({"agentType": "general-purpose", "description": "External research", "toolUseId": "tu_agent"}),
         encoding="utf-8",
     )
-    r = claude_harness.from_claude(log, {"session_id": "sid", "result": "done"}, tmp_path, [])
+    r = claude_harness.ClaudeSessionLog(log, {"session_id": "sid", "result": "done"}).to_result(tmp_path, [])
     assert r.calls[0].tools[0].id == "tu_agent"
     (sub,) = r.subagents
     assert (sub.agent, sub.id, sub.description, sub.parent_turn, sub.turns) == (
@@ -827,7 +832,7 @@ def test_from_codex_folds_forked_rollouts_and_attributes_the_spawning_turn(tmp_p
         ],
     )
     # sub_rollouts=None discovers the captured layout: <session dir>/subagents/*.jsonl
-    r = codex_harness.from_codex(tmp_path / "log.jsonl", 0, tmp_path, [])
+    r = codex_harness.CodexSessionLog(tmp_path / "log.jsonl", 0).to_result(tmp_path, [])
     (agent,) = r.subagents
     assert (agent.agent, agent.id, agent.description, agent.parent_turn, agent.turns) == (
         "Curie",
@@ -841,7 +846,7 @@ def test_from_codex_folds_forked_rollouts_and_attributes_the_spawning_turn(tmp_p
     assert r.usage == Usage(input_tokens=310, output_tokens=35, cache_read_tokens=40)
     assert r.turns == 2
     # The runner path passes the forks explicitly; the ledger is identical either way.
-    explicit = codex_harness.from_codex(tmp_path / "log.jsonl", 0, tmp_path, [], sub_rollouts=[sub])
+    explicit = codex_harness.CodexSessionLog(tmp_path / "log.jsonl", 0, sub_rollouts=[sub]).to_result(tmp_path, [])
     assert explicit.subagents[0].usage == agent.usage
 
 
@@ -852,7 +857,7 @@ def test_metrics_record_is_flat_and_complete() -> None:
 
     r = _result("m", Usage(10, 20, 30, 40))
     r.turns, r.duration_ms, r.estimated_cost_usd = 7, 4321, 0.5
-    r.rates_applied = {"model": "m", "source": "/p/prices.toml"}
+    r.rates_applied = _applied_rates()
     r.tool_calls = {"Edit": 2, "Bash": 3}
     r.files_written = ["a", "b"]
     r.calls = [Call(n=1, at="t", usage=Usage(input_tokens=10, cache_read_tokens=30))]
@@ -863,7 +868,17 @@ def test_metrics_record_is_flat_and_complete() -> None:
     assert (rec["accumulative_billed_tokens"], rec["baseline_tokens"], rec["peak_context_tokens"]) == (100, 40, 40)
     assert not {"tokens", "billed_tokens", "context_tokens", "cost_usd", "reported_cost_usd"} & rec.keys()
     assert (rec["harness_reported_cost_usd"], rec["reported_turns"]) == (None, None)
-    assert rec["rates_applied"] == {"model": "m", "source": "/p/prices.toml"}
+    assert rec["rates_applied"]["model"] == "m" and rec["rates_applied"]["source"] == "/p/prices.toml"
+    assert set(rec["rates_applied"]) == {
+        "input",
+        "output",
+        "cache_read",
+        "cache_write",
+        "cache_write_1h",
+        "model",
+        "source",
+        "applied_at",
+    }
     assert rec["files_written"] == 2
     assert (
         history.status_word(rec)
@@ -1058,9 +1073,9 @@ def _skill(tmp_path: Path) -> Path:
     ],
 )
 def test_skill_ignore_globs(pattern: str, matches: list[str], misses: list[str]) -> None:
-    rules = skillcov.compile_ignore([pattern, ""])
-    assert all(skillcov.is_ignored(p, rules) for p in matches), pattern
-    assert not any(skillcov.is_ignored(p, rules) for p in misses), pattern
+    rules = ignorerules.IgnoreRules.compiled([pattern, ""])
+    assert all(rules.matches(p) for p in matches), pattern
+    assert not any(rules.matches(p) for p in misses), pattern
 
 
 def test_catalog_applies_bare_and_skill_scoped_ignore_lines(tmp_path: Path) -> None:
@@ -1074,12 +1089,12 @@ def test_catalog_applies_bare_and_skill_scoped_ignore_lines(tmp_path: Path) -> N
         "",
     ]
     files = skillcov.catalog(skill, ignore=lines)
-    ignored = {f["path"] for f in files if f["ignored"]}
+    ignored = {f.path for f in files if f.ignored}
     assert ignored == {"assets/icon.png", "scripts/check.test.ts", "scripts/package.json"}
     r = _result("m", Usage())
     cov = skillcov.annotate("demo", files, r)
-    assert cov["summary"]["ignored"] == 3 and cov["summary"]["files"] == 5 and cov["summary"]["tests"] == 0
-    assert "scripts/package.json" not in cov["not_loaded"] and "scripts/check.test.ts" not in cov["not_loaded"]
+    assert cov.summary.ignored == 3 and cov.summary.files == 5 and cov.summary.tests == 0
+    assert "scripts/package.json" not in cov.not_loaded and "scripts/check.test.ts" not in cov.not_loaded
 
 
 def test_a_skillignore_file_in_the_skill_is_not_read(tmp_path: Path) -> None:
@@ -1087,8 +1102,8 @@ def test_a_skillignore_file_in_the_skill_is_not_read(tmp_path: Path) -> None:
     skill = _skill(tmp_path)
     (skill / ".skillignore").write_text("assets/\n", encoding="utf-8")
     files = skillcov.catalog(skill)
-    assert not any(f["ignored"] for f in files)
-    assert ".skillignore" not in {f["path"] for f in files}
+    assert not any(f.ignored for f in files)
+    assert ".skillignore" not in {f.path for f in files}
 
 
 @pytest.mark.parametrize(
@@ -1104,20 +1119,20 @@ def test_a_skillignore_file_in_the_skill_is_not_read(tmp_path: Path) -> None:
     ],
 )
 def test_patterns_for_selects_lines_by_skill_name(line: str, applies: bool) -> None:
-    resolved = skillcov.patterns_for("mermaidjs-diagrams", [line])
+    resolved = ignorerules.patterns_for("mermaidjs-diagrams", [line])
     assert resolved == ([line.partition(":")[2].strip() or line] if applies else [])
 
 
 @pytest.mark.parametrize("line", ["mermaidjs-diagrams:", ": README.md", ":"])
 def test_patterns_for_rejects_a_selector_without_a_pattern(line: str) -> None:
     with pytest.raises(ValueError, match="xharness_skill_ignore"):
-        skillcov.patterns_for("mermaidjs-diagrams", [line])
+        ignorerules.patterns_for("mermaidjs-diagrams", [line])
 
 
 def test_catalog_lists_the_skill_surface_with_kinds_and_hashes(tmp_path: Path) -> None:
     files = skillcov.catalog(_skill(tmp_path))
-    assert all(f["ignored"] is False for f in files)
-    assert [(f["path"], f["kind"]) for f in files] == [
+    assert all(f.ignored is False for f in files)
+    assert [(f.path, f.kind) for f in files] == [
         ("SKILL.md", "doc"),
         ("assets/icon.png", "asset"),
         ("resources/guide.md", "doc"),
@@ -1127,7 +1142,7 @@ def test_catalog_lists_the_skill_surface_with_kinds_and_hashes(tmp_path: Path) -
         ("scripts/never.py", "script"),
         ("scripts/package.json", "asset"),
     ]
-    assert files[0]["bytes"] == 6 and len(files[0]["sha256"]) == 64
+    assert files[0].bytes == 6 and len(files[0].sha256) == 64
 
 
 def test_annotate_marks_loaded_and_run_turns_and_derives_the_missed_sets(tmp_path: Path) -> None:
@@ -1154,31 +1169,24 @@ def test_annotate_marks_loaded_and_run_turns_and_derives_the_missed_sets(tmp_pat
         Call(n=6, at="t", tools=[ToolCall("Bash", "", {"command": "bun run /x/skills/demo/scripts/check.ts again"})]),
     ]
     cov = skillcov.annotate("demo", files, r)
-    by = {f["path"]: f for f in cov["files"]}
-    assert (by["SKILL.md"]["loaded"], by["SKILL.md"]["run"]) == ([1], [])
-    assert (by["resources/guide.md"]["loaded"], by["resources/guide.md"]["run"]) == ([2, 5], [])
+    by = {f.path: f for f in cov.files}
+    assert (by["SKILL.md"].loaded, by["SKILL.md"].run) == ([1], [])
+    assert (by["resources/guide.md"].loaded, by["resources/guide.md"].run) == ([2, 5], [])
     # Turn 3 only read the script; turns 4 and 6 ran it (each turn counted once).
-    assert (by["scripts/check.ts"]["loaded"], by["scripts/check.ts"]["run"]) == ([3], [4, 6])
-    assert cov["loaded"] == ["SKILL.md", "resources/guide.md", "scripts/check.ts"]
-    assert cov["run"] == ["scripts/check.ts"]
-    assert cov["not_loaded"] == [
+    assert (by["scripts/check.ts"].loaded, by["scripts/check.ts"].run) == ([3], [4, 6])
+    assert cov.loaded == ["SKILL.md", "resources/guide.md", "scripts/check.ts"]
+    assert cov.run == ["scripts/check.ts"]
+    assert cov.not_loaded == [
         "assets/icon.png",
         "resources/unused.md",
         "scripts/check.test.ts",
         "scripts/never.py",
         "scripts/package.json",
     ]
-    assert cov["not_run"] == ["scripts/never.py"]  # tests are never expected to run
-    assert cov["summary"] == {
-        "files": 8,
-        "ignored": 0,
-        "docs": 3,
-        "scripts": 2,
-        "tests": 1,
-        "assets": 2,
-        "loaded": 3,
-        "run": 1,
-    }
+    assert cov.not_run == ["scripts/never.py"]  # tests are never expected to run
+    assert cov.summary == skillcov.CoverageSummary(
+        files=8, ignored=0, docs=3, scripts=2, tests=1, assets=2, loaded=3, run=1
+    )
 
 
 # -- effective working directory (ADR 0027) -----------------------------------------
@@ -1259,10 +1267,10 @@ def test_annotate_follows_the_claude_shells_cwd_and_the_harness_reset(tmp_path: 
         Call(n=4, at="t", tools=[ToolCall("Bash", "", {"command": "bun run check.ts /x/ws/doc.md; cat SKILL.md"})]),
     ]
     cov = skillcov.annotate("demo", files, r)
-    by = {f["path"]: f for f in cov["files"]}
-    assert (by["SKILL.md"]["loaded"], by["SKILL.md"]["run"]) == ([1], [])
-    assert (by["scripts/check.ts"]["loaded"], by["scripts/check.ts"]["run"]) == ([], [2, 3])
-    assert cov["run"] == ["scripts/check.ts"]
+    by = {f.path: f for f in cov.files}
+    assert (by["SKILL.md"].loaded, by["SKILL.md"].run) == ([1], [])
+    assert (by["scripts/check.ts"].loaded, by["scripts/check.ts"].run) == ([], [2, 3])
+    assert cov.run == ["scripts/check.ts"]
 
 
 def test_annotate_resolves_each_codex_exec_at_its_own_workdir(tmp_path: Path) -> None:
@@ -1293,10 +1301,10 @@ def test_annotate_resolves_each_codex_exec_at_its_own_workdir(tmp_path: Path) ->
         Call(n=3, at="t", tools=[ToolCall("exec", "", {"command": "cat resources/unused.md", "workdir": "/x/ws"})]),
     ]
     cov = skillcov.annotate("demo", files, r)
-    by = {f["path"]: f for f in cov["files"]}
-    assert by["resources/guide.md"]["loaded"] == [1]
-    assert by["resources/unused.md"]["loaded"] == []
-    assert cov["run"] == []
+    by = {f.path: f for f in cov.files}
+    assert by["resources/guide.md"].loaded == [1]
+    assert by["resources/unused.md"].loaded == []
+    assert cov.run == []
 
 
 def test_codex_usage_splits_openai_inclusive_input_into_disjoint_tiers() -> None:
@@ -1409,9 +1417,9 @@ def test_coverage_uses_the_new_harnesss_own_shell_vocabulary(tmp_path: Path, pro
         Call(n=2, at="t", tools=[ToolCall("Terminal", "", {"command": "bun run scripts/check.ts"})]),
     ]
     cov = skillcov.annotate("demo", files, r)
-    by = {f["path"]: f for f in cov["files"]}
-    assert by["SKILL.md"]["loaded"] == [1]
-    assert by["scripts/check.ts"]["run"] == [2]
+    by = {f.path: f for f in cov.files}
+    assert by["SKILL.md"].loaded == [1]
+    assert by["scripts/check.ts"].run == [2]
 
 
 # -- pipeline: the sequence both the live cell and a replay run ------------------------
@@ -1485,21 +1493,17 @@ def test_derive_prices_annotates_and_names_the_case_in_one_order(tmp_path: Path)
     r = _result("claude-opus-5", Usage(1_000_000, 0, 0, 0))
     r.workspace = "/x/ws"
     r.calls = [Call(n=1, at="t", tools=[ToolCall("Read", "", {"file_path": "/x/skills/demo/SKILL.md"})])]
-    case = pipeline.case_record(
+    case = CaseRef.of(
         evalcase(prompt="go", skill="demo", fixture="seed")(lambda result, workspace: None),
         "skills/demo/evals/eval_x.py",
     )
     out = pipeline.derive(r, table=pricing.load_table(), skill="demo", skill_files=files, case=case)
     assert out is r
-    assert r.cost_status == "priced" and r.estimated_cost_usd == pytest.approx(5.0)
-    assert r.skill_coverage["loaded"] == ["SKILL.md"]
-    assert r.case == {
-        "suite": "skills/demo/evals/eval_x.py",
-        "name": "<lambda>",
-        "skill": "demo",
-        "fixture": "seed",
-        "prompt": "go",
-    }
+    assert r.cost_status is CostStatus.PRICED and r.estimated_cost_usd == pytest.approx(5.0)
+    assert r.skill_coverage is not None and r.skill_coverage.loaded == ["SKILL.md"]
+    assert r.case == CaseRef(
+        suite="skills/demo/evals/eval_x.py", name="<lambda>", skill="demo", fixture="seed", prompt="go"
+    )
 
 
 # -- replay (ADR 0023) --------------------------------------------------------------
@@ -1691,11 +1695,15 @@ def test_replay_refuses_a_result_without_its_log(tmp_path: Path) -> None:
 def test_history_carries_coverage_counts_and_the_status_word_shows_them() -> None:
     r = _result("m", Usage(10, 20, 30, 40))
     r.estimated_cost_usd = 0.5
-    r.skill_coverage = {
-        "summary": {"files": 8, "loaded": 3, "scripts": 2, "run": 1},
-        "not_loaded": ["a"],
-        "not_run": ["b"],
-    }
+    r.skill_coverage = skillcov.SkillCoverage(
+        skill="demo",
+        files=[],
+        loaded=[],
+        run=[],
+        not_loaded=["a"],
+        not_run=["b"],
+        summary=skillcov.CoverageSummary(files=8, ignored=0, docs=0, scripts=2, tests=0, assets=0, loaded=3, run=1),
+    )
     rec = history.metrics_of(r, node="n", verdict="pass", wall_ms=1000, started_at="t")
     assert (rec["skill_files"], rec["skill_files_loaded"], rec["skill_scripts"], rec["skill_scripts_run"]) == (
         8,
@@ -1716,8 +1724,8 @@ def test_report_indexes_every_captured_result_and_writes_the_page(tmp_path: Path
     new = _result("claude-opus-5", Usage(26, 5289, 492_998, 28_154, cache_write_1h_tokens=28_154))
     new.harness, new.session_id, new.turns = "claude", "9f5f73a0", 13
     new.harness_reported_cost_usd, new.estimated_cost_usd = 0.66, 0.55
-    new.rates_applied = {"model": "claude-opus-5", "source": "/p/prices.toml"}
-    new.case = {"name": "eval_demo", "skill": "demo"}
+    new.rates_applied = _applied_rates(model="claude-opus-5")
+    new.case = CaseRef(name="eval_demo", skill="demo")
     new.calls = [
         Call(n=1, at="t", usage=Usage(input_tokens=2, cache_read_tokens=22_954), tools=[ToolCall("Bash", "ls")])
     ]

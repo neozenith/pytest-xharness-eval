@@ -78,7 +78,7 @@ def test_skill_ignore_lines_scope_by_skill_name(pytester: pytest.Pytester) -> No
         "    for item in items:\n"
         "        if isinstance(item, EvalItem):\n"
         "            for f in item.skill_files:\n"
-        "                print('FILE', f['path'], f['ignored'])\n"
+        "                print('FILE', f.path, f.ignored)\n"
     )
     result = pytester.runpytest("--collect-only", "-s")
     result.stdout.fnmatch_lines(["FILE SKILL.md False", "FILE assets/icon.png True", "FILE README.md True"])

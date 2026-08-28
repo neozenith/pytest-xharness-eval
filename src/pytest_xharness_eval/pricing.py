@@ -3,6 +3,11 @@
 Every priced result records the rates it was priced with and where they came
 from (``rates_applied``), so a decision made on a stale or wrong row can be
 traced back to that row rather than re-derived.
+
+The arithmetic belongs to :class:`Rates` — a row knows what it charges for a
+:class:`~pytest_xharness_eval.runresult.Usage` — and the answer travels as one
+:class:`CostEstimate` that a result applies in a single call. No module outside this one
+writes a cost field (ADR 0035).
 """
 
 from __future__ import annotations
@@ -11,14 +16,14 @@ from __future__ import annotations
 import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Self
 
 # Our Libraries
 from pytest_xharness_eval import history
 
 if TYPE_CHECKING:
     # Our Libraries
-    from pytest_xharness_eval.runresult import RunResult
+    from pytest_xharness_eval.runresult import RunResult, Usage
 
 # The table shipped with the package. A project's ``xharness_prices`` ini lines add to
 # or override these rows (see ``load_table``); they never have to replace them wholesale.
@@ -39,7 +44,26 @@ class PricingError(RuntimeError):
     """An unpriced model is a hard error, never a zero (ADR 0007)."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
+class AppliedRates:
+    """The rates one result was priced with, and when: the audit block beside every estimate.
+
+    This is :class:`Rates` plus the moment it was applied. Its field names are the
+    ``rates_applied`` keys of ``result.json``, mirrored by ``report-ui/src/lib/types.ts``,
+    so they are a wire contract (ADR 0021).
+    """
+
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
+    cache_write_1h: float
+    model: str
+    source: str
+    applied_at: str
+
+
+@dataclass(frozen=True, slots=True)
 class Rates:
     """USD per token for the billed tiers, plus where the row came from.
 
@@ -54,6 +78,45 @@ class Rates:
     cache_write_1h: float
     model: str = ""
     source: str = ""
+
+    def breakdown(self, usage: Usage) -> dict[str, float]:
+        """USD per tier for ``usage``. Cache writes price by TTL where the harness reported one."""
+        tagged = usage.cache_write_1h_tokens + usage.cache_write_5m_tokens
+        untagged = max(usage.cache_write_tokens - tagged, 0)
+        return {
+            "input": usage.input_tokens * self.input,
+            "output": usage.output_tokens * self.output,
+            "cache_read": usage.cache_read_tokens * self.cache_read,
+            "cache_write_5m": (usage.cache_write_5m_tokens + untagged) * self.cache_write,
+            "cache_write_1h": usage.cache_write_1h_tokens * self.cache_write_1h,
+        }
+
+    def applied(self, at: str) -> AppliedRates:
+        """This row stamped with the moment it was used to price a run."""
+        return AppliedRates(**asdict(self), applied_at=at)
+
+
+@dataclass(frozen=True, slots=True)
+class CostEstimate:
+    """What one run costs under one price row: the total, the tier split, and the provenance.
+
+    Built here and applied by :meth:`RunResult.apply_cost` in a single call, so a result's
+    four cost fields are written together or not at all (ADR 0007, ADR 0035).
+    """
+
+    total_usd: float
+    by_tier: dict[str, float]
+    rates: AppliedRates
+
+    @classmethod
+    def of(cls, usage: Usage, rates: Rates) -> Self:
+        """Price ``usage`` with ``rates``, stamped with the moment of application."""
+        tiers = rates.breakdown(usage)
+        return cls(
+            total_usd=round(sum(tiers.values()), 6),
+            by_tier={k: round(v, 6) for k, v in tiers.items()},
+            rates=rates.applied(history.now_iso()),
+        )
 
 
 def _parse(path: Path) -> dict[str, Rates]:
@@ -158,33 +221,11 @@ def validate_matrix(models: list[str], table: dict[str, Rates]) -> None:
         )
 
 
-def breakdown(result: RunResult, rates: Rates) -> dict[str, float]:
-    """USD per tier. Cache writes price by TTL where the harness reported one."""
-    u = result.usage
-    tagged = u.cache_write_1h_tokens + u.cache_write_5m_tokens
-    untagged = max(u.cache_write_tokens - tagged, 0)
-    return {
-        "input": u.input_tokens * rates.input,
-        "output": u.output_tokens * rates.output,
-        "cache_read": u.cache_read_tokens * rates.cache_read,
-        "cache_write_5m": (u.cache_write_5m_tokens + untagged) * rates.cache_write,
-        "cache_write_1h": u.cache_write_1h_tokens * rates.cache_write_1h,
-    }
-
-
-def rates_record(rates: Rates) -> dict[str, Any]:
-    """The provenance block stored beside every estimate: per-tier USD/token, row key, file, time."""
-    rec: dict[str, Any] = asdict(rates)
-    rec["applied_at"] = history.now_iso()
-    return rec
-
-
 def price(result: RunResult, table: dict[str, Rates]) -> RunResult:
-    """Attach ``estimated_cost_usd``, ``cost_by_tier`` and ``rates_applied`` to a RunResult."""
-    rates = resolve(result.model, table)
-    tiers = breakdown(result, rates)
-    result.cost_by_tier = {k: round(v, 6) for k, v in tiers.items()}
-    result.estimated_cost_usd = round(sum(tiers.values()), 6)
-    result.rates_applied = rates_record(rates)
-    result.cost_status = "priced"
+    """Price ``result`` from ``table`` and record the estimate on it; the run is returned.
+
+    Resolving the row is the only step that can fail, and it raises rather than pricing an
+    unknown model as zero (ADR 0007).
+    """
+    result.apply_cost(CostEstimate.of(result.usage, resolve(result.model, table)))
     return result

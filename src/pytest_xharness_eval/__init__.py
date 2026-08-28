@@ -10,7 +10,20 @@ from __future__ import annotations
 # Our Libraries
 from pytest_xharness_eval.case import EvalCase, evalcase
 from pytest_xharness_eval.matrix import DEFAULT_MATRIX, Cell
-from pytest_xharness_eval.runresult import Call, RunResult, ToolCall, ToolResult, Usage
+from pytest_xharness_eval.runresult import Call, CaseRef, CostStatus, RunResult, Subagent, ToolCall, ToolResult, Usage
 
-__all__ = ["DEFAULT_MATRIX", "Call", "Cell", "EvalCase", "RunResult", "ToolCall", "ToolResult", "Usage", "evalcase"]
+__all__ = [
+    "DEFAULT_MATRIX",
+    "Call",
+    "CaseRef",
+    "Cell",
+    "CostStatus",
+    "EvalCase",
+    "RunResult",
+    "Subagent",
+    "ToolCall",
+    "ToolResult",
+    "Usage",
+    "evalcase",
+]
 __version__ = "0.2.0"

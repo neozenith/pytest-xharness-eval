@@ -20,6 +20,7 @@ from __future__ import annotations
 
 # Standard Library
 import json
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -32,16 +33,22 @@ if TYPE_CHECKING:
 
 
 def metrics_of(result: RunResult, *, node: str, verdict: str, wall_ms: int, started_at: str) -> dict[str, Any]:
-    """The flat, JSON-ready metrics record for one cell."""
+    """The flat, JSON-ready metrics record for one cell.
+
+    Flat and built of builtins on purpose: this record travels to the xdist controller on
+    ``TestReport.user_properties``, which serialises builtins only (ADR 0016).
+    """
     u = result.usage
-    cov = result.skill_coverage.get("summary") or {}
+    case = result.case
+    cov = result.skill_coverage
+    summary = cov.summary if cov else None
     return {
         "at": started_at,
         "node": node,
-        "suite": result.case.get("suite"),
-        "case": result.case.get("name"),
-        "skill": result.case.get("skill"),
-        "fixture": result.case.get("fixture"),
+        "suite": case.suite if case else None,
+        "case": case.name if case else None,
+        "skill": case.skill if case else None,
+        "fixture": case.fixture if case else None,
         "harness": result.harness,
         "model": result.model,
         "session_id": result.session_id,
@@ -54,7 +61,7 @@ def metrics_of(result: RunResult, *, node: str, verdict: str, wall_ms: int, star
         "wall_ms": wall_ms,
         "estimated_cost_usd": result.estimated_cost_usd,
         "harness_reported_cost_usd": result.harness_reported_cost_usd,
-        "rates_applied": dict(result.rates_applied),
+        "rates_applied": asdict(result.rates_applied) if result.rates_applied else {},
         "accumulative_billed_tokens": u.accumulative_billed_tokens,
         "baseline_tokens": result.baseline_tokens,
         "input_tokens": u.input_tokens,
@@ -71,12 +78,12 @@ def metrics_of(result: RunResult, *, node: str, verdict: str, wall_ms: int, star
         "ttft_ms": result.ttft_ms,
         "output_tokens_per_sec": result.output_tokens_per_sec,
         "record_kinds": dict(result.record_kinds),
-        "skill_files": cov.get("files"),
-        "skill_files_loaded": cov.get("loaded"),
-        "skill_scripts": cov.get("scripts"),
-        "skill_scripts_run": cov.get("run"),
-        "skill_not_loaded": list(result.skill_coverage.get("not_loaded") or []),
-        "skill_not_run": list(result.skill_coverage.get("not_run") or []),
+        "skill_files": summary.files if summary else None,
+        "skill_files_loaded": summary.loaded if summary else None,
+        "skill_scripts": summary.scripts if summary else None,
+        "skill_scripts_run": summary.run if summary else None,
+        "skill_not_loaded": list(cov.not_loaded) if cov else [],
+        "skill_not_run": list(cov.not_run) if cov else [],
     }
 
 

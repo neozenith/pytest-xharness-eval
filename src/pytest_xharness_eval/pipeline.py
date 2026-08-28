@@ -23,8 +23,8 @@ from pytest_xharness_eval import history, pricing, skillcov
 
 if TYPE_CHECKING:
     # Our Libraries
-    from pytest_xharness_eval.case import EvalCase
-    from pytest_xharness_eval.runresult import RunResult
+    from pytest_xharness_eval.runresult import CaseRef, RunResult
+    from pytest_xharness_eval.skillcov import SkillFile
 
 RESULT_NAME = "result.json"
 LOG_NAME = "log.jsonl"
@@ -32,24 +32,13 @@ HISTORY_NAME = "history.json"
 SUBAGENTS_DIR = "subagents"
 
 
-def case_record(case: EvalCase, suite: str) -> dict[str, Any]:
-    """Which suite file and case produced a run, and the prompt it sent (ADR 0025)."""
-    return {
-        "suite": suite,
-        "name": case.name,
-        "skill": case.skill,
-        "fixture": case.fixture,
-        "prompt": case.prompt,
-    }
-
-
 def derive(
     result: RunResult,
     *,
     table: dict[str, pricing.Rates],
     skill: str,
-    skill_files: list[dict[str, Any]],
-    case: dict[str, Any],
+    skill_files: list[SkillFile],
+    case: CaseRef | None,
 ) -> RunResult:
     """Price the run, annotate skill coverage, and name its case -- in that order.
 

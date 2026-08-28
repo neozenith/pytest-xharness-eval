@@ -58,7 +58,8 @@ All source lives under `src/pytest_xharness_eval/`.
 | Context window, TTFT or tokens-per-second figures | `runresult.py` (the properties) and `harness/<provider>.py` (where each harness reports them); the derivation and its provider sources are `docs/token-accounting.md`, update it with them |
 | A name, metric definition or id on the report | `assets/XHARNESS-REPORT-GLOSSARY.md` (shipped beside the page), then the element ids in `report-ui/src/` and the checklist in `report-ui/e2e/inline.spec.ts` |
 | A session-log record kind, its category or pill colour | the harness's `classify_record` in `harness/<provider>.py` for the kind, `records.py` for the catalogue and category, then the mirrored tables in `report-ui/src/lib/records.ts` (and the local map in `report-ui/src/components/panels/helpers.ts`), then the glossary |
-| Which skill files count as loaded or run, or how `xharness_skill_ignore` lines (`<pattern>` or `<skill>: <pattern>`) match | `skillcov.py` |
+| Which skill files count as loaded or run | `skillcov.py` (`SkillFile` catalogued, `FileCoverage` annotated, `SkillCoverage` derived) |
+| How `xharness_skill_ignore` lines (`<pattern>` or `<skill>: <pattern>`) select and match | `ignorerules.py` (ADR 0035) |
 | Rebuilding cached results without a paid run, or migrating a legacy captured/ dir | `replay.py` (`uv run -m pytest_xharness_eval.replay <cache dir>`) |
 | How a workspace is built or diffed | `workspace.py` |
 | The `@evalcase` contract | `case.py` |

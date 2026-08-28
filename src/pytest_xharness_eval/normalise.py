@@ -8,10 +8,14 @@ from. Nothing is truncated: the ledger is the evidence, and the report renders a
 
 A run's ``usage`` is the ledger's sum plus every subagent's, and ``turns`` is the primary
 ledger's length; each CLI's own aggregates are kept on ``reported_usage`` /
-``reported_turns`` for reconciliation rather than being trusted.
+``reported_turns`` for reconciliation rather than being trusted. Those two derivations are
+not here: they belong to :meth:`RunResult.folded` and :meth:`Subagent.folded`, which are
+the only places a usage total is summed (ADR 0035).
 
-This module knows nothing about any provider. That is the point: a new harness reuses it
-without editing it.
+What is here is the dialect-free machinery every fold needs: reading a numbered JSONL,
+flattening a content value, summarising a tool argument, and measuring the gap between two
+timestamps. This module knows nothing about any provider. That is the point: a new harness
+reuses it without editing it.
 """
 
 from __future__ import annotations
@@ -20,9 +24,6 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
-
-# Our Libraries
-from pytest_xharness_eval.runresult import Call, RunResult, Subagent, Usage
 
 if TYPE_CHECKING:
     # Standard Library
@@ -102,26 +103,3 @@ def ms_between(earlier: str | None, later: str | None) -> int | None:
     except ValueError:
         return None
     return max(int((b - a).total_seconds() * 1000), 0)
-
-
-def sum_usage(calls: list[Call]) -> Usage:
-    total = Usage()
-    for call in calls:
-        total.add(call.usage)
-    return total
-
-
-# -- Subagents ---------------------------------------------------------------------
-
-
-def attach_subagents(result: RunResult, subs: list[Subagent]) -> RunResult:
-    """Hang the subagent ledgers on a result and fold their usage into the billed total.
-
-    ``usage`` is the run's whole bill (the primary ledger's sum plus every subagent's), so
-    pricing and the report's totals cover the tokens the spawned threads spent; ``turns``
-    and ``calls`` stay the primary thread's own.
-    """
-    result.subagents = sorted(subs, key=lambda s: (s.parent_turn or 0, s.agent, s.id))
-    for sub in result.subagents:
-        result.usage.add(sub.usage)
-    return result

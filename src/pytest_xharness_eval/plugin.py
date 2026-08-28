@@ -44,6 +44,8 @@ from pytest_xharness_eval import matrix as mx
 from pytest_xharness_eval import pipeline, pricing, report, skillcov
 from pytest_xharness_eval import workspace as ws
 from pytest_xharness_eval.case import EvalCase
+from pytest_xharness_eval.ignorerules import IgnoreRules
+from pytest_xharness_eval.runresult import CaseRef
 from pytest_xharness_eval.settings import (
     INI_CACHE_DIR,
     INI_MATRIX,
@@ -163,7 +165,7 @@ def pytest_configure(config: pytest.Config) -> None:
     # ADR 0026 / ADR 0030: a malformed ignore or price line stops the session here,
     # before any cell is collected.
     try:
-        skillcov.patterns_for("", [str(p) for p in config.getini(INI_SKILL_IGNORE)])
+        IgnoreRules.for_skill("", [str(p) for p in config.getini(INI_SKILL_IGNORE)])
         pricing.parse_price_lines([str(line) for line in config.getini(INI_PRICES)])
     except (ValueError, pricing.PricingError) as exc:
         raise pytest.UsageError(str(exc)) from exc
@@ -264,7 +266,7 @@ class EvalItem(pytest.Item):
     """One cell: run the CLI in a fresh workspace, price it, capture evidence, grade."""
 
     def __init__(
-        self, *, case: EvalCase, cell: mx.Cell, skill_files: list[dict[str, Any]] | None = None, **kw: Any
+        self, *, case: EvalCase, cell: mx.Cell, skill_files: list[skillcov.SkillFile] | None = None, **kw: Any
     ) -> None:
         super().__init__(**kw)
         self.case = case
@@ -342,7 +344,7 @@ class EvalItem(pytest.Item):
             table=settings.price_table(),
             skill=self.case.skill,
             skill_files=self.skill_files,
-            case=pipeline.case_record(self.case, self.suite),
+            case=CaseRef.of(self.case, self.suite),
         )
         session_dir = pipeline.capture(result, self.results_dir / result.session_id)
 

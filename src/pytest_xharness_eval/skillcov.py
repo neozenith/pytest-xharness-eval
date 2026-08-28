@@ -9,33 +9,38 @@ the catalogue and what was touched is the run's ``not_loaded`` and ``not_run``
 sets: the decision paths the agent never took.
 
 Files that are part of the directory but not of the skill's decision surface
-(example galleries, lockfiles, the skill's own unit tests) are excluded with
-gitignore-style patterns from the project's ``xharness_skill_ignore`` ini key
-(ADR 0026). Each line is either a bare pattern, which applies to every skill, or
-``<skill>: <pattern>``, which applies to the skills whose name matches the
-``fnmatch`` selector before the colon, in the way pytest's own ``markers`` lines
-pair a name with its text. Ignored files are counted, never silently dropped.
+(example galleries, lockfiles, the skill's own unit tests) are excluded by the project's
+``xharness_skill_ignore`` ini key, whose patterns are
+:mod:`~pytest_xharness_eval.ignorerules`' business (ADR 0026). Ignored files are counted
+here, never silently dropped.
 
 Detection is textual and deliberately simple: a tool call touches a file when the
 call's arguments contain ``<skill>/<relative path>``. That form is what both
 harnesses see, whether the skill is mounted through ``--add-dir`` (Claude) or
 copied under ``$CODEX_HOME/skills`` (Codex). A ``Skill`` tool invocation of the
 skill counts as loading ``SKILL.md``.
+
+The vocabulary of the answer is typed here — :class:`SkillFile` is one catalogued file,
+:class:`FileCoverage` is that file plus the turns that touched it, and
+:class:`SkillCoverage` derives the missed sets and the summary from those rows in one
+place (ADR 0035). Their field names are the ``skill_coverage`` keys of ``result.json``.
 """
 
 from __future__ import annotations
 
 # Standard Library
-import fnmatch
 import hashlib
 import json
 import posixpath
 import re
+from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 # Our Libraries
 from pytest_xharness_eval import harness
+from pytest_xharness_eval.ignorerules import IgnoreRules
 
 if TYPE_CHECKING:
     # Our Libraries
@@ -51,127 +56,181 @@ _RUNNERS = r"(?:bun|bunx|uv|uvx|python3?|node|bash|sh|zsh|deno|npx)(?:\s+\S+)*?\
 _TEST_NAMES = re.compile(r"^(test_.*\.py|.*_test\.py|conftest\.py|.*\.test\.[cm]?[jt]s)$")
 
 
-# -- ignore patterns (gitignore-style subset) -------------------------------------
+# -- the coverage vocabulary -------------------------------------------------------
 
 
-def _expand_braces(pattern: str) -> list[str]:
-    """``scripts/{Makefile,CLAUDE.md}`` -> two patterns; nested braces are not supported."""
-    m = re.search(r"\{([^{}]*)\}", pattern)
-    if not m:
-        return [pattern]
-    head, tail = pattern[: m.start()], pattern[m.end() :]
-    out: list[str] = []
-    for alt in m.group(1).split(","):
-        out.extend(_expand_braces(head + alt + tail))
-    return out
+class FileKind(StrEnum):
+    """What a catalogued file is, decided from its path alone (ADR 0022).
 
-
-def _glob_to_regex(pattern: str) -> re.Pattern[str]:
-    """One gitignore-style pattern to a regex over ``/``-separated relative paths.
-
-    ``**`` spans directories, ``*`` and ``?`` stay inside one path segment, a
-    trailing ``/`` names a directory and everything under it, and a pattern with
-    no ``/`` (other than a trailing one) matches at any depth.
+    A ``str`` subclass, so it serialises as the bare word the wire format carries.
     """
-    directory = pattern.endswith("/")
-    body = pattern.rstrip("/")
-    anchored = "/" in body
-    body = body.lstrip("/")
-    out = ""
-    i = 0
-    while i < len(body):
-        ch = body[i]
-        if body.startswith("**/", i):
-            out += "(?:.*/)?"
-            i += 3
-        elif body.startswith("**", i):
-            out += ".*"
-            i += 2
-        elif ch == "*":
-            out += "[^/]*"
-            i += 1
-        elif ch == "?":
-            out += "[^/]"
-            i += 1
-        else:
-            out += re.escape(ch)
-            i += 1
-    prefix = "^" if anchored else "(?:^|.*/)"
-    suffix = "(?:/.*)?$" if directory else "$"
-    return re.compile(prefix + out + suffix)
+
+    DOC = "doc"
+    SCRIPT = "script"
+    #: The skill's own unit tests: catalogued, but never expected of an agent, so they are
+    #: excluded from the ``not_run`` set.
+    TEST = "test"
+    ASSET = "asset"
 
 
-def patterns_for(skill: str, lines: list[str]) -> list[str]:
-    """The patterns of ``xharness_skill_ignore`` that apply to ``skill``.
+class Access(StrEnum):
+    """The two ways a turn can touch a skill file, and the row field each records into."""
 
-    A line with no ``:`` applies to every skill. ``<selector>: <pattern>`` applies
-    when ``fnmatch(skill, selector)`` holds, so ``mermaidjs-diagrams: README.md``
-    names one skill and ``*-diagrams: README.md`` a family. Blank lines and ``#``
-    comments are dropped here; a line whose pattern is empty is an error, since a
-    selector with nothing after it ignores nothing and is almost certainly a typo.
+    LOADED = "loaded"
+    RUN = "run"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SkillFile:
+    """One file of the skill's tree, catalogued before a sweep starts (ADR 0022).
+
+    Taken once, at collection, so every cell of a sweep is measured against the same
+    inventory; ``sha256`` is what makes that claim checkable after the fact.
     """
-    out: list[str] = []
-    for raw in lines:
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        selector, sep, pattern = line.partition(":")
-        if not sep:
-            out.append(line)
-            continue
-        selector, pattern = selector.strip(), pattern.strip()
-        if not selector or not pattern:
-            raise ValueError(f"xharness_skill_ignore: expected '<skill>: <pattern>' or '<pattern>', got {line!r}")
-        if fnmatch.fnmatchcase(skill, selector):
-            out.append(pattern)
-    return out
+
+    path: str
+    kind: FileKind
+    bytes: int
+    sha256: str
+    ignored: bool = False
 
 
-def compile_ignore(patterns: list[str]) -> list[re.Pattern[str]]:
-    """Blank lines and ``#`` comments are dropped; braces expand; the rest become regexes."""
-    out: list[re.Pattern[str]] = []
-    for raw in patterns:
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        out.extend(_glob_to_regex(p) for p in _expand_braces(line))
-    return out
+@dataclass(slots=True)
+class FileCoverage:
+    """A catalogued file and the turns that loaded or ran it.
+
+    The extra two fields are the whole difference between the catalogue and the answer,
+    which is why this widens :class:`SkillFile` rather than nesting it: the wire format
+    is one flat row per file.
+    """
+
+    path: str
+    kind: FileKind
+    bytes: int
+    sha256: str
+    ignored: bool
+    loaded: list[int] = field(default_factory=list)
+    run: list[int] = field(default_factory=list)
+
+    @classmethod
+    def of(cls, catalogued: SkillFile) -> Self:
+        """An untouched row for a catalogued file."""
+        return cls(
+            path=catalogued.path,
+            kind=catalogued.kind,
+            bytes=catalogued.bytes,
+            sha256=catalogued.sha256,
+            ignored=catalogued.ignored,
+        )
+
+    @property
+    def touched(self) -> bool:
+        """True when any turn loaded or ran this file."""
+        return bool(self.loaded or self.run)
+
+    def touch(self, access: Access, turn: int) -> None:
+        """Record that ``turn`` loaded or ran this file; a turn counts once per access."""
+        turns = self.run if access is Access.RUN else self.loaded
+        if turn not in turns:
+            turns.append(turn)
 
 
-def is_ignored(rel: str, rules: list[re.Pattern[str]]) -> bool:
-    """True when any rule matches the path or one of its parent directories."""
-    return any(r.search(rel) for r in rules)
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CoverageSummary:
+    """The counts and denominators the metrics record and the report row read.
+
+    Ignored files are counted in ``ignored`` and in nothing else: they are not decision
+    surface, so they must not move a coverage percentage (ADR 0026).
+    """
+
+    files: int
+    ignored: int
+    docs: int
+    scripts: int
+    tests: int
+    assets: int
+    loaded: int
+    run: int
+
+    @classmethod
+    def over(cls, rows: list[FileCoverage]) -> Self:
+        """Count ``rows``, splitting the ignored ones out of every figure but their own."""
+        live = [r for r in rows if not r.ignored]
+        return cls(
+            files=len(live),
+            ignored=len(rows) - len(live),
+            docs=sum(r.kind is FileKind.DOC for r in live),
+            scripts=sum(r.kind is FileKind.SCRIPT for r in live),
+            tests=sum(r.kind is FileKind.TEST for r in live),
+            assets=sum(r.kind is FileKind.ASSET for r in live),
+            loaded=sum(r.touched for r in live),
+            run=sum(bool(r.run) for r in live),
+        )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SkillCoverage:
+    """Which of a skill's files a run loaded or ran, and which it never touched (ADR 0022).
+
+    The four path sets and the summary are all derived from the annotated rows by
+    :meth:`over`, so they cannot disagree with each other or with ``files``.
+    """
+
+    skill: str
+    files: list[FileCoverage]
+    loaded: list[str]
+    run: list[str]
+    not_loaded: list[str]
+    not_run: list[str]
+    summary: CoverageSummary
+
+    @classmethod
+    def over(cls, skill: str, rows: list[FileCoverage]) -> Self:
+        """Derive the sets and the summary from rows a run has already been annotated onto.
+
+        Ignored files stay in ``files`` -- a run may well touch them, and hiding that would
+        make the rules unauditable -- but count toward neither the missed sets nor the
+        summary's denominators.
+        """
+        live = [r for r in rows if not r.ignored]
+        scripts = [r.path for r in live if r.kind is FileKind.SCRIPT]
+        run = [r.path for r in live if r.run]
+        return cls(
+            skill=skill,
+            files=rows,
+            loaded=[r.path for r in live if r.touched],
+            run=run,
+            not_loaded=[r.path for r in live if not r.touched],
+            not_run=[p for p in scripts if p not in run],
+            summary=CoverageSummary.over(rows),
+        )
 
 
 # -- catalogue -------------------------------------------------------------------
 
 
-def kind_of(rel: str) -> str:
-    """``doc``, ``script``, ``test`` or ``asset`` from the path alone.
-
-    Tests are the skill's own unit tests; an agent is not expected to run them, so
-    they are catalogued but excluded from the ``not_run`` set.
-    """
+def kind_of(rel: str) -> FileKind:
+    """The :class:`FileKind` of a relative path, from the path alone."""
     path = Path(rel)
     if _TEST_NAMES.match(path.name):
-        return "test"
+        return FileKind.TEST
     if path.suffix in SCRIPT_SUFFIXES or path.name == "Makefile":
-        return "script"
+        return FileKind.SCRIPT
     if path.suffix in DOC_SUFFIXES:
-        return "doc"
-    return "asset"
+        return FileKind.DOC
+    return FileKind.ASSET
 
 
-def catalog(skill_dir: Path, ignore: list[str] | None = None) -> list[dict[str, Any]]:
+def catalog(skill_dir: Path, ignore: list[str] | None = None) -> list[SkillFile]:
     """Every file of the skill, relative to its root, with kind, size, hash and ignored flag.
 
     ``ignore`` is the project's ``xharness_skill_ignore`` line list; the lines that
-    apply to this skill (by its directory name) are resolved with ``patterns_for``.
-    Ignored files stay in the list with ``ignored: True`` so a reader can see what
+    apply to this skill are selected by its directory name.
+    Ignored files stay in the list with ``ignored=True`` so a reader can see what
     the rules removed.
     """
-    rules = compile_ignore(patterns_for(skill_dir.name, list(ignore or [])))
-    out: list[dict[str, Any]] = []
+    rules = IgnoreRules.for_skill(skill_dir.name, list(ignore or []))
+    out: list[SkillFile] = []
     for path in sorted(skill_dir.rglob("*")):
         if not path.is_file():
             continue
@@ -181,13 +240,13 @@ def catalog(skill_dir: Path, ignore: list[str] | None = None) -> list[dict[str, 
         rel = "/".join(rel_parts)
         data = path.read_bytes()
         out.append(
-            {
-                "path": rel,
-                "kind": kind_of(rel),
-                "bytes": len(data),
-                "sha256": hashlib.sha256(data).hexdigest(),
-                "ignored": is_ignored(rel, rules),
-            }
+            SkillFile(
+                path=rel,
+                kind=kind_of(rel),
+                bytes=len(data),
+                sha256=hashlib.sha256(data).hexdigest(),
+                ignored=rules.matches(rel),
+            )
         )
     return out
 
@@ -289,31 +348,31 @@ def _command_of(arguments: Any) -> tuple[str, str | None]:
     return str(arguments or ""), None
 
 
-def _access(tool: str, text: str, skill: str, entry: dict[str, Any], shell_tools: frozenset[str]) -> str | None:
-    """``run``, ``loaded`` or None for one tool call against one catalogued file."""
-    needle = f"{skill}/{entry['path']}"
-    if tool == "Skill" and entry["path"] == "SKILL.md" and skill in text:
-        return "loaded"
+def _access(tool: str, text: str, skill: str, entry: FileCoverage, shell_tools: frozenset[str]) -> Access | None:
+    """How one tool call touched one catalogued file, or None if it did not."""
+    needle = f"{skill}/{entry.path}"
+    if tool == "Skill" and entry.path == "SKILL.md" and skill in text:
+        return Access.LOADED
     if needle not in text:
         return None
-    if entry["kind"] == "script" and tool in shell_tools:
+    if entry.kind is FileKind.SCRIPT and tool in shell_tools:
         pattern = _RUNNERS + r"\S*" + re.escape(needle)
         if re.search(pattern, text) or re.search(r"(?:^|[\s;&|(])\./?\S*" + re.escape(needle) + r"(?:\s|$)", text):
-            return "run"
-    return "loaded"
+            return Access.RUN
+    return Access.LOADED
 
 
-def annotate(skill: str, files: list[dict[str, Any]], result: RunResult) -> dict[str, Any]:
-    """Per-file turns that loaded or ran it, plus the not-loaded / not-run sets.
+def annotate(skill: str, files: list[SkillFile], result: RunResult) -> SkillCoverage:
+    """Walk a run's ledger and record, per catalogued file, the turns that loaded or ran it.
 
-    Ignored files are still annotated (a run may well touch them) but never count
-    toward the missed sets or the summary's denominators.
+    Ignored files are still annotated (a run may well touch them); what that means for the
+    missed sets and the summary is :meth:`SkillCoverage.over`'s to decide, not this walk's.
     """
     # Which tool names mean "ran a shell command", and which of those keep their cwd, is a
     # property of the harness that produced this run -- not a union of every provider's names
     # (ADR 0027, ADR 0034).
     agent = harness.get(result.harness)
-    rows = [{**f, "ignored": bool(f.get("ignored")), "loaded": [], "run": []} for f in files]
+    rows = [FileCoverage.of(f) for f in files]
     # The persistent shell's working directory, per result: it starts in the workspace
     # and follows every ``cd`` of a persistent shell tool until the harness resets it.
     cwd: str | None = str(result.workspace) if result.workspace else None
@@ -329,31 +388,10 @@ def annotate(skill: str, files: list[dict[str, Any]], result: RunResult) -> dict
                 text = f"{text}\n{resolved}"
             for row in rows:
                 access = _access(tool.name, text, skill, row, agent.shell_tools)
-                if access and call.n not in row[access]:
-                    row[access].append(call.n)
+                if access is not None:
+                    row.touch(access, call.n)
         for res in call.results_in:
             m = _CWD_RESET.search(res.content or "")
             if m:
                 cwd = m.group(1)
-    live = [r for r in rows if not r["ignored"]]
-    scripts = [r["path"] for r in live if r["kind"] == "script"]
-    loaded = [r["path"] for r in live if r["loaded"] or r["run"]]
-    run = [r["path"] for r in live if r["run"]]
-    return {
-        "skill": skill,
-        "files": rows,
-        "loaded": loaded,
-        "run": run,
-        "not_loaded": [r["path"] for r in live if not (r["loaded"] or r["run"])],
-        "not_run": [p for p in scripts if p not in run],
-        "summary": {
-            "files": len(live),
-            "ignored": len(rows) - len(live),
-            "docs": sum(r["kind"] == "doc" for r in live),
-            "scripts": len(scripts),
-            "tests": sum(r["kind"] == "test" for r in live),
-            "assets": sum(r["kind"] == "asset" for r in live),
-            "loaded": len(loaded),
-            "run": len(run),
-        },
-    }
+    return SkillCoverage.over(skill, rows)

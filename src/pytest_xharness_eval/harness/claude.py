@@ -34,11 +34,9 @@ from pytest_xharness_eval.harness.base import (
 )
 from pytest_xharness_eval.normalise import (
     Numbered,
-    attach_subagents,
     join_text,
     ms_between,
     read_jsonl_numbered,
-    sum_usage,
     summarise,
     text_of,
 )
@@ -261,50 +259,62 @@ def _context_window(envelope: dict[str, Any], model: str) -> int | None:
     return None
 
 
-def from_claude(log: Path, envelope: dict[str, Any], workspace: Path, files_written: list[str]) -> RunResult:
-    """Normalise a Claude session log plus its stdout result envelope."""
-    records = read_jsonl_numbered(log)
-    calls, tools = ledger_of(records)
+class ClaudeSessionLog(SessionLog):
+    """A Claude session log and the stdout envelope that completes it.
 
-    model = ""
-    for _, rec in records:
-        msg = rec.get("message") or {}
-        if rec.get("type") == "assistant" and not record_kinds.is_synthetic(msg):
-            model = str(msg.get("model") or model)
+    The envelope is not an optional extra: the session id, ``total_cost_usd`` and the
+    aggregate usage appear nowhere in the log, so a log without one cannot be folded.
+    Holding it here is what lets :meth:`to_result` share a signature with every other
+    dialect.
+    """
 
-    env_usage = envelope.get("usage") or {}
-    reported = {k: int(v) for k, v in env_usage.items() if isinstance(v, int | float) and not isinstance(v, bool)}
-    num_turns = envelope.get("num_turns")
-    model_id = model or str(envelope.get("model") or "")
-    ttft = envelope.get("ttft_ms")
-    api_ms = envelope.get("duration_api_ms")
+    def __init__(self, path: Path, envelope: dict[str, Any]) -> None:
+        super().__init__(path)
+        self.envelope = envelope
 
-    result = RunResult(
-        harness="claude",
-        model=model or str(envelope.get("model") or ""),
-        session_id=str(envelope.get("session_id") or ""),
-        session_log=str(log),
-        workspace=str(workspace),
-        exit_code=1 if envelope.get("is_error") else 0,
-        duration_ms=int(envelope.get("duration_ms") or 0),
-        turns=len(calls),
-        final_text=str(envelope.get("result") or ""),
-        usage=sum_usage(calls),
-        tool_calls=tools,
-        files_written=files_written,
-        harness_reported_cost_usd=envelope.get("total_cost_usd"),
-        calls=calls,
-        reported_usage=reported,
-        reported_turns=int(num_turns) if num_turns is not None else None,
-        reported_model_usage=dict(envelope.get("modelUsage") or {}),
-        envelope={k: v for k, v in envelope.items() if k != "result"},
-        record_kinds=CLAUDE.census([rec for _, rec in records]),
-        context_window=_context_window(envelope, model_id),
-        ttft_ms=int(ttft) if isinstance(ttft, int | float) else None,
-        api_duration_ms=int(api_ms) if isinstance(api_ms, int | float) else None,
-    )
-    spawns = {tool.id: call.n for call in calls for tool in call.tools if tool.id}
-    return attach_subagents(result, subagents_of(log, spawns))
+    def to_result(self, workspace: Path, files_written: list[str]) -> RunResult:
+        """Fold this log and its envelope into a run: one :class:`Call` per ``message.id``."""
+        envelope = self.envelope
+        records = read_jsonl_numbered(self.path)
+        calls, tools = ledger_of(records)
+
+        model = ""
+        for _, rec in records:
+            msg = rec.get("message") or {}
+            if rec.get("type") == "assistant" and not record_kinds.is_synthetic(msg):
+                model = str(msg.get("model") or model)
+
+        env_usage = envelope.get("usage") or {}
+        reported = {k: int(v) for k, v in env_usage.items() if isinstance(v, int | float) and not isinstance(v, bool)}
+        num_turns = envelope.get("num_turns")
+        model_id = model or str(envelope.get("model") or "")
+        ttft = envelope.get("ttft_ms")
+        api_ms = envelope.get("duration_api_ms")
+        spawns = {tool.id: call.n for call in calls for tool in call.tools if tool.id}
+
+        return RunResult.folded(
+            calls,
+            subagents_of(self.path, spawns),
+            harness="claude",
+            model=model_id,
+            session_id=str(envelope.get("session_id") or ""),
+            session_log=str(self.path),
+            workspace=str(workspace),
+            exit_code=1 if envelope.get("is_error") else 0,
+            duration_ms=int(envelope.get("duration_ms") or 0),
+            final_text=str(envelope.get("result") or ""),
+            tool_calls=tools,
+            files_written=files_written,
+            harness_reported_cost_usd=envelope.get("total_cost_usd"),
+            reported_usage=reported,
+            reported_turns=int(num_turns) if num_turns is not None else None,
+            reported_model_usage=dict(envelope.get("modelUsage") or {}),
+            envelope={k: v for k, v in envelope.items() if k != "result"},
+            record_kinds=CLAUDE.census([rec for _, rec in records]),
+            context_window=_context_window(envelope, model_id),
+            ttft_ms=int(ttft) if isinstance(ttft, int | float) else None,
+            api_duration_ms=int(api_ms) if isinstance(api_ms, int | float) else None,
+        )
 
 
 def subagents_of(log: Path, spawns: dict[str, int]) -> list[Subagent]:
@@ -315,7 +325,7 @@ def subagents_of(log: Path, spawns: dict[str, int]) -> list[Subagent]:
     description, and the ``toolUseId`` of the Agent tool call that spawned it. Captured
     layout: the same pairs under ``<session dir>/subagents/``. ``spawns`` maps tool-use
     id -> the primary turn that issued it; the transcripts are the same record dialect
-    as the session log, so :func:`claude_ledger` folds them unchanged.
+    as the session log, so :func:`ledger_of` folds them unchanged.
     """
     directory = next(
         (d for d in (log.parent / "subagents", log.with_suffix("") / "subagents") if d.is_dir()),
@@ -336,15 +346,13 @@ def subagents_of(log: Path, spawns: dict[str, int]) -> list[Subagent]:
         calls, _tools = ledger_of(records)
         agent_id = str((records[0][1].get("agentId") if records else "") or transcript.stem.removeprefix("agent-"))
         subs.append(
-            Subagent(
+            Subagent.folded(
+                calls,
                 agent=str(meta.get("agentType") or "subagent"),
                 id=agent_id,
                 log=str(transcript),
                 parent_turn=spawns.get(str(meta.get("toolUseId") or "")),
-                turns=len(calls),
                 description=str(meta.get("description") or ""),
-                usage=sum_usage(calls),
-                calls=calls,
             )
         )
     return subs
@@ -380,23 +388,6 @@ def _classify(rec: dict[str, Any]) -> str:
 
 
 # -- the harness -----------------------------------------------------------------------
-
-
-class ClaudeSessionLog(SessionLog):
-    """A Claude session log and the stdout envelope that completes it.
-
-    The envelope is not an optional extra: the session id, ``total_cost_usd`` and the
-    aggregate usage appear nowhere in the log, so a log without one cannot be folded.
-    Holding it here is what lets :meth:`to_result` share a signature with every other
-    dialect.
-    """
-
-    def __init__(self, path: Path, envelope: dict[str, Any]) -> None:
-        super().__init__(path)
-        self.envelope = envelope
-
-    def to_result(self, workspace: Path, files_written: list[str]) -> RunResult:
-        return from_claude(self.path, self.envelope, workspace, files_written)
 
 
 class ClaudeHarness(Harness):
