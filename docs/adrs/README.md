@@ -46,4 +46,5 @@ record ends in a **Lens**: the reusable rule it leaves behind.
 | [0032](0032-all-run-output-consolidates-under-a-cache-dir.md) | All run output consolidates under `.xharness_eval_cache/`, and the report is one combine step | accepted, refines 0014, 0018 and 0020; supersedes 0018's captured/ location, 0020's per-directory report and `xharness_workdir` |
 | [0033](0033-subagent-transcripts-are-captured-and-billed.md) | Subagent transcripts are captured evidence, and their tokens are billed | accepted, refines 0019, 0021 and 0032; the fold moved into 0035's constructor |
 | [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) | A harness is a class, the registry is the only dispatch, and the layers are named | accepted, refines 0002, 0014, 0015 and 0023; structural only |
-| [0035](0035-the-nouns-carry-their-own-invariants.md) | The nouns carry their own invariants | accepted, refines 0003, 0019, 0021, 0022, 0025 and 0033; structural only |
+| [0035](0035-the-nouns-carry-their-own-invariants.md) | The nouns carry their own invariants | accepted, refines 0003, 0019, 0021, 0022, 0025 and 0033; structural only; the folding constructors' keywords are typed by 0036 |
+| [0036](0036-a-folding-constructor-declares-its-keyword-fields.md) | A folding constructor declares its keyword fields | accepted, refines 0003 and 0035; structural only |

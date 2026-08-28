@@ -1,0 +1,77 @@
+# 0036: A folding constructor declares its keyword fields
+
+Status: accepted, 2026-08-28. Refines
+[0035](0035-the-nouns-carry-their-own-invariants.md) (the nouns carry their own
+invariants) and [0003](0003-runresult-is-a-stdlib-dataclass.md) (RunResult is a
+stdlib dataclass). Structural only: no serialised key and no metric's value
+changes.
+
+## Context
+
+0035 replaced two per-adapter constructions of `RunResult` with one folding
+constructor, so that the run's whole bill is summed exactly once. It spelled the
+remaining dialect fields `**fields: Any`, and that spelling gave back more than
+the fold won. `Any` erases the keyword names and their types, so at the only two
+construction sites in the codebase the type checker stopped seeing the fields it
+had been checking:
+
+| Written at an adapter | Before 0035 (`RunResult(...)`) | After 0035 (`**fields: Any`) |
+| --- | --- | --- |
+| `harnes="claude"` | `Unexpected keyword argument` | accepted |
+| `model=123` | `incompatible type "int"` | accepted |
+| omitting `duration_ms` | `Missing named argument` | accepted |
+
+All three verified against this repository's pinned mypy under `--strict`. The
+regression sat at exactly the seam 0035 existed to harden, and it made "build one
+with `folded`" a rule held by a docstring — the prose enforcement that ADR set
+out to end — because nothing distinguished a correct call from a wrong one.
+
+The keyword caravan also hid a second thing. `RunResult` has four groups of
+fields with four different owners, and `**fields: Any` let a harness adapter
+reach all of them: it could have set `estimated_cost_usd` without the rates that
+justify it, bypassing `apply_cost`, or written `skill_coverage` before the run
+was graded.
+
+## Decision
+
+**The keyword fields are a TypedDict, unpacked.** `RunResultFields` and
+`SubagentFields` declare, key by key with its exact type, what a harness adapter
+supplies; `folded` takes `**fields: Unpack[RunResultFields]` (PEP 692, stdlib
+since 3.12, and this package targets 3.12). Required keys are the dataclass
+fields that have no default, so a missing one is a type error too. Unpacking the
+TypedDict into the dataclass call is what checks each key's *type* against the
+field it lands on: the two declarations cannot disagree without failing the gate.
+
+**A field's owner is visible in what the TypedDict omits.** Four groups
+partition `RunResult`, and only the last is reachable through the constructor:
+
+| Group | Owner | Fields |
+| --- | --- | --- |
+| derived | `RunResult.folded` | `turns`, `usage`, `calls`, `subagents` |
+| priced | `RunResult.apply_cost` (0021) | `estimated_cost_usd`, `cost_status`, `cost_by_tier`, `rates_applied` |
+| attached | `pipeline.derive` after grading (0022, 0025) | `case`, `skill_coverage` |
+| supplied | the harness adapter, via `RunResultFields` | everything else |
+
+`tests/test_units.py` asserts those four groups tile the dataclass exactly. That
+is the one drift a type checker cannot see: a *new* field would be silently
+unreachable through `folded` rather than an error, and a stale key would fail
+first at a paid call site.
+
+## Consequences
+
+Both adapters are unchanged — the calls they already wrote type-check as they
+are — and so is every serialised key. The characterization goldens are
+byte-identical, which is the evidence that this is a declaration and not a
+change.
+
+`__required_keys__` is not the checker's view at runtime: this package uses
+`from __future__ import annotations`, so `NotRequired` is never unwrapped and
+every key reports as required. The partition test unions required with optional
+and says why, so the caveat is recorded where someone would otherwise "fix" it.
+
+## Lens
+
+`**kwargs: Any` on a constructor is a hole in the type system shaped exactly like
+the constructor it is meant to protect. Declare the keywords as a TypedDict and
+unpack them; then the set of fields a caller may set — and, by omission, the ones
+that belong to another owner — is checked rather than described.

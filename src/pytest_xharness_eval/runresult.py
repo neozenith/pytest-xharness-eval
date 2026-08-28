@@ -2,9 +2,12 @@
 
 The types here carry their own invariants rather than restating them in prose (ADR 0035):
 :class:`Usage` is frozen and accumulates only by producing a new total, so "usage is the
-whole bill" is enforced by :meth:`RunResult.folded` computing it once; a price estimate
-lands through :meth:`RunResult.apply_cost` as one indivisible block; and the case that
-produced a run and the skill files it touched are typed records, not free-form mappings.
+whole bill" is enforced by :meth:`RunResult.folded` computing it once — and that
+constructor names the fields a caller may set, as a TypedDict it unpacks, so the fields
+belonging to another owner are unreachable through it rather than merely unmentioned
+(ADR 0036). A price estimate lands through :meth:`RunResult.apply_cost` as one
+indivisible block; and the case that produced a run and the skill files it touched are
+typed records, not free-form mappings.
 
 ``to_dict`` stays ``asdict(self)`` plus derived keys. That is the serialisation contract:
 every field name below is a key of ``result.json``, which ``report-ui/src/lib/types.ts``
@@ -17,7 +20,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, NotRequired, Self, TypedDict, Unpack
 
 if TYPE_CHECKING:
     # Standard Library
@@ -146,6 +149,23 @@ class Call:
         return round(self.usage.output_tokens / (self.latency_ms / 1000), 2)
 
 
+class SubagentFields(TypedDict):
+    """The identity a spawned thread's metadata supplies; the ledger derives the rest.
+
+    Every key is a :class:`Subagent` field, with the same type, and the keys this
+    declares are exactly the ones :meth:`Subagent.folded` does *not* derive —
+    ``tests/test_units.py`` asserts that partition, so the two cannot drift. Unpacked
+    into ``folded``'s ``**fields`` (PEP 692) so that misnaming or mistyping one is a
+    type error at the adapter, not a ``TypeError`` during a paid run (ADR 0036).
+    """
+
+    agent: str
+    id: str
+    log: str
+    parent_turn: NotRequired[int | None]
+    description: NotRequired[str]
+
+
 @dataclass(slots=True)
 class Subagent:
     """One parallel thread the primary session spawned, with its own captured transcript.
@@ -169,11 +189,11 @@ class Subagent:
     calls: list[Call] = field(default_factory=list)
 
     @classmethod
-    def folded(cls, calls: list[Call], **fields: Any) -> Self:
+    def folded(cls, calls: list[Call], **fields: Unpack[SubagentFields]) -> Self:
         """A subagent whose ``turns`` and ``usage`` are derived from its own ledger.
 
-        ``fields`` are the identity ones the transcript's metadata supplies (``agent``,
-        ``id``, ``log``, ``parent_turn``, ``description``).
+        ``fields`` is :class:`SubagentFields`: the identity the transcript's metadata
+        supplies, checked field by field by the type checker.
         """
         return cls(turns=len(calls), usage=Usage.total(c.usage for c in calls), calls=calls, **fields)
 
@@ -223,12 +243,50 @@ class CaseRef:
         )
 
 
+class RunResultFields(TypedDict):
+    """What a harness adapter observed in its own dialect, and nothing else (ADR 0036).
+
+    These are the supplied fields of :class:`RunResult`. The three other groups have
+    their own owners and are absent here on purpose, so a dialect cannot reach them
+    through the constructor: :meth:`RunResult.folded` derives ``turns``, ``usage``,
+    ``calls`` and ``subagents`` from the ledgers, :meth:`RunResult.apply_cost` writes the
+    four cost fields together, and the derivation pipeline attaches ``case`` and
+    ``skill_coverage`` once the run is graded.
+
+    Every key is a :class:`RunResult` field with the same type; the required ones are the
+    fields that have no default. ``tests/test_units.py`` asserts that the four groups
+    partition the dataclass exactly, so this declaration cannot drift from it. Unpacked
+    into ``folded``'s ``**fields`` (PEP 692), which is what makes a misspelled or
+    mistyped field a type error at the adapter rather than a ``TypeError`` mid-run.
+    """
+
+    harness: str
+    model: str
+    session_id: str
+    session_log: str
+    workspace: str
+    exit_code: int
+    duration_ms: int
+    final_text: str
+    tool_calls: NotRequired[dict[str, int]]
+    files_written: NotRequired[list[str]]
+    harness_reported_cost_usd: NotRequired[float | None]
+    reported_usage: NotRequired[dict[str, int]]
+    reported_turns: NotRequired[int | None]
+    reported_model_usage: NotRequired[dict[str, Any]]
+    envelope: NotRequired[dict[str, Any]]
+    record_kinds: NotRequired[dict[str, int]]
+    context_window: NotRequired[int | None]
+    ttft_ms: NotRequired[int | None]
+    api_duration_ms: NotRequired[int | None]
+
+
 @dataclass
 class RunResult:
     """One eval cell's outcome: what the agent did, cost, and where the proof is.
 
-    Build one with :meth:`folded` rather than by hand: it is what makes ``usage`` the
-    run's whole bill and ``turns`` the primary ledger's length, derived once from the
+    A harness adapter builds one through :meth:`folded`, which is what makes ``usage``
+    the run's whole bill and ``turns`` the primary ledger's length, derived once from the
     same ledger rather than by each adapter (ADR 0035).
     """
 
@@ -278,13 +336,14 @@ class RunResult:
     subagents: list[Subagent] = field(default_factory=list)
 
     @classmethod
-    def folded(cls, calls: list[Call], subagents: Iterable[Subagent] = (), **fields: Any) -> Self:
+    def folded(cls, calls: list[Call], subagents: Iterable[Subagent] = (), **fields: Unpack[RunResultFields]) -> Self:
         """The one constructor a harness adapter uses once its ledgers are folded.
 
         ``turns`` is the primary ledger's length and ``usage`` is that ledger's sum plus
         every subagent's — the run's whole bill, computed here and nowhere else, so a
         second fold cannot bill the spawned threads twice (ADR 0033, ADR 0035).
-        ``fields`` are the remaining RunResult fields, which are the dialect's own.
+        ``fields`` is :class:`RunResultFields`: the dialect's own observations, every one
+        of them checked by name and type against the dataclass.
         """
         subs = sorted(subagents, key=lambda s: (s.parent_turn or 0, s.agent, s.id))
         return cls(

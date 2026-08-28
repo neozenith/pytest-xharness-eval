@@ -1,6 +1,7 @@
 """Unit tests for the pure modules: pricing, matrix, normalise, workspace, case, runresult."""
 
 # Standard Library
+import dataclasses
 import json
 import tomllib
 from collections.abc import Iterator
@@ -28,7 +29,7 @@ from pytest_xharness_eval import (
 from pytest_xharness_eval import harness as harnesses
 from pytest_xharness_eval import history, ignorerules
 from pytest_xharness_eval import matrix as mx
-from pytest_xharness_eval import pipeline, pricing, records, replay, report, settings, skillcov
+from pytest_xharness_eval import pipeline, pricing, records, replay, report, runresult, settings, skillcov
 from pytest_xharness_eval import workspace as ws
 from pytest_xharness_eval.harness import claude as claude_harness
 from pytest_xharness_eval.harness import codex as codex_harness
@@ -253,6 +254,43 @@ def test_baseline_comes_from_the_first_turn_of_the_ledger(tmp_path: Path) -> Non
     assert "context_tokens" not in data  # no headline context figure (ADR 0021)
     assert [c["context_tokens"] for c in data["calls"]] == [20_010, 25_010, 25_002]
     assert data["calls"][0]["usage"]["cache_read_tokens"] == 20_000 and data["calls"][0]["records"] == [1, 2]
+
+
+def _typed_dict_keys(td: Any) -> set[str]:
+    """Every key a TypedDict declares.
+
+    Required and optional are unioned rather than compared: this module's annotations are
+    strings (``from __future__ import annotations``), so at runtime ``NotRequired`` is not
+    unwrapped and every key reports as required. The type checker sees the real split.
+    """
+    return set(td.__required_keys__) | set(td.__optional_keys__)
+
+
+def test_each_runresult_field_has_exactly_one_owner() -> None:
+    """``folded``'s ``**fields`` is a TypedDict, so every field is checked by name (ADR 0035).
+
+    A field belongs to one owner: the fold derives it from the ledgers, ``apply_cost``
+    writes it with its provenance, the derivation pipeline attaches it after grading, or
+    the harness adapter observed it — and only that last group is reachable through
+    ``folded``. A key whose *type* drifts is already a static error, because ``folded``
+    unpacks the TypedDict into the dataclass; a field whose *name* drifts is not, so it
+    is asserted here: a new field would otherwise be silently unreachable, and a stale
+    key would fail first at a paid call site.
+    """
+    derived = {"turns", "usage", "calls", "subagents"}
+    priced = {"estimated_cost_usd", "cost_status", "cost_by_tier", "rates_applied"}
+    attached = {"case", "skill_coverage"}
+    supplied = _typed_dict_keys(runresult.RunResultFields)
+    assert not supplied & (derived | priced | attached)
+    assert supplied | derived | priced | attached == {f.name for f in dataclasses.fields(RunResult)}
+
+
+def test_each_subagent_field_is_derived_from_the_ledger_or_named_by_the_transcript() -> None:
+    """The same partition for a spawned thread: ``turns`` and ``usage`` are never supplied."""
+    derived = {"turns", "usage", "calls"}
+    supplied = _typed_dict_keys(runresult.SubagentFields)
+    assert not supplied & derived
+    assert supplied | derived == {f.name for f in dataclasses.fields(Subagent)}
 
 
 # -- workspace -----------------------------------------------------------------------

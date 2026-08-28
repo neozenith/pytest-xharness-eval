@@ -8,7 +8,9 @@ estimate), [0022](0022-record-kind-catalogue-and-skill-coverage.md) (skill
 coverage), [0025](0025-results-name-their-case-and-charts-have-a-log-line-axis.md)
 (a result names its case) and
 [0033](0033-subagent-transcripts-are-captured-and-billed.md) (subagents are
-billed). Structural only: no serialised key and no metric's value changes.
+billed). Structural only: no serialised key and no metric's value changes. The
+folding constructors' keyword fields are declared and type-checked by
+[0036](0036-a-folding-constructor-declares-its-keyword-fields.md).
 
 ## Context
 
