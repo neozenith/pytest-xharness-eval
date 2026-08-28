@@ -186,15 +186,17 @@ that proves nothing.
 | CostStatus | `priced` or `unpriced`, with no third state (ADR 0007); a `StrEnum`, so the wire format carries the same bare word it always has (ADR 0035) |
 | pipeline | The single sequence run over a `RunResult` by both a live cell and a replay: derive (price, coverage, case), capture (log, subagents, result), record metrics; `pipeline.py` (ADR 0034) |
 | settings | One resolved view of a project's configuration, built either from the live `pytest.Config` or, for a replay, from the pytest config on disk; `settings.py` (ADR 0034) |
-| captured | `evals/captured/<case>/`, where each run's log and `RunResult` are written; git-ignored |
-| history | `evals/captured/history.jsonl`, one flat metrics line per live cell (turns, tool calls, duration, wall clock, USD, tokens); git-ignored with the rest of `captured/` |
+| CacheLayout, SessionDir | The cache tree as a value object, and one session's evidence directory within it. `CacheLayout` owns `build/`, `results/`, `report/`, every file name under them and the five-level `sessions()` walk; `SessionDir` owns `log.jsonl`, `result.json`, `history.json` and `subagents/`, and the relative link the page fetches them by. `Settings.cache` is a `CacheLayout`, so nothing reassembles a path under the cache root (ADR 0032, ADR 0037) |
+| captured | `<cache>/results/{skill}/{harness}/{model}/{run}/{session}/`, where each run's log, `RunResult` and metrics record are written; git-ignored (ADR 0032) |
+| CellMetrics, Outcome | One graded cell's metrics record -- the `history.json` written beside its evidence and one line of the combined `report/history.jsonl` -- as a type: flat, built of builtins, and carrying `status_word()` and its own `cache` field. `Outcome` is the four values grading observed and no log can supply (node, verdict, wall clock, start), which a replay carries forward while recomputing everything else. The record crosses to the xdist controller as a plain mapping and is a type on both sides (ADR 0016, ADR 0018, ADR 0037) |
+| history | One `history.json` per session (turns, tool calls, duration, wall clock, USD, tokens), combined into `<cache>/report/history.jsonl`; git-ignored with the rest of the cache (ADR 0032) |
 | call, turn | One model API call inside a cell's session (a *SessionTurn* in the report); `RunResult.calls` is the ledger of them, each with its usage, tools issued, results fed in, text, thinking, and the log lines it came from (ADR 0019, 0021). `turns` counts them; the CLI's own count is `reported_turns` |
 | subagent | A parallel thread the session spawned (Claude's Agent tool sidecars under `subagents/`, Codex's forked rollouts), captured beside `log.jsonl` and folded through the same ledger; `RunResult.subagents` lists them, each attributed to the primary turn that spawned it (`parent_turn`), and their usage is inside the run's `usage` and estimate (ADR 0033) |
 | estimated cost | `estimated_cost_usd`: this plugin's price-table estimate; `rates_applied` records the rates, row and file behind it (ADR 0021) |
 | harness reported cost | `harness_reported_cost_usd`: what the harness CLI itself said the run cost; Claude only |
 | total tokens | Every priced token summed over all turns; the cached prefix counts once per turn |
 | baseline tokens | The first turn's context: the harness's own prompt before the agent acts |
-| report | `evals/captured/report.html` with `index.json` and `XHARNESS-REPORT-GLOSSARY.md` beside it: a static page over the captured JSON, served over HTTP (ADR 0020, 0021) |
+| report, IndexRow | `<cache>/report/`: `report.html` with `index.json`, `history.jsonl`, `report.tokens.json` and `XHARNESS-REPORT-GLOSSARY.md` beside it -- a static page over the captured JSON, served over HTTP (ADR 0020, 0021, 0032). `IndexRow` is one row of `index.json`: a session summarised from its stored `result.json` and metrics record, with its evidence addressed by relative path (ADR 0037) |
 | SessionId, SessionTurnId | How the report addresses a session (the harness-minted session id, a unique prefix accepted) and a turn (`<SessionId>/t<N>`); both copyable from the page and carried in its URL fragment |
 | record kind | The catalogued shape of one session-log line, `harness/type[/subtype]`, with a category that colours its pill in the report; each harness's `classify_record` names the kind, `records.py` is the catalogue, and `record_kinds` is the per-run census (ADR 0022, ADR 0034) |
 | skill coverage | Which of the skill's catalogued files a run loaded or ran, per turn, and the `not_loaded` / `not_run` sets; `skillcov.py` (ADR 0022). What the project's `xharness_skill_ignore` lines mean, and which files they take off the decision surface, is `ignorerules.py` (ADR 0026, ADR 0035) |
@@ -237,9 +239,9 @@ flowchart TB
     end
 
     subgraph kept["Kept after the run"]
-        CAP["captured/&lt;case&gt;/<br/>log and result, git-ignored"]:::out
-        HIST["captured/history.jsonl<br/>one metrics line per cell"]:::out
-        REP["report.json<br/>under the work directory"]:::out
+        CAP["SessionDir<br/>results/&lt;skill&gt;/…/&lt;session&gt;/, git-ignored"]:::out
+        HIST["CellMetrics<br/>one history.json per session"]:::out
+        REP["report/<br/>report.json and the combined microsite"]:::out
     end
 
     ROOT -->|"holds skill/evals/ trees"| SKILL
@@ -260,8 +262,8 @@ flowchart TB
     LOG -->|"copied to"| CAP
     SUB -->|"copied to subagents/ in"| CAP
     RR -->|"written to"| CAP
-    RR -->|"metrics appended to"| HIST
-    RR -->|"appended to"| REP
+    RR -->|"metrics recorded as"| HIST
+    RR -->|"summarised into"| REP
 
     classDef declare fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
     classDef cfg     fill:#93c5fd,stroke:#1e40af,color:#1e293b,stroke-width:1px

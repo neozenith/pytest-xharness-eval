@@ -48,10 +48,11 @@ All source lives under `src/pytest_xharness_eval/`.
 | A bundled model price | `prices.toml` only; a project overrides with `xharness_prices` ini lines, USD per MTok (ADR 0030) |
 | The plugin-default matrix or narrowing | `matrix.py`; the *known* harnesses are the registry, never a second list (ADR 0034) |
 | A plugin option, collection rule, or `report.json` | `plugin.py` (pytest hooks only) |
-| An ini key, or how a location is resolved for a sweep *and* a replay | `settings.py` (`Settings.from_config` / `from_cache`) (ADR 0034) |
+| An ini key, or how a location is resolved for a sweep *and* a replay | `settings.py` (`Settings.from_config` / `from_cache`); `Settings.cache` is the `CacheLayout`, never a bare path (ADR 0034, ADR 0037) |
 | What happens to a `RunResult` after the CLI returns (price, coverage, case, evidence, metrics) | `pipeline.py` -- one sequence, run by both the live cell and a replay (ADR 0034) |
-| The per-cell metrics record or the verbose status word | `history.py` |
-| `report/index.json` or the aggregated `report/history.jsonl` (the combine step, ADR 0032) | `report.py` |
+| The per-cell metrics record or the verbose status word | `metrics.py` (`CellMetrics`; its keys are a wire format, pinned in `tests/test_units.py`, ADR 0037) |
+| A directory or file name under the cache root, or the `{skill}/{harness}/{model}/{run}/{session}` shape | `layout.py` (`CacheLayout`, `SessionDir`) and nowhere else (ADR 0037) |
+| `report/index.json` or the aggregated `report/history.jsonl` (the combine step, ADR 0032) | `report.py` (`IndexRow`) |
 | The browsable `report/report.html` | `report-ui/src/` (the SPA, ADR 0028, ADR 0031: Tamagui base, Plotly charts), then `make ui-promote`; `assets/report.html` is the built artifact, never edited by hand |
 | A page component, its id or its data contract | `report-ui/src/components/` or `views/`, `report-ui/src/lib/types.ts` (mirrors the JSON `report.py` writes), then the glossary |
 | The report's colours, fonts or chart palette | `assets/report.tokens.json` (the bundled design tokens); a project overrides them with `xharness_report_design_tokens` |
@@ -71,7 +72,7 @@ consuming repository: `skills/<skill>/evals/eval_<suite>.py`, seed trees under
 session's evidence is `.xharness_eval_cache/results/{skill}/{harness}/{model}/{run}/{session}/`
 (`log.jsonl`, `result.json`, `history.json`, all git-ignored by the `.*_cache` convention),
 and the aggregated report is `.xharness_eval_cache/report/`. Per-cell metrics are built
-in `history.py`.
+in `metrics.py`.
 
 ## Hard boundaries
 
@@ -93,6 +94,11 @@ in `history.py`.
   unioning both providers' vocabularies). Reach a provider through `harness.get(name)`
   and put the difference on the class. A ruff `TID251` rule fails the build if anything
   outside `harness/` imports `harness.claude` or `harness.codex` by name (ADR 0034).
+- Never put a dataclass on `TestReport.user_properties`. execnet serialises builtins
+  only: the metrics record is `to_dict()`-ed at the `pytest_runtest_makereport` hook and
+  `from_dict()`-ed on the controller, and is a type everywhere else (ADR 0016, ADR 0037).
+- Never spell a cache path by hand (`cache / "results"`, `session_dir / "log.jsonl"`, a
+  `*/*/*/*/*` glob). Go through `CacheLayout` / `SessionDir` (ADR 0037).
 - Never edit an accepted ADR. Write a new one that supersedes it and update the index.
 
 ## Vocabulary
@@ -113,7 +119,7 @@ that table in the same change.
 | A plugin option or ini key | `README.md` tables and `tests/test_plugin.py` |
 | The default matrix | `README.md` Quickstart expected output, `tests/test_plugin.py` |
 | A decision recorded in an ADR | Write a new ADR that supersedes it; do not edit the old one |
-| A key `report.py` or `history.py` writes | `report-ui/src/lib/types.ts`, the glossary's metric table, and the `SessionTable` column definitions if it is shown |
+| A key `report.py` or `metrics.py` writes | `report-ui/src/lib/types.ts`, the glossary's metric table, the frozen key lists in `tests/test_units.py`, and the `SessionTable` column definitions if it is shown |
 | `report-ui/src/` | `make ui-check`, `make ui-test`; a `TIER=small` sweep while iterating, `TIER=medium` before shipping, `large` when the change ripples wide |
 | A route param in `report-ui/src/lib/route.ts` | `report-ui/src/lib/permutations.ts` in the same change, or the e2e matrix silently stops covering it |
 

@@ -39,12 +39,15 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 # Our Libraries
-from pytest_xharness_eval import harness, history
+from pytest_xharness_eval import harness
 from pytest_xharness_eval import matrix as mx
 from pytest_xharness_eval import pipeline, pricing, report, skillcov
 from pytest_xharness_eval import workspace as ws
 from pytest_xharness_eval.case import EvalCase
 from pytest_xharness_eval.ignorerules import IgnoreRules
+from pytest_xharness_eval.layout import CacheLayout
+from pytest_xharness_eval.metrics import CellMetrics, Outcome
+from pytest_xharness_eval.normalise import now_iso
 from pytest_xharness_eval.runresult import CaseRef
 from pytest_xharness_eval.settings import (
     INI_CACHE_DIR,
@@ -65,14 +68,17 @@ if TYPE_CHECKING:
     # Third Party
     from _pytest.terminal import TerminalReporter
 
+    # Our Libraries
+    from pytest_xharness_eval.layout import SessionDir
+
 
 # The user_properties key a cell's record travels under, worker to controller.
 PROPERTY = "xharness_eval"
 
 # One record per cell, keyed by node id, in the order their call reports arrived.
-RESULTS_KEY: pytest.StashKey[dict[str, dict[str, Any]]] = pytest.StashKey()
+RESULTS_KEY: pytest.StashKey[dict[str, CellMetrics]] = pytest.StashKey()
 # The record an EvalItem produced, attached to the item until its call report is made.
-RECORD_KEY: pytest.StashKey[dict[str, Any]] = pytest.StashKey()
+RECORD_KEY: pytest.StashKey[CellMetrics] = pytest.StashKey()
 
 
 # -- options -------------------------------------------------------------------
@@ -186,7 +192,7 @@ def pytest_report_header(config: pytest.Config) -> list[str]:
         f"{INI_MATRIX} ({len(project)} entries)" if project else f"plugin default ({len(mx.DEFAULT_MATRIX)} entries)"
     )
     return [
-        f"xharness-eval: skills root = {root}{state}, cache = {settings.cache_dir}",
+        f"xharness-eval: skills root = {root}{state}, cache = {settings.cache.root}",
         f"xharness-eval: matrix = {source}; a case's models= overrides it",
     ]
 
@@ -293,11 +299,15 @@ class EvalItem(pytest.Item):
         """``evals/fixtures/<name>/`` (ADR 0018)."""
         return self.evals_dir / "fixtures" / self.case.fixture
 
-    @property
-    def results_dir(self) -> Path:
-        """``<cache>/results/{skill}/{harness}/{model}/{run}/``: a per-session dir under it holds the evidence."""
-        root = _settings(self.config).results_root()
-        return root / self.case.skill / self.cell.harness / self.cell.model / _run_ts()
+    def session_dir(self, cache: CacheLayout, session_id: str) -> SessionDir:
+        """Where this cell's evidence goes: its five coordinates under ``<cache>/results/``."""
+        return cache.session(
+            skill=self.case.skill,
+            harness=self.cell.harness,
+            model=self.cell.model,
+            run=_run_ts(),
+            session=session_id,
+        )
 
     def runtest(self) -> None:
         skill_dir = _settings(self.config).skill_dir(self.case.skill)
@@ -307,13 +317,7 @@ class EvalItem(pytest.Item):
             raise harness.RunError(f"fixture directory not found: {self.fixture_dir}")
 
         if self.config.option.eval_dry_run:
-            self.stash[RECORD_KEY] = {
-                "node": self.node,
-                "harness": self.cell.harness,
-                "model": self.cell.model,
-                "verdict": "dry-run",
-                "estimated_cost_usd": None,
-            }
+            self.stash[RECORD_KEY] = CellMetrics.dry_run(node=self.node, cell=self.cell)
             pytest.skip(f"dry-run: would invoke {self.cell.id}")
 
         self._run_live(skill_dir)
@@ -329,9 +333,9 @@ class EvalItem(pytest.Item):
     def _run_live(self, skill_dir: Path) -> None:  # pragma: no cover - invokes a paid CLI (ADR 0002)
         cell_id = f"{self.case.name}-{self.cell.harness}-{self.cell.model}"
         settings = _settings(self.config)
-        workspace = ws.materialise(self.fixture_dir, cell_id, settings.cache_dir / "build")
+        workspace = ws.materialise(self.fixture_dir, cell_id, settings.cache.build)
 
-        started_at = history.now_iso()
+        started_at = now_iso()
         t0 = time.monotonic()
         result = harness.get(self.cell.harness).run(
             prompt=self.case.prompt, model=self.cell.model, workspace=workspace, skill_dir=skill_dir
@@ -346,7 +350,7 @@ class EvalItem(pytest.Item):
             skill_files=self.skill_files,
             case=CaseRef.of(self.case, self.suite),
         )
-        session_dir = pipeline.capture(result, self.results_dir / result.session_id)
+        session = pipeline.capture(result, self.session_dir(settings.cache, result.session_id))
 
         verdict = "pass"
         try:
@@ -360,12 +364,9 @@ class EvalItem(pytest.Item):
         finally:
             self.stash[RECORD_KEY] = pipeline.record_metrics(
                 result,
-                session_dir,
-                node=self.node,
-                verdict=verdict,
-                wall_ms=wall_ms,
-                started_at=started_at,
-                cache=settings.cache_dir,
+                session,
+                outcome=Outcome(node=self.node, verdict=verdict, wall_ms=wall_ms, started_at=started_at),
+                cache=settings.cache,
             )
 
     def repr_failure(self, excinfo: pytest.ExceptionInfo[BaseException]) -> str:  # type: ignore[override]
@@ -380,10 +381,16 @@ class EvalItem(pytest.Item):
 
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]) -> Generator[None, Any, Any]:
-    """Worker side: put the cell's record on its call report so it survives xdist and reaches JUnit."""
+    """Worker side: put the cell's record on its call report so it survives xdist and reaches JUnit.
+
+    This is the one place the typed record becomes a plain mapping. ``user_properties`` is
+    what pytest-xdist ships to the controller, and execnet serialises builtins only
+    (ADR 0016): a dataclass on that list would fail at runtime during a paid sweep, and
+    never at type-check time. :func:`_record_of` is the matching decode (ADR 0037).
+    """
     report = yield
     if call.when == "call" and isinstance(item, EvalItem) and RECORD_KEY in item.stash:
-        record = item.stash[RECORD_KEY]
+        record = item.stash[RECORD_KEY].to_dict()
         props: list[tuple[str, object]] = [(PROPERTY, record)]
         # Flat scalars as their own properties, so --junitxml carries the metrics history too.
         props.extend((f"xharness_{k}", v) for k, v in record.items() if isinstance(v, str | int | float))
@@ -394,10 +401,11 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]) ->
     return report
 
 
-def _record_of(report: pytest.TestReport) -> dict[str, Any] | None:
+def _record_of(report: pytest.TestReport) -> CellMetrics | None:
+    """Controller side: the cell record carried on a call report, decoded back into its type."""
     for name, value in report.user_properties:
         if name == PROPERTY and isinstance(value, dict):
-            return value
+            return CellMetrics.from_dict(value)
     return None
 
 
@@ -427,13 +435,13 @@ def pytest_report_teststatus(
     record = _record_of(report)
     if record is None:
         return None
-    if record["verdict"] == "dry-run":
+    if record.verdict == "dry-run":
         return ("skipped", "s", ("DRY-RUN", {"yellow": True}))
-    detail = history.status_word(record)
-    if record["verdict"] == "pass":
+    detail = record.status_word()
+    if record.verdict == "pass":
         return ("passed", ".", (f"PASSED  {detail}", {"green": True}))
-    letter = "F" if record["verdict"] == "fail" else "E"
-    return ("failed", letter, (f"{record['verdict'].upper()}  {detail}", {"red": True}))
+    letter = "F" if record.verdict == "fail" else "E"
+    return ("failed", letter, (f"{record.verdict.upper()}  {detail}", {"red": True}))
 
 
 # -- report: matrix x verdict x USD --------------------------------------------
@@ -445,22 +453,24 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: int,
     if not results:
         return
     tr = terminalreporter
-    total = sum(r.get("estimated_cost_usd") or 0.0 for r in results)
+    total = sum(r.estimated_cost_usd or 0.0 for r in results)
     tr.section("agent eval report")
     for r in results:
-        cost = f"${r['estimated_cost_usd']:.4f}" if r.get("estimated_cost_usd") is not None else "-"
-        tr.write_line(f"  {r['verdict']:<8} {cost:>9}  {r['node']}")
+        cost = f"${r.estimated_cost_usd:.4f}" if r.estimated_cost_usd is not None else "-"
+        tr.write_line(f"  {r.verdict:<8} {cost:>9}  {r.node}")
     tr.write_line(f"  total estimated spend: ${total:.4f} across {len(results)} cell(s)")
     settings = _settings(config)
-    report_path = settings.cache_dir / "report" / "report.json"
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps({"cells": results, "total_usd": round(total, 6)}, indent=2), encoding="utf-8")
-    tr.write_line(f"  report: {report_path}")
+    summary = {"cells": [r.to_dict() for r in results], "total_usd": round(total, 6)}
+    settings.cache.summary.parent.mkdir(parents=True, exist_ok=True)
+    settings.cache.summary.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    tr.write_line(f"  report: {settings.cache.summary}")
     # The one combine step (ADR 0032): aggregate everything under results/ - every skill,
-    # every run - into one browsable report, when this run wrote any evidence.
+    # every run - into one browsable report, when this run wrote any evidence. A dry run
+    # names no cache root, so it combines nothing.
     tokens, inline = settings.report_tokens, settings.report_inline
-    for cache in sorted({str(r["cache"]) for r in results if r.get("cache")}):
-        page = report.write(Path(cache), design_tokens=tokens, inline=inline)
+    for root in sorted({r.cache for r in results if r.cache}):
+        cache = CacheLayout(Path(root))
+        page = report.write(cache, design_tokens=tokens, inline=inline)
         tr.write_line(f"  aggregated report: {page}{' (inline, opens over file://)' if inline else ''}")
         if not inline:
-            tr.write_line(f"  serve it: {report.serve_hint(Path(cache))}")
+            tr.write_line(f"  serve it: {report.serve_hint(cache)}")

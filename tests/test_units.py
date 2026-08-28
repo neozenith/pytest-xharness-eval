@@ -27,12 +27,14 @@ from pytest_xharness_eval import (
     evalcase,
 )
 from pytest_xharness_eval import harness as harnesses
-from pytest_xharness_eval import history, ignorerules
+from pytest_xharness_eval import ignorerules
 from pytest_xharness_eval import matrix as mx
-from pytest_xharness_eval import pipeline, pricing, records, replay, report, runresult, settings, skillcov
+from pytest_xharness_eval import normalise, pipeline, pricing, records, replay, report, runresult, settings, skillcov
 from pytest_xharness_eval import workspace as ws
 from pytest_xharness_eval.harness import claude as claude_harness
 from pytest_xharness_eval.harness import codex as codex_harness
+from pytest_xharness_eval.layout import CacheLayout, SessionDir
+from pytest_xharness_eval.metrics import CellMetrics, Outcome
 from pytest_xharness_eval.runresult import Subagent
 
 # -- package surface ---------------------------------------------------------------
@@ -128,6 +130,23 @@ def _result(model: str, usage: Usage, harness: str = "claude") -> RunResult:
 def _applied_rates(model: str = "m", source: str = "/p/prices.toml") -> pricing.AppliedRates:
     """A provenance block for tests that need one without going through a price table."""
     return pricing.Rates(1e-6, 1e-6, 1e-6, 1e-6, 1e-6, model=model, source=source).applied("2026-08-22T00:00:00+00:00")
+
+
+def _metrics(
+    result: RunResult,
+    *,
+    node: str = "n",
+    verdict: str = "pass",
+    wall_ms: int = 1,
+    started_at: str = "t",
+    cache: str = "/c",
+) -> CellMetrics:
+    """The record one graded cell emits, with the grading observations defaulted."""
+    return CellMetrics.of(
+        result,
+        outcome=Outcome(node=node, verdict=verdict, wall_ms=wall_ms, started_at=started_at),
+        cache=CacheLayout(Path(cache)),
+    )
 
 
 def test_bundled_table_prices_each_tier_separately() -> None:
@@ -600,7 +619,7 @@ def test_case_metadata_round_trips_and_reaches_history(tmp_path: Path) -> None:
     )
     data = json.loads(r.write(tmp_path / "r.json").read_text(encoding="utf-8"))
     assert data["case"]["suite"] == "skills/demo/evals/eval_demo.py" and data["case"]["prompt"] == "say hi"
-    rec = history.metrics_of(r, node="n", verdict="pass", wall_ms=1, started_at="t")
+    rec = _metrics(r).to_dict()
     assert (rec["suite"], rec["case"], rec["skill"], rec["fixture"]) == (
         "skills/demo/evals/eval_demo.py",
         "eval_demo",
@@ -899,7 +918,8 @@ def test_metrics_record_is_flat_and_complete() -> None:
     r.tool_calls = {"Edit": 2, "Bash": 3}
     r.files_written = ["a", "b"]
     r.calls = [Call(n=1, at="t", usage=Usage(input_tokens=10, cache_read_tokens=30))]
-    rec = history.metrics_of(r, node="n[x/m]", verdict="pass", wall_ms=5000, started_at="2026-08-21T00:00:00+00:00")
+    cell = _metrics(r, node="n[x/m]", wall_ms=5000, started_at="2026-08-21T00:00:00+00:00")
+    rec = cell.to_dict()
     assert rec["tool_calls"] == 5 and rec["tool_calls_by_name"] == {"Edit": 2, "Bash": 3}
     assert (rec["turns"], rec["duration_ms"], rec["wall_ms"], rec["estimated_cost_usd"]) == (7, 4321, 5000, 0.5)
     # Names carry unit and source (ADR 0021); no bare "tokens", "cost_usd" or headline "context".
@@ -919,11 +939,10 @@ def test_metrics_record_is_flat_and_complete() -> None:
     }
     assert rec["files_written"] == 2
     assert (
-        history.status_word(rec)
-        == "est $0.5000  100 accumulative_billed_tokens  40 baseline_tokens  5.0s  7 turns  5 tools"
+        cell.status_word() == "est $0.5000  100 accumulative_billed_tokens  40 baseline_tokens  5.0s  7 turns  5 tools"
     )
-    rec["harness_reported_cost_usd"] = 0.6
-    assert history.status_word(rec).startswith("est $0.5000 (harness $0.6000)  100 accumulative_billed_tokens")
+    reported = dataclasses.replace(cell, harness_reported_cost_usd=0.6)
+    assert reported.status_word().startswith("est $0.5000 (harness $0.6000)  100 accumulative_billed_tokens")
 
 
 # -- records (ADR 0022) -----------------------------------------------------------------
@@ -1426,7 +1445,7 @@ class _ProbeHarness(harnesses.Harness):
     def run(self, **kwargs: object) -> RunResult:  # type: ignore[override]
         raise NotImplementedError("the probe harness never invokes anything")
 
-    def session_from_capture(self, session_dir: Path, stored: dict[str, Any]) -> Any:
+    def session_from_capture(self, session: SessionDir, stored: dict[str, Any]) -> Any:
         raise NotImplementedError("the probe harness has no dialect to replay")
 
     def classify_record(self, rec: dict[str, Any]) -> str:
@@ -1503,14 +1522,14 @@ def test_capture_writes_the_log_subagent_transcripts_and_the_result(tmp_path: Pa
         Subagent(agent="ghost", id="a2", log=str(native / "missing.jsonl"), turns=0, usage=Usage()),
     ]
 
-    session_dir = pipeline.capture(r, tmp_path / "results" / "sid-1")
+    session = pipeline.capture(r, SessionDir.at(tmp_path / "results" / "sid-1"))
 
-    assert (session_dir / "log.jsonl").read_text(encoding="utf-8") == '{"type": "user"}\n'
-    assert (session_dir / "subagents" / "agent-a1.jsonl").is_file()
-    assert (session_dir / "subagents" / "agent-a1.meta.json").is_file()
+    assert session.log.read_text(encoding="utf-8") == '{"type": "user"}\n'
+    assert (session.subagents / "agent-a1.jsonl").is_file()
+    assert (session.subagents / "agent-a1.meta.json").is_file()
     assert r.subagents[0].log == "subagents/agent-a1.jsonl"  # rewritten to the captured copy
     assert r.subagents[1].log == str(native / "missing.jsonl")  # untouched: nothing was copied
-    stored = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
+    stored = json.loads(session.result.read_text(encoding="utf-8"))
     assert stored["session_id"] == "sid-1"
 
 
@@ -1518,28 +1537,30 @@ def test_capture_of_a_run_without_subagents_writes_no_subagents_dir(tmp_path: Pa
     r = _result("m", Usage())
     (tmp_path / "s.jsonl").write_text("{}\n", encoding="utf-8")
     r.session_log = str(tmp_path / "s.jsonl")
-    session_dir = pipeline.capture(r, tmp_path / "out")
-    assert not (session_dir / "subagents").exists()
+    session = pipeline.capture(r, SessionDir.at(tmp_path / "out"))
+    assert not session.subagents.exists()
 
 
 def test_record_metrics_writes_the_cell_record_beside_its_evidence(tmp_path: Path) -> None:
     """The live cell and a replay build this record with the same call (ADR 0032, ADR 0034)."""
     r = _result("claude-opus-5", Usage(10, 20, 30, 40))
-    session_dir = tmp_path / "sid"
-    session_dir.mkdir()
+    session = SessionDir.at(tmp_path / "sid")
+    session.mkdir()
     record = pipeline.record_metrics(
         r,
-        session_dir,
-        node="skills/demo/evals/eval_x.py::eval_x[claude/claude-opus-5]",
-        verdict="pass",
-        wall_ms=1234,
-        started_at="2026-08-22T00:00:00+00:00",
-        cache=tmp_path / "cache",
+        session,
+        outcome=Outcome(
+            node="skills/demo/evals/eval_x.py::eval_x[claude/claude-opus-5]",
+            verdict="pass",
+            wall_ms=1234,
+            started_at="2026-08-22T00:00:00+00:00",
+        ),
+        cache=CacheLayout(tmp_path / "cache"),
     )
-    assert record["verdict"] == "pass" and record["wall_ms"] == 1234
-    assert record["cache"] == str(tmp_path / "cache")
-    on_disk = json.loads((session_dir / "history.json").read_text(encoding="utf-8"))
-    assert on_disk == record
+    assert record.verdict == "pass" and record.wall_ms == 1234
+    # ``cache`` is a declared field of the record, not a key stamped on afterwards (ADR 0037).
+    assert record.cache == str(tmp_path / "cache")
+    assert CellMetrics.stored(session.history) == record
 
 
 def test_derive_prices_annotates_and_names_the_case_in_one_order(tmp_path: Path) -> None:
@@ -1681,17 +1702,21 @@ def test_replay_migrates_a_legacy_captured_directory(tmp_path: Path) -> None:
     (case / "claude-sid1.result.json").write_text(
         json.dumps({"harness": "claude", "model": "claude-opus-5", "session_id": "sid1"}), encoding="utf-8"
     )
-    history.append(
-        captured / "history.jsonl",
-        {
-            "session_id": "sid1",
-            "case": "eval_demo",
-            "verdict": "pass",
-            "at": "2026-08-22T00:00:00+00:00",
-            "node": "n",
-            "wall_ms": 1,
-            "captured": str(captured),
-        },
+    # A pre-0032 line, with the ``captured`` key this version no longer carries.
+    (captured / "history.jsonl").write_text(
+        json.dumps(
+            {
+                "session_id": "sid1",
+                "case": "eval_demo",
+                "verdict": "pass",
+                "at": "2026-08-22T00:00:00+00:00",
+                "node": "n",
+                "wall_ms": 1,
+                "captured": str(captured),
+            }
+        )
+        + "\n",
+        encoding="utf-8",
     )
 
     cache = tmp_path / ".xharness_eval_cache"
@@ -1699,7 +1724,11 @@ def test_replay_migrates_a_legacy_captured_directory(tmp_path: Path) -> None:
     session_dir = cache / "results" / "demo" / "claude" / "claude-opus-5" / "20260822T000000Z" / "sid1"
     assert (session_dir / "result.json").is_file() and (session_dir / "log.jsonl").is_file()
     hist = json.loads((session_dir / "history.json").read_text(encoding="utf-8"))
+    # The record is migrated to the current shape, not copied verbatim: it names its new
+    # cache root, the pre-0032 ``captured`` key is gone, and today's fields are present.
     assert hist["cache"] == str(cache) and "captured" not in hist
+    assert (hist["case"], hist["verdict"], hist["node"]) == ("eval_demo", "pass", "n")
+    assert hist["accumulative_billed_tokens"] == 0
     # The original evidence is untouched, and a second migration is a no-op.
     assert (case / "claude-sid1.result.json").is_file() and (captured / "history.jsonl").is_file()
     assert replay.migrate_legacy(captured, cache) == 0
@@ -1759,7 +1788,8 @@ def test_history_carries_coverage_counts_and_the_status_word_shows_them() -> Non
         not_run=["b"],
         summary=skillcov.CoverageSummary(files=8, ignored=0, docs=0, scripts=2, tests=0, assets=0, loaded=3, run=1),
     )
-    rec = history.metrics_of(r, node="n", verdict="pass", wall_ms=1000, started_at="t")
+    cell = _metrics(r, wall_ms=1000)
+    rec = cell.to_dict()
     assert (rec["skill_files"], rec["skill_files_loaded"], rec["skill_scripts"], rec["skill_scripts_run"]) == (
         8,
         3,
@@ -1767,7 +1797,7 @@ def test_history_carries_coverage_counts_and_the_status_word_shows_them() -> Non
         1,
     )
     assert (rec["skill_not_loaded"], rec["skill_not_run"]) == (["a"], ["b"])
-    assert history.status_word(rec).endswith("1 turns  0 tools  skill 3/8 loaded 1/2 run")
+    assert cell.status_word().endswith("1 turns  0 tools  skill 3/8 loaded 1/2 run")
 
 
 # -- report ---------------------------------------------------------------------------
@@ -1804,7 +1834,7 @@ def test_report_indexes_every_captured_result_and_writes_the_page(tmp_path: Path
     old.harness, old.session_id = "codex", "01a022dc"
     old.write(codex_dir / "result.json")
 
-    page = report.write(cache)
+    page = report.write(CacheLayout(cache))
     assert page == cache / "report" / "report.html"
     html = page.read_text(encoding="utf-8")
     assert "index.json" in html and "window.__XH_DATA__ = " not in html and report.INLINE_MARKER not in html
@@ -1850,7 +1880,8 @@ def test_report_indexes_every_captured_result_and_writes_the_page(tmp_path: Path
         None,
         False,
     )
-    assert "report/report.html" in report.serve_hint(cache) and str(cache) in report.serve_hint(cache)
+    hint = report.serve_hint(CacheLayout(cache))
+    assert "report/report.html" in hint and str(cache) in hint
 
 
 def test_report_inline_embeds_data_and_user_design_tokens(tmp_path: Path) -> None:
@@ -1867,7 +1898,7 @@ def test_report_inline_embeds_data_and_user_design_tokens(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    page = report.write(cache, design_tokens=brand, inline=True)
+    page = report.write(CacheLayout(cache), design_tokens=brand, inline=True)
     html = page.read_text(encoding="utf-8")
     assert "window.__XH_DATA__ = {" in html and report.INLINE_MARKER not in html
     assert '"name": "acme"' in json.dumps(
@@ -1887,11 +1918,11 @@ def test_report_refuses_missing_or_malformed_design_tokens(tmp_path: Path) -> No
     cache = tmp_path / ".xharness_eval_cache"
     cache.mkdir()
     with pytest.raises(FileNotFoundError, match="design tokens file not found"):
-        report.write(cache, design_tokens=tmp_path / "absent.json")
+        report.write(CacheLayout(cache), design_tokens=tmp_path / "absent.json")
     bad = tmp_path / "bad.json"
     bad.write_text('{"colours": {}}', encoding="utf-8")
     with pytest.raises(ValueError, match="'themes' key"):
-        report.write(cache, design_tokens=bad)
+        report.write(CacheLayout(cache), design_tokens=bad)
 
 
 def test_report_tolerates_an_empty_or_corrupt_results_tree(tmp_path: Path) -> None:
@@ -1900,20 +1931,207 @@ def test_report_tolerates_an_empty_or_corrupt_results_tree(tmp_path: Path) -> No
     session_dir.mkdir(parents=True)
     (session_dir / "result.json").write_text("not json", encoding="utf-8")
     (session_dir / "history.json").write_text("not json", encoding="utf-8")
-    report.write(cache)
+    report.write(CacheLayout(cache))
     assert json.loads((cache / "report" / "index.json").read_text(encoding="utf-8"))["cells"] == []
     assert (cache / "report" / "history.jsonl").read_text(encoding="utf-8") == ""
     # A cache with no results/ at all still writes an empty report.
     empty = tmp_path / "empty-cache"
-    report.write(empty)
+    report.write(CacheLayout(empty))
     assert json.loads((empty / "report" / "index.json").read_text(encoding="utf-8"))["cells"] == []
 
 
-def test_history_append_is_one_json_line_per_call(tmp_path: Path) -> None:
+def test_a_metrics_record_round_trips_through_disk_and_the_wire(tmp_path: Path) -> None:
+    """One line of sorted JSON out, the same record back (ADR 0037)."""
+    record = _metrics(_result("m", Usage(10, 20, 30, 40)), node="n[x/m]", verdict="fail")
+    path = record.write(tmp_path / "sid" / "history.json")
+    assert path.read_text(encoding="utf-8").endswith("}\n")
+    assert json.loads(path.read_text(encoding="utf-8")) == record.to_dict()
+    assert CellMetrics.stored(path) == record
+    # The wire boundary: execnet ships builtins only, so the record crosses as a mapping
+    # and is decoded on the controller (ADR 0016).
+    assert CellMetrics.from_dict(record.to_dict()) == record
+    assert normalise.now_iso().endswith("+00:00")
 
-    path = tmp_path / "evals" / "history.jsonl"
-    history.append(path, {"b": 1, "a": 2})
-    history.append(path, {"a": 3})
-    lines = path.read_text(encoding="utf-8").splitlines()
-    assert lines == ['{"a": 2, "b": 1}', '{"a": 3}']
-    assert history.now_iso().endswith("+00:00")
+
+def test_a_metrics_record_survives_a_partial_or_foreign_document(tmp_path: Path) -> None:
+    """A capture from another version reads as a partial record, never as a failed rebuild."""
+    assert CellMetrics.stored(tmp_path / "absent.json") is None
+    (tmp_path / "broken.json").write_text("not json", encoding="utf-8")
+    assert CellMetrics.stored(tmp_path / "broken.json") is None
+    (tmp_path / "list.json").write_text("[]", encoding="utf-8")
+    assert CellMetrics.stored(tmp_path / "list.json") is None
+    # Unknown keys are dropped and absent ones keep their default; the four values a
+    # replay must carry forward come back as an Outcome.
+    partial = CellMetrics.from_dict(
+        {"verdict": "pass", "node": "n", "at": "t", "wall_ms": 7, "tokens": 99, "captured": "/old"}
+    )
+    assert partial.outcome == Outcome(node="n", verdict="pass", wall_ms=7, started_at="t")
+    assert partial.turns == 0 and partial.estimated_cost_usd is None
+    assert "tokens" not in partial.to_dict() and "captured" not in partial.to_dict()
+
+
+# -- the wire formats these two documents are (ADR 0037) --------------------------------
+
+# Every key of ``history.json``, spelled out. ``report-ui/src/lib/types.ts`` mirrors this
+# set, and so does the glossary's metric table: a field added, renamed or dropped without
+# the same edit there is a silently broken page, which is what this list exists to catch.
+HISTORY_KEYS = [
+    "accumulative_billed_tokens",
+    "at",
+    "baseline_tokens",
+    "cache",
+    "cache_read_tokens",
+    "cache_write_1h_tokens",
+    "cache_write_tokens",
+    "case",
+    "context_window",
+    "context_window_pct",
+    "duration_ms",
+    "estimated_cost_usd",
+    "files_written",
+    "final_context_pct",
+    "fixture",
+    "harness",
+    "harness_reported_cost_usd",
+    "input_tokens",
+    "model",
+    "node",
+    "output_tokens",
+    "output_tokens_per_sec",
+    "peak_context_tokens",
+    "rates_applied",
+    "reasoning_tokens",
+    "record_kinds",
+    "reported_turns",
+    "session_id",
+    "skill",
+    "skill_files",
+    "skill_files_loaded",
+    "skill_not_loaded",
+    "skill_not_run",
+    "skill_scripts",
+    "skill_scripts_run",
+    "suite",
+    "tool_calls",
+    "tool_calls_by_name",
+    "ttft_ms",
+    "turns",
+    "verdict",
+    "wall_ms",
+]
+
+# Every key of one ``report/index.json`` row, likewise.
+INDEX_ROW_KEYS = [
+    "accumulative_billed_tokens",
+    "at",
+    "baseline_tokens",
+    "case",
+    "context_window",
+    "context_window_pct",
+    "duration_ms",
+    "estimated_cost_usd",
+    "files_written",
+    "final_context_pct",
+    "fixture",
+    "harness",
+    "harness_reported_cost_usd",
+    "has_ledger",
+    "log",
+    "model",
+    "node",
+    "output_tokens_per_sec",
+    "peak_context_tokens",
+    "prompt",
+    "rates_applied",
+    "record_kinds",
+    "reported_turns",
+    "result",
+    "run",
+    "session_id",
+    "skill",
+    "skill_coverage",
+    "subagents",
+    "suite",
+    "tool_calls",
+    "ttft_ms",
+    "turns",
+    "verdict",
+    "wall_ms",
+]
+
+
+def test_history_json_has_exactly_the_frozen_key_set() -> None:
+    """A fitness function, not a restatement: these names are a published wire format."""
+    assert sorted(_metrics(_result("m", Usage(1, 2))).to_dict()) == HISTORY_KEYS
+    # The dry-run record is the same document, not a shape of its own (ADR 0037), and it
+    # names no cache root, so a dry run combines nothing.
+    dry = CellMetrics.dry_run(node="n", cell=mx.Cell(harness="claude", model="claude-opus-5"))
+    assert sorted(dry.to_dict()) == HISTORY_KEYS
+    assert (dry.verdict, dry.harness, dry.model, dry.cache) == ("dry-run", "claude", "claude-opus-5", "")
+
+
+def test_index_json_has_exactly_the_frozen_key_set(tmp_path: Path) -> None:
+    cache = CacheLayout(tmp_path / ".xharness_eval_cache")
+    session = cache.session(skill="demo", harness="claude", model="m", run="20260822T000000Z", session="sid1")
+    _result("m", Usage(1, 2)).write(session.result)
+    report.write(cache)
+
+    index = json.loads(cache.index.read_text(encoding="utf-8"))
+    assert sorted(index) == ["captured", "cells", "generated_at", "inline"]
+    assert sorted(index["cells"][0]) == INDEX_ROW_KEYS
+
+
+# -- the cache tree has one owner (ADR 0037) --------------------------------------------
+
+
+def test_cache_layout_names_every_path_in_the_tree(tmp_path: Path) -> None:
+    """Each name is declared once; nothing else reassembles one of these paths."""
+    cache = CacheLayout(tmp_path / "cache")
+    assert (cache.build, cache.results, cache.report) == (
+        tmp_path / "cache" / "build",
+        tmp_path / "cache" / "results",
+        tmp_path / "cache" / "report",
+    )
+    assert [p.name for p in (cache.index, cache.history, cache.summary, cache.page, cache.tokens, cache.glossary)] == [
+        "index.json",
+        "history.jsonl",
+        "report.json",
+        "report.html",
+        "report.tokens.json",
+        "XHARNESS-REPORT-GLOSSARY.md",
+    ]
+    session = cache.session(skill="demo", harness="claude", model="opus", run="20260822T000000Z", session="sid1")
+    assert session.path == cache.results / "demo" / "claude" / "opus" / "20260822T000000Z" / "sid1"
+    assert session.rel == "demo/claude/opus/20260822T000000Z/sid1"
+    assert [p.name for p in (session.log, session.result, session.history, session.subagents)] == [
+        "log.jsonl",
+        "result.json",
+        "history.json",
+        "subagents",
+    ]
+    # The page fetches its evidence relative to report/, where index.json sits (ADR 0032).
+    assert session.report_link("log.jsonl") == "../results/demo/claude/opus/20260822T000000Z/sid1/log.jsonl"
+
+
+def test_cache_layout_walks_the_five_levels_and_keeps_the_coordinates(tmp_path: Path) -> None:
+    """The walk the index, the aggregated history and the replay all share."""
+    cache = CacheLayout(tmp_path / "cache")
+    for model in ("sonnet", "opus"):
+        cache.session(skill="demo", harness="claude", model=model, run="20260822T000000Z", session="sid").mkdir()
+    # Neither a file at the session level nor a directory at the wrong depth is a session.
+    (cache.results / "demo" / "claude" / "opus" / "20260822T000000Z" / "stray.txt").write_text("x", encoding="utf-8")
+    (cache.results / "demo" / "shallow").mkdir(parents=True)
+
+    found = list(cache.sessions())
+    assert [(s.model, s.session) for s in found] == [("opus", "sid"), ("sonnet", "sid")]
+    assert {(s.skill, s.harness, s.run) for s in found} == {("demo", "claude", "20260822T000000Z")}
+    # A cache with no results/ at all walks to nothing rather than raising.
+    assert list(CacheLayout(tmp_path / "empty").sessions()) == []
+
+
+def test_a_session_dir_handed_a_path_has_no_coordinates(tmp_path: Path) -> None:
+    """``at`` is for the callers given a directory rather than finding one: a replay, an adapter."""
+    session = SessionDir.at(tmp_path / "sid1")
+    assert (session.session, session.skill, session.run) == ("sid1", "", "")
+    assert session.log == tmp_path / "sid1" / "log.jsonl"
+    assert session.mkdir().is_dir()

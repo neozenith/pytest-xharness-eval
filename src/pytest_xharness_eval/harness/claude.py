@@ -19,7 +19,7 @@ import json
 import os
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 # Our Libraries
 from pytest_xharness_eval import records as record_kinds
@@ -41,6 +41,10 @@ from pytest_xharness_eval.normalise import (
     text_of,
 )
 from pytest_xharness_eval.runresult import Call, RunResult, Subagent, ToolCall, ToolResult, Usage
+
+if TYPE_CHECKING:
+    # Our Libraries
+    from pytest_xharness_eval.layout import SessionDir
 
 # Isolation levers verified against the installed CLI (claude 2.1.237).
 _ISOLATION = ["--setting-sources", ""]
@@ -408,7 +412,7 @@ class ClaudeHarness(Harness):
     ) -> RunResult:  # pragma: no cover - spawns a real CLI (ADR 0002)
         return run_claude(prompt, model, workspace, skill_dir=skill_dir, timeout_s=timeout_s)
 
-    def session_from_capture(self, session_dir: Path, stored: dict[str, Any]) -> ClaudeSessionLog:
+    def session_from_capture(self, session: SessionDir, stored: dict[str, Any]) -> ClaudeSessionLog:
         """Rebuild the envelope from the stored result, then fold as the live run did.
 
         The captured ``result.json`` keeps the envelope minus its ``result`` text (which
@@ -421,7 +425,7 @@ class ClaudeHarness(Harness):
         envelope.setdefault("total_cost_usd", stored.get("harness_reported_cost_usd"))
         envelope.setdefault("duration_ms", stored.get("duration_ms"))
         envelope["result"] = stored.get("final_text") or ""
-        return ClaudeSessionLog(session_dir / "log.jsonl", envelope)
+        return ClaudeSessionLog(session.log, envelope)
 
     def classify_record(self, rec: dict[str, Any]) -> str:
         return _classify(rec)

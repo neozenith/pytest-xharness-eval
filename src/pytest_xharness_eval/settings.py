@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 # Our Libraries
 from pytest_xharness_eval import matrix as mx
 from pytest_xharness_eval import pricing
+from pytest_xharness_eval.layout import CacheLayout
 
 if TYPE_CHECKING:
     # Standard Library
@@ -107,7 +108,9 @@ class Settings:
 
     rootpath: Path
     skills_root: Path
-    cache_dir: Path
+    # The cache tree, not the bare path to it: every location under it has one owner
+    # (ADR 0037), so no caller reassembles ``<cache>/results`` or ``<cache>/build``.
+    cache: CacheLayout
     price_lines: list[str] = field(default_factory=list)
     matrix_lines: list[str] = field(default_factory=list)
     skill_ignore: list[str] = field(default_factory=list)
@@ -123,7 +126,7 @@ class Settings:
         return cls(
             rootpath=config.rootpath,
             skills_root=(config.rootpath / str(config.getini(INI_SKILLS_DIR))).resolve(),
-            cache_dir=config.rootpath / str(config.getini(INI_CACHE_DIR)),
+            cache=CacheLayout(config.rootpath / str(config.getini(INI_CACHE_DIR))),
             price_lines=[str(line) for line in config.getini(INI_PRICES)],
             matrix_lines=[str(e).strip() for e in config.getini(INI_MATRIX) if str(e).strip()],
             skill_ignore=[str(p) for p in config.getini(INI_SKILL_IGNORE)],
@@ -152,7 +155,7 @@ class Settings:
         return cls(
             rootpath=rootpath,
             skills_root=rootpath / str(ini_value(cache, INI_SKILLS_DIR) or DEFAULT_SKILLS_DIR),
-            cache_dir=cache,
+            cache=CacheLayout(cache),
             price_lines=ini_lines(cache, INI_PRICES) + list(prices or []),
             matrix_lines=ini_lines(cache, INI_MATRIX),
             skill_ignore=ini_lines(cache, INI_SKILL_IGNORE) + list(ignore or []),
@@ -173,7 +176,3 @@ class Settings:
     def skill_dir(self, skill: str) -> Path:
         """Where the skill under test lives."""
         return self.skills_root / skill
-
-    def results_root(self) -> Path:
-        """``<cache>/results/``: one directory per session beneath it (ADR 0032)."""
-        return self.cache_dir / "results"

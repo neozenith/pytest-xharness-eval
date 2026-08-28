@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Self
 
 # Our Libraries
-from pytest_xharness_eval import history
+from pytest_xharness_eval.normalise import now_iso
 
 if TYPE_CHECKING:
     # Our Libraries
@@ -115,7 +115,7 @@ class CostEstimate:
         return cls(
             total_usd=round(sum(tiers.values()), 6),
             by_tier={k: round(v, 6) for k, v in tiers.items()},
-            rates=rates.applied(history.now_iso()),
+            rates=rates.applied(now_iso()),
         )
 
 

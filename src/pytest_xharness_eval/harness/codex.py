@@ -22,7 +22,7 @@ import os
 import shutil
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 # Our Libraries
 from pytest_xharness_eval import records as record_kinds
@@ -44,6 +44,10 @@ from pytest_xharness_eval.normalise import (
     text_of,
 )
 from pytest_xharness_eval.runresult import Call, RunResult, Subagent, ToolCall, ToolResult, Usage
+
+if TYPE_CHECKING:
+    # Our Libraries
+    from pytest_xharness_eval.layout import SessionDir
 
 # Isolation levers verified against the installed CLI (codex 0.148.0).
 _ISOLATION = ["--ignore-user-config", "--skip-git-repo-check"]
@@ -452,9 +456,9 @@ class CodexHarness(Harness):
     ) -> RunResult:  # pragma: no cover - spawns a real CLI (ADR 0002)
         return run_codex(prompt, model, workspace, skill_dir=skill_dir, timeout_s=timeout_s)
 
-    def session_from_capture(self, session_dir: Path, stored: dict[str, Any]) -> CodexSessionLog:
+    def session_from_capture(self, session: SessionDir, stored: dict[str, Any]) -> CodexSessionLog:
         """The rollout is self-contained; only the exit code has to come from the stored result."""
-        return CodexSessionLog(session_dir / "log.jsonl", int(stored.get("exit_code") or 0))
+        return CodexSessionLog(session.log, int(stored.get("exit_code") or 0))
 
     def classify_record(self, rec: dict[str, Any]) -> str:
         return _classify(rec)

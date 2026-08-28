@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     # Our Libraries
+    from pytest_xharness_eval.layout import SessionDir
     from pytest_xharness_eval.runresult import RunResult
 
 DEFAULT_TIMEOUT_S = 600
@@ -104,13 +105,14 @@ class Harness(ABC):
         """
 
     @abstractmethod
-    def session_from_capture(self, session_dir: Path, stored: dict[str, Any]) -> SessionLog:
+    def session_from_capture(self, session: SessionDir, stored: dict[str, Any]) -> SessionLog:
         """Rebuild this harness's session log from a captured session directory (ADR 0023).
 
-        ``stored`` is the previously written ``result.json``. A dialect whose log is
-        incomplete recovers its side-channel from there; a self-contained one ignores
-        all but the fields it needs. This is the replay path, and it must fold to the
-        same result the live run produced.
+        ``session`` names the captured files rather than spelling them out, so a dialect
+        never hardcodes ``log.jsonl`` (ADR 0037). ``stored`` is the previously written
+        ``result.json``: a dialect whose log is incomplete recovers its side-channel from
+        there; a self-contained one ignores all but the fields it needs. This is the replay
+        path, and it must fold to the same result the live run produced.
         """
 
     def classify(self, rec: dict[str, Any]) -> str:
