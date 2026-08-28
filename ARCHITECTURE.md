@@ -13,7 +13,7 @@ decisions as records see [docs/adrs/](docs/adrs/README.md).
 ```mermaid
 flowchart LR
     CASE["eval_*.py case"]
-    PLUG["plugin.py<br/>collect, expand matrix"]
+    PLUG["plugin/<br/>collect, expand matrix"]
     WS["model/workspace.py<br/>pristine copy"]
     RUN["harness/<br/>ClaudeHarness | CodexHarness"]
     LOG["session log<br/>this run's own"]
@@ -45,7 +45,7 @@ rather than repeating it -- one sequence, two entry points (ADR 0034).
 
 ```mermaid
 sequenceDiagram
-    participant P as plugin.py
+    participant P as plugin/
     participant W as model/workspace.py
     participant R as harness/
     participant C as claude CLI
@@ -120,9 +120,11 @@ git-dependent skills out of scope for now (ADR 0004).
 ## The package listing is the architecture
 
 `src/pytest_xharness_eval/` is not a flat list of modules. Two entry-point modules sit at
-the root because something outside the package resolves them by name -- `plugin.py`
+the root because something outside the package resolves them by name -- `plugin/`
 through the `pytest11` entry point (ADR 0014) and `replay.py` through `python -m` -- and
-the five layers each run is pushed through are folders beneath them:
+the five layers each run is pushed through are folders beneath them. `plugin/` is itself
+a package: its `__init__` is the hook manifest and each hook's job -- options, collection,
+the per-cell run, the record's crossing, the summary -- is a module beside it (ADR 0040):
 
 | Layer | Answers | Depends on |
 | --- | --- | --- |
@@ -191,6 +193,7 @@ that proves nothing.
 | Term | Meaning |
 |------|---------|
 | case | One `@evalcase` function in an `eval_*.py` module: a prompt, a skill, a fixture, a matrix |
+| EvalSuite | One imported `eval_*.py` module and the cases it declares. A suite belongs to no package, so it is imported by path under a name derived from that path; `EvalSuite.load` and `find_case` are the one loader collection and a replay share, where each used to keep its own (`model/suite.py`, ADR 0040) |
 | cell | One (harness, model) pair of a case; the unit pytest collects, runs, and reports |
 | harness | The agent CLI a cell runs on, `claude` or `codex`; the first half of a cell id |
 | matrix | The list of `harness/model` entries a case expands into cells; three scopes, case over project over plugin; `--harness`, `--model`, and `-k` narrow it |
@@ -207,6 +210,7 @@ that proves nothing.
 | CostStatus | `priced` or `unpriced`, with no third state (ADR 0007); a `StrEnum`, so the wire format carries the same bare word it always has (ADR 0035) |
 | pipeline | The single sequence run over a `RunResult` by both a live cell and a replay: derive (price, coverage, case), capture (log, subagents, result), record metrics; `runtime/pipeline.py` (ADR 0034, ADR 0039) |
 | settings | One resolved view of a project's configuration, built either from the live `pytest.Config` or, for a replay, from the pytest config on disk; `runtime/settings.py` (ADR 0034, ADR 0039) |
+| CellRun, Attempt, Verdict | One cell's live run as a small state machine: materialise the workspace, `invoke` the CLI, `store` (derive then capture), `grade`, `record`. Exactly one of those steps spends money, and it is the only one carrying `pragma: no cover`, so the sequence a replay is pinned against is testable without paying (`plugin/cell.py`, ADR 0002, ADR 0040). An `Attempt` is what one invocation produced plus the two clock facts no log carries; a `Verdict` is `pass`, `fail`, `error` or `dry-run`, and its `.value` -- never the member -- reaches a record, because that record crosses execnet |
 | CacheLayout, SessionDir, LocatedSession | The cache tree as a value object, and one session's evidence directory within it. `CacheLayout` owns `build/`, `results/`, `report/`, every file name under them and the five-level `sessions()` walk; `SessionDir` owns `log.jsonl`, `result.json`, `history.json` and `subagents/`. `LocatedSession` is a `SessionDir` that knows its five coordinates, and therefore the only one that can be named by `rel` or linked to from the page; only `CacheLayout` builds one (ADR 0038). `Settings.cache` is a `CacheLayout`, so nothing reassembles a path under the cache root (ADR 0032, ADR 0037) |
 | captured | `<cache>/results/{skill}/{harness}/{model}/{run}/{session}/`, where each run's log, `RunResult` and metrics record are written; git-ignored (ADR 0032) |
 | CellMetrics, Outcome | One graded cell's metrics record -- the `history.json` written beside its evidence and one line of the combined `report/history.jsonl` -- as a type: flat, built of builtins, and carrying `status_word()` and its own `cache` field. `Outcome` is the four values grading observed and no log can supply (node, verdict, wall clock, start), which a replay carries forward while recomputing everything else. The record crosses to the xdist controller as a plain mapping and is a type on both sides; `from_dict` drops an unknown key *and* a value that is not of its field's declared type, so every reader may trust the declaration (ADR 0016, ADR 0018, ADR 0037, ADR 0038) |
@@ -218,6 +222,8 @@ that proves nothing.
 | total tokens | Every priced token summed over all turns; the cached prefix counts once per turn |
 | baseline tokens | The first turn's context: the harness's own prompt before the agent acts |
 | report, IndexRow | `<cache>/report/`: `report.html` with `index.json`, `history.jsonl`, `report.tokens.json` and `XHARNESS-REPORT-GLOSSARY.md` beside it -- a static page over the captured JSON, served over HTTP (ADR 0020, 0021, 0032). `IndexRow` is one row of `index.json`: a session summarised from its stored `result.json` and metrics record, with its evidence addressed by relative path (ADR 0037) |
+| RunSummary | `report/report.json` as a type: the cells one pytest session graded and the estimate they add up to, plus `cache_roots()` -- the roots this session wrote evidence into, which is where the combine step's trigger is decided and why a dry run stays free (`emit/summary.py`, ADR 0037, ADR 0040) |
+| LegacyCapture | A pre-0032 `<skill>/evals/captured` directory, recognised by shape and migrated into a cache root; transitional code with a known end, kept in one file so it can be deleted in one (`runtime/legacy.py`, ADR 0032, ADR 0040) |
 | SessionId, SessionTurnId | How the report addresses a session (the harness-minted session id, a unique prefix accepted) and a turn (`<SessionId>/t<N>`); both copyable from the page and carried in its URL fragment |
 | record kind | The catalogued shape of one session-log line, `harness/type[/subtype]`, with a category that colours its pill in the report; each harness's `classify_record` names the kind, `harness/records.py` is the catalogue, and `record_kinds` is the per-run census (ADR 0022, ADR 0034) |
 | skill coverage | Which of the skill's catalogued files a run loaded or ran, per turn, and the `not_loaded` / `not_run` sets; `derive/skillcov.py` (ADR 0022). What the project's `xharness_skill_ignore` lines mean, and which files they take off the decision surface, is `derive/ignorerules.py` (ADR 0026, ADR 0035) |

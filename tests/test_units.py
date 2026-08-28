@@ -3,6 +3,11 @@
 # Standard Library
 import dataclasses
 import json
+import logging
+import os
+import re
+import sys
+import textwrap
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
@@ -31,17 +36,25 @@ from pytest_xharness_eval import replay
 from pytest_xharness_eval.derive import ignorerules, pricing, skillcov
 from pytest_xharness_eval.emit import page
 from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome
+from pytest_xharness_eval.emit.summary import RunSummary
 from pytest_xharness_eval.harness import claude as claude_harness
 from pytest_xharness_eval.harness import codex as codex_harness
 from pytest_xharness_eval.harness import records
 from pytest_xharness_eval.model import clock
 from pytest_xharness_eval.model import matrix as mx
 from pytest_xharness_eval.model import runresult
+from pytest_xharness_eval.model import suite as suites
 from pytest_xharness_eval.model import workspace as ws
 from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
 from pytest_xharness_eval.model.registry import Shells
 from pytest_xharness_eval.model.runresult import Subagent
+from pytest_xharness_eval.model.suite import EvalSuite
+from pytest_xharness_eval.plugin import cell as cellrun
+from pytest_xharness_eval.plugin import results as plugin_results
+from pytest_xharness_eval.plugin import summary as plugin_summary
+from pytest_xharness_eval.plugin.verdict import Verdict
 from pytest_xharness_eval.runtime import pipeline, settings
+from pytest_xharness_eval.runtime.legacy import LegacyCapture
 
 # -- package surface ---------------------------------------------------------------
 
@@ -1612,10 +1625,317 @@ def test_derive_prices_annotates_and_names_the_case_in_one_order(tmp_path: Path)
     )
 
 
+# -- the suite loader both entry points share (ADR 0040) -------------------------------
+
+SUITE = textwrap.dedent(
+    """
+    from pytest_xharness_eval import evalcase
+
+    NOT_A_CASE = "a module-level value the loader must not mistake for one"
+
+    @evalcase(prompt="{prompt}", skill="demo", fixture="seed")
+    def {name}(run, workspace):
+        pass
+    """
+)
+
+
+def _suite_file(path: Path, *, name: str = "eval_demo", prompt: str = "go") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(SUITE.format(name=name, prompt=prompt), encoding="utf-8")
+    return path
+
+
+def test_a_suite_is_imported_by_path_and_offers_only_its_cases(tmp_path: Path) -> None:
+    """Collection and a replay import a suite through this one loader (ADR 0040)."""
+    suite = EvalSuite.load(_suite_file(tmp_path / "a" / "evals" / "eval_demo.py", prompt="alpha"))
+    assert [c.name for c in suite.cases] == ["eval_demo"]
+    found = suite.case_named("eval_demo")
+    assert found is not None and found.prompt == "alpha"
+    assert suite.case_named("eval_absent") is None
+    # Registered while it executes, under a name derived from its path, so two skills may
+    # both declare an eval_demo.py without the second shadowing the first.
+    assert sys.modules[suite.module.__name__] is suite.module
+    other = EvalSuite.load(_suite_file(tmp_path / "b" / "evals" / "eval_demo.py", prompt="beta"))
+    assert other.module.__name__ != suite.module.__name__
+    assert (other.cases[0].prompt, suite.cases[0].prompt) == ("beta", "alpha")
+
+
+def test_a_file_python_has_no_loader_for_is_an_import_error(tmp_path: Path) -> None:
+    path = tmp_path / "eval_demo.notpy"
+    path.write_text("X = 1\n", encoding="utf-8")
+    with pytest.raises(ImportError, match="cannot load eval module"):
+        EvalSuite.load(path)
+
+
+def test_find_case_searches_the_skills_suites_and_a_broken_one_does_not_stop_it(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A replay recovers a case by name; one unimportable suite must not lose the others (ADR 0023)."""
+    evals = tmp_path / "evals"
+    evals.mkdir()
+    (evals / "eval_broken.py").write_text("import does_not_exist_anywhere\n", encoding="utf-8")
+    _suite_file(evals / "eval_late.py", name="eval_late", prompt="late")
+
+    with caplog.at_level(logging.WARNING):
+        found = suites.find_case(evals, "eval_late")
+
+    assert found is not None
+    path, case = found
+    assert path.name == "eval_late.py" and case.prompt == "late"
+    assert "could not import eval_broken.py" in caplog.text
+    assert suites.find_case(evals, "eval_nobody_declares") is None
+
+
+# -- one cell's live run, step by step (ADR 0002, ADR 0040) ----------------------------
+
+
+def eval_ok(run: RunResult, workspace: Path) -> None:
+    """A grader that passes."""
+
+
+def eval_fails(run: RunResult, workspace: Path) -> None:
+    """A grader whose assertion fails the cell."""
+    raise AssertionError("the agent did not do the thing")
+
+
+def eval_errors(run: RunResult, workspace: Path) -> None:
+    """A grader that is itself broken."""
+    raise RuntimeError("boom")
+
+
+def _cell_run(tmp_path: Path, grader: Any = eval_ok) -> cellrun.CellRun:
+    """A CellRun over a real skill, a real fixture and a real cache: everything but the CLI.
+
+    Nothing here is faked (ADR 0002). What the tests exercise are the six free steps
+    around ``invoke``, which is the only one that would spawn a process.
+    """
+    skill = _skill(tmp_path / "skills")  # skills/demo
+    fixture_dir = skill / "evals" / "fixtures" / "seed"
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    (fixture_dir / "README.md").write_text("seed\n", encoding="utf-8")
+    case = evalcase(prompt="go", skill="demo", fixture="seed")(grader)
+    return cellrun.CellRun(
+        case=case,
+        cell=Cell(harness="claude", model="claude-opus-5"),
+        settings=settings.Settings(
+            rootpath=tmp_path, skills_root=tmp_path / "skills", cache=CacheLayout(tmp_path / "cache")
+        ),
+        skill_dir=skill,
+        fixture_dir=fixture_dir,
+        node="skills/demo/evals/eval_demo.py::eval_demo[claude/claude-opus-5]",
+        suite="skills/demo/evals/eval_demo.py",
+        skill_files=skillcov.catalog(skill),
+    )
+
+
+def _captured_run(tmp_path: Path) -> RunResult:
+    """A folded run with a session log on disk, as one would exist when the CLI returns."""
+    result = _result("claude-opus-5", Usage(1_000_000, 0, 0, 0))
+    log = tmp_path / "native" / "session.jsonl"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text('{"type": "user", "message": {"content": "go"}}\n', encoding="utf-8")
+    result.session_log, result.session_id, result.workspace = str(log), "sid-1", str(tmp_path / "ws")
+    return result
+
+
+def test_the_run_stamp_is_minted_once_and_shared_through_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One stamp per sweep, so a run's cells share one results/{...}/{run}/ level (ADR 0032)."""
+    monkeypatch.delenv(cellrun.RUN_STAMP_ENV, raising=False)
+    stamp = cellrun.run_stamp()
+    assert re.fullmatch(r"\d{8}T\d{6}Z", stamp)
+    # An xdist worker is a child process: it reads the controller's stamp back, not a new one.
+    assert os.environ[cellrun.RUN_STAMP_ENV] == stamp == cellrun.run_stamp()
+    monkeypatch.setenv(cellrun.RUN_STAMP_ENV, "")
+    assert cellrun.run_stamp() != ""  # an empty stamp would name an unnamed run directory
+
+
+def test_a_cell_materialises_its_own_workspace_under_the_caches_build_dir(tmp_path: Path) -> None:
+    run = _cell_run(tmp_path)
+    workspace = run.materialise()
+    assert workspace == tmp_path / "cache" / "build" / "eval_ok-claude-claude-opus-5"
+    assert (workspace / "README.md").read_text(encoding="utf-8") == "seed\n"
+
+
+def test_a_cell_derives_and_captures_where_its_five_coordinates_say(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``store`` is the live half of the sequence a replay repeats (ADR 0034)."""
+    monkeypatch.setenv(cellrun.RUN_STAMP_ENV, "20260828T000000Z")
+    run = _cell_run(tmp_path)
+    result = _captured_run(tmp_path)
+
+    session = run.store(result)
+
+    assert session.rel == "demo/claude/claude-opus-5/20260828T000000Z/sid-1"
+    assert session.path == tmp_path / "cache" / "results" / session.rel
+    # Priced, coverage-annotated and named after its case -- before anything is written.
+    assert result.cost_status is CostStatus.PRICED and result.estimated_cost_usd is not None
+    assert result.skill_coverage is not None and result.case is not None
+    assert (result.case.name, result.case.suite) == ("eval_ok", "skills/demo/evals/eval_demo.py")
+    assert json.loads(session.result.read_text(encoding="utf-8"))["session_id"] == "sid-1"
+    assert session.log.read_text(encoding="utf-8").startswith('{"type": "user"')
+
+
+@pytest.mark.parametrize(
+    ("grader", "expected", "raises"),
+    [
+        (eval_ok, Verdict.PASS, None),
+        (eval_fails, Verdict.FAIL, AssertionError),
+        (eval_errors, Verdict.ERROR, RuntimeError),
+    ],
+)
+def test_grading_names_the_verdict_and_still_lets_the_grader_fail_the_cell(
+    tmp_path: Path, grader: Any, expected: Verdict, raises: type[Exception] | None
+) -> None:
+    """An assertion is a fail, anything else is an error, and pytest still sees the exception."""
+    run = _cell_run(tmp_path, grader)
+    result = _captured_run(tmp_path)
+    if raises is None:
+        assert run.grade(result, tmp_path / "ws") is Verdict.PASS
+    else:
+        with pytest.raises(raises):
+            run.grade(result, tmp_path / "ws")
+    assert run.verdict is expected
+
+
+def test_a_cells_record_carries_a_plain_string_verdict_beside_its_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The record crosses to the controller through execnet, which serialises builtins only (ADR 0016)."""
+    monkeypatch.setenv(cellrun.RUN_STAMP_ENV, "20260828T000000Z")
+    run = _cell_run(tmp_path)
+    result = _captured_run(tmp_path)
+    session = run.store(result)
+    run.grade(result, tmp_path / "ws")
+
+    record = run.record(cellrun.Attempt(result=result, started_at="2026-08-28T00:00:00+00:00", wall_ms=4321), session)
+
+    assert record.verdict == "pass" and type(record.verdict) is str
+    assert (record.node, record.wall_ms, record.at) == (run.node, 4321, "2026-08-28T00:00:00+00:00")
+    assert record.cache == str(tmp_path / "cache")
+    assert CellMetrics.stored(session.history) == record
+
+
+# -- the record's crossing to the controller, and its status word (ADR 0016) -----------
+
+
+def _report(record: CellMetrics | None, *, when: str = "call") -> pytest.TestReport:
+    """A real call report carrying (or not carrying) a cell's record, as a worker would send it."""
+    return pytest.TestReport(
+        nodeid="skills/demo/evals/eval_demo.py::eval_demo[claude/claude-opus-5]",
+        location=("skills/demo/evals/eval_demo.py", 0, "eval_demo"),
+        keywords={},
+        outcome="passed",
+        longrepr=None,
+        when=when,
+        user_properties=[] if record is None else [(plugin_results.PROPERTY, record.to_dict())],
+    )
+
+
+def test_the_record_decodes_back_into_its_type_on_the_controller_side() -> None:
+    record = _metrics(_result("claude-opus-5", Usage(10, 20)))
+    assert plugin_results.record_of(_report(record)) == record
+    assert plugin_results.record_of(_report(None)) is None
+
+
+@pytest.mark.parametrize(
+    ("verdict", "category", "letter"),
+    [(Verdict.PASS, "passed", "."), (Verdict.FAIL, "failed", "F"), (Verdict.ERROR, "failed", "E")],
+)
+def test_the_status_word_is_the_verdict_followed_by_the_cells_metrics(
+    pytestconfig: pytest.Config, verdict: Verdict, category: str, letter: str
+) -> None:
+    result = _result("claude-opus-5", Usage(10, 20))
+    result.estimated_cost_usd = 0.25
+    status = plugin_results.pytest_report_teststatus(
+        _report(_metrics(result, verdict=verdict.value, wall_ms=2000)), pytestconfig
+    )
+    assert status is not None
+    assert (status[0], status[1]) == (category, letter)
+    word, markup = status[2]
+    assert word.startswith("PASSED" if verdict is Verdict.PASS else verdict.upper())
+    assert "est $0.2500" in word and "2.0s" in word
+    assert markup == ({"green": True} if verdict is Verdict.PASS else {"red": True})
+
+
+def test_a_dry_run_cell_shows_dry_run_and_a_foreign_report_keeps_pytests_own_word(
+    pytestconfig: pytest.Config,
+) -> None:
+    dry = CellMetrics.dry_run(node="n", cell=Cell(harness="claude", model="claude-opus-5"))
+    assert plugin_results.pytest_report_teststatus(_report(dry), pytestconfig) == (
+        "skipped",
+        "s",
+        ("DRY-RUN", {"yellow": True}),
+    )
+    # Not ours, or not the call phase: pytest's own status word stands.
+    assert plugin_results.pytest_report_teststatus(_report(None), pytestconfig) is None
+    assert plugin_results.pytest_report_teststatus(_report(dry, when="setup"), pytestconfig) is None
+
+
+# -- report.json and the combine step it triggers (ADR 0032, ADR 0037) -----------------
+
+
+def test_the_run_summary_is_the_two_keys_report_json_has_always_had(tmp_path: Path) -> None:
+    priced = _result("claude-opus-5", Usage(10, 20))
+    priced.estimated_cost_usd = 0.25
+    cells = [
+        _metrics(priced, node="n1", cache=str(tmp_path / "cache")),
+        CellMetrics.dry_run(node="n2", cell=Cell(harness="claude", model="claude-opus-5")),
+    ]
+    summary = RunSummary.of(cells)
+
+    assert summary.total_usd == pytest.approx(0.25)
+    # A dry-run record names no cache root, which is what keeps a free run free (ADR 0018).
+    assert summary.cache_roots() == [str(tmp_path / "cache")]
+    doc = json.loads(summary.write(tmp_path / "report" / "report.json").read_text(encoding="utf-8"))
+    assert sorted(doc) == ["cells", "total_usd"]
+    assert doc["total_usd"] == 0.25
+    assert [(c["node"], c["verdict"]) for c in doc["cells"]] == [("n1", "pass"), ("n2", "dry-run")]
+
+
+def test_the_terminal_line_shows_the_estimate_or_a_dash_when_a_cell_has_none() -> None:
+    priced = _result("claude-opus-5", Usage(10, 20))
+    priced.estimated_cost_usd = 1.5
+    assert plugin_summary.cell_line(_metrics(priced, node="n1")) == "  pass       $1.5000  n1"
+    dry = CellMetrics.dry_run(node="n2", cell=Cell(harness="claude", model="claude-opus-5"))
+    assert plugin_summary.cell_line(dry) == "  dry-run          -  n2"
+
+
+def test_the_combine_step_runs_once_per_cache_root_the_session_wrote_into(tmp_path: Path) -> None:
+    """The step aggregates every run in the cache, not this session's cells (ADR 0032)."""
+    cache = CacheLayout(tmp_path / ".xharness_eval_cache")
+    session = cache.session(
+        skill="demo", harness="claude", model="claude-opus-5", run="20260828T000000Z", session="sid1"
+    )
+    session.mkdir()
+    result = _result("claude-opus-5", Usage(10, 20))
+    result.session_id = "sid1"
+    result.write(session.result)
+    record = _metrics(result, cache=str(cache.root))
+    record.write(session.history)
+    project = settings.Settings(rootpath=tmp_path, skills_root=tmp_path, cache=cache)
+
+    lines = list(plugin_summary.combine(RunSummary.of([record]), project))
+
+    assert cache.page.is_file() and cache.index.is_file()
+    assert lines[0] == f"  aggregated report: {cache.page}"
+    assert "python3 -m http.server" in lines[1]
+    # A record that names no cache root combines nothing at all.
+    homeless = dataclasses.replace(record, cache="")
+    assert list(plugin_summary.combine(RunSummary.of([homeless]), project)) == []
+
+
 # -- replay (ADR 0023) --------------------------------------------------------------
 
 
-def test_replay_rebuilds_results_history_and_report_from_cached_logs(tmp_path: Path) -> None:
+def _stale_cache(tmp_path: Path) -> tuple[Path, Path]:
+    """A project holding one captured Claude session whose ``result.json`` is out of date.
+
+    The log and the stored envelope are the evidence a replay re-derives from; the rest of
+    the stored result is deliberately wrong, so a rebuild that does nothing is visible.
+    Returns the cache root and that session's directory.
+    """
     skill = _skill(tmp_path)  # tmp_path/demo
     # The project's pytest config: rootdir discovery anchors here, and the skills root is tmp_path itself.
     (tmp_path / "pyproject.toml").write_text('[tool.pytest.ini_options]\nxharness_skills_dir = "."\n', encoding="utf-8")
@@ -1677,6 +1997,11 @@ def test_replay_rebuilds_results_history_and_report_from_cached_logs(tmp_path: P
         ),
         encoding="utf-8",
     )
+    return cache, session_dir
+
+
+def test_replay_rebuilds_results_history_and_report_from_cached_logs(tmp_path: Path) -> None:
+    cache, session_dir = _stale_cache(tmp_path)
 
     rewritten = replay.rebuild(cache)
     assert rewritten == [session_dir / "result.json"]
@@ -1721,6 +2046,23 @@ def test_replay_rebuilds_results_history_and_report_from_cached_logs(tmp_path: P
     assert (cache / "report" / "report.html").is_file()
 
 
+def test_replay_main_rebuilds_the_cache_named_on_its_command_line(tmp_path: Path) -> None:
+    """The ``python -m`` entry point: parse, rebuild, report -- and spend nothing (ADR 0032)."""
+    cache, session_dir = _stale_cache(tmp_path)
+
+    replay.main([str(cache), "--price", "claude-opus-5: input=1.00 output=2.00", "-v"])
+
+    fresh = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
+    assert fresh["turns"] == 1  # the stale 99 is gone
+    assert fresh["rates_applied"]["input"] == pytest.approx(1e-6)  # the --price line was applied
+    assert (cache / "report" / "report.html").is_file()
+
+
+def test_replay_main_refuses_a_target_that_is_not_a_directory(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="not a directory"):
+        replay.main([str(tmp_path / "nowhere")])
+
+
 def test_replay_migrates_a_legacy_captured_directory(tmp_path: Path) -> None:
     """ADR 0032: pointed at a pre-cache captured/ dir, replay copies it into results/ and leaves it be."""
     skill = _skill(tmp_path / "skills")  # skills/demo
@@ -1758,7 +2100,10 @@ def test_replay_migrates_a_legacy_captured_directory(tmp_path: Path) -> None:
         fh.write(json.dumps({"session_id": "sid2", "verdict": "pass", "at": None}) + "\n")
 
     cache = tmp_path / ".xharness_eval_cache"
-    assert replay.migrate_legacy(captured, cache) == 2
+    capture = LegacyCapture.found_at(captured)
+    # The directory is recognised by shape, and only a recognised one can be migrated.
+    assert capture is not None and capture.skill == "demo"
+    assert capture.migrate_into(cache) == 2
     assert (cache / "results" / "demo" / "claude" / "claude-opus-5" / "00000000T000000Z" / "sid2").is_dir()
     session_dir = cache / "results" / "demo" / "claude" / "claude-opus-5" / "20260822T000000Z" / "sid1"
     assert (session_dir / "result.json").is_file() and (session_dir / "log.jsonl").is_file()
@@ -1770,8 +2115,48 @@ def test_replay_migrates_a_legacy_captured_directory(tmp_path: Path) -> None:
     assert hist["accumulative_billed_tokens"] == 0
     # The original evidence is untouched, and a second migration is a no-op.
     assert (case / "claude-sid1.result.json").is_file() and (captured / "history.jsonl").is_file()
-    assert replay.migrate_legacy(captured, cache) == 0
-    assert replay.is_legacy_captured(captured) and not replay.is_legacy_captured(cache)
+    assert capture.migrate_into(cache) == 0
+    assert LegacyCapture.found_at(cache) is None  # a cache root is not a legacy capture
+
+
+def test_replay_main_pointed_at_a_legacy_directory_migrates_then_rebuilds(tmp_path: Path) -> None:
+    """The pre-0032 location is an input to the entry point and never an output (ADR 0032)."""
+    skill = _skill(tmp_path / "skills")  # skills/demo
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest.ini_options]\n", encoding="utf-8")
+    captured = skill / "evals" / "captured"
+    case_dir = captured / "eval_demo"
+    case_dir.mkdir(parents=True)
+    _jsonl(
+        case_dir / "claude-sid1.jsonl",
+        [
+            {"type": "user", "message": {"content": "go"}},
+            {
+                "type": "assistant",
+                "message": {"id": "m1", "model": "claude-opus-5", "usage": {"input_tokens": 5, "output_tokens": 7}},
+            },
+        ],
+    )
+    (case_dir / "claude-sid1.result.json").write_text(
+        json.dumps(
+            {
+                "harness": "claude",
+                "model": "claude-opus-5",
+                "session_id": "sid1",
+                "envelope": {"session_id": "sid1", "num_turns": 1, "total_cost_usd": 0.5, "usage": {}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    replay.main([str(captured)])
+
+    # The destination is the project's own cache root, resolved from its pytest config.
+    session = tmp_path / ".xharness_eval_cache" / "results" / "demo" / "claude" / "claude-opus-5"
+    rebuilt = json.loads((session / "00000000T000000Z" / "sid1" / "result.json").read_text(encoding="utf-8"))
+    assert (rebuilt["turns"], rebuilt["harness_reported_cost_usd"]) == (1, 0.5)
+    assert rebuilt["estimated_cost_usd"] > 0
+    assert (tmp_path / ".xharness_eval_cache" / "report" / "report.html").is_file()
+    assert (case_dir / "claude-sid1.result.json").is_file()  # the original is untouched
 
 
 @pytest.mark.parametrize(

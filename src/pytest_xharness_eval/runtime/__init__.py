@@ -10,11 +10,15 @@ after the CLI returns" instead of two that drift (ADR 0034).
   (ADR 0014, ADR 0026, ADR 0030).
 * :mod:`.pipeline` -- price, annotate coverage, name the case, capture the evidence,
   record the metrics: the sequence both paths run, in one order.
+* :mod:`.legacy` -- the one-shot migration of a pre-0032 ``captured/`` directory into a
+  cache root, which a replay may be pointed at; transitional, and deletable in one file
+  (ADR 0032, ADR 0040).
 """
 
 from __future__ import annotations
 
 # Our Libraries
+from pytest_xharness_eval.runtime.legacy import LegacyCapture
 from pytest_xharness_eval.runtime.pipeline import capture, capture_subagents, derive, record_metrics
 from pytest_xharness_eval.runtime.settings import (
     DEFAULT_CACHE_DIR,
@@ -42,6 +46,7 @@ __all__ = [
     "INI_REPORT_TOKENS",
     "INI_SKILLS_DIR",
     "INI_SKILL_IGNORE",
+    "LegacyCapture",
     "Settings",
     "capture",
     "capture_subagents",

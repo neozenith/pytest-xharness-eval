@@ -5,7 +5,7 @@
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml/badge.svg" alt="CICD Checks"></a>
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml/badge.svg" alt="Build Status"></a>
     <!-- coverage-badge -->
-    <img src="https://img.shields.io/badge/coverage-95%25-brightgreen.svg" alt="Coverage">
+    <img src="https://img.shields.io/badge/coverage-97%25-brightgreen.svg" alt="Coverage">
     <!-- coverage-badge -->
 </p>
 <p align="center">
@@ -215,7 +215,7 @@ xharness_prices = [
 ```mermaid
 flowchart LR
     CASE["eval_*.py case"]
-    PLUG["plugin.py<br/>collect, expand matrix"]
+    PLUG["plugin/<br/>collect, expand matrix"]
     WS["model/workspace.py<br/>pristine copy"]
     RUN["harness/<br/>ClaudeHarness | CodexHarness"]
     LOG["session log<br/>this run's own"]

@@ -105,11 +105,12 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 # Everything above a banned layer, and nothing else. The two entry points sit at the root
-# above every layer; each layer names itself; `model/registry.py` is the one declared edge
+# above every layer (`plugin/` is a package of hook modules, all of them entry-point code,
+# ADR 0040); each layer names itself; `model/registry.py` is the one declared edge
 # from the domain up to the adapters (ADR 0039); the harness package's own __init__ is what
 # registers the providers; and the unit tests exercise each dialect's folding directly.
 "src/pytest_xharness_eval/__init__.py" = ["TID251"]
-"src/pytest_xharness_eval/plugin.py" = ["TID251"]
+"src/pytest_xharness_eval/plugin/*" = ["TID251"]
 "src/pytest_xharness_eval/replay.py" = ["TID251"]
 "src/pytest_xharness_eval/model/registry.py" = ["TID251"]
 "src/pytest_xharness_eval/harness/*" = ["TID251"]

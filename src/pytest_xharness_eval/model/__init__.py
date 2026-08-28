@@ -9,6 +9,8 @@ pointing this way (ADR 0039).
 * :mod:`.runresult` -- the normalised record every harness folds its session log into,
   and the ``result.json`` wire format (ADR 0019, ADR 0035).
 * :mod:`.case` -- the ``@evalcase`` contract an ``eval_*.py`` module declares (ADR 0008).
+* :mod:`.suite` -- importing one of those modules by path, and finding the case it
+  declares: the one loader collection and a replay share (ADR 0040).
 * :mod:`.matrix` -- the ``harness/model`` cells a case sweeps (ADR 0010, ADR 0015).
 * :mod:`.layout` -- every path under a project's eval cache (ADR 0032, ADR 0038).
 * :mod:`.workspace` -- materialising a fixture into a per-cell workspace (ADR 0004).
@@ -40,6 +42,7 @@ from pytest_xharness_eval.model.runresult import (
     ToolResult,
     Usage,
 )
+from pytest_xharness_eval.model.suite import EvalSuite, find_case, suites_under
 from pytest_xharness_eval.model.workspace import diff, materialise, snapshot
 
 __all__ = [
@@ -50,6 +53,7 @@ __all__ = [
     "Cell",
     "CostStatus",
     "EvalCase",
+    "EvalSuite",
     "LocatedSession",
     "RunResult",
     "SessionDir",
@@ -61,6 +65,7 @@ __all__ = [
     "diff",
     "evalcase",
     "expand",
+    "find_case",
     "known_harnesses",
     "materialise",
     "ms_between",
@@ -68,4 +73,5 @@ __all__ = [
     "now_iso",
     "read_json_object",
     "snapshot",
+    "suites_under",
 ]

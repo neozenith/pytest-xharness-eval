@@ -19,7 +19,7 @@ record ends in a **Lens**: the reusable rule it leaves behind.
 | [0005](0005-private-codex-home-per-run.md) | A private per-run CODEX_HOME, seeded with credentials | accepted |
 | [0006](0006-local-price-table-is-authoritative.md) | A local prices.toml is authoritative | accepted, seed pending; bundled table plus override since 0014; the override moved into the pytest config by 0030 |
 | [0007](0007-unpriced-model-aborts-before-spend.md) | An unpriced model aborts before spend | accepted |
-| [0008](0008-evals-are-eval-prefixed-modules.md) | Evals are `eval_*.py` modules, directory-scoped | accepted, refined by 0016 |
+| [0008](0008-evals-are-eval-prefixed-modules.md) | Evals are `eval_*.py` modules, directory-scoped | accepted, refined by 0016; one loader imports a suite for both entry points since 0040 |
 | [0009](0009-register-via-rootdir-conftest.md) | Register the plugin from the rootdir conftest.py | superseded by 0014 |
 | [0010](0010-matrix-options-and-dry-run.md) | Default matrix, per-case override, `--model` / `--cli` / `--dry-run` | accepted, refined by 0015 |
 | [0011](0011-inject-skill-through-each-cli-path.md) | The skill loads through each CLI's own path | accepted |
@@ -27,7 +27,7 @@ record ends in a **Lens**: the reusable rule it leaves behind.
 | [0013](0013-verifiers-are-python-beside-the-case.md) | Custom verifiers are Python beside the case | accepted, helper pending |
 | [0014](0014-register-through-the-pytest11-entry-point.md) | Register through the pytest11 entry point of an extracted package | accepted, supersedes 0009, refined by 0017 and 0026 |
 | [0015](0015-harness-is-the-axis-and-the-project-owns-the-matrix.md) | Harness is the axis name, and the project owns the default matrix | accepted, refines 0010 |
-| [0016](0016-results-travel-on-the-test-report.md) | Results travel on the test report, and cells group by harness | accepted, refines 0008; the record crosses that boundary as a dict and is a type on both sides since 0037 |
+| [0016](0016-results-travel-on-the-test-report.md) | Results travel on the test report, and cells group by harness | accepted, refines 0008; the record crosses that boundary as a dict and is a type on both sides since 0037; both ends of the crossing are one module since 0040 |
 | [0017](0017-distributed-through-pypi-with-trusted-publishing.md) | Distribute through PyPI with trusted publishing, released from a GitHub Release | accepted; 0.1.0 published 2026-08-21 |
 | [0018](0018-fixtures-directory-and-metrics-history.md) | Fixtures live under evals/fixtures/, and every live cell appends to a metrics history | accepted, refines 0004 and 0016; refined by 0019 and 0020; the metrics record is a type since 0037 |
 | [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) | Every run carries a per-call ledger; tokens are reported as context and billed; cache writes price by TTL | accepted, refines 0003, 0006 and 0018; names refined by 0021; the ledger folds through one constructor since 0035 |
@@ -43,11 +43,12 @@ record ends in a **Lens**: the reusable rule it leaves behind.
 | [0029](0029-the-billed-sum-is-named-accumulative-billed-tokens.md) | The billed sum is named `accumulative_billed_tokens` | accepted, supersedes one row of 0021, refines 0019 |
 | [0030](0030-price-rows-live-in-the-pytest-config.md) | Project price rows live in the pytest config, not in a prices.toml beside it | accepted, refines 0006, 0014 and 0026 |
 | [0031](0031-plotly-tamagui-and-a-deeplink-permutation-matrix.md) | The report draws with Plotly on a Tamagui base, every state deeplinks, and a Playwright matrix sweeps them all | accepted, refines 0020, 0024, 0025 and 0028; supersedes 0028's component stack and 0024's series-fold rule |
-| [0032](0032-all-run-output-consolidates-under-a-cache-dir.md) | All run output consolidates under `.xharness_eval_cache/`, and the report is one combine step | accepted, refines 0014, 0018 and 0020; supersedes 0018's captured/ location, 0020's per-directory report and `xharness_workdir`; the cache tree has one owner since 0037 |
+| [0032](0032-all-run-output-consolidates-under-a-cache-dir.md) | All run output consolidates under `.xharness_eval_cache/`, and the report is one combine step | accepted, refines 0014, 0018 and 0020; supersedes 0018's captured/ location, 0020's per-directory report and `xharness_workdir`; the cache tree has one owner since 0037, and the pre-0032 migration is its own module since 0040 |
 | [0033](0033-subagent-transcripts-are-captured-and-billed.md) | Subagent transcripts are captured evidence, and their tokens are billed | accepted, refines 0019, 0021 and 0032; the fold moved into 0035's constructor |
 | [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) | A harness is a class, the registry is the only dispatch, and the layers are named | accepted, refines 0002, 0014, 0015 and 0023; structural only; the layers became packages in 0039 |
 | [0035](0035-the-nouns-carry-their-own-invariants.md) | The nouns carry their own invariants | accepted, refines 0003, 0019, 0021, 0022, 0025 and 0033; structural only; the folding constructors' keywords are typed by 0036 |
 | [0036](0036-a-folding-constructor-declares-its-keyword-fields.md) | A folding constructor declares its keyword fields | accepted, refines 0003 and 0035; structural only |
-| [0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md) | The emitted records are types, and the cache tree has one owner | accepted, refines 0016, 0018, 0020, 0032 and 0035; structural only; its two boundary constructors are tightened by 0038 |
+| [0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md) | The emitted records are types, and the cache tree has one owner | accepted, refines 0016, 0018, 0020, 0032 and 0035; structural only; its two boundary constructors are tightened by 0038, and `report.json` becomes the last such type in 0040 |
 | [0038](0038-a-tolerant-reader-still-honours-its-declaration.md) | A tolerant reader still honours its declaration | accepted, refines 0032 and 0037; structural only |
-| [0039](0039-the-package-listing-is-the-architecture.md) | The package listing is the architecture | accepted, refines 0014, 0027, 0034 and 0037; structural only |
+| [0039](0039-the-package-listing-is-the-architecture.md) | The package listing is the architecture | accepted, refines 0014, 0027, 0034 and 0037; structural only; `plugin` becomes a package of hook modules in 0040 |
+| [0040](0040-the-plugin-is-a-hook-manifest.md) | The plugin is a hook manifest, and each job behind it is a module | accepted, refines 0008, 0014, 0016, 0032, 0037 and 0039; structural only |

@@ -8,6 +8,8 @@ change (ADR 0021, ADR 0039).
 * :mod:`.metrics` -- ``history.json``: one :class:`CellMetrics` per graded cell, the
   record that also crosses the xdist boundary as a plain mapping (ADR 0016, ADR 0018).
 * :mod:`.index` -- ``report/index.json``: one :class:`IndexRow` per captured session.
+* :mod:`.summary` -- ``report/report.json``: the cells one pytest session graded and the
+  spend they add up to, as a :class:`RunSummary` (ADR 0040).
 * :mod:`.tokens` -- ``report/report.tokens.json``: the design tokens the page is themed
   with (ADR 0024).
 * :mod:`.page` -- the combine step that assembles all of it into ``<cache>/report/``
@@ -25,6 +27,7 @@ from __future__ import annotations
 from pytest_xharness_eval.emit.index import IndexRow, aggregate_history, cells
 from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome
 from pytest_xharness_eval.emit.page import INLINE_MARKER, inline_page, serve_hint, write
+from pytest_xharness_eval.emit.summary import RunSummary
 from pytest_xharness_eval.emit.tokens import load_tokens
 from pytest_xharness_eval.model.layout import INDEX_NAME, REPORT_DIR, TOKENS_NAME
 
@@ -36,6 +39,7 @@ __all__ = [
     "CellMetrics",
     "IndexRow",
     "Outcome",
+    "RunSummary",
     "aggregate_history",
     "cells",
     "inline_page",

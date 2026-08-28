@@ -38,17 +38,18 @@ Never use `pip install` or invoke `python` directly; use `uv`.
 
 All source lives under `src/pytest_xharness_eval/`, and the listing is the architecture
 (ADR 0039). Two entry-point modules sit at the root because importlib resolves them by
-name -- `plugin.py` (the `pytest11` entry point) and `replay.py` (`python -m`) -- and the
-five layers each run is pushed through are folders beneath them, each depending only on
-the ones above it in this list:
+name -- `plugin/` (the `pytest11` entry point, a package whose `__init__` is the hook
+manifest, ADR 0040) and `replay.py` (`python -m`) -- and the five layers each run is
+pushed through are folders beneath them, each depending only on the ones above it in
+this list:
 
 | Layer | What lives there |
 |-------|------------------|
-| `model/` | the nouns: `runresult.py`, `case.py`, `matrix.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
+| `model/` | the nouns: `runresult.py`, `case.py`, `suite.py`, `matrix.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
 | `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, and the record-kind catalogue `records.py` |
 | `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, and the bundled `prices.toml` |
-| `emit/` | the documents that leave: `metrics.py`, `index.py`, `tokens.py`, `page.py` |
-| `runtime/` | how a sweep is wired: `settings.py`, `pipeline.py` |
+| `emit/` | the documents that leave: `metrics.py`, `index.py`, `summary.py`, `tokens.py`, `page.py` |
+| `runtime/` | how a sweep is wired: `settings.py`, `pipeline.py`, and the transitional `legacy.py` |
 
 A ruff `TID251` rule fails the build when a layer names one above it; the exceptions are
 the per-file-ignore list in `pyproject.toml` and nowhere else.
@@ -62,7 +63,11 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | A new field on the run record | `model/runresult.py`, then `harness/claude.py` and `harness/codex.py` for both dialects |
 | A bundled model price | `derive/prices.toml` only; a project overrides with `xharness_prices` ini lines, USD per MTok (ADR 0030) |
 | The plugin-default matrix or narrowing | `model/matrix.py`; the *known* harnesses are the registry, reached through `model/registry.py` and never a second list (ADR 0034, ADR 0039) |
-| A plugin option, collection rule, or `report.json` | `plugin.py` (pytest hooks only) |
+| A plugin option or ini key's registration | `plugin/options.py` (which also validates the price and ignore lines at configure time, and prints the header) |
+| The collection rule, the cell item, or how one cell runs | `plugin/collect.py` (`EvalFile`, `EvalItem`), `plugin/cell.py` (`CellRun`: materialise, invoke, store, grade, record; only `invoke` spends, ADR 0002) |
+| How a record reaches the xdist controller, or a cell's status word | `plugin/results.py` (`PROPERTY`, the stash keys, the one dict crossing, ADR 0016) |
+| The terminal table, `report.json`, or when the combine step runs | `plugin/summary.py` (the hook) and `emit/summary.py` (`RunSummary`, the document, ADR 0040) |
+| How an `eval_*.py` suite is imported, or a case found in one | `model/suite.py` (`EvalSuite`, `find_case`) -- one loader for collection and replay alike (ADR 0040) |
 | An ini key, or how a location is resolved for a sweep *and* a replay | `runtime/settings.py` (`Settings.from_config` / `from_cache`); `Settings.cache` is the `CacheLayout`, never a bare path (ADR 0034, ADR 0037) |
 | What happens to a `RunResult` after the CLI returns (price, coverage, case, evidence, metrics) | `runtime/pipeline.py` -- one sequence, run by both the live cell and a replay (ADR 0034) |
 | The per-cell metrics record or the verbose status word | `emit/metrics.py` (`CellMetrics`; its keys are a wire format, pinned in `tests/test_units.py`, ADR 0037) |
@@ -76,7 +81,8 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | A session-log record kind, its category or pill colour | the harness's `classify_record` in `harness/<provider>.py` for the kind, `harness/records.py` for the catalogue and category, then the mirrored tables in `report-ui/src/lib/records.ts` (and the local map in `report-ui/src/components/panels/helpers.ts`), then the glossary |
 | Which skill files count as loaded or run | `derive/skillcov.py` (`SkillFile` catalogued, `FileCoverage` annotated, `SkillCoverage` derived); the shell vocabulary it attributes with arrives as a `model.registry.Shells` value (ADR 0027, ADR 0039) |
 | How `xharness_skill_ignore` lines (`<pattern>` or `<skill>: <pattern>`) select and match | `derive/ignorerules.py` (ADR 0035) |
-| Rebuilding cached results without a paid run, or migrating a legacy captured/ dir | `replay.py` (`uv run -m pytest_xharness_eval.replay <cache dir>`) |
+| Rebuilding cached results without a paid run | `replay.py` (`uv run -m pytest_xharness_eval.replay <cache dir>`) |
+| Migrating a legacy pre-0032 `captured/` dir | `runtime/legacy.py` (`LegacyCapture`); transitional, deletable in one file (ADR 0040) |
 | How a workspace is built or diffed | `model/workspace.py` |
 | The `@evalcase` contract | `model/case.py` |
 | A behaviour of the plugin | `tests/test_plugin.py` (pytester), `tests/test_units.py` (pure modules) |
@@ -94,6 +100,13 @@ in `emit/metrics.py`.
 - Never mock, patch, or fake a CLI, its subprocess, or its session log. Not in evals,
   not in unit tests. The functions that spawn a CLI carry `pragma: no cover` with a
   stated reason instead (ADR 0002).
+- Never widen a `pragma: no cover` past the call that spends. If free steps sit inside
+  it, push the paid call down into its own method until the pragma fits it exactly, and
+  test the rest (ADR 0040) -- `plugin/cell.py` is the worked example.
+- Never author a serialised document as a literal inside a pytest hook or a CLI entry
+  point. Every emitted format is a type in `emit/` with `to_dict`/`write` on it, so a
+  reader (and `report-ui/src/lib/types.ts`) has one definition to look at (ADR 0037,
+  ADR 0040).
 - Never make a cell pass without a real session log. A missing log, a mismatched
   session id, or zero tokens is a failure, not a skip.
 - Never price an unknown model as zero or `None` and continue. Add the bundled row or
