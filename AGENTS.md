@@ -51,7 +51,7 @@ All source lives under `src/pytest_xharness_eval/`.
 | An ini key, or how a location is resolved for a sweep *and* a replay | `settings.py` (`Settings.from_config` / `from_cache`); `Settings.cache` is the `CacheLayout`, never a bare path (ADR 0034, ADR 0037) |
 | What happens to a `RunResult` after the CLI returns (price, coverage, case, evidence, metrics) | `pipeline.py` -- one sequence, run by both the live cell and a replay (ADR 0034) |
 | The per-cell metrics record or the verbose status word | `metrics.py` (`CellMetrics`; its keys are a wire format, pinned in `tests/test_units.py`, ADR 0037) |
-| A directory or file name under the cache root, or the `{skill}/{harness}/{model}/{run}/{session}` shape | `layout.py` (`CacheLayout`, `SessionDir`) and nowhere else (ADR 0037) |
+| A directory or file name under the cache root, or the `{skill}/{harness}/{model}/{run}/{session}` shape | `layout.py` (`CacheLayout`, `SessionDir`, `LocatedSession`) and nowhere else (ADR 0037, ADR 0038) |
 | `report/index.json` or the aggregated `report/history.jsonl` (the combine step, ADR 0032) | `report.py` (`IndexRow`) |
 | The browsable `report/report.html` | `report-ui/src/` (the SPA, ADR 0028, ADR 0031: Tamagui base, Plotly charts), then `make ui-promote`; `assets/report.html` is the built artifact, never edited by hand |
 | A page component, its id or its data contract | `report-ui/src/components/` or `views/`, `report-ui/src/lib/types.ts` (mirrors the JSON `report.py` writes), then the glossary |
@@ -98,7 +98,11 @@ in `metrics.py`.
   only: the metrics record is `to_dict()`-ed at the `pytest_runtest_makereport` hook and
   `from_dict()`-ed on the controller, and is a type everywhere else (ADR 0016, ADR 0037).
 - Never spell a cache path by hand (`cache / "results"`, `session_dir / "log.jsonl"`, a
-  `*/*/*/*/*` glob). Go through `CacheLayout` / `SessionDir` (ADR 0037).
+  `*/*/*/*/*` glob). Go through `CacheLayout` / `SessionDir` (ADR 0037). A report link or
+  a session key needs a `LocatedSession`, which only `CacheLayout` builds (ADR 0038).
+- Never give a field a default that exists only because one constructor cannot fill it,
+  and never let a boundary reader (`from_dict`) return a value its own declaration does
+  not describe: drop the value, keep the type honest (ADR 0038).
 - Never edit an accepted ADR. Write a new one that supersedes it and update the index.
 
 ## Vocabulary

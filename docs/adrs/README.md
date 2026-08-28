@@ -48,4 +48,5 @@ record ends in a **Lens**: the reusable rule it leaves behind.
 | [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) | A harness is a class, the registry is the only dispatch, and the layers are named | accepted, refines 0002, 0014, 0015 and 0023; structural only |
 | [0035](0035-the-nouns-carry-their-own-invariants.md) | The nouns carry their own invariants | accepted, refines 0003, 0019, 0021, 0022, 0025 and 0033; structural only; the folding constructors' keywords are typed by 0036 |
 | [0036](0036-a-folding-constructor-declares-its-keyword-fields.md) | A folding constructor declares its keyword fields | accepted, refines 0003 and 0035; structural only |
-| [0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md) | The emitted records are types, and the cache tree has one owner | accepted, refines 0016, 0018, 0020, 0032 and 0035; structural only |
+| [0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md) | The emitted records are types, and the cache tree has one owner | accepted, refines 0016, 0018, 0020, 0032 and 0035; structural only; its two boundary constructors are tightened by 0038 |
+| [0038](0038-a-tolerant-reader-still-honours-its-declaration.md) | A tolerant reader still honours its declaration | accepted, refines 0032 and 0037; structural only |

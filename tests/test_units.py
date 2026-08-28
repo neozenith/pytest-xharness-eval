@@ -1522,7 +1522,7 @@ def test_capture_writes_the_log_subagent_transcripts_and_the_result(tmp_path: Pa
         Subagent(agent="ghost", id="a2", log=str(native / "missing.jsonl"), turns=0, usage=Usage()),
     ]
 
-    session = pipeline.capture(r, SessionDir.at(tmp_path / "results" / "sid-1"))
+    session = pipeline.capture(r, SessionDir(tmp_path / "results" / "sid-1"))
 
     assert session.log.read_text(encoding="utf-8") == '{"type": "user"}\n'
     assert (session.subagents / "agent-a1.jsonl").is_file()
@@ -1537,14 +1537,14 @@ def test_capture_of_a_run_without_subagents_writes_no_subagents_dir(tmp_path: Pa
     r = _result("m", Usage())
     (tmp_path / "s.jsonl").write_text("{}\n", encoding="utf-8")
     r.session_log = str(tmp_path / "s.jsonl")
-    session = pipeline.capture(r, SessionDir.at(tmp_path / "out"))
+    session = pipeline.capture(r, SessionDir(tmp_path / "out"))
     assert not session.subagents.exists()
 
 
 def test_record_metrics_writes_the_cell_record_beside_its_evidence(tmp_path: Path) -> None:
     """The live cell and a replay build this record with the same call (ADR 0032, ADR 0034)."""
     r = _result("claude-opus-5", Usage(10, 20, 30, 40))
-    session = SessionDir.at(tmp_path / "sid")
+    session = SessionDir(tmp_path / "sid")
     session.mkdir()
     record = pipeline.record_metrics(
         r,
@@ -1719,8 +1719,17 @@ def test_replay_migrates_a_legacy_captured_directory(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
+    # A second session whose record has a null timestamp: the run directory is stamped from
+    # ``at``, so it falls back to the zero stamp rather than raising (ADR 0038).
+    (case / "claude-sid2.result.json").write_text(
+        json.dumps({"harness": "claude", "model": "claude-opus-5", "session_id": "sid2"}), encoding="utf-8"
+    )
+    with (captured / "history.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"session_id": "sid2", "verdict": "pass", "at": None}) + "\n")
+
     cache = tmp_path / ".xharness_eval_cache"
-    assert replay.migrate_legacy(captured, cache) == 1
+    assert replay.migrate_legacy(captured, cache) == 2
+    assert (cache / "results" / "demo" / "claude" / "claude-opus-5" / "00000000T000000Z" / "sid2").is_dir()
     session_dir = cache / "results" / "demo" / "claude" / "claude-opus-5" / "20260822T000000Z" / "sid1"
     assert (session_dir / "result.json").is_file() and (session_dir / "log.jsonl").is_file()
     hist = json.loads((session_dir / "history.json").read_text(encoding="utf-8"))
@@ -1798,6 +1807,10 @@ def test_history_carries_coverage_counts_and_the_status_word_shows_them() -> Non
     )
     assert (rec["skill_not_loaded"], rec["skill_not_run"]) == (["a"], ["b"])
     assert cell.status_word().endswith("1 turns  0 tools  skill 3/8 loaded 1/2 run")
+    # Where the harness reports a window, how close the run came to it is in the word too.
+    r.context_window = 1000
+    r.calls = [Call(n=1, at="t", usage=Usage(input_tokens=100))]
+    assert "  ctx 10.0%  skill 3/8 loaded" in _metrics(r, wall_ms=1000).status_word()
 
 
 # -- report ---------------------------------------------------------------------------
@@ -1939,6 +1952,18 @@ def test_report_tolerates_an_empty_or_corrupt_results_tree(tmp_path: Path) -> No
     report.write(CacheLayout(empty))
     assert json.loads((empty / "report" / "index.json").read_text(encoding="utf-8"))["cells"] == []
 
+    # A stored record carrying a null where a string is declared: the combine step sorts
+    # every record by ``at``, so a None there used to abort the whole report (ADR 0038).
+    nulled = CacheLayout(tmp_path / "nulled-cache")
+    session = nulled.session(skill="s", harness="h", model="m", run="20260101T000000Z", session="sid")
+    session.mkdir()
+    session.result.write_text('{"harness": "h", "session_id": "sid"}', encoding="utf-8")
+    session.history.write_text('{"session_id": "sid", "at": null, "verdict": null}', encoding="utf-8")
+    report.write(nulled)
+    row = json.loads(nulled.index.read_text(encoding="utf-8"))["cells"][0]
+    assert (row["session_id"], row["at"], row["verdict"]) == ("sid", "", "")
+    assert json.loads(nulled.history.read_text(encoding="utf-8"))["at"] == ""
+
 
 def test_a_metrics_record_round_trips_through_disk_and_the_wire(tmp_path: Path) -> None:
     """One line of sorted JSON out, the same record back (ADR 0037)."""
@@ -1968,6 +1993,18 @@ def test_a_metrics_record_survives_a_partial_or_foreign_document(tmp_path: Path)
     assert partial.outcome == Outcome(node="n", verdict="pass", wall_ms=7, started_at="t")
     assert partial.turns == 0 and partial.estimated_cost_usd is None
     assert "tokens" not in partial.to_dict() and "captured" not in partial.to_dict()
+    # A present-but-null value is dropped like an unknown key, so the *declared* type holds
+    # and every reader may trust it: a record whose ``at`` is null sorts as "" rather than
+    # raising in the combine step (ADR 0038).
+    nulled = CellMetrics.from_dict(
+        {"at": None, "verdict": None, "wall_ms": None, "rates_applied": None, "skill_not_run": None}
+    )
+    assert (nulled.at, nulled.verdict, nulled.wall_ms) == ("", "", 0)
+    assert (nulled.rates_applied, nulled.skill_not_run) == ({}, [])
+    # An optional field still admits its null, and JSON's one number type still reads as a float.
+    priced = CellMetrics.from_dict({"reported_turns": None, "estimated_cost_usd": 0, "context_window": "wide"})
+    assert priced.reported_turns is None and priced.context_window is None
+    assert isinstance(priced.estimated_cost_usd, float)
 
 
 # -- the wire formats these two documents are (ADR 0037) --------------------------------
@@ -2129,9 +2166,20 @@ def test_cache_layout_walks_the_five_levels_and_keeps_the_coordinates(tmp_path: 
     assert list(CacheLayout(tmp_path / "empty").sessions()) == []
 
 
-def test_a_session_dir_handed_a_path_has_no_coordinates(tmp_path: Path) -> None:
-    """``at`` is for the callers given a directory rather than finding one: a replay, an adapter."""
-    session = SessionDir.at(tmp_path / "sid1")
-    assert (session.session, session.skill, session.run) == ("sid1", "", "")
+def test_a_session_dir_addressed_by_path_cannot_publish_a_report_link(tmp_path: Path) -> None:
+    """The two variants are two types, so a garbage key is unrepresentable (ADR 0038).
+
+    A caller handed a directory -- a replay, a harness adapter re-reading its own captured
+    log -- gets the four documents and ``mkdir()``. It does not get ``rel`` or a report
+    link, because a bare path does not know where it sits in a cache: when one type served
+    both jobs with the coordinates defaulting to empty, that caller published ``"////sid1"``
+    as a session key and no one was told.
+    """
+    session = SessionDir(tmp_path / "sid1")
+    assert session.session == "sid1"
     assert session.log == tmp_path / "sid1" / "log.jsonl"
     assert session.mkdir().is_dir()
+    assert not hasattr(session, "rel") and not hasattr(session, "report_link")
+
+    located = CacheLayout(tmp_path).session(skill="s", harness="h", model="m", run="r", session="sid1")
+    assert isinstance(located, SessionDir) and located.rel == "s/h/m/r/sid1"

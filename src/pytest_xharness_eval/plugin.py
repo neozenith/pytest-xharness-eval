@@ -69,7 +69,7 @@ if TYPE_CHECKING:
     from _pytest.terminal import TerminalReporter
 
     # Our Libraries
-    from pytest_xharness_eval.layout import SessionDir
+    from pytest_xharness_eval.layout import LocatedSession
 
 
 # The user_properties key a cell's record travels under, worker to controller.
@@ -299,7 +299,7 @@ class EvalItem(pytest.Item):
         """``evals/fixtures/<name>/`` (ADR 0018)."""
         return self.evals_dir / "fixtures" / self.case.fixture
 
-    def session_dir(self, cache: CacheLayout, session_id: str) -> SessionDir:
+    def session_dir(self, cache: CacheLayout, session_id: str) -> LocatedSession:
         """Where this cell's evidence goes: its five coordinates under ``<cache>/results/``."""
         return cache.session(
             skill=self.case.skill,

@@ -26,8 +26,9 @@ from __future__ import annotations
 
 # Standard Library
 import json
-from dataclasses import asdict, dataclass, field, fields
-from typing import TYPE_CHECKING, Any, Self
+from dataclasses import asdict, dataclass, field
+from types import UnionType
+from typing import TYPE_CHECKING, Any, Final, Self, Union, get_args, get_origin, get_type_hints
 
 # Our Libraries
 from pytest_xharness_eval.normalise import read_json_object
@@ -41,6 +42,16 @@ if TYPE_CHECKING:
     from pytest_xharness_eval.layout import CacheLayout
     from pytest_xharness_eval.matrix import Cell
     from pytest_xharness_eval.runresult import RunResult
+
+
+def _admitted(hint: Any) -> tuple[type, ...]:
+    """The runtime classes one field annotation admits: ``int | None`` -> ``(int, NoneType)``.
+
+    Only the shapes this record's fields actually use are handled -- a class, a union of
+    classes, and a parameterised ``dict``/``list`` whose origin is the class to test.
+    """
+    parts = get_args(hint) if get_origin(hint) in (UnionType, Union) else (hint,)
+    return tuple(get_origin(part) or part for part in parts)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -191,12 +202,24 @@ class CellMetrics:
         """Rebuild the record from a plain mapping: the inverse of :meth:`to_dict`.
 
         Used at the two places a mapping is all there is: the xdist controller reading what
-        execnet shipped, and a reader of a ``history.json`` on disk. Keys this version does
-        not know are dropped and ones it does not find keep their default, so an old
-        capture degrades to a partial record rather than failing the read.
+        execnet shipped, and a reader of a ``history.json`` on disk. A key this version does
+        not know is dropped, and so is a value that is not of its field's declared type --
+        most often a ``null`` where a ``str`` is declared, which an older capture wrote and
+        a hand-truncated one still can. Both cases leave the field at its default, so a
+        foreign document degrades to a partial record rather than failing the read *and*
+        every reader may trust the declaration: the combine step sorting by ``at`` and a
+        replay stamping a run directory from it cannot meet a None there (ADR 0038).
         """
-        known = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in raw.items() if k in known})
+        values: dict[str, Any] = {}
+        for key, stored in raw.items():
+            admitted = _ADMITTED.get(key)
+            if admitted is None:
+                continue
+            # JSON has one number type, so a float field legitimately arrives as ``0``.
+            value = float(stored) if float in admitted and type(stored) is int else stored
+            if isinstance(value, admitted):
+                values[key] = value
+        return cls(**values)
 
     @classmethod
     def stored(cls, path: Path) -> Self | None:
@@ -254,3 +277,10 @@ class CellMetrics:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.to_dict(), sort_keys=True) + "\n", encoding="utf-8")
         return path
+
+
+# What each field admits when a stored mapping is read back, resolved once from the
+# declarations themselves so the two cannot drift (ADR 0038).
+_ADMITTED: Final[dict[str, tuple[type, ...]]] = {
+    name: _admitted(hint) for name, hint in get_type_hints(CellMetrics).items()
+}

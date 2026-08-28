@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     # Our Libraries
-    from pytest_xharness_eval.layout import CacheLayout, SessionDir
+    from pytest_xharness_eval.layout import CacheLayout, LocatedSession
 
 INLINE_MARKER = "<!--XHARNESS_INLINE_DATA-->"
 
@@ -124,8 +124,13 @@ class IndexRow:
     skill_coverage: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def of(cls, session: SessionDir, result: Mapping[str, Any], hist: CellMetrics | None) -> Self:
-        """Summarise one captured session from its result and its metrics record."""
+    def of(cls, session: LocatedSession, result: Mapping[str, Any], hist: CellMetrics | None) -> Self:
+        """Summarise one captured session from its result and its metrics record.
+
+        The session must be a *located* one: the row carries its run and links to its
+        evidence relative to ``report/``, and only a directory that knows its coordinates
+        can name either (ADR 0038).
+        """
         usage = result.get("usage") or {}
         tool_calls = result.get("tool_calls") or {}
         meta = result.get("case") or {}

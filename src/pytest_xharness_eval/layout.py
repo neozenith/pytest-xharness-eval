@@ -8,7 +8,7 @@ modules at once -- ``HISTORY_NAME`` meant ``history.json`` in ``pipeline`` and
 adapters hardcoded ``log.jsonl``, and ``Settings.results_root`` was a third spelling of
 ``<cache>/results`` -- so no rename could be made in one edit.
 
-Both types here are value objects over a path: frozen, holding no state, and touching the
+Every type here is a value object over a path: frozen, holding no state, and touching the
 filesystem only to list a tree or create a directory. Nothing here reads or writes a
 document; the documents own their own formats (``metrics.CellMetrics``,
 ``runresult.RunResult``, ``report.IndexRow``).
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 # Standard Library
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Standard Library
@@ -47,45 +47,27 @@ TOKENS_NAME = "report.tokens.json"
 GLOSSARY_NAME = "XHARNESS-REPORT-GLOSSARY.md"
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@dataclass(frozen=True, slots=True)
 class SessionDir:
-    """``results/{skill}/{harness}/{model}/{run}/{session}/``: one cell's evidence directory.
+    """One cell's evidence directory, addressed by path alone.
 
     A cell writes only inside its own directory, which is what makes parallel workers
     conflict-free (ADR 0032). The four names it may hold are addressed through the
     properties below, so a harness re-reading its own captured log, the combine step
     indexing it and a replay rebuilding it all spell them the same way.
 
-    The coordinates are carried alongside the path because the tree's five levels *are*
-    the record's identity: :meth:`rel` is the key the report page addresses a session by.
-    They are empty on a directory reached through :meth:`at`, which is handed a path
-    rather than finding one.
+    This is the type for a caller *handed* a directory -- a replay rebuilding one session,
+    an adapter folding its own captured log -- and it deliberately cannot produce a report
+    link, because a bare path does not know where it sits in a cache. The type that can is
+    :class:`LocatedSession`, and only :class:`CacheLayout` builds one (ADR 0038).
     """
 
     path: Path
-    skill: str = ""
-    harness: str = ""
-    model: str = ""
-    run: str = ""
-
-    @classmethod
-    def at(cls, path: Path) -> Self:
-        """The evidence directory at ``path``, for a caller that was handed one.
-
-        A replay rebuilding a single session, or a harness folding its captured log, knows
-        the directory but not where it sits in a cache; the coordinates stay empty.
-        """
-        return cls(path=path)
 
     @property
     def session(self) -> str:
         """The session id: the directory is named for it."""
         return self.path.name
-
-    @property
-    def rel(self) -> str:
-        """``{skill}/{harness}/{model}/{run}/{session}``: the coordinates as one posix key."""
-        return "/".join((self.skill, self.harness, self.model, self.run, self.session))
 
     @property
     def log(self) -> Path:
@@ -107,6 +89,35 @@ class SessionDir:
         """Where the transcripts of the threads this session spawned are captured (ADR 0033)."""
         return self.path / SUBAGENTS_DIR
 
+    def mkdir(self) -> Path:
+        """Create the directory and its parents, and return it."""
+        self.path.mkdir(parents=True, exist_ok=True)
+        return self.path
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class LocatedSession(SessionDir):
+    """A :class:`SessionDir` that knows its five coordinates under ``results/``.
+
+    The tree's five levels *are* a session's identity, so a located directory -- and only a
+    located one -- can be named by :attr:`rel` and linked to from the report page. The
+    coordinates are always all known: :meth:`CacheLayout.session` is handed them and
+    :meth:`CacheLayout.sessions` reads them off the walk, and there is no third
+    constructor. One type served both jobs until ADR 0038, with the coordinates defaulting
+    to empty strings, which made ``"////sid"`` a representable key and
+    ``"../results/////sid/log.jsonl"`` a publishable link.
+    """
+
+    skill: str
+    harness: str
+    model: str
+    run: str
+
+    @property
+    def rel(self) -> str:
+        """``{skill}/{harness}/{model}/{run}/{session}``: the coordinates as one posix key."""
+        return "/".join((self.skill, self.harness, self.model, self.run, self.session))
+
     @property
     def report_link_prefix(self) -> str:
         """The path from ``report/`` to this directory: the page fetches relative (ADR 0032)."""
@@ -115,11 +126,6 @@ class SessionDir:
     def report_link(self, name: str) -> str:
         """The path from ``report/`` to one of this session's files."""
         return f"{self.report_link_prefix}/{name}"
-
-    def mkdir(self) -> Path:
-        """Create the directory and its parents, and return it."""
-        self.path.mkdir(parents=True, exist_ok=True)
-        return self.path
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +148,7 @@ class CacheLayout:
 
     @property
     def results(self) -> Path:
-        """``<cache>/results/``: one :class:`SessionDir` five levels beneath it."""
+        """``<cache>/results/``: one :class:`LocatedSession` five levels beneath it."""
         return self.root / RESULTS_DIR
 
     @property
@@ -152,17 +158,17 @@ class CacheLayout:
 
     # -- the evidence tree -------------------------------------------------------------
 
-    def session(self, *, skill: str, harness: str, model: str, run: str, session: str) -> SessionDir:
+    def session(self, *, skill: str, harness: str, model: str, run: str, session: str) -> LocatedSession:
         """The evidence directory for one cell of one run, named by its five coordinates."""
-        return SessionDir(
-            path=self.results / skill / harness / model / run / session,
+        return LocatedSession(
+            self.results / skill / harness / model / run / session,
             skill=skill,
             harness=harness,
             model=model,
             run=run,
         )
 
-    def sessions(self) -> Iterator[SessionDir]:
+    def sessions(self) -> Iterator[LocatedSession]:
         """Every captured session directory under ``results/``, in path order.
 
         The five-level walk lives here and nowhere else. The index, the aggregated history
@@ -175,7 +181,7 @@ class CacheLayout:
             if not path.is_dir():
                 continue
             skill, harness, model, run, _session = path.relative_to(results).parts
-            yield SessionDir(path=path, skill=skill, harness=harness, model=model, run=run)
+            yield LocatedSession(path, skill=skill, harness=harness, model=model, run=run)
 
     # -- the microsite -----------------------------------------------------------------
 

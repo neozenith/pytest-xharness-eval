@@ -64,7 +64,7 @@ def rebuild_result(
     settings: Settings | None = None,
 ) -> RunResult:
     """Re-derive one session's result from its captured log and stored envelope."""
-    session = SessionDir.at(session_dir)
+    session = SessionDir(session_dir)
     old = json.loads(session.result.read_text(encoding="utf-8"))
     if not session.log.is_file():
         raise FileNotFoundError(f"no captured session log beside {session.result}: {session.log.name}")
