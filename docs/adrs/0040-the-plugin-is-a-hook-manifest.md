@@ -11,7 +11,10 @@ consolidates under a cache dir),
 [0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md)
 (the emitted records are types) and
 [0039](0039-the-package-listing-is-the-architecture.md) (the package listing is
-the architecture). Structural only: no serialised key, no ini key, no CLI option
+the architecture). Its placement of `Verdict` in `plugin/verdict.py`, and the
+exports its manifest widened to, are superseded by
+[0041](0041-the-vocabulary-is-a-domain-noun-and-the-manifest-is-a-manifest.md).
+Structural only: no serialised key, no ini key, no CLI option
 and no metric's value changes; every hook keeps its name and its signature, and
 the characterization goldens are byte-identical.
 

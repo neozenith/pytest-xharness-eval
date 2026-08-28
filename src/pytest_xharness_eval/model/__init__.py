@@ -12,6 +12,7 @@ pointing this way (ADR 0039).
 * :mod:`.suite` -- importing one of those modules by path, and finding the case it
   declares: the one loader collection and a replay share (ADR 0040).
 * :mod:`.matrix` -- the ``harness/model`` cells a case sweeps (ADR 0010, ADR 0015).
+* :mod:`.verdict` -- the four words a cell may grade to (ADR 0041).
 * :mod:`.layout` -- every path under a project's eval cache (ADR 0032, ADR 0038).
 * :mod:`.workspace` -- materialising a fixture into a per-cell workspace (ADR 0004).
 * :mod:`.clock` and :mod:`.documents` -- the wall clock, and reading back a document this
@@ -43,6 +44,7 @@ from pytest_xharness_eval.model.runresult import (
     Usage,
 )
 from pytest_xharness_eval.model.suite import EvalSuite, find_case, suites_under
+from pytest_xharness_eval.model.verdict import Verdict
 from pytest_xharness_eval.model.workspace import diff, materialise, snapshot
 
 __all__ = [
@@ -62,6 +64,7 @@ __all__ = [
     "ToolCall",
     "ToolResult",
     "Usage",
+    "Verdict",
     "diff",
     "evalcase",
     "expand",

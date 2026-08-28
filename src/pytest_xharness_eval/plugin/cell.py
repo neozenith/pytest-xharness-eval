@@ -28,8 +28,8 @@ from pytest_xharness_eval.emit.metrics import Outcome
 from pytest_xharness_eval.model import workspace as ws
 from pytest_xharness_eval.model.clock import now_iso
 from pytest_xharness_eval.model.runresult import CaseRef
+from pytest_xharness_eval.model.verdict import Verdict
 from pytest_xharness_eval.plugin.results import RECORD_KEY
-from pytest_xharness_eval.plugin.verdict import Verdict
 from pytest_xharness_eval.runtime import pipeline
 
 if TYPE_CHECKING:
@@ -172,7 +172,7 @@ class CellRun:
             session,
             outcome=Outcome(
                 node=self.node,
-                verdict=self.verdict.value,
+                verdict=self.verdict,
                 wall_ms=attempt.wall_ms,
                 started_at=attempt.started_at,
             ),

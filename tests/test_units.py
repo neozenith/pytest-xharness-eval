@@ -32,7 +32,7 @@ from pytest_xharness_eval import (
     evalcase,
 )
 from pytest_xharness_eval import harness as harnesses
-from pytest_xharness_eval import replay
+from pytest_xharness_eval import plugin, replay
 from pytest_xharness_eval.derive import ignorerules, pricing, skillcov
 from pytest_xharness_eval.emit import page
 from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome
@@ -49,10 +49,10 @@ from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
 from pytest_xharness_eval.model.registry import Shells
 from pytest_xharness_eval.model.runresult import Subagent
 from pytest_xharness_eval.model.suite import EvalSuite
+from pytest_xharness_eval.model.verdict import Verdict
 from pytest_xharness_eval.plugin import cell as cellrun
 from pytest_xharness_eval.plugin import results as plugin_results
 from pytest_xharness_eval.plugin import summary as plugin_summary
-from pytest_xharness_eval.plugin.verdict import Verdict
 from pytest_xharness_eval.runtime import pipeline, settings
 from pytest_xharness_eval.runtime.legacy import LegacyCapture
 
@@ -75,6 +75,68 @@ def test_an_unregistered_harness_fails_loudly_rather_than_defaulting() -> None:
     """The dispatch that used to fall through to Codex now raises (ADR 0034)."""
     with pytest.raises(harnesses.UnknownHarness, match="unknown harness 'gemini'"):
         harnesses.get("gemini")
+
+
+def test_the_plugin_module_binds_every_hook_and_nothing_of_its_own(pytestconfig: pytest.Config) -> None:
+    """A fitness function for the manifest: pluggy's surface plus the compatibility names (ADR 0041).
+
+    Pluggy discovers a hook as an attribute of the imported plugin module, so every hook
+    implemented in the package has to be bound here or it silently stops firing. Nothing
+    else belongs: an internal re-exported from the manifest becomes API by accident.
+    """
+    hooks = sorted(name for name in plugin.__all__ if name.startswith("pytest_"))
+    assert hooks == [
+        "pytest_addoption",
+        "pytest_collect_file",
+        "pytest_configure",
+        "pytest_report_header",
+        "pytest_report_teststatus",
+        "pytest_runtest_makereport",
+        "pytest_terminal_summary",
+    ]
+    # Every hook the package implements is bound, wherever it is implemented.
+    implemented = {
+        name
+        for module in (plugin.collect, plugin.options, plugin.results, plugin.summary)
+        for name, obj in vars(module).items()
+        if name.startswith("pytest_") and getattr(obj, "__module__", None) == module.__name__
+    }
+    assert implemented == set(hooks)
+    assert all(getattr(plugin, name).__module__.startswith("pytest_xharness_eval.plugin.") for name in hooks)
+    # The compatibility surface a consuming repository's conftest.py imports, and no more.
+    assert sorted(set(plugin.__all__) - set(hooks)) == [
+        "EvalFile",
+        "EvalItem",
+        "PROPERTY",
+        "RECORD_KEY",
+        "RESULTS_KEY",
+    ]
+    assert plugin.EvalItem is plugin.collect.EvalItem and plugin.PROPERTY == "xharness_eval"
+    # The pytest11 entry point names this package, and it is the one registration (ADR 0014).
+    pyproject = tomllib.loads((pytestconfig.rootpath / "pyproject.toml").read_text(encoding="utf-8"))
+    assert pyproject["project"]["entry-points"]["pytest11"] == {"xharness_eval": "pytest_xharness_eval.plugin"}
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [("pass", Verdict.PASS), ("fail", Verdict.FAIL), ("error", Verdict.ERROR), ("dry-run", Verdict.DRY_RUN)],
+)
+def test_the_four_words_are_read_back_as_the_vocabulary(stored: str, expected: Verdict) -> None:
+    """The words a record may grade to are named once, in the domain, and no fifth (ADR 0041)."""
+    assert Verdict.stored(stored) is expected and expected.value == stored
+    assert list(Verdict) == [Verdict.PASS, Verdict.FAIL, Verdict.ERROR, Verdict.DRY_RUN]
+
+
+@pytest.mark.parametrize("stored", ["", "skipped", "PASS"])
+def test_a_verdict_no_version_of_this_package_wrote_reads_as_no_verdict(stored: str) -> None:
+    """A stored word outside the vocabulary is None, never a grade the run was not given (ADR 0038)."""
+    assert Verdict.stored(stored) is None
+    # Which is what a replay carries forward: the record keeps its empty verdict rather
+    # than gaining one, and the rebuild does not abort on it.
+    record = CellMetrics.from_dict({"verdict": stored, "node": "n", "at": "t", "wall_ms": 3})
+    assert record.outcome.verdict is None
+    rebuilt = CellMetrics.of(_result("m", Usage(1, 2)), outcome=record.outcome, cache=CacheLayout(Path("/c")))
+    assert rebuilt.verdict == "" and rebuilt.node == "n"
 
 
 # -- matrix --------------------------------------------------------------------------
@@ -155,7 +217,7 @@ def _metrics(
     result: RunResult,
     *,
     node: str = "n",
-    verdict: str = "pass",
+    verdict: Verdict = Verdict.PASS,
     wall_ms: int = 1,
     started_at: str = "t",
     cache: str = "/c",
@@ -1594,7 +1656,7 @@ def test_record_metrics_writes_the_cell_record_beside_its_evidence(tmp_path: Pat
         session,
         outcome=Outcome(
             node="skills/demo/evals/eval_x.py::eval_x[claude/claude-opus-5]",
-            verdict="pass",
+            verdict=Verdict.PASS,
             wall_ms=1234,
             started_at="2026-08-22T00:00:00+00:00",
         ),
@@ -1849,7 +1911,7 @@ def test_the_status_word_is_the_verdict_followed_by_the_cells_metrics(
     result = _result("claude-opus-5", Usage(10, 20))
     result.estimated_cost_usd = 0.25
     status = plugin_results.pytest_report_teststatus(
-        _report(_metrics(result, verdict=verdict.value, wall_ms=2000)), pytestconfig
+        _report(_metrics(result, verdict=verdict, wall_ms=2000)), pytestconfig
     )
     assert status is not None
     assert (status[0], status[1]) == (category, letter)
@@ -2382,7 +2444,7 @@ def test_report_tolerates_an_empty_or_corrupt_results_tree(tmp_path: Path) -> No
 
 def test_a_metrics_record_round_trips_through_disk_and_the_wire(tmp_path: Path) -> None:
     """One line of sorted JSON out, the same record back (ADR 0037)."""
-    record = _metrics(_result("m", Usage(10, 20, 30, 40)), node="n[x/m]", verdict="fail")
+    record = _metrics(_result("m", Usage(10, 20, 30, 40)), node="n[x/m]", verdict=Verdict.FAIL)
     path = record.write(tmp_path / "sid" / "history.json")
     assert path.read_text(encoding="utf-8").endswith("}\n")
     assert json.loads(path.read_text(encoding="utf-8")) == record.to_dict()
@@ -2405,7 +2467,7 @@ def test_a_metrics_record_survives_a_partial_or_foreign_document(tmp_path: Path)
     partial = CellMetrics.from_dict(
         {"verdict": "pass", "node": "n", "at": "t", "wall_ms": 7, "tokens": 99, "captured": "/old"}
     )
-    assert partial.outcome == Outcome(node="n", verdict="pass", wall_ms=7, started_at="t")
+    assert partial.outcome == Outcome(node="n", verdict=Verdict.PASS, wall_ms=7, started_at="t")
     assert partial.turns == 0 and partial.estimated_cost_usd is None
     assert "tokens" not in partial.to_dict() and "captured" not in partial.to_dict()
     # A present-but-null value is dropped like an unknown key, so the *declared* type holds
@@ -2520,6 +2582,9 @@ def test_history_json_has_exactly_the_frozen_key_set() -> None:
     dry = CellMetrics.dry_run(node="n", cell=mx.Cell(harness="claude", model="claude-opus-5"))
     assert sorted(dry.to_dict()) == HISTORY_KEYS
     assert (dry.verdict, dry.harness, dry.model, dry.cache) == ("dry-run", "claude", "claude-opus-5", "")
+    # The fourth word's only producer names it from the vocabulary, and still stores the
+    # plain word: this record is shipped by execnet (ADR 0016, ADR 0041).
+    assert dry.verdict == Verdict.DRY_RUN and type(dry.verdict) is str
 
 
 def test_index_json_has_exactly_the_frozen_key_set(tmp_path: Path) -> None:

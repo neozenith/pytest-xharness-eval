@@ -45,7 +45,7 @@ this list:
 
 | Layer | What lives there |
 |-------|------------------|
-| `model/` | the nouns: `runresult.py`, `case.py`, `suite.py`, `matrix.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
+| `model/` | the nouns: `runresult.py`, `case.py`, `suite.py`, `matrix.py`, `verdict.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
 | `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, and the record-kind catalogue `records.py` |
 | `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, and the bundled `prices.toml` |
 | `emit/` | the documents that leave: `metrics.py`, `index.py`, `summary.py`, `tokens.py`, `page.py` |
@@ -66,6 +66,7 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | A plugin option or ini key's registration | `plugin/options.py` (which also validates the price and ignore lines at configure time, and prints the header) |
 | The collection rule, the cell item, or how one cell runs | `plugin/collect.py` (`EvalFile`, `EvalItem`), `plugin/cell.py` (`CellRun`: materialise, invoke, store, grade, record; only `invoke` spends, ADR 0002) |
 | How a record reaches the xdist controller, or a cell's status word | `plugin/results.py` (`PROPERTY`, the stash keys, the one dict crossing, ADR 0016) |
+| The words a cell may grade to | `model/verdict.py` (`Verdict`); every producer names it from there, and the `.value` -- never the member -- reaches a record (ADR 0041) |
 | The terminal table, `report.json`, or when the combine step runs | `plugin/summary.py` (the hook) and `emit/summary.py` (`RunSummary`, the document, ADR 0040) |
 | How an `eval_*.py` suite is imported, or a case found in one | `model/suite.py` (`EvalSuite`, `find_case`) -- one loader for collection and replay alike (ADR 0040) |
 | An ini key, or how a location is resolved for a sweep *and* a replay | `runtime/settings.py` (`Settings.from_config` / `from_cache`); `Settings.cache` is the `CacheLayout`, never a bare path (ADR 0034, ADR 0037) |
@@ -107,6 +108,12 @@ in `emit/metrics.py`.
   point. Every emitted format is a type in `emit/` with `to_dict`/`write` on it, so a
   reader (and `report-ui/src/lib/types.ts`) has one definition to look at (ADR 0037,
   ADR 0040).
+- Never spell a word from a shared vocabulary as a literal. A vocabulary two layers use
+  is a `StrEnum` in `model/`, where every layer above may import it; its `.value` is what
+  reaches a record that crosses execnet (ADR 0041).
+- Never re-export an internal from `plugin/__init__.py`. It binds the seven hooks pluggy
+  discovers plus the four compatibility names, and a test pins that set; everything else
+  stays addressable at `plugin.<module>.<name>` (ADR 0041).
 - Never make a cell pass without a real session log. A missing log, a mismatched
   session id, or zero tokens is a failure, not a skip.
 - Never price an unknown model as zero or `None` and continue. Add the bundled row or

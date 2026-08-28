@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Final, Self, Union, get_args, get_origin,
 
 # Our Libraries
 from pytest_xharness_eval.model.documents import read_json_object
+from pytest_xharness_eval.model.verdict import Verdict
 
 if TYPE_CHECKING:
     # Standard Library
@@ -61,10 +62,15 @@ class Outcome:
     Who ran it, when, for how long by the wall clock, and how it graded. A replay
     recomputes every other field on the record but keeps these four from the previous one,
     because there is nothing to recompute them from (ADR 0023).
+
+    :attr:`verdict` is the vocabulary itself rather than a string that resembles it
+    (ADR 0041), and is None only where it came from a stored record that named no verdict
+    this version knows -- the one case a replay must carry forward without inventing a
+    grade (ADR 0038).
     """
 
     node: str
-    verdict: str
+    verdict: Verdict | None
     wall_ms: int
     started_at: str
 
@@ -151,7 +157,8 @@ class CellMetrics:
             harness=result.harness,
             model=result.model,
             session_id=result.session_id,
-            verdict=outcome.verdict,
+            # The word, never the member: this record is shipped by execnet (ADR 0041).
+            verdict=outcome.verdict.value if outcome.verdict else "",
             turns=result.turns,
             reported_turns=result.reported_turns,
             tool_calls=sum(result.tool_calls.values()),
@@ -194,8 +201,11 @@ class CellMetrics:
         one thing every reader of ``report.json`` could rely on -- that a cell record is a
         cell record -- did not hold (ADR 0037). ``cache`` stays empty: a dry run invokes
         nothing, so it must leave no evidence and trigger no combine step (ADR 0018).
+
+        A dry run is the fourth word's only producer, and it names it from the vocabulary
+        like every other producer does (ADR 0041).
         """
-        return cls(node=node, harness=cell.harness, model=cell.model, verdict="dry-run")
+        return cls(node=node, harness=cell.harness, model=cell.model, verdict=Verdict.DRY_RUN.value)
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> Self:
@@ -236,8 +246,13 @@ class CellMetrics:
 
     @property
     def outcome(self) -> Outcome:
-        """The four values a replay must keep, since it cannot re-derive them."""
-        return Outcome(node=self.node, verdict=self.verdict, wall_ms=self.wall_ms, started_at=self.at)
+        """The four values a replay must keep, since it cannot re-derive them.
+
+        The stored word is read back through the vocabulary, so a record whose verdict is
+        absent or foreign carries no verdict forward rather than a word no reader can
+        interpret (ADR 0038, ADR 0041).
+        """
+        return Outcome(node=self.node, verdict=Verdict.stored(self.verdict), wall_ms=self.wall_ms, started_at=self.at)
 
     def status_word(self) -> str:
         """The detail shown after the verdict in ``-v`` output.

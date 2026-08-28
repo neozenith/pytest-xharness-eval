@@ -22,7 +22,7 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval.emit.metrics import CellMetrics
-from pytest_xharness_eval.plugin.verdict import Verdict
+from pytest_xharness_eval.model.verdict import Verdict
 
 if TYPE_CHECKING:
     # Standard Library
