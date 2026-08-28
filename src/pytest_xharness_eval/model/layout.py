@@ -10,8 +10,8 @@ adapters hardcoded ``log.jsonl``, and ``Settings.results_root`` was a third spel
 
 Every type here is a value object over a path: frozen, holding no state, and touching the
 filesystem only to list a tree or create a directory. Nothing here reads or writes a
-document; the documents own their own formats (``metrics.CellMetrics``,
-``runresult.RunResult``, ``report.IndexRow``).
+document; the documents own their own formats (``emit.metrics.CellMetrics``,
+``model.runresult.RunResult``, ``emit.index.IndexRow``).
 """
 
 from __future__ import annotations
@@ -76,12 +76,12 @@ class SessionDir:
 
     @property
     def result(self) -> Path:
-        """The normalised :class:`~pytest_xharness_eval.runresult.RunResult`."""
+        """The normalised :class:`~pytest_xharness_eval.model.runresult.RunResult`."""
         return self.path / RESULT_NAME
 
     @property
     def history(self) -> Path:
-        """This session's one :class:`~pytest_xharness_eval.metrics.CellMetrics` record."""
+        """This session's one :class:`~pytest_xharness_eval.emit.metrics.CellMetrics` record."""
         return self.path / HISTORY_NAME
 
     @property
@@ -187,7 +187,7 @@ class CacheLayout:
 
     @property
     def index(self) -> Path:
-        """``report/index.json``: one :class:`~pytest_xharness_eval.report.IndexRow` per session."""
+        """``report/index.json``: one :class:`~pytest_xharness_eval.emit.index.IndexRow` per session."""
         return self.report / INDEX_NAME
 
     @property

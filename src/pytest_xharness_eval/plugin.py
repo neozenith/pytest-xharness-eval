@@ -40,16 +40,18 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval import harness
-from pytest_xharness_eval import matrix as mx
-from pytest_xharness_eval import pipeline, pricing, report, skillcov
-from pytest_xharness_eval import workspace as ws
-from pytest_xharness_eval.case import EvalCase
-from pytest_xharness_eval.ignorerules import IgnoreRules
-from pytest_xharness_eval.layout import CacheLayout
-from pytest_xharness_eval.metrics import CellMetrics, Outcome
-from pytest_xharness_eval.normalise import now_iso
-from pytest_xharness_eval.runresult import CaseRef
-from pytest_xharness_eval.settings import (
+from pytest_xharness_eval.derive import pricing, skillcov
+from pytest_xharness_eval.derive.ignorerules import IgnoreRules
+from pytest_xharness_eval.emit import page
+from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome
+from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model import workspace as ws
+from pytest_xharness_eval.model.case import EvalCase
+from pytest_xharness_eval.model.clock import now_iso
+from pytest_xharness_eval.model.layout import CacheLayout
+from pytest_xharness_eval.model.runresult import CaseRef
+from pytest_xharness_eval.runtime import pipeline
+from pytest_xharness_eval.runtime.settings import (
     INI_CACHE_DIR,
     INI_MATRIX,
     INI_PRICES,
@@ -69,7 +71,7 @@ if TYPE_CHECKING:
     from _pytest.terminal import TerminalReporter
 
     # Our Libraries
-    from pytest_xharness_eval.layout import LocatedSession
+    from pytest_xharness_eval.model.layout import LocatedSession
 
 
 # The user_properties key a cell's record travels under, worker to controller.
@@ -470,7 +472,7 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: int,
     tokens, inline = settings.report_tokens, settings.report_inline
     for root in sorted({r.cache for r in results if r.cache}):
         cache = CacheLayout(Path(root))
-        page = report.write(cache, design_tokens=tokens, inline=inline)
-        tr.write_line(f"  aggregated report: {page}{' (inline, opens over file://)' if inline else ''}")
+        report_page = page.write(cache, design_tokens=tokens, inline=inline)
+        tr.write_line(f"  aggregated report: {report_page}{' (inline, opens over file://)' if inline else ''}")
         if not inline:
-            tr.write_line(f"  serve it: {report.serve_hint(cache)}")
+            tr.write_line(f"  serve it: {page.serve_hint(cache)}")

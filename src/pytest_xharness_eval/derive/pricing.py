@@ -5,7 +5,7 @@ from (``rates_applied``), so a decision made on a stale or wrong row can be
 traced back to that row rather than re-derived.
 
 The arithmetic belongs to :class:`Rates` — a row knows what it charges for a
-:class:`~pytest_xharness_eval.runresult.Usage` — and the answer travels as one
+:class:`~pytest_xharness_eval.model.runresult.Usage` — and the answer travels as one
 :class:`CostEstimate` that a result applies in a single call. No module outside this one
 writes a cost field (ADR 0035).
 """
@@ -19,11 +19,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Self
 
 # Our Libraries
-from pytest_xharness_eval.normalise import now_iso
+from pytest_xharness_eval.model.clock import now_iso
 
 if TYPE_CHECKING:
     # Our Libraries
-    from pytest_xharness_eval.runresult import RunResult, Usage
+    from pytest_xharness_eval.model.runresult import RunResult, Usage
 
 # The table shipped with the package. A project's ``xharness_prices`` ini lines add to
 # or override these rows (see ``load_table``); they never have to replace them wholesale.

@@ -27,15 +27,21 @@ from pytest_xharness_eval import (
     evalcase,
 )
 from pytest_xharness_eval import harness as harnesses
-from pytest_xharness_eval import ignorerules
-from pytest_xharness_eval import matrix as mx
-from pytest_xharness_eval import normalise, pipeline, pricing, records, replay, report, runresult, settings, skillcov
-from pytest_xharness_eval import workspace as ws
+from pytest_xharness_eval import replay
+from pytest_xharness_eval.derive import ignorerules, pricing, skillcov
+from pytest_xharness_eval.emit import page
+from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome
 from pytest_xharness_eval.harness import claude as claude_harness
 from pytest_xharness_eval.harness import codex as codex_harness
-from pytest_xharness_eval.layout import CacheLayout, SessionDir
-from pytest_xharness_eval.metrics import CellMetrics, Outcome
-from pytest_xharness_eval.runresult import Subagent
+from pytest_xharness_eval.harness import records
+from pytest_xharness_eval.model import clock
+from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model import runresult
+from pytest_xharness_eval.model import workspace as ws
+from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
+from pytest_xharness_eval.model.registry import Shells
+from pytest_xharness_eval.model.runresult import Subagent
+from pytest_xharness_eval.runtime import pipeline, settings
 
 # -- package surface ---------------------------------------------------------------
 
@@ -1496,6 +1502,30 @@ def test_coverage_uses_the_new_harnesss_own_shell_vocabulary(tmp_path: Path, pro
     assert by["scripts/check.ts"].run == [2]
 
 
+def test_coverage_can_be_handed_a_shell_vocabulary_instead_of_looking_one_up(tmp_path: Path) -> None:
+    """Annotating a ledger is arithmetic, not a registry call (ADR 0039).
+
+    The same run, under a harness name nothing has registered: handed the vocabulary it
+    produces the same answer, and asked to find one it fails loudly rather than guessing.
+    """
+    files = skillcov.catalog(_skill(tmp_path))
+    r = _result("m", Usage(), harness="nowhere")
+    r.workspace = "/x/ws"
+    r.calls = [
+        Call(n=1, at="t", tools=[ToolCall("Terminal", "", {"command": "cd /x/skills/demo && cat SKILL.md"})]),
+        Call(n=2, at="t", tools=[ToolCall("Terminal", "", {"command": "bun run scripts/check.ts"})]),
+    ]
+    shells = Shells(tools=frozenset({"Terminal"}), persistent=frozenset({"Terminal"}))
+
+    cov = skillcov.annotate("demo", files, r, shells)
+    by = {f.path: f for f in cov.files}
+    assert by["SKILL.md"].loaded == [1]
+    assert by["scripts/check.ts"].run == [2]
+
+    with pytest.raises(harnesses.UnknownHarness, match="unknown harness 'nowhere'"):
+        skillcov.annotate("demo", files, r)
+
+
 # -- pipeline: the sequence both the live cell and a replay run ------------------------
 
 
@@ -1847,10 +1877,10 @@ def test_report_indexes_every_captured_result_and_writes_the_page(tmp_path: Path
     old.harness, old.session_id = "codex", "01a022dc"
     old.write(codex_dir / "result.json")
 
-    page = report.write(CacheLayout(cache))
-    assert page == cache / "report" / "report.html"
-    html = page.read_text(encoding="utf-8")
-    assert "index.json" in html and "window.__XH_DATA__ = " not in html and report.INLINE_MARKER not in html
+    report_page = page.write(CacheLayout(cache))
+    assert report_page == cache / "report" / "report.html"
+    html = report_page.read_text(encoding="utf-8")
+    assert "index.json" in html and "window.__XH_DATA__ = " not in html and page.INLINE_MARKER not in html
     report_dir = cache / "report"
     assert "# xharness report glossary" in (report_dir / "XHARNESS-REPORT-GLOSSARY.md").read_text(encoding="utf-8")
     # The bundled design tokens land beside the page so they can be edited in place (ADR 0024).
@@ -1893,7 +1923,7 @@ def test_report_indexes_every_captured_result_and_writes_the_page(tmp_path: Path
         None,
         False,
     )
-    hint = report.serve_hint(CacheLayout(cache))
+    hint = page.serve_hint(CacheLayout(cache))
     assert "report/report.html" in hint and str(cache) in hint
 
 
@@ -1911,9 +1941,9 @@ def test_report_inline_embeds_data_and_user_design_tokens(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    page = report.write(CacheLayout(cache), design_tokens=brand, inline=True)
-    html = page.read_text(encoding="utf-8")
-    assert "window.__XH_DATA__ = {" in html and report.INLINE_MARKER not in html
+    report_page = page.write(CacheLayout(cache), design_tokens=brand, inline=True)
+    html = report_page.read_text(encoding="utf-8")
+    assert "window.__XH_DATA__ = {" in html and page.INLINE_MARKER not in html
     assert '"name": "acme"' in json.dumps(
         json.loads((cache / "report" / "report.tokens.json").read_text(encoding="utf-8")), indent=1
     )
@@ -1931,11 +1961,11 @@ def test_report_refuses_missing_or_malformed_design_tokens(tmp_path: Path) -> No
     cache = tmp_path / ".xharness_eval_cache"
     cache.mkdir()
     with pytest.raises(FileNotFoundError, match="design tokens file not found"):
-        report.write(CacheLayout(cache), design_tokens=tmp_path / "absent.json")
+        page.write(CacheLayout(cache), design_tokens=tmp_path / "absent.json")
     bad = tmp_path / "bad.json"
     bad.write_text('{"colours": {}}', encoding="utf-8")
     with pytest.raises(ValueError, match="'themes' key"):
-        report.write(CacheLayout(cache), design_tokens=bad)
+        page.write(CacheLayout(cache), design_tokens=bad)
 
 
 def test_report_tolerates_an_empty_or_corrupt_results_tree(tmp_path: Path) -> None:
@@ -1944,12 +1974,12 @@ def test_report_tolerates_an_empty_or_corrupt_results_tree(tmp_path: Path) -> No
     session_dir.mkdir(parents=True)
     (session_dir / "result.json").write_text("not json", encoding="utf-8")
     (session_dir / "history.json").write_text("not json", encoding="utf-8")
-    report.write(CacheLayout(cache))
+    page.write(CacheLayout(cache))
     assert json.loads((cache / "report" / "index.json").read_text(encoding="utf-8"))["cells"] == []
     assert (cache / "report" / "history.jsonl").read_text(encoding="utf-8") == ""
     # A cache with no results/ at all still writes an empty report.
     empty = tmp_path / "empty-cache"
-    report.write(CacheLayout(empty))
+    page.write(CacheLayout(empty))
     assert json.loads((empty / "report" / "index.json").read_text(encoding="utf-8"))["cells"] == []
 
     # A stored record carrying a null where a string is declared: the combine step sorts
@@ -1959,7 +1989,7 @@ def test_report_tolerates_an_empty_or_corrupt_results_tree(tmp_path: Path) -> No
     session.mkdir()
     session.result.write_text('{"harness": "h", "session_id": "sid"}', encoding="utf-8")
     session.history.write_text('{"session_id": "sid", "at": null, "verdict": null}', encoding="utf-8")
-    report.write(nulled)
+    page.write(nulled)
     row = json.loads(nulled.index.read_text(encoding="utf-8"))["cells"][0]
     assert (row["session_id"], row["at"], row["verdict"]) == ("sid", "", "")
     assert json.loads(nulled.history.read_text(encoding="utf-8"))["at"] == ""
@@ -1975,7 +2005,7 @@ def test_a_metrics_record_round_trips_through_disk_and_the_wire(tmp_path: Path) 
     # The wire boundary: execnet ships builtins only, so the record crosses as a mapping
     # and is decoded on the controller (ADR 0016).
     assert CellMetrics.from_dict(record.to_dict()) == record
-    assert normalise.now_iso().endswith("+00:00")
+    assert clock.now_iso().endswith("+00:00")
 
 
 def test_a_metrics_record_survives_a_partial_or_foreign_document(tmp_path: Path) -> None:
@@ -2111,7 +2141,7 @@ def test_index_json_has_exactly_the_frozen_key_set(tmp_path: Path) -> None:
     cache = CacheLayout(tmp_path / ".xharness_eval_cache")
     session = cache.session(skill="demo", harness="claude", model="m", run="20260822T000000Z", session="sid1")
     _result("m", Usage(1, 2)).write(session.result)
-    report.write(cache)
+    page.write(cache)
 
     index = json.loads(cache.index.read_text(encoding="utf-8"))
     assert sorted(index) == ["captured", "cells", "generated_at", "inline"]

@@ -11,7 +11,7 @@ only to the skills whose name matches the ``fnmatch`` selector, in the way pytes
 patterns once and answers the only question anyone asks of them: is this path ignored.
 
 Nothing here knows what a skill, a run or a harness is. That is why it is not in
-:mod:`~pytest_xharness_eval.skillcov`: the coverage module reads a tree and a ledger, and
+:mod:`~pytest_xharness_eval.derive.skillcov`: the coverage module reads a tree and a ledger, and
 this one is string matching it delegates to.
 """
 

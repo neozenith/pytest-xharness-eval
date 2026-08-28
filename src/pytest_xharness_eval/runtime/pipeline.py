@@ -18,16 +18,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 # Our Libraries
-from pytest_xharness_eval import pricing, skillcov
-from pytest_xharness_eval.layout import SUBAGENTS_DIR
-from pytest_xharness_eval.metrics import CellMetrics
+from pytest_xharness_eval.derive import pricing, skillcov
+from pytest_xharness_eval.emit.metrics import CellMetrics
+from pytest_xharness_eval.model.layout import SUBAGENTS_DIR
 
 if TYPE_CHECKING:
     # Our Libraries
-    from pytest_xharness_eval.layout import CacheLayout, SessionDir
-    from pytest_xharness_eval.metrics import Outcome
-    from pytest_xharness_eval.runresult import CaseRef, RunResult
-    from pytest_xharness_eval.skillcov import SkillFile
+    from pytest_xharness_eval.derive.skillcov import SkillFile
+    from pytest_xharness_eval.emit.metrics import Outcome
+    from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
+    from pytest_xharness_eval.model.runresult import CaseRef, RunResult
 
 
 def derive(

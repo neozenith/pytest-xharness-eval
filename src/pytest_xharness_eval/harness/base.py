@@ -33,8 +33,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     # Our Libraries
-    from pytest_xharness_eval.layout import SessionDir
-    from pytest_xharness_eval.runresult import RunResult
+    from pytest_xharness_eval.model.layout import SessionDir
+    from pytest_xharness_eval.model.runresult import RunResult
 
 DEFAULT_TIMEOUT_S = 600
 

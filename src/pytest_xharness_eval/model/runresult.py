@@ -28,9 +28,12 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     # Our Libraries
-    from pytest_xharness_eval.case import EvalCase
-    from pytest_xharness_eval.pricing import AppliedRates, CostEstimate
-    from pytest_xharness_eval.skillcov import SkillCoverage
+    # The two derived documents a result carries are annotated here and nowhere else:
+    # these names are needed to declare the fields, never at run time, so the derivation
+    # layer stays strictly above this one (ADR 0039).
+    from pytest_xharness_eval.derive.pricing import AppliedRates, CostEstimate
+    from pytest_xharness_eval.derive.skillcov import SkillCoverage
+    from pytest_xharness_eval.model.case import EvalCase
 
 
 @dataclass(frozen=True, slots=True)

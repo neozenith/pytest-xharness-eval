@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     # Our Libraries
-    from pytest_xharness_eval.runresult import RunResult
+    from pytest_xharness_eval.model.runresult import RunResult
 
     Grader = Callable[[RunResult, Path], object]
 

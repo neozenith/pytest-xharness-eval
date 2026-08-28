@@ -12,17 +12,19 @@ ledger's length; each CLI's own aggregates are kept on ``reported_usage`` /
 not here: they belong to :meth:`RunResult.folded` and :meth:`Subagent.folded`, which are
 the only places a usage total is summed (ADR 0035).
 
-What is here is the dialect-free machinery every fold needs: reading a numbered JSONL or a
-stored JSON document, flattening a content value, summarising a tool argument, stamping
-the present moment, and measuring the gap between two timestamps. This module knows nothing about any provider.
-That is the point: a new harness reuses it without editing it.
+What is here is the dialect-free machinery every fold needs: reading a session log as
+numbered JSONL, flattening a content value, and summarising a tool argument. This module
+knows nothing about any provider. That is the point: a new harness reuses it without
+editing it -- and nothing above the adapter layer has to reach down into it, which is why
+the wall clock and the reader for this package's own stored documents moved out to
+:mod:`~pytest_xharness_eval.model.clock` and
+:mod:`~pytest_xharness_eval.model.documents` (ADR 0039).
 """
 
 from __future__ import annotations
 
 # Standard Library
 import json
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -55,23 +57,6 @@ def read_jsonl_numbered(path: Path) -> Numbered:
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     """Parse a JSONL file, skipping blank and unparseable lines."""
     return [rec for _, rec in read_jsonl_numbered(path)]
-
-
-def read_json_object(path: Path) -> dict[str, Any] | None:
-    """A JSON object read from ``path``, or None when it is absent, malformed or not an object.
-
-    The tolerant reader for a *stored document* -- a captured ``result.json`` or
-    ``history.json``. They are read back by the combine step and by a replay long after
-    they were written, sometimes by an older version of this package, so an unreadable one
-    is skipped rather than failing the whole rebuild.
-    """
-    if not path.is_file():
-        return None
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-    return value if isinstance(value, dict) else None
 
 
 def text_of(content: Any) -> str:
@@ -108,20 +93,3 @@ def summarise(name: str, arguments: Any) -> str:
 
 def join_text(existing: str, more: str) -> str:
     return (existing + "\n" + more).strip() if more else existing
-
-
-def now_iso() -> str:
-    """UTC timestamp, second precision: the form every ``at`` and ``applied_at`` field takes."""
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
-
-
-def ms_between(earlier: str | None, later: str | None) -> int | None:
-    """Milliseconds between two ISO-8601 timestamps (``Z`` accepted); None if either is missing or unparseable."""
-    if not earlier or not later:
-        return None
-    try:
-        a = datetime.fromisoformat(earlier.replace("Z", "+00:00"))
-        b = datetime.fromisoformat(later.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return max(int((b - a).total_seconds() * 1000), 0)

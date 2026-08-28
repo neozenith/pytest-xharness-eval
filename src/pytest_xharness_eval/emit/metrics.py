@@ -31,7 +31,7 @@ from types import UnionType
 from typing import TYPE_CHECKING, Any, Final, Self, Union, get_args, get_origin, get_type_hints
 
 # Our Libraries
-from pytest_xharness_eval.normalise import read_json_object
+from pytest_xharness_eval.model.documents import read_json_object
 
 if TYPE_CHECKING:
     # Standard Library
@@ -39,9 +39,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     # Our Libraries
-    from pytest_xharness_eval.layout import CacheLayout
-    from pytest_xharness_eval.matrix import Cell
-    from pytest_xharness_eval.runresult import RunResult
+    from pytest_xharness_eval.model.layout import CacheLayout
+    from pytest_xharness_eval.model.matrix import Cell
+    from pytest_xharness_eval.model.runresult import RunResult
 
 
 def _admitted(hint: Any) -> tuple[type, ...]:

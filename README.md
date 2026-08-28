@@ -216,11 +216,11 @@ xharness_prices = [
 flowchart LR
     CASE["eval_*.py case"]
     PLUG["plugin.py<br/>collect, expand matrix"]
-    WS["workspace.py<br/>pristine copy"]
+    WS["model/workspace.py<br/>pristine copy"]
     RUN["harness/<br/>ClaudeHarness | CodexHarness"]
     LOG["session log<br/>this run's own"]
     NORM["SessionLog.to_result<br/>RunResult"]
-    PRICE["pipeline.derive<br/>price, coverage, case"]
+    PRICE["runtime/pipeline.derive<br/>price, coverage, case"]
     GRADE["case assertions"]
     REP["report.json"]
 

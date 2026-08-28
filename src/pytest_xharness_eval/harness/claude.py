@@ -22,8 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 # Our Libraries
-from pytest_xharness_eval import records as record_kinds
-from pytest_xharness_eval import workspace as ws
+from pytest_xharness_eval.harness import records as record_kinds
 from pytest_xharness_eval.harness.base import (
     DEFAULT_TIMEOUT_S,
     Harness,
@@ -32,19 +31,20 @@ from pytest_xharness_eval.harness.base import (
     register,
     spawn,
 )
-from pytest_xharness_eval.normalise import (
+from pytest_xharness_eval.harness.normalise import (
     Numbered,
     join_text,
-    ms_between,
     read_jsonl_numbered,
     summarise,
     text_of,
 )
-from pytest_xharness_eval.runresult import Call, RunResult, Subagent, ToolCall, ToolResult, Usage
+from pytest_xharness_eval.model import workspace as ws
+from pytest_xharness_eval.model.clock import ms_between
+from pytest_xharness_eval.model.runresult import Call, RunResult, Subagent, ToolCall, ToolResult, Usage
 
 if TYPE_CHECKING:
     # Our Libraries
-    from pytest_xharness_eval.layout import SessionDir
+    from pytest_xharness_eval.model.layout import SessionDir
 
 # Isolation levers verified against the installed CLI (claude 2.1.237).
 _ISOLATION = ["--setting-sources", ""]

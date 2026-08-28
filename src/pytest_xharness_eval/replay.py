@@ -32,13 +32,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 # Our Libraries
-from pytest_xharness_eval import harness, pipeline, pricing, report, skillcov
-from pytest_xharness_eval.case import EvalCase
-from pytest_xharness_eval.layout import AGGREGATED_HISTORY_NAME, CacheLayout, SessionDir
-from pytest_xharness_eval.metrics import CellMetrics
-from pytest_xharness_eval.normalise import read_json_object
-from pytest_xharness_eval.runresult import CaseRef
-from pytest_xharness_eval.settings import (
+from pytest_xharness_eval import harness
+from pytest_xharness_eval.derive import pricing, skillcov
+from pytest_xharness_eval.emit import page
+from pytest_xharness_eval.emit.metrics import CellMetrics
+from pytest_xharness_eval.model.case import EvalCase
+from pytest_xharness_eval.model.documents import read_json_object
+from pytest_xharness_eval.model.layout import AGGREGATED_HISTORY_NAME, CacheLayout, SessionDir
+from pytest_xharness_eval.model.runresult import CaseRef
+from pytest_xharness_eval.runtime import pipeline
+from pytest_xharness_eval.runtime.settings import (
     DEFAULT_CACHE_DIR,
     INI_CACHE_DIR,
     Settings,
@@ -51,7 +54,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     # Our Libraries
-    from pytest_xharness_eval.runresult import RunResult
+    from pytest_xharness_eval.model.runresult import RunResult
 
 log = logging.getLogger(__name__)
 
@@ -235,8 +238,8 @@ def rebuild(
             coverage.summary if coverage else None,
         )
 
-    page = report.write(settings.cache, design_tokens=design_tokens, inline=inline)
-    log.info("report: %s%s", page, " (inline)" if inline else "")
+    report_page = page.write(settings.cache, design_tokens=design_tokens, inline=inline)
+    log.info("report: %s%s", report_page, " (inline)" if inline else "")
     return rewritten
 
 

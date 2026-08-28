@@ -19,9 +19,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 # Our Libraries
-from pytest_xharness_eval import matrix as mx
-from pytest_xharness_eval import pricing
-from pytest_xharness_eval.layout import CacheLayout
+from pytest_xharness_eval.derive import pricing
+from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model.layout import CacheLayout
 
 if TYPE_CHECKING:
     # Standard Library
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     import pytest
 
     # Our Libraries
-    from pytest_xharness_eval.case import EvalCase
+    from pytest_xharness_eval.model.case import EvalCase
 
 INI_SKILLS_DIR = "xharness_skills_dir"
 INI_CACHE_DIR = "xharness_cache_dir"

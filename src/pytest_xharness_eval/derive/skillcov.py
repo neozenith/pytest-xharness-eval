@@ -11,7 +11,7 @@ sets: the decision paths the agent never took.
 Files that are part of the directory but not of the skill's decision surface
 (example galleries, lockfiles, the skill's own unit tests) are excluded by the project's
 ``xharness_skill_ignore`` ini key, whose patterns are
-:mod:`~pytest_xharness_eval.ignorerules`' business (ADR 0026). Ignored files are counted
+:mod:`~pytest_xharness_eval.derive.ignorerules`' business (ADR 0026). Ignored files are counted
 here, never silently dropped.
 
 Detection is textual and deliberately simple: a tool call touches a file when the
@@ -39,12 +39,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
 # Our Libraries
-from pytest_xharness_eval import harness
-from pytest_xharness_eval.ignorerules import IgnoreRules
+from pytest_xharness_eval.derive.ignorerules import IgnoreRules
+from pytest_xharness_eval.model.registry import Shells
 
 if TYPE_CHECKING:
     # Our Libraries
-    from pytest_xharness_eval.runresult import RunResult
+    from pytest_xharness_eval.model.runresult import RunResult
 
 # Directories that are never part of a skill's own surface, whatever the ignore rules say.
 EXCLUDED_DIRS = {"evals", "captured", "node_modules", "__pycache__", ".git", ".mmdc_cache", "tmp", ".venv"}
@@ -350,30 +350,36 @@ def _command_of(arguments: Any) -> tuple[str, str | None]:
     return str(arguments or ""), None
 
 
-def _access(tool: str, text: str, skill: str, entry: FileCoverage, shell_tools: frozenset[str]) -> Access | None:
+def _access(tool: str, text: str, skill: str, entry: FileCoverage, shells: Shells) -> Access | None:
     """How one tool call touched one catalogued file, or None if it did not."""
     needle = f"{skill}/{entry.path}"
     if tool == "Skill" and entry.path == "SKILL.md" and skill in text:
         return Access.LOADED
     if needle not in text:
         return None
-    if entry.kind is FileKind.SCRIPT and tool in shell_tools:
+    if entry.kind is FileKind.SCRIPT and tool in shells.tools:
         pattern = _RUNNERS + r"\S*" + re.escape(needle)
         if re.search(pattern, text) or re.search(r"(?:^|[\s;&|(])\./?\S*" + re.escape(needle) + r"(?:\s|$)", text):
             return Access.RUN
     return Access.LOADED
 
 
-def annotate(skill: str, files: list[SkillFile], result: RunResult) -> SkillCoverage:
+def annotate(skill: str, files: list[SkillFile], result: RunResult, shells: Shells | None = None) -> SkillCoverage:
     """Walk a run's ledger and record, per catalogued file, the turns that loaded or ran it.
+
+    ``shells`` is the shell vocabulary of the harness that produced the run: which tool
+    names mean "ran a shell command", and which of those keep their working directory
+    between calls (ADR 0027). It is a *value this walk is handed*, not a registry lookup
+    it performs, so annotating coverage is arithmetic over a ledger and nothing else --
+    and a caller with a synthetic result can measure it without registering a harness
+    (ADR 0039). Omitted, it is resolved once from the registry by the run's own harness
+    name, which is what every production caller wants and what the pinned characterization
+    of the pipeline calls.
 
     Ignored files are still annotated (a run may well touch them); what that means for the
     missed sets and the summary is :meth:`SkillCoverage.over`'s to decide, not this walk's.
     """
-    # Which tool names mean "ran a shell command", and which of those keep their cwd, is a
-    # property of the harness that produced this run -- not a union of every provider's names
-    # (ADR 0027, ADR 0034).
-    agent = harness.get(result.harness)
+    vocab = shells if shells is not None else Shells.of(result.harness)
     rows = [FileCoverage.of(f) for f in files]
     # The persistent shell's working directory, per result: it starts in the workspace
     # and follows every ``cd`` of a persistent shell tool until the harness resets it.
@@ -381,15 +387,15 @@ def annotate(skill: str, files: list[SkillFile], result: RunResult) -> SkillCove
     for call in result.calls:
         for tool in call.tools:
             text = _call_text(tool.name, tool.input)
-            if tool.name in agent.shell_tools:
+            if tool.name in vocab.tools:
                 command, workdir = _command_of(tool.input)
-                start = cwd if tool.name in agent.persistent_shells else (workdir or (str(result.workspace) or None))
+                start = cwd if tool.name in vocab.persistent else (workdir or (str(result.workspace) or None))
                 resolved, after = resolve_command(command, skill, start)
-                if tool.name in agent.persistent_shells:
+                if tool.name in vocab.persistent:
                     cwd = after
                 text = f"{text}\n{resolved}"
             for row in rows:
-                access = _access(tool.name, text, skill, row, agent.shell_tools)
+                access = _access(tool.name, text, skill, row, vocab)
                 if access is not None:
                     row.touch(access, call.n)
         for res in call.results_in:
