@@ -14,33 +14,20 @@ Everything here is free. The paid part -- invoking the CLI -- belongs to the har
 from __future__ import annotations
 
 # Standard Library
-import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 # Our Libraries
-from pytest_xharness_eval import history, pricing, skillcov
+from pytest_xharness_eval.derive import pricing, skillcov
+from pytest_xharness_eval.emit.metrics import CellMetrics
+from pytest_xharness_eval.model.layout import SUBAGENTS_DIR
 
 if TYPE_CHECKING:
     # Our Libraries
-    from pytest_xharness_eval.case import EvalCase
-    from pytest_xharness_eval.runresult import RunResult
-
-RESULT_NAME = "result.json"
-LOG_NAME = "log.jsonl"
-HISTORY_NAME = "history.json"
-SUBAGENTS_DIR = "subagents"
-
-
-def case_record(case: EvalCase, suite: str) -> dict[str, Any]:
-    """Which suite file and case produced a run, and the prompt it sent (ADR 0025)."""
-    return {
-        "suite": suite,
-        "name": case.name,
-        "skill": case.skill,
-        "fixture": case.fixture,
-        "prompt": case.prompt,
-    }
+    from pytest_xharness_eval.derive.skillcov import SkillFile
+    from pytest_xharness_eval.emit.metrics import Outcome
+    from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
+    from pytest_xharness_eval.model.runresult import CaseRef, RunResult
 
 
 def derive(
@@ -48,8 +35,8 @@ def derive(
     *,
     table: dict[str, pricing.Rates],
     skill: str,
-    skill_files: list[dict[str, Any]],
-    case: dict[str, Any],
+    skill_files: list[SkillFile],
+    case: CaseRef | None,
 ) -> RunResult:
     """Price the run, annotate skill coverage, and name its case -- in that order.
 
@@ -63,7 +50,7 @@ def derive(
     return result
 
 
-def capture_subagents(result: RunResult, session_dir: Path) -> None:
+def capture_subagents(result: RunResult, session: SessionDir) -> None:
     """Copy each subagent transcript (and its Claude ``.meta.json`` sidecar) into
     ``<session dir>/subagents/`` and point ``Subagent.log`` at the captured copy, so the
     evidence survives the private ``CODEX_HOME`` teardown and a replay re-derives the
@@ -71,7 +58,7 @@ def capture_subagents(result: RunResult, session_dir: Path) -> None:
     """
     if not result.subagents:
         return
-    directory = session_dir / SUBAGENTS_DIR
+    directory = session.subagents
     directory.mkdir(parents=True, exist_ok=True)
     for sub in result.subagents:
         source = Path(sub.log)
@@ -84,36 +71,27 @@ def capture_subagents(result: RunResult, session_dir: Path) -> None:
         sub.log = f"{SUBAGENTS_DIR}/{source.name}"
 
 
-def capture(result: RunResult, session_dir: Path) -> Path:
+def capture(result: RunResult, session: SessionDir) -> SessionDir:
     """Write one session's evidence: the log, any subagent transcripts, and the result.
 
     One directory per session and no shared file: the convention that makes parallel
     workers conflict-free (ADR 0032). Never inside ``fixtures/`` -- a fixture is copied
     into every workspace, so anything there would leak into the next agent's cwd.
     """
-    session_dir.mkdir(parents=True, exist_ok=True)
-    (session_dir / LOG_NAME).write_bytes(Path(result.session_log).read_bytes())
-    capture_subagents(result, session_dir)
-    result.write(session_dir / RESULT_NAME)
-    return session_dir
+    session.mkdir()
+    session.log.write_bytes(Path(result.session_log).read_bytes())
+    capture_subagents(result, session)
+    result.write(session.result)
+    return session
 
 
-def record_metrics(
-    result: RunResult,
-    session_dir: Path,
-    *,
-    node: str,
-    verdict: str,
-    wall_ms: int,
-    started_at: str,
-    cache: Path,
-) -> dict[str, Any]:
+def record_metrics(result: RunResult, session: SessionDir, *, outcome: Outcome, cache: CacheLayout) -> CellMetrics:
     """Build this cell's metrics record and write it beside its evidence (ADR 0018).
 
-    ``cache`` travels on the record so the controller knows which cache root to run the
-    combine step against (ADR 0032).
+    ``cache`` is a declared field of the record, not a key written onto it afterwards
+    (ADR 0037): the controller reads it to know which cache root to run the combine step
+    against (ADR 0032).
     """
-    record = history.metrics_of(result, node=node, verdict=verdict, wall_ms=wall_ms, started_at=started_at)
-    record["cache"] = str(cache)
-    (session_dir / HISTORY_NAME).write_text(json.dumps(record, sort_keys=True) + "\n", encoding="utf-8")
-    return record
+    metrics = CellMetrics.of(result, outcome=outcome, cache=cache)
+    metrics.write(session.history)
+    return metrics

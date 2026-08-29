@@ -22,11 +22,10 @@ import os
 import shutil
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 # Our Libraries
-from pytest_xharness_eval import records as record_kinds
-from pytest_xharness_eval import workspace as ws
+from pytest_xharness_eval.harness import records as record_kinds
 from pytest_xharness_eval.harness.base import (
     DEFAULT_TIMEOUT_S,
     Harness,
@@ -35,17 +34,20 @@ from pytest_xharness_eval.harness.base import (
     register,
     spawn,
 )
-from pytest_xharness_eval.normalise import (
+from pytest_xharness_eval.harness.normalise import (
     Numbered,
-    attach_subagents,
     join_text,
-    ms_between,
     read_jsonl_numbered,
-    sum_usage,
     summarise,
     text_of,
 )
-from pytest_xharness_eval.runresult import Call, RunResult, Subagent, ToolCall, ToolResult, Usage
+from pytest_xharness_eval.model import workspace as ws
+from pytest_xharness_eval.model.clock import ms_between
+from pytest_xharness_eval.model.runresult import Call, RunResult, Subagent, ToolCall, ToolResult, Usage
+
+if TYPE_CHECKING:
+    # Our Libraries
+    from pytest_xharness_eval.model.layout import SessionDir
 
 # Isolation levers verified against the installed CLI (codex 0.148.0).
 _ISOLATION = ["--ignore-user-config", "--skip-git-repo-check"]
@@ -325,50 +327,50 @@ def fold(records: Numbered) -> tuple[str, str, _Ledger]:
     return session_id, model, ledger
 
 
-def from_codex(
-    log: Path,
-    exit_code: int,
-    workspace: Path,
-    files_written: list[str],
-    sub_rollouts: list[Path] | None = None,
-) -> RunResult:
-    """Normalise a Codex rollout file.
+class CodexSessionLog(SessionLog):
+    """A Codex rollout, the process exit code, and the subagent rollouts forked beside it.
 
-    ``sub_rollouts`` are the forked subagent rollouts of the same run (the runner passes
-    them from the private ``CODEX_HOME``); ``None`` means discover them beside a captured
-    log, under ``<session dir>/subagents/``.
+    The rollout carries its own session id, model, timing and usage, so the only thing it
+    cannot know is how the process ended. ``sub_rollouts`` is ``None`` for a captured log,
+    where the forks are discovered under ``<session dir>/subagents/``.
     """
-    records = read_jsonl_numbered(log)
-    session_id, model, ledger = fold(records)
 
-    total = ledger.last_total
-    reported = {k: int(v) for k, v in total.items() if isinstance(v, int | float) and not isinstance(v, bool)}
+    def __init__(self, path: Path, exit_code: int, sub_rollouts: list[Path] | None = None) -> None:
+        super().__init__(path)
+        self.exit_code = exit_code
+        self.sub_rollouts = sub_rollouts
 
-    result = RunResult(
-        harness="codex",
-        model=model,
-        session_id=session_id,
-        session_log=str(log),
-        workspace=str(workspace),
-        exit_code=exit_code,
-        duration_ms=ledger.duration_ms,
-        turns=len(ledger.calls),
-        final_text=ledger.final_text,
-        usage=sum_usage(ledger.calls),
-        tool_calls=ledger.tools,
-        files_written=files_written,
-        harness_reported_cost_usd=None,
-        calls=ledger.calls,
-        reported_usage=reported,
-        reported_turns=ledger.tasks,
-        record_kinds=CODEX.census([rec for _, rec in records]),
-        context_window=ledger.context_window,
-        ttft_ms=ledger.ttft_ms,
-        api_duration_ms=ledger.duration_ms or None,
-    )
-    if sub_rollouts is None:
-        sub_rollouts = sorted((log.parent / "subagents").glob("*.jsonl"))
-    return attach_subagents(result, subagents_of(sub_rollouts, result.calls))
+    def to_result(self, workspace: Path, files_written: list[str]) -> RunResult:
+        """Fold this rollout into a run: one :class:`Call` per ``token_count`` event."""
+        records = read_jsonl_numbered(self.path)
+        session_id, model, ledger = fold(records)
+        total = ledger.last_total
+        reported = {k: int(v) for k, v in total.items() if isinstance(v, int | float) and not isinstance(v, bool)}
+        forks = self.sub_rollouts
+        if forks is None:
+            forks = sorted((self.path.parent / "subagents").glob("*.jsonl"))
+
+        return RunResult.folded(
+            ledger.calls,
+            subagents_of(forks, ledger.calls),
+            harness="codex",
+            model=model,
+            session_id=session_id,
+            session_log=str(self.path),
+            workspace=str(workspace),
+            exit_code=self.exit_code,
+            duration_ms=ledger.duration_ms,
+            final_text=ledger.final_text,
+            tool_calls=ledger.tools,
+            files_written=files_written,
+            harness_reported_cost_usd=None,
+            reported_usage=reported,
+            reported_turns=ledger.tasks,
+            record_kinds=CODEX.census([rec for _, rec in records]),
+            context_window=ledger.context_window,
+            ttft_ms=ledger.ttft_ms,
+            api_duration_ms=ledger.duration_ms or None,
+        )
 
 
 def subagents_of(rollouts: list[Path], primary_calls: list[Call]) -> list[Subagent]:
@@ -395,15 +397,13 @@ def subagents_of(rollouts: list[Path], primary_calls: list[Call]) -> list[Subage
             primary_calls[-1].n if primary_calls else None,
         )
         subs.append(
-            Subagent(
+            Subagent.folded(
+                ledger.calls,
                 agent=str(meta.get("agent_nickname") or "subagent"),
                 id=session_id or str(meta.get("id") or ""),
                 log=str(rollout),
                 parent_turn=parent,
-                turns=len(ledger.calls),
                 description=str(meta.get("agent_path") or ""),
-                usage=sum_usage(ledger.calls),
-                calls=ledger.calls,
             )
         )
     return subs
@@ -438,23 +438,6 @@ def _classify(rec: dict[str, Any]) -> str:
 # -- the harness -----------------------------------------------------------------------
 
 
-class CodexSessionLog(SessionLog):
-    """A Codex rollout, the process exit code, and the subagent rollouts forked beside it.
-
-    The rollout carries its own session id, model, timing and usage, so the only thing it
-    cannot know is how the process ended. ``sub_rollouts`` is ``None`` for a captured log,
-    where the forks are discovered under ``<session dir>/subagents/``.
-    """
-
-    def __init__(self, path: Path, exit_code: int, sub_rollouts: list[Path] | None = None) -> None:
-        super().__init__(path)
-        self.exit_code = exit_code
-        self.sub_rollouts = sub_rollouts
-
-    def to_result(self, workspace: Path, files_written: list[str]) -> RunResult:
-        return from_codex(self.path, self.exit_code, workspace, files_written, sub_rollouts=self.sub_rollouts)
-
-
 class CodexHarness(Harness):
     """``codex exec``: no ``--session-id``, so a private CODEX_HOME isolates the rollout."""
 
@@ -473,9 +456,9 @@ class CodexHarness(Harness):
     ) -> RunResult:  # pragma: no cover - spawns a real CLI (ADR 0002)
         return run_codex(prompt, model, workspace, skill_dir=skill_dir, timeout_s=timeout_s)
 
-    def session_from_capture(self, session_dir: Path, stored: dict[str, Any]) -> CodexSessionLog:
+    def session_from_capture(self, session: SessionDir, stored: dict[str, Any]) -> CodexSessionLog:
         """The rollout is self-contained; only the exit code has to come from the stored result."""
-        return CodexSessionLog(session_dir / "log.jsonl", int(stored.get("exit_code") or 0))
+        return CodexSessionLog(session.log, int(stored.get("exit_code") or 0))
 
     def classify_record(self, rec: dict[str, Any]) -> str:
         return _classify(rec)

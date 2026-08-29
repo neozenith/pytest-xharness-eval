@@ -1,4 +1,15 @@
-"""Harnesses: one class per agent CLI, discovered through the registry in :mod:`.base`.
+"""The adapters: one class per agent CLI, plus the toolkit every dialect folds with.
+
+The layer that turns a provider's session log into the domain's :class:`RunResult` and
+knows nothing about what happens to it afterwards. Four parts:
+
+* :mod:`.base` -- the :class:`Harness` interface, the :class:`SessionLog` it folds, and
+  the registry that is the only dispatch on a harness name (ADR 0034).
+* :mod:`.claude` and :mod:`.codex` -- the two shipped dialects. Nothing outside this
+  package may name them; the ruff rule in ``pyproject.toml`` enforces it.
+* :mod:`.normalise` -- the dialect-free folding toolkit both adapters build a ledger with.
+* :mod:`.records` -- the catalogue of record kinds and the categories they belong to
+  (ADR 0022), shared by both dialects and mirrored by the report page.
 
 Importing this package registers every shipped harness, so ``harness.get("claude")``
 works anywhere without the caller importing the provider module. A project adding its

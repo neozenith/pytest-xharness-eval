@@ -78,7 +78,7 @@ def test_skill_ignore_lines_scope_by_skill_name(pytester: pytest.Pytester) -> No
         "    for item in items:\n"
         "        if isinstance(item, EvalItem):\n"
         "            for f in item.skill_files:\n"
-        "                print('FILE', f['path'], f['ignored'])\n"
+        "                print('FILE', f.path, f.ignored)\n"
     )
     result = pytester.runpytest("--collect-only", "-s")
     result.stdout.fnmatch_lines(["FILE SKILL.md False", "FILE assets/icon.png True", "FILE README.md True"])
@@ -184,9 +184,14 @@ def test_dry_run_writes_report_and_summary(pytester: pytest.Pytester) -> None:
         ]
     )
     report = json.loads((pytester.path / ".xharness_eval_cache" / "report" / "report.json").read_text(encoding="utf-8"))
+    # report.json is two keys and has always been two keys: a frozen wire format (ADR 0037).
+    assert sorted(report) == ["cells", "total_usd"]
     assert report["total_usd"] == 0
     assert [c["verdict"] for c in report["cells"]] == ["dry-run", "dry-run"]
     assert {c["harness"] for c in report["cells"]} == {"claude", "codex"}
+    # A dry-run cell is the same record as a live one, not a shape of its own: the whole
+    # metrics vocabulary is present, unmeasured (tests/test_units.py pins the key set).
+    assert all(c["accumulative_billed_tokens"] == 0 and c["estimated_cost_usd"] is None for c in report["cells"])
 
 
 def test_dry_run_writes_no_results(pytester: pytest.Pytester) -> None:

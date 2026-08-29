@@ -1,0 +1,92 @@
+# 0041: A shared vocabulary is a domain noun, and a manifest exports nothing of its own
+
+Status: accepted, 2026-08-28. Refines
+[0016](0016-results-travel-on-the-test-report.md) (results travel on the test
+report),
+[0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md)
+(the emitted records are types),
+[0038](0038-a-tolerant-reader-still-honours-its-declaration.md) (a tolerant
+reader still honours its declaration),
+[0039](0039-the-package-listing-is-the-architecture.md) (the package listing is
+the architecture) and
+[0040](0040-the-plugin-is-a-hook-manifest.md) (the plugin is a hook manifest).
+**Supersedes 0040's placement of `Verdict` in `plugin/verdict.py`, and the
+justification given there for it.** Structural only: no serialised key, no ini
+key, no CLI option and no metric's value changes; every hook keeps its name and
+its signature, and the characterization goldens are byte-identical.
+
+## Context
+
+0040 introduced `Verdict` — `pass`, `fail`, `error`, `dry-run` — and put it in
+`plugin/verdict.py`, claiming a vocabulary the whole package shares. It was
+neither, for three reasons that only show up when the layer rule of 0039 is taken
+seriously:
+
+| Symptom | What it cost |
+| --- | --- |
+| `plugin/` is the entry-point layer, above every other | `emit/` structurally *cannot* import from it — the ruff `TID251` rule fails the build. So `CellMetrics.dry_run`, the only producer of the fourth word, still wrote the bare literal `verdict="dry-run"`. The vocabulary was duplicated, not centralised. |
+| The enum typed no field | `Outcome.verdict`, `CellMetrics.verdict` and `IndexRow.verdict` were all `str`. An enum that nothing is declared as is a naming convention with a class statement around it. |
+| The module's own docstring was untrue | It said the two ends of a cell's life "neither may import the other", but `plugin/cell.py` imports `plugin/results.py` directly. A docstring that states a false constraint is worse than no docstring: the next reader preserves a shape for a reason that does not exist. |
+
+The repository already had the right answer in it. `CostStatus` — `priced` or
+`unpriced`, with no third state — lives in `model/runresult.py`, beside
+`cost_status: CostStatus`, the field it types.
+
+0040 also widened the manifest it had just declared to be "a manifest and nothing
+else": `__init__` re-exported `CellRun`, `Attempt`, `run_stamp`, `Verdict` and a
+`_ResultCollector` renamed public on the way out. None of those is named by
+0040's own compatibility list, and every one of them is API the moment it is
+exported.
+
+## Decision
+
+**A word two layers share is a domain noun.** `Verdict` moves to
+`model/verdict.py`, the bottom layer, which every layer above may name. Its
+producers then all use it: `plugin/cell.py` decides one, `emit/metrics.py`
+records it — `CellMetrics.dry_run` included, which is why the move is what
+removes the literal rather than a lint that forbids it.
+
+**The vocabulary types the observation, and the wire keeps the word.**
+`Outcome.verdict` is declared `Verdict | None`. The `.value` — never the member —
+is what reaches `CellMetrics.verdict`, which stays `str`: that record crosses to
+the xdist controller through execnet, which serialises builtins only (0016), and
+a `StrEnum` member is not a builtin. Typing the *record* field would have shipped
+a member over that wire.
+
+**A stored word that names no member is no verdict, not a fabricated one.**
+`Verdict.stored(word)` returns `None` for anything outside the four, which is
+what `CellMetrics.outcome` reads a replayed record back through. A capture
+written before the field existed, or truncated by hand, carries its empty verdict
+forward exactly as it did before; the alternative — mapping the unknown onto
+`error` — would have a rebuild assert a grade the run was never given, and 0038's
+tolerance is about degrading to the default, never about inventing a value.
+
+**A manifest exports the hooks and the compatibility surface, and nothing else.**
+`plugin/__init__` binds the seven `pytest_*` hooks pluggy discovers as attributes
+of the imported module, plus the four names a consuming repository's
+`conftest.py` already reaches for: `EvalFile`, `EvalItem`, `PROPERTY`,
+`RESULTS_KEY`, `RECORD_KEY`. Internals stay addressable where they are
+implemented — `plugin.cell.CellRun`, `plugin.results.ResultCollector` — which is
+where the tests already reach them.
+
+## Consequences
+
+`tests/test_units.py` gains a fitness function over the manifest: the bound hooks
+are exactly the hooks the package implements (a hook not bound here silently
+stops firing), the rest of `__all__` is exactly the compatibility surface, and
+the `pytest11` entry point still names `pytest_xharness_eval.plugin`. A new hook
+that is implemented and not bound now fails the suite instead of the next sweep.
+
+`from pytest_xharness_eval.plugin import Verdict` no longer resolves; the import
+is `from pytest_xharness_eval.model.verdict import Verdict`, or
+`pytest_xharness_eval.model`. The name was one commit old and unreleased.
+
+## Lens
+
+Two questions decide where a shared name lives, and neither is "who uses it
+most". *Which layer may everyone that needs it import?* — that is the only
+placement that can be enforced rather than agreed. *Which field is declared as
+it?* — a vocabulary that types nothing is decoration, and its duplicate literals
+survive the refactor that was supposed to remove them. And a module that
+advertises itself as a manifest must be audited as one: every convenience export
+is a public API nobody decided to publish.

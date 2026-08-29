@@ -13,12 +13,12 @@ decisions as records see [docs/adrs/](docs/adrs/README.md).
 ```mermaid
 flowchart LR
     CASE["eval_*.py case"]
-    PLUG["plugin.py<br/>collect, expand matrix"]
-    WS["workspace.py<br/>pristine copy"]
+    PLUG["plugin/<br/>collect, expand matrix"]
+    WS["model/workspace.py<br/>pristine copy"]
     RUN["harness/<br/>ClaudeHarness | CodexHarness"]
     LOG["session log<br/>this run's own"]
     NORM["SessionLog.to_result<br/>RunResult"]
-    PRICE["pipeline.derive<br/>price, coverage, case"]
+    PRICE["runtime/pipeline.derive<br/>price, coverage, case"]
     GRADE["case assertions"]
     REP["report.json"]
 
@@ -36,7 +36,7 @@ One cell flows left to right: a case is expanded into cells, each cell gets a fr
 workspace, the harness runs its CLI, its own log is located and folded into a
 `RunResult`, then priced, graded, and reported.
 
-Everything from the `RunResult` rightwards is `pipeline.py`, and a replay
+Everything from the `RunResult` rightwards is `runtime/pipeline.py`, and a replay
 (`python -m pytest_xharness_eval.replay`) rejoins the same flow at the session log
 rather than repeating it -- one sequence, two entry points (ADR 0034).
 
@@ -45,8 +45,8 @@ rather than repeating it -- one sequence, two entry points (ADR 0034).
 
 ```mermaid
 sequenceDiagram
-    participant P as plugin.py
-    participant W as workspace.py
+    participant P as plugin/
+    participant W as model/workspace.py
     participant R as harness/
     participant C as claude CLI
     participant X as codex CLI
@@ -117,6 +117,29 @@ The workspace itself is a plain copy of the fixture tree under the work director
 discarded and rebuilt for every cell. No git repository is created, which puts
 git-dependent skills out of scope for now (ADR 0004).
 
+## The package listing is the architecture
+
+`src/pytest_xharness_eval/` is not a flat list of modules. Two entry-point modules sit at
+the root because something outside the package resolves them by name -- `plugin/`
+through the `pytest11` entry point (ADR 0014) and `replay.py` through `python -m` -- and
+the five layers each run is pushed through are folders beneath them. `plugin/` is itself
+a package: its `__init__` is the hook manifest and each hook's job -- options, collection,
+the per-cell run, the record's crossing, the summary -- is a module beside it (ADR 0040):
+
+| Layer | Answers | Depends on |
+| --- | --- | --- |
+| `model/` | what a run, a case, a cell, a workspace and a cache tree *are* | nothing |
+| `harness/` | how one agent CLI is invoked, and how its session log folds | `model/` |
+| `derive/` | what a folded run cost, and which of the skill it reached | `model/` |
+| `emit/` | the documents that leave: the metrics record and the report microsite | `model/`, `harness/` |
+| `runtime/` | how a sweep is wired: settings, and the steps after the CLI returns | everything below |
+
+The order is a rule, not a description: a ruff `TID251` rule fails `make check` when a
+layer names one above it, with the exceptions listed once in `pyproject.toml` (ADR 0039).
+The one edge that points up is `model/registry.py`, which answers "which harnesses exist"
+and "what is this one's shell vocabulary" -- both lookups by registered name, because the
+registry is the only dispatch on a harness (ADR 0034).
+
 ## Paths come from the rootdir, not from the package
 
 The plugin is installed, so nothing about the consuming repository can be derived
@@ -136,7 +159,7 @@ visible on the first line of output.
 
 Neither session log carries cost. Claude reports `total_cost_usd` on its stdout
 envelope; Codex reports nothing. The plugin therefore prices every run itself from
-its bundled `prices.toml`, layered with the project's `xharness_prices` ini rows, using
+its bundled `derive/prices.toml`, layered with the project's `xharness_prices` ini rows, using
 four rates per model: input, output, cache read, and cache write.
 
 Keeping the cache tiers separate matters. In the reference Codex run, 174,336 of
@@ -170,6 +193,7 @@ that proves nothing.
 | Term | Meaning |
 |------|---------|
 | case | One `@evalcase` function in an `eval_*.py` module: a prompt, a skill, a fixture, a matrix |
+| EvalSuite | One imported `eval_*.py` module and the cases it declares. A suite belongs to no package, so it is imported by path under a name derived from that path; `EvalSuite.load` and `find_case` are the one loader collection and a replay share, where each used to keep its own (`model/suite.py`, ADR 0040) |
 | cell | One (harness, model) pair of a case; the unit pytest collects, runs, and reports |
 | harness | The agent CLI a cell runs on, `claude` or `codex`; the first half of a cell id |
 | matrix | The list of `harness/model` entries a case expands into cells; three scopes, case over project over plugin; `--harness`, `--model`, and `-k` narrow it |
@@ -179,21 +203,34 @@ that proves nothing.
 | session log | The JSONL file the CLI writes for one session; the evidence a verdict is tied to |
 | Harness | The class behind a harness name: how its CLI is invoked, how its log correlates back to the run, how its records classify, and what its shell tools mean for coverage. `harness.get(name)` is the only way to reach one; an unregistered name raises rather than defaulting (ADR 0034) |
 | SessionLog | One captured session in a provider's dialect *plus the side-channel that dialect needs* -- Claude's stdout envelope, Codex's exit code -- so every caller gets one uniform `to_result` (ADR 0034) |
-| RunResult | The normalised record of one cell: identity, usage, tool calls, files written, cost |
-| pipeline | The single sequence run over a `RunResult` by both a live cell and a replay: derive (price, coverage, case), capture (log, subagents, result), record metrics; `pipeline.py` (ADR 0034) |
-| settings | One resolved view of a project's configuration, built either from the live `pytest.Config` or, for a replay, from the pytest config on disk; `settings.py` (ADR 0034) |
-| captured | `evals/captured/<case>/`, where each run's log and `RunResult` are written; git-ignored |
-| history | `evals/captured/history.jsonl`, one flat metrics line per live cell (turns, tool calls, duration, wall clock, USD, tokens); git-ignored with the rest of `captured/` |
+| RunResult | The normalised record of one cell: identity, usage, tool calls, files written, cost. `RunResult.folded(calls, subagents, ...)` is the one constructor an adapter builds one through, so `turns` and `usage` are derived from the ledgers rather than supplied (ADR 0035) |
+| Usage | Token counts normalised across both dialects and kept apart by billed tier, for one call, one subagent, or a whole run. Frozen: a total accumulates only by producing a new total (`+`, `Usage.total`), so "a run's usage is its whole bill -- the primary ledger plus every subagent" is an invariant of the type rather than a rule the caller has to remember, and a second fold cannot bill a subagent twice (ADR 0033, ADR 0035) |
+| CaseRef | The case a result names -- suite, name, skill, fixture, prompt -- as one type for the live cell and both replay paths, which used to hand-build the record three times; the `case` block of `result.json` (ADR 0025, ADR 0035) |
+| CostEstimate, AppliedRates | What one run costs under one price row: `CostEstimate.of(usage, rates)` is the total, the per-tier split and the provenance, and `RunResult.apply_cost` writes all of it in one call, so the four cost fields are never written apart. `AppliedRates` is the `Rates` row plus the `applied_at` stamp, and is the `rates_applied` block of `result.json` (ADR 0021, ADR 0035) |
+| CostStatus | `priced` or `unpriced`, with no third state (ADR 0007); a `StrEnum`, so the wire format carries the same bare word it always has (ADR 0035) |
+| Verdict | How a cell graded: `pass`, `fail`, `error` or `dry-run`, and no fifth. A domain noun in `model/verdict.py`, so every layer that names one -- the cell that decides it, the record that stores it, the status word that prints it -- spells it from the same place; `Outcome.verdict` is declared as it, while the record keeps the `.value`, because that record crosses execnet, which serialises builtins only. `Verdict.stored` reads a word no version of this package wrote as *no* verdict rather than a fabricated grade (ADR 0016, ADR 0038, ADR 0041) |
+| pipeline | The single sequence run over a `RunResult` by both a live cell and a replay: derive (price, coverage, case), capture (log, subagents, result), record metrics; `runtime/pipeline.py` (ADR 0034, ADR 0039) |
+| settings | One resolved view of a project's configuration, built either from the live `pytest.Config` or, for a replay, from the pytest config on disk; `runtime/settings.py` (ADR 0034, ADR 0039) |
+| CellRun, Attempt | One cell's live run as a small state machine: materialise the workspace, `invoke` the CLI, `store` (derive then capture), `grade`, `record`. Exactly one of those steps spends money, and it is the only one carrying `pragma: no cover`, so the sequence a replay is pinned against is testable without paying (`plugin/cell.py`, ADR 0002, ADR 0040). An `Attempt` is what one invocation produced plus the two clock facts no log carries |
+| CacheLayout, SessionDir, LocatedSession | The cache tree as a value object, and one session's evidence directory within it. `CacheLayout` owns `build/`, `results/`, `report/`, every file name under them and the five-level `sessions()` walk; `SessionDir` owns `log.jsonl`, `result.json`, `history.json` and `subagents/`. `LocatedSession` is a `SessionDir` that knows its five coordinates, and therefore the only one that can be named by `rel` or linked to from the page; only `CacheLayout` builds one (ADR 0038). `Settings.cache` is a `CacheLayout`, so nothing reassembles a path under the cache root (ADR 0032, ADR 0037) |
+| captured | `<cache>/results/{skill}/{harness}/{model}/{run}/{session}/`, where each run's log, `RunResult` and metrics record are written; git-ignored (ADR 0032) |
+| CellMetrics, Outcome | One graded cell's metrics record -- the `history.json` written beside its evidence and one line of the combined `report/history.jsonl` -- as a type: flat, built of builtins, and carrying `status_word()` and its own `cache` field. `Outcome` is the four values grading observed and no log can supply (node, verdict, wall clock, start), which a replay carries forward while recomputing everything else. The record crosses to the xdist controller as a plain mapping and is a type on both sides; `from_dict` drops an unknown key *and* a value that is not of its field's declared type, so every reader may trust the declaration (ADR 0016, ADR 0018, ADR 0037, ADR 0038) |
+| history | One `history.json` per session (turns, tool calls, duration, wall clock, USD, tokens), combined into `<cache>/report/history.jsonl`; git-ignored with the rest of the cache (ADR 0032) |
 | call, turn | One model API call inside a cell's session (a *SessionTurn* in the report); `RunResult.calls` is the ledger of them, each with its usage, tools issued, results fed in, text, thinking, and the log lines it came from (ADR 0019, 0021). `turns` counts them; the CLI's own count is `reported_turns` |
 | subagent | A parallel thread the session spawned (Claude's Agent tool sidecars under `subagents/`, Codex's forked rollouts), captured beside `log.jsonl` and folded through the same ledger; `RunResult.subagents` lists them, each attributed to the primary turn that spawned it (`parent_turn`), and their usage is inside the run's `usage` and estimate (ADR 0033) |
 | estimated cost | `estimated_cost_usd`: this plugin's price-table estimate; `rates_applied` records the rates, row and file behind it (ADR 0021) |
 | harness reported cost | `harness_reported_cost_usd`: what the harness CLI itself said the run cost; Claude only |
 | total tokens | Every priced token summed over all turns; the cached prefix counts once per turn |
 | baseline tokens | The first turn's context: the harness's own prompt before the agent acts |
-| report | `evals/captured/report.html` with `index.json` and `XHARNESS-REPORT-GLOSSARY.md` beside it: a static page over the captured JSON, served over HTTP (ADR 0020, 0021) |
+| report, IndexRow | `<cache>/report/`: `report.html` with `index.json`, `history.jsonl`, `report.tokens.json` and `XHARNESS-REPORT-GLOSSARY.md` beside it -- a static page over the captured JSON, served over HTTP (ADR 0020, 0021, 0032). `IndexRow` is one row of `index.json`: a session summarised from its stored `result.json` and metrics record, with its evidence addressed by relative path (ADR 0037) |
+| RunSummary | `report/report.json` as a type: the cells one pytest session graded and the estimate they add up to, plus `cache_roots()` -- the roots this session wrote evidence into, which is where the combine step's trigger is decided and why a dry run stays free (`emit/summary.py`, ADR 0037, ADR 0040) |
+| LegacyCapture | A pre-0032 `<skill>/evals/captured` directory, recognised by shape and migrated into a cache root; transitional code with a known end, kept in one file so it can be deleted in one (`runtime/legacy.py`, ADR 0032, ADR 0040) |
 | SessionId, SessionTurnId | How the report addresses a session (the harness-minted session id, a unique prefix accepted) and a turn (`<SessionId>/t<N>`); both copyable from the page and carried in its URL fragment |
-| record kind | The catalogued shape of one session-log line, `harness/type[/subtype]`, with a category that colours its pill in the report; each harness's `classify_record` names the kind, `records.py` is the catalogue, and `record_kinds` is the per-run census (ADR 0022, ADR 0034) |
-| skill coverage | Which of the skill's catalogued files a run loaded or ran, per turn, and the `not_loaded` / `not_run` sets; `skillcov.py` (ADR 0022) |
+| record kind | The catalogued shape of one session-log line, `harness/type[/subtype]`, with a category that colours its pill in the report; each harness's `classify_record` names the kind, `harness/records.py` is the catalogue, and `record_kinds` is the per-run census (ADR 0022, ADR 0034) |
+| skill coverage | Which of the skill's catalogued files a run loaded or ran, per turn, and the `not_loaded` / `not_run` sets; `derive/skillcov.py` (ADR 0022). What the project's `xharness_skill_ignore` lines mean, and which files they take off the decision surface, is `derive/ignorerules.py` (ADR 0026, ADR 0035) |
+| SkillFile, FileCoverage | One catalogued file of the skill -- path, `FileKind` (doc, script, test, asset), bytes, sha256, ignored -- and that file widened by the turns that loaded or ran it, one list per `Access`. The row widens the record rather than nesting it because the wire format is one flat row per file in `skill_coverage.files` (ADR 0022, ADR 0035) |
+| CoverageSummary, SkillCoverage | The counts and denominators the metrics record and the report row read, and the whole coverage answer for one run. `SkillCoverage.over` derives the four path sets and the summary from the annotated rows in one place, so they cannot disagree with each other or with `files` (ADR 0022, ADR 0035) |
+| IgnoreRules | The `xharness_skill_ignore` lines that apply to one skill, compiled once at collection into the gitignore-pattern subset that `matches(rel)` answers. It knows nothing of skills, runs or harnesses, and a malformed line raises at configure time rather than silently measuring nothing (ADR 0026, ADR 0035) |
 | context window | The model's window as the harness reported it; `context_window_pct` (peak turn) and `final_context_pct` are measured prompt sizes over it, never estimates (ADR 0024) |
 | design tokens | `report.tokens.json`: the palette, series, pill colours and fonts the report is themed with; bundled, copied beside every report, overridable per project (ADR 0024) |
 
@@ -230,9 +267,9 @@ flowchart TB
     end
 
     subgraph kept["Kept after the run"]
-        CAP["captured/&lt;case&gt;/<br/>log and result, git-ignored"]:::out
-        HIST["captured/history.jsonl<br/>one metrics line per cell"]:::out
-        REP["report.json<br/>under the work directory"]:::out
+        CAP["SessionDir<br/>results/&lt;skill&gt;/…/&lt;session&gt;/, git-ignored"]:::out
+        HIST["CellMetrics<br/>one history.json per session"]:::out
+        REP["report/<br/>report.json and the combined microsite"]:::out
     end
 
     ROOT -->|"holds skill/evals/ trees"| SKILL
@@ -253,8 +290,8 @@ flowchart TB
     LOG -->|"copied to"| CAP
     SUB -->|"copied to subagents/ in"| CAP
     RR -->|"written to"| CAP
-    RR -->|"metrics appended to"| HIST
-    RR -->|"appended to"| REP
+    RR -->|"metrics recorded as"| HIST
+    RR -->|"summarised into"| REP
 
     classDef declare fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
     classDef cfg     fill:#93c5fd,stroke:#1e40af,color:#1e293b,stroke-width:1px

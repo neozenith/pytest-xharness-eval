@@ -93,11 +93,29 @@ unfixable = []
 # delete this rule if the registry has been abandoned, rather than leaving it to mislead.
 "pytest_xharness_eval.harness.claude".msg = "import pytest_xharness_eval.harness and use harness.get(name); ADR 0034"
 "pytest_xharness_eval.harness.codex".msg = "import pytest_xharness_eval.harness and use harness.get(name); ADR 0034"
+# Architecture fitness function for ADR 0039: the layers only depend downward, and these
+# three are the ones with something beneath them to invert. The listed layer may be named
+# only by the layers above it, which are named in per-file-ignores below and nowhere else,
+# so an import that turns the stack upside down fails `make check` rather than review.
+# Owner: the maintainer of src/pytest_xharness_eval/. Review by: 2027-08-28 -- delete these
+# rules if the package is flattened again, rather than leaving them to mislead.
+"pytest_xharness_eval.harness".msg = "the adapter layer is above the domain; resolve a harness through model.registry (ADR 0039)"
+"pytest_xharness_eval.emit".msg = "emit is above derive, harness and model; a document must not be named from beneath it (ADR 0039)"
+"pytest_xharness_eval.runtime".msg = "runtime is the top layer below the entry points; nothing beneath it may name it (ADR 0039)"
 
 [tool.ruff.lint.per-file-ignores]
-# The package's own __init__ is what registers the providers, and the unit tests exercise
-# each dialect's folding directly; both are inside the boundary, not consumers of it.
-"src/pytest_xharness_eval/harness/__init__.py" = ["TID251"]
+# Everything above a banned layer, and nothing else. The two entry points sit at the root
+# above every layer (`plugin/` is a package of hook modules, all of them entry-point code,
+# ADR 0040); each layer names itself; `model/registry.py` is the one declared edge
+# from the domain up to the adapters (ADR 0039); the harness package's own __init__ is what
+# registers the providers; and the unit tests exercise each dialect's folding directly.
+"src/pytest_xharness_eval/__init__.py" = ["TID251"]
+"src/pytest_xharness_eval/plugin/*" = ["TID251"]
+"src/pytest_xharness_eval/replay.py" = ["TID251"]
+"src/pytest_xharness_eval/model/registry.py" = ["TID251"]
+"src/pytest_xharness_eval/harness/*" = ["TID251"]
+"src/pytest_xharness_eval/emit/*" = ["TID251"]
+"src/pytest_xharness_eval/runtime/*" = ["TID251"]
 "tests/*" = ["TID251"]
 
 [tool.ruff.lint.pydocstyle]

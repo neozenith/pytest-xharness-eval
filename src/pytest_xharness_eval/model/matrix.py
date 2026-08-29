@@ -11,16 +11,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Our Libraries
-from pytest_xharness_eval import harness as harnesses_pkg
+from pytest_xharness_eval.model import registry
 
 
 def known_harnesses() -> tuple[str, ...]:
     """The harnesses this plugin can drive: whatever is registered, never a second list.
 
     Read through the registry rather than copied beside it, so registering a harness is
-    the only edit a new CLI needs (ADR 0034).
+    the only edit a new CLI needs (ADR 0034); :mod:`~pytest_xharness_eval.model.registry`
+    is the one module below the adapter layer that names it (ADR 0039).
     """
-    return harnesses_pkg.names()
+    return registry.names()
 
 
 # The plugin-scope fallback sweep, used when neither the project nor the case sets one.
