@@ -5,7 +5,7 @@
       "source": "neozenith/agentic-dotfiles",
       "sourceType": "github",
       "skillPath": "skills/concise-decisions/SKILL.md",
-      "computedHash": "655254d53b92975b0866046017b529da83b6fb21ed2df9e95e39017a04b8ffa4"
+      "computedHash": "6e55cab85b4b0d9fb61b3dcf1bc2c6540c7553de04493926d279e4135cef96ac"
     },
     "gooddocs": {
       "source": "neozenith/agentic-dotfiles",
@@ -17,13 +17,13 @@
       "source": "neozenith/agentic-dotfiles",
       "sourceType": "github",
       "skillPath": "skills/librarian/SKILL.md",
-      "computedHash": "370c10045867d79c68aca16f5567982002a5eba52ea463e5d580f1ae911d285f"
+      "computedHash": "a067f6c5d13e2eeba1cfd85ad2fe4705f451f06f42fd0e48657959ffdeaf0a8c"
     },
     "mermaidjs-diagrams": {
       "source": "neozenith/agentic-dotfiles",
       "sourceType": "github",
       "skillPath": "skills/mermaidjs-diagrams/SKILL.md",
-      "computedHash": "bdac9d49253697dac58c2795b715ff4eb66cfb6af3da87272ffa5abdbae1c461"
+      "computedHash": "ff4b742082d8d43406fd96c2843c526cee2add913ff07d6ed7a7d4c50c7cdbc6"
     },
     "prwalkthrough": {
       "source": "neozenith/agentic-dotfiles",
