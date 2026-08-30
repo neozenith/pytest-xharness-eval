@@ -1,0 +1,140 @@
+# 0043: The overview's tables are budgeted to one screen, and the aggregate has a decomposition as well as an accumulation
+
+Status: accepted, 2026-08-30. Refines
+[0020](0020-captured-report-is-a-static-microsite.md) (the captured report is a static microsite),
+[0021](0021-metric-names-carry-unit-and-provenance.md) (a metric name carries its unit and its source),
+[0025](0025-results-name-their-case-and-charts-have-a-log-line-axis.md) (a result names its case),
+[0031](0031-plotly-tamagui-and-a-deeplink-permutation-matrix.md) (every state deeplinks, and a
+Playwright matrix sweeps them all) and
+[0042](0042-the-overview-is-filtered-by-the-url.md) (the overview is filtered by the URL).
+Nothing the Python side emits changes: no new JSON key, no ini key, no CLI
+option, no metric's value.
+
+## Context
+
+0042 gave the overview a filter, a `SessionSummaryTable` and three consumers that
+answer to it. Three things were left unresolved by it.
+
+`SessionTable` did not fit. Eighteen columns measured ~1600px against the 1086px
+a card gives it at a 1440px viewport, so a third of the metrics were permanently
+behind a horizontal scrollbar; the table's own auto-scroll-the-sorted-head effect
+existed only to paper over that. A metric a reader cannot see is a metric that
+does not exist, and the metrics off the right edge were not the unimportant ones —
+they were whichever ones happened to be declared last.
+
+`SessionSummaryTable` was declared unsortable, on the reasoning that a second
+sort param would double the route surface for a sixteen-row table. That reasoning
+holds for the *route*, not for the reader: the whole point of an aggregate is to
+rank groups — by mean cost, by pass rate, by mean wall — and a fixed key order
+answers none of those questions.
+
+And the overview had an *accumulation* of tokens (how fast the bill grows) with
+no *decomposition* (where it went). The per-session `TokenWaterfallChart` answers
+the second question for one run and there was no way to ask it of many.
+
+## Decision
+
+Four binding parts.
+
+### 1. The second table sorts on its own param pair
+
+`ssort` / `sdir` on the overview route, parsed and serialised by the same
+`sortState` helper as `sort` / `dir`. **Not** a shared pair: a reader ranks groups
+by mean cost while ranking sessions by when they ran, so a shared pair would make
+every click on one table silently reorder the other, and no single URL could
+express the pair of orders the reader is actually looking at. Both pairs are
+enumerated in `lib/permutations.ts` in this same change, including the permutation
+that carries both at once.
+
+The fixed `skill|case|harness|model` key order stays the default, and it remains
+the only order in which `SessionSummaryTable`'s skill banding and its repeated-value
+muting tell the truth — so **both switch off whenever a column is sorted**. Under
+any other order "the row above" is whatever the reader last clicked, and a band
+drawn then is describing a grouping the table is no longer in.
+
+### 2. Every control on the overview writes through one patch function
+
+`overviewWith(route, patch)` spreads the current overview state and applies one
+change. Controls no longer respell the route. This is not tidiness: the filter
+chips had already been caught clearing `sort`, the sort heads clearing `facets`,
+and each new param makes every control that predates it wrong by default. One
+function is wrong in one place or in none.
+
+### 3. `SessionTable` is budgeted to one screen, and width is taken from spelling rather than from data
+
+Every metric stays. The width comes back from how figures are *written*, and from
+one column that was not a metric:
+
+- the session id is not a column — it identified a row without telling you
+  anything about it, the row opens the `SessionView` that prints it beside a
+  `CopyId`, and `data-sid` still carries it;
+- `estimated_cost_usd` and `harness_reported_cost_usd` are one column: the
+  estimate is the value and the harness's own figure is a signed **drift** from
+  it. Two four-decimal figures side by side were being subtracted by eye, and the
+  subtraction is the whole question;
+- token counts are abbreviated (`1.5M`, `29.4k`) with the exact figure on the
+  cell's `title`, and cost drops to three decimals here (a tenth of a cent is
+  below the resolution anyone ranks a sweep by; `ReconciliationPanel` and
+  `CostByTierPanel`, which exist to reconcile, keep four);
+- `model` drops its vendor prefix and `case` the `eval_` every case shares —
+  and shortening is abandoned for the *whole* sweep if any two models would
+  collide, because a partial map reads as an inconsistency rather than a rule;
+- `baseline_tokens` loses its column to the `peak ctx` cell's title: it is the
+  harness's own prompt before the agent acted, near-constant within a harness,
+  and the one figure here nobody ranks a sweep by;
+- the heads print the shortest form that reads, and the eight `mean …` labels in
+  `SessionSummaryTable` say the word once in a caption instead of eight times in
+  eight heads. The canonical field name stays in every head's tooltip and
+  accessible name (WCAG 2.5.3), so nothing is renamed — only abbreviated;
+- the pair steps down to a 5px cell inset and bleeds to the card's edge. Fifteen
+  columns at the kit's 10px inset spent 300px on gutter, and `CardContent`'s 20px
+  frames prose, not a table that is the card's subject.
+
+**An identity column whose value is the same on every visible row is stated once
+in the table's `<caption>` and dropped.** Under a filter — which 0042 made the
+normal way to read this page — that is where most of the width comes back: filter
+to one harness and the harness column stops existing rather than repeating twelve
+times. Only the four identity columns may collapse; a *measure* that happens to be
+equal on every row is a finding, and must stay visible as a column.
+
+The measurement, not the column count, is the contract: `e2e/inline.spec.ts`
+asserts the box does not overflow. At 1440px both tables fit exactly; below
+~1350px `SessionTable` scrolls again, and the scroll box, its edge fade and its
+sticky head handle that as they did before.
+
+### 4. The aggregate waterfall aggregates the filtered population, not one group per line
+
+`TokenWaterfallAggregateChart` sits below `TokenAccumulationChart` and draws the
+same six categories and total, averaged over every run in view. One waterfall,
+not one per group: the filters are how a reader narrows to a group, which is what
+makes the pair drillable rather than decorative, and sixteen small-multiple
+waterfalls would answer no question the accumulation chart above does not already.
+
+Each column is the arithmetic mean over the runs that **reached** that turn — a
+short run is missing from a late turn, never zero in it, and the divisor is that
+count, never the run total. Because the mean base and the mean segments are taken
+over the same subset, the stack's top is the mean running total, which is what the
+min–max whisker brackets.
+
+That makes the late columns a mean of fewer and fewer runs, so **a column's
+opacity is the share of runs that reached it**: a turn one run of twenty-four
+survived to fades almost out rather than reading as a rising trend. The `total`
+column is each run's own final figure, so it can sit *below* a late turn averaged
+over the one run that got there. That is survivorship, it is the honest reading of
+"these runs, on average", and it is shown rather than smoothed away.
+
+## Consequences
+
+- A reader sees every metric of every session without scrolling sideways at
+  1440px, and a filtered read fits a 1280px laptop.
+- Two figures whose difference is the interesting quantity are printed as that
+  difference. The real capture immediately showed drifts of +14% to +29% between
+  the plugin's estimate and Claude's own reported cost — visible at a glance, and
+  previously two columns apart.
+- `SessionSummaryTable` can be ranked, and doing so honestly costs it the banding
+  that only a fixed order justifies.
+- Abbreviation moves precision to a `title`. Exactness is one hover away, and
+  never on screen — a deliberate trade, and the reason the exact figure is on
+  every abbreviated cell rather than on some of them.
+- A new overview param is now a one-line change at each control instead of a
+  silent omission at every control that predates it.

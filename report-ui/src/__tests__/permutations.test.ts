@@ -1,4 +1,6 @@
 import { assertUniqueSlugs, enumeratePermutations, slugify, TIERS } from "@/lib/permutations";
+import { filterCells } from "@/lib/facets";
+import { parseSearch } from "@/lib/route";
 import type { Cell, Index, RunResult } from "@/lib/types";
 
 const cell = (over: Partial<Cell>): Cell =>
@@ -49,10 +51,16 @@ test("slugify is lowercase, dash-joined and filesystem-safe", () => {
 test("every permutation slug is unique and every turn is enumerated in both views", () => {
   const perms = enumeratePermutations(index([cell({})]), {});
   assertUniqueSlugs(perms);
-  // 3 overview states + 4 session states (landing, per-line axis, dark, raw records) + 2 views × (1 landing + 2 turns)
-  expect(perms).toHaveLength(3 + 4 + 2 * 3);
+  // 5 overview states (plain, dark, and the three sorts: SessionTable, SessionSummaryTable, both
+  // at once) + 4 session states (landing, per-line axis, dark, raw records) + 2 views × (1
+  // landing + 2 turns). No filter permutation: this fixture's skill is null and it has one
+  // harness and one model, so no facet has two options — there is no choice to cover.
+  expect(perms).toHaveLength(5 + 4 + 2 * 3);
   expect(perms[0]).toEqual({ slug: "overview", search: "?", description: "SweepOverview: 1 sessions" });
   expect(perms.map((p) => p.slug)).toContain("overview--dark");
+  // the two tables sort on their own param pairs, and one URL carries both orders at once
+  expect(perms.find((p) => p.slug === "overview--summary-sort-billed")?.search).toBe("?ssort=billed&sdir=desc");
+  expect(perms.find((p) => p.slug === "overview--sort-both")?.search).toBe("?sort=turns&dir=asc&ssort=cost&sdir=desc");
   expect(perms.find((p) => p.slug.endsWith("--axis-line"))?.search).toContain("axis=line");
   expect(perms.find((p) => p.slug.endsWith("--rec-raw"))?.search).toContain("view=detailed&rec=raw");
   const detailedTurn2 = perms.find((p) => p.slug.endsWith("detailed--turn-02"));
@@ -112,4 +120,30 @@ test("small constrains every dimension: one session per harness, one mid turn, d
   expect(perms.filter((p) => p.slug.includes("--summary"))).toHaveLength(0);
   expect(perms.filter((p) => p.slug.includes("efgh5678"))).toHaveLength(0); // second claude cell excluded
   expect(perms.filter((p) => p.slug.includes("--turn-"))).toHaveLength(2); // one mid turn per harness
+});
+
+test("a multi-valued sweep enumerates the filter states, and small enumerates none of them", () => {
+  const cells = [
+    cell({ session_id: "a", skill: "discovery", harness: "claude", model: "claude-opus-5" }),
+    cell({ session_id: "b", skill: "discovery", harness: "codex", model: "gpt-5.6-sol" }),
+    cell({ session_id: "c", skill: "mermaidjs-diagrams", harness: "codex", model: "gpt-5.6-terra" }),
+  ];
+  const perms = enumeratePermutations(index(cells), {}, "large");
+  assertUniqueSlugs(perms);
+  const search = (slug: string) => perms.find((p) => p.slug === slug)?.search;
+  expect(search("overview--filter-skill-discovery")).toBe("?skill=discovery");
+  expect(search("overview--filter-harness-claude")).toBe("?harness=claude");
+  expect(search("overview--filter-model-claude-opus-5")).toBe("?model=claude-opus-5");
+  // the multi-select is the comma serialisation, and is not the same URL as the param being absent
+  expect(search("overview--filter-multi")).toBe("?skill=discovery,mermaidjs-diagrams");
+  // the empty state the matrix must sweep: a legal, reachable harness × model pair with no session
+  const none = search("overview--filter-none");
+  expect(none).toBe("?harness=claude&model=gpt-5.6-sol");
+  const route = parseSearch(none!);
+  expect(route.view === "overview" && filterCells(cells, route.facets)).toHaveLength(0);
+
+  const small = new Set(enumeratePermutations(index(cells), {}, "small").map((p) => p.slug));
+  for (const slug of [...small]) expect(slug).not.toMatch(/^overview--filter-/);
+  const medium = new Set(enumeratePermutations(index(cells), {}, "medium").map((p) => p.slug));
+  expect(medium).toContain("overview--filter-none");
 });

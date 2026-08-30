@@ -8,7 +8,8 @@
  * Keep this the single source of truth: a new route param added to `lib/route.ts` must be
  * enumerated here in the same change, or the matrix silently stops covering it.
  */
-import { overviewSearch, sessionSearch, type TurnView } from "./route";
+import { facetOptions, FACETS, filterCells, type Facet } from "./facets";
+import { NO_FACETS, overviewSearch, sessionSearch, type TurnView } from "./route";
 import type { Cell, Index, RunResult } from "./types";
 
 export interface Permutation {
@@ -67,7 +68,7 @@ export interface MatrixTier {
   /** which turn-table views participate */
   views: TurnView[];
   /** which single-param variants are included */
-  variants: { sortedOverview: boolean; darkOverview: boolean; axisLine: boolean; dark: boolean; recRaw: boolean; line: boolean };
+  variants: { sortedOverview: boolean; darkOverview: boolean; filteredOverview: boolean; axisLine: boolean; dark: boolean; recRaw: boolean; line: boolean };
 }
 
 const firstBy = (cells: Cell[], keyOf: (c: Cell) => string): Cell[] => {
@@ -88,23 +89,66 @@ export const TIERS: Record<TierName, MatrixTier> = {
     cells: (cells) => firstBy(cells, (c) => c.harness),
     turns: (n) => (n ? [mid(n)] : []),
     views: ["detailed"],
-    variants: { sortedOverview: false, darkOverview: false, axisLine: false, dark: false, recRaw: false, line: false },
+    variants: { sortedOverview: false, darkOverview: false, filteredOverview: false, axisLine: false, dark: false, recRaw: false, line: false },
   },
   medium: {
     name: "medium",
     cells: (cells) => firstBy(cells, (c) => `${c.harness}/${c.model}`),
     turns: (n) => (n ? [...new Set([1, mid(n), n])] : []),
     views: ["summary", "detailed"],
-    variants: { sortedOverview: true, darkOverview: true, axisLine: true, dark: true, recRaw: true, line: true },
+    variants: { sortedOverview: true, darkOverview: true, filteredOverview: true, axisLine: true, dark: true, recRaw: true, line: true },
   },
   large: {
     name: "large",
     cells: (cells) => cells,
     turns: (n) => Array.from({ length: n }, (_, i) => i + 1),
     views: ["summary", "detailed"],
-    variants: { sortedOverview: true, darkOverview: true, axisLine: true, dark: true, recRaw: true, line: true },
+    variants: { sortedOverview: true, darkOverview: true, filteredOverview: true, axisLine: true, dark: true, recRaw: true, line: true },
   },
 };
+
+/**
+ * The overview's filter states (ADR 0042), derived from the data rather than hardcoded: one
+ * single-select per facet that offers a real choice, one multi-select (which is what covers the
+ * comma serialisation, and is not the same URL as the param being absent), and — when the data
+ * offers one — a harness × model pair that selects zero sessions, which is the empty state the
+ * matrix must look at every sweep. A facet with fewer than two options emits nothing: there is
+ * no choice there to cover.
+ */
+function filterPermutations(cells: Cell[]): Permutation[] {
+  const perms: Permutation[] = [];
+  const options = Object.fromEntries(FACETS.map((f) => [f, facetOptions(cells, f)])) as Record<Facet, string[]>;
+  for (const facet of FACETS) {
+    const value = options[facet].length >= 2 ? options[facet][0] : undefined;
+    if (value === undefined) continue;
+    perms.push({
+      slug: `overview--filter-${facet}-${slugify(value)}`,
+      search: overviewSearch(null, null, { ...NO_FACETS, [facet]: [value] }),
+      description: `SweepOverview filtered to ${facet} ${value}`,
+    });
+  }
+  const multi = FACETS.find((f) => options[f].length >= 2);
+  if (multi) {
+    perms.push({
+      slug: "overview--filter-multi",
+      search: overviewSearch(null, null, { ...NO_FACETS, [multi]: options[multi] }),
+      description: `SweepOverview filtered to every ${multi} at once (comma-separated multi-select)`,
+    });
+  }
+  if (options.harness.length >= 2 && options.model.length >= 2) {
+    for (const harness of options.harness) {
+      const model = options.model.find((m) => filterCells(cells, { ...NO_FACETS, harness: [harness], model: [m] }).length === 0);
+      if (model === undefined) continue;
+      perms.push({
+        slug: "overview--filter-none",
+        search: overviewSearch(null, null, { ...NO_FACETS, harness: [harness], model: [model] }),
+        description: `SweepOverview filtered to ${harness} × ${model}, which no session matches`,
+      });
+      break;
+    }
+  }
+  return perms;
+}
 
 /**
  * Enumerate the tier's covering matrix: the overview (plain, sorted, dark), then per
@@ -127,10 +171,26 @@ export function enumeratePermutations(
       search: overviewSearch({ key: "estimated_cost_usd", dir: "desc" }),
       description: "SweepOverview sorted by estimated cost",
     });
+    perms.push({
+      slug: "overview--summary-sort-billed",
+      search: overviewSearch(null, null, null, { key: "billed", dir: "desc" }),
+      description: "SweepOverview with the SessionSummaryTable sorted by mean billed tokens",
+    });
+    /*
+     * Both tables sorted at once, on their own pairs. This is the permutation that would catch a
+     * regression to a *shared* sort pair: on one, a summary click would silently reorder the
+     * table below it, and this URL could not be expressed at all.
+     */
+    perms.push({
+      slug: "overview--sort-both",
+      search: overviewSearch({ key: "turns", dir: "asc" }, null, null, { key: "cost", dir: "desc" }),
+      description: "SweepOverview with the SessionTable and SessionSummaryTable sorted independently",
+    });
   }
   if (t.variants.darkOverview) {
     perms.push({ slug: "overview--dark", search: overviewSearch(null, "dark"), description: "SweepOverview in the dark theme" });
   }
+  if (t.variants.filteredOverview) perms.push(...filterPermutations(index.cells));
   for (const cell of t.cells(index.cells)) {
     const base = cellSlug(cell);
     const name = `${cell.case} ${cell.harness}/${cell.model}`;

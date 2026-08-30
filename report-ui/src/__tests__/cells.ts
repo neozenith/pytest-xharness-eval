@@ -1,0 +1,49 @@
+/** The `Cell` fixture the overview's tests build on: every field present, overridden per test. */
+import type { Cell } from "@/lib/types";
+
+export const cell = (over: Partial<Cell>): Cell => ({
+  case: "eval_case",
+  suite: "skills/s/evals/eval_case.py",
+  skill: "discovery",
+  fixture: null,
+  prompt: null,
+  harness: "claude",
+  model: "claude-opus-5",
+  session_id: "s1",
+  verdict: "pass",
+  at: "2026-08-23T07:18:05.537Z",
+  node: null,
+  wall_ms: 1000,
+  result: "eval_case/x.result.json",
+  log: null,
+  estimated_cost_usd: 1,
+  harness_reported_cost_usd: null,
+  rates_applied: {},
+  accumulative_billed_tokens: 1000,
+  baseline_tokens: null,
+  context_window: 1_000_000,
+  peak_context_tokens: 100_000,
+  context_window_pct: 10,
+  final_context_pct: null,
+  ttft_ms: null,
+  output_tokens_per_sec: 50,
+  turns: 4,
+  reported_turns: null,
+  tool_calls: 6,
+  duration_ms: null,
+  files_written: [],
+  has_ledger: true,
+  record_kinds: {},
+  skill_coverage: { files: 18, loaded: 6, scripts: 4, run: 2 },
+  ...over,
+});
+
+/** The real capture's shape in miniature: 2 skills × 2 harnesses × 4 models, models nested under a harness. */
+export const sweep = (): Cell[] => [
+  cell({ session_id: "a", skill: "discovery", harness: "claude", model: "claude-opus-5" }),
+  cell({ session_id: "b", skill: "discovery", harness: "claude", model: "claude-sonnet-5" }),
+  cell({ session_id: "c", skill: "discovery", harness: "codex", model: "gpt-5.6-sol" }),
+  cell({ session_id: "d", skill: "mermaidjs-diagrams", harness: "claude", model: "claude-opus-5" }),
+  cell({ session_id: "e", skill: "mermaidjs-diagrams", harness: "codex", model: "gpt-5.6-sol" }),
+  cell({ session_id: "f", skill: "mermaidjs-diagrams", harness: "codex", model: "gpt-5.6-terra" }),
+];

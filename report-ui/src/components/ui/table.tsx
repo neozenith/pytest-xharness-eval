@@ -14,16 +14,23 @@ import { cn } from "@/lib/utils";
  * show a half-cut number as if it were whole. It has to be measured: the equivalent
  * background trick relies on `background-attachment: local`, and masks have no attachment.
  */
-function useClippedEdges<T extends HTMLElement>() {
+function useClippedEdges<T extends HTMLElement>(focusable: boolean) {
   const ref = React.useRef<T>(null);
   React.useEffect(() => {
     const box = ref.current;
     if (!box) return;
     const measure = () => {
       // A pixel of slack: sub-pixel layout leaves a fraction of overflow on tables that fit.
-      const remaining = box.scrollWidth - box.clientWidth - box.scrollLeft;
+      const overflow = box.scrollWidth - box.clientWidth;
+      const remaining = overflow - box.scrollLeft;
       box.dataset.edgeStart = String(box.scrollLeft > 1);
       box.dataset.edgeEnd = String(remaining > 1);
+      /*
+       * The tab stop is *measured*, not declared: a box wide enough for its table has nothing
+       * to scroll and must not cost the reader a Tab press to walk past. It appears the moment
+       * the same measurement says columns are clipped.
+       */
+      if (focusable) box.tabIndex = overflow > 1 ? 0 : -1;
     };
     measure();
     box.addEventListener("scroll", measure, { passive: true });
@@ -35,17 +42,31 @@ function useClippedEdges<T extends HTMLElement>() {
       box.removeEventListener("scroll", measure);
       observer?.disconnect();
     };
-  }, []);
+  }, [focusable]);
   return ref;
 }
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
-  const box = useClippedEdges<HTMLDivElement>();
-  return (
-    <div ref={box} data-slot="table-container" className="table-scroll">
+/**
+ * `scrollLabel` makes the scroll box itself keyboard-operable, and is required of any table
+ * whose rows hold nothing focusable: without it the columns past the clipped right edge can
+ * only be reached with a pointer (WCAG 2.1.1). `SessionTable` does not need it — every row is
+ * a tab stop, so arrowing down the table scrolls it — but `SessionSummaryTable`, a pure
+ * readout, has no focusable descendant at all.
+ */
+function Table({ className, scrollLabel, ...props }: React.ComponentProps<"table"> & { scrollLabel?: string }) {
+  const box = useClippedEdges<HTMLDivElement>(scrollLabel != null);
+  const scroller = (
+    <div ref={box} data-slot="table-container" className="table-scroll" role={scrollLabel ? "region" : undefined} aria-label={scrollLabel}>
       <table data-slot="table" className={cn("xh-table", className)} {...props} />
     </div>
   );
+  /*
+   * The focus ring cannot be drawn on the scroll box itself: that box masks its own left and
+   * right edges to fade clipped content out, and a mask takes the outline with it — the ring
+   * came out as two disconnected horizontal rules. So a focusable box gets one unmasked
+   * wrapper whose only job is to carry the ring (`.table-scroll-ring` in index.css).
+   */
+  return scrollLabel ? <div className="table-scroll-ring">{scroller}</div> : scroller;
 }
 
 const TableHeader = (props: React.ComponentProps<"thead">) => <thead data-slot="table-header" {...props} />;

@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { CopyId } from "@/components/CopyId";
+import { ColumnHead } from "@/components/ColumnHead";
 import { VerdictBadge } from "@/components/VerdictBadge";
-import { coverageText, fmt, NONE, pct, secs, usd, when, windowLabel } from "@/lib/format";
-import { pushRoute, replaceRoute, useRoute, type SortDir } from "@/lib/route";
+import { caseShort, compact, coverageShare, coverageText, dec, fmt, modelShort, NONE, pct, secs, usd, usd3, when, windowLabel } from "@/lib/format";
+import { NO_MATCH } from "@/lib/facets";
+import { overviewWith, pushRoute, replaceRoute, useRoute, type SortDir } from "@/lib/route";
 import type { Cell } from "@/lib/types";
 
 type SortKey = keyof Cell | "coverage";
+
+/** What a cell needs from the sweep it sits in, rather than from its own row. */
+export interface RowContext {
+  /** The model's short name, disambiguated over the whole sweep (`lib/format.ts`). */
+  shortModel: (model: string) => string;
+}
 
 interface Column {
   key: SortKey;
@@ -24,12 +29,30 @@ interface Column {
   numeric?: boolean;
   /** The first column of the metrics half; it draws the rule that divides the table in two. */
   group?: boolean;
-  render: (c: Cell) => React.ReactNode;
+  render: (c: Cell, ctx: RowContext) => React.ReactNode;
 }
 
 /** A missing value is a muted glyph, so a sparse column reads as sparse rather than as data. */
 const nil = <span className="muted">{NONE}</span>;
 const orNil = (v: unknown, text: string): React.ReactNode => (v == null ? nil : text);
+
+/**
+ * A token count abbreviated in the cell and exact on its `title`. Both figures come from the
+ * same value, so the hover is the precision the column gave up, never a second quantity.
+ */
+const exact = (n: number | null | undefined): React.ReactNode => (n == null ? nil : <span title={fmt(n)}>{compact(n)}</span>);
+
+/**
+ * How far the harness's own cost figure sits from this plugin's estimate, as a signed share of
+ * the estimate. The two agree to a fraction of a percent when the price table is right, so the
+ * reader is looking for the row where they do not — which is a comparison, not two numbers.
+ * Below 0.05% the sign is noise and the column says the two agree.
+ */
+const drift = (estimated: number, reported: number): string => {
+  if (estimated === 0) return NONE;
+  const share = (100 * (reported - estimated)) / estimated;
+  return Math.abs(share) < 0.05 ? "=" : `${share > 0 ? "+" : "−"}${Math.abs(share).toFixed(1)}%`;
+};
 
 /**
  * `28 Aug 14:44`, not `28 Aug 2026, 14:44`. The year is the same on every row of a sweep and
@@ -46,13 +69,6 @@ const atShort = (iso: string | null | undefined): string => {
 };
 
 /**
- * Two decimals, always. `fmt` drops a trailing zero, so `86.8` and `32.8` sat one glyph right
- * of the other twenty-two values and the decimal points walked — which is the whole of what a
- * right-aligned tabular-numeral column buys you.
- */
-const dec2 = (n: number): string => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-/**
  * Two halves, left to right: who ran what (identity), then how it went (metrics). The order
  * inside each half is by how often a reader needs the column, because at eighteen columns the
  * table always scrolls and the only real decision is what earns the first screen.
@@ -61,23 +77,38 @@ const dec2 = (n: number): string => n.toLocaleString("en-US", { minimumFractionD
  * figure is. `accumulative_billed_tokens` (billed across turns) and `peak_context_tokens` (the
  * largest prompt one turn processed) are different quantities and are never shown as one.
  */
+/**
+ * THE COLUMN BUDGET: every metric that matters, on one screen, with no horizontal scroll.
+ *
+ * Eighteen columns did not fit 1440px, so the eight to the right of the fold were reachable
+ * only by a scrollbar most readers never found — the table's own sorted-head auto-scroll
+ * existed to paper over exactly that. Rather than cut the data, the width was taken back from
+ * the ways it was *spelled*:
+ *
+ *   - `session_id` is gone. It identified a row without telling you anything about it, and the
+ *     row already opens the session that prints it beside a `CopyId`. `data-sid` still carries
+ *     it for the e2e matrix and for anyone reading the DOM.
+ *   - `estimated_cost_usd` and `harness_reported_cost_usd` are one column: the estimate is the
+ *     value, and the CLI's own figure is the muted *delta* from it. Two figures four decimals
+ *     wide, printed side by side, were being compared by eye; the subtraction is the whole
+ *     question and it is now done for the reader.
+ *   - token counts are `compact` (`1.5M`, `29.4k`). Nine glyphs of thousands separators bought
+ *     a precision nobody compares down a column; the exact figure is on the cell's `title`.
+ *   - `model` drops the vendor prefix and `case` the `eval_` every case shares (`lib/format.ts`).
+ *   - the heads print the shortest form that still reads, and carry the canonical field name in
+ *     the tooltip and the accessible name, so nothing is renamed — only abbreviated.
+ *
+ * The order is unchanged: identity first, then metrics, each half ordered by how often a reader
+ * needs the column. `accumulative_billed_tokens` (billed across turns) and `peak_context_tokens`
+ * (the largest prompt one turn processed) are different quantities and are never shown as one.
+ */
 const COLUMNS: Column[] = [
   /*
    * The verdict leads. It is the one column a reader scans rather than reads — four of these
-   * twenty-four cells are a fail — and it was sitting second, behind thirteen characters of
-   * hex that identify a row without telling you anything about it. Flush at the card's left
-   * edge the pills make a rail: the exceptions are found before the eye enters the table.
+   * twenty-four cells are a fail — and flush at the card's left edge the pills make a rail: the
+   * exceptions are found before the eye enters the table.
    */
   { key: "verdict", name: "verdict", label: "verdict", title: "the history line's verdict for this cell", render: (c) => <VerdictBadge verdict={c.verdict} /> },
-  {
-    key: "session_id",
-    name: "session_id",
-    label: "session",
-    // Eight characters is not enough: four codex sessions in this sweep share `01a046ae`, so
-    // the column showed one id four times. Thirteen reaches into the random half of a UUID.
-    title: "the harness's session id; click to copy the whole of it",
-    render: (c) => <CopyId id={c.session_id} label={c.session_id.slice(0, 13)} />,
-  },
   {
     key: "at",
     name: "at",
@@ -85,89 +116,78 @@ const COLUMNS: Column[] = [
     title: "when the cell started (history line); hover a cell for the year",
     render: (c) => <span title={when(c.at)}>{atShort(c.at)}</span>,
   },
-  { key: "skill", name: "skill", label: "skill", title: "the skill under test (a sweep can span several)", render: (c) => orNil(c.skill, c.skill ?? "") },
+  {
+    key: "skill",
+    name: "skill",
+    label: "skill",
+    title: "the skill under test (a sweep can span several)",
+    render: (c) => (c.skill == null ? nil : <span title={c.skill}>{c.skill}</span>),
+  },
   {
     key: "case",
     name: "case",
-    // `suite` used to sit beside this as its own column, printing the same string with `.py`
-    // on the end — two hundred pixels of the first screen spent saying `case` twice. The file
-    // it lives in is the cell's title instead, and the width went to the cost columns.
     label: "case",
-    title: "the @evalcase function; hover a cell for the eval_*.py that defines it",
-    // Every case in a sweep is named `eval_*`, so on twenty-four rows those five glyphs are a
-    // column of noise the eye has to step over to reach the word that differs. The prefix is
-    // still printed — it is part of the function's name, and of what you copy — but muted, so
-    // the row reads as `discovery_refresh` at a glance and as `eval_discovery_refresh` when
-    // you look at it.
+    title: "the @evalcase function, without the eval_ prefix every case shares; hover a cell for the full name and its eval_*.py",
+    render: (c) => <span title={`${c.case}${c.suite ? ` · ${c.suite}` : ""}`}>{caseShort(c.case)}</span>,
+  },
+  { key: "harness", name: "harness", label: "harness", title: "which CLI ran the cell", render: (c) => c.harness },
+  {
+    key: "model",
+    name: "model",
+    label: "model",
+    title: "the model the harness was told to use, without its vendor prefix; hover a cell for the full id",
+    render: (c, ctx) => <code title={c.model}>{ctx.shortModel(c.model)}</code>,
+  },
+  {
+    key: "estimated_cost_usd",
+    name: "estimated_cost_usd",
+    label: "cost",
+    title: "this plugin's estimate from rates_applied; the muted figure is how far the CLI's own harness_reported_cost_usd sits from it (Claude only)",
+    numeric: true,
+    group: true,
     render: (c) => {
-      const shared = c.case.startsWith("eval_");
+      if (c.estimated_cost_usd == null) return nil;
       return (
-        <span title={c.suite ?? undefined}>
-          {shared ? <span className="muted">eval_</span> : null}
-          {shared ? c.case.slice(5) : c.case}
+        <span
+          title={
+            c.harness_reported_cost_usd == null ? undefined : `estimated ${usd(c.estimated_cost_usd)} · harness reported ${usd(c.harness_reported_cost_usd)}`
+          }
+        >
+          {usd3(c.estimated_cost_usd)}
+          {c.harness_reported_cost_usd == null ? null : <span className="muted qual tight">{drift(c.estimated_cost_usd, c.harness_reported_cost_usd)}</span>}
         </span>
       );
     },
   },
-  { key: "harness", name: "harness", label: "harness", title: "which CLI ran the cell", render: (c) => c.harness },
-  { key: "model", name: "model", label: "model", title: "the model the harness was told to use", render: (c) => <code>{c.model}</code> },
-  {
-    key: "estimated_cost_usd",
-    name: "estimated_cost_usd",
-    label: "est. cost",
-    title: "this plugin's estimate from rates_applied",
-    numeric: true,
-    group: true,
-    render: (c) => orNil(c.estimated_cost_usd, usd(c.estimated_cost_usd)),
-  },
-  {
-    key: "harness_reported_cost_usd",
-    name: "harness_reported_cost_usd",
-    label: "reported cost",
-    title: "what the CLI itself said the run cost (Claude only)",
-    numeric: true,
-    render: (c) => orNil(c.harness_reported_cost_usd, usd(c.harness_reported_cost_usd)),
-  },
   {
     key: "accumulative_billed_tokens",
     name: "accumulative_billed_tokens (billed)",
-    label: "billed tokens",
+    label: "billed",
     title: "every token of every call summed, the cached prefix once per turn that re-read it; a spend figure, not a context figure",
     numeric: true,
-    render: (c) => orNil(c.accumulative_billed_tokens, fmt(c.accumulative_billed_tokens)),
-  },
-  {
-    key: "baseline_tokens",
-    name: "baseline_tokens",
-    label: "baseline",
-    title: "the prompt of the first call, before the agent acted",
-    numeric: true,
-    render: (c) => orNil(c.baseline_tokens, fmt(c.baseline_tokens)),
+    render: (c) => exact(c.accumulative_billed_tokens),
   },
   {
     key: "context_window_pct",
     name: "peak_context_tokens",
-    label: "peak context",
-    title: "the largest prompt one turn processed, as a share of the model's context window",
+    label: "peak ctx",
+    title: "the largest prompt one turn processed, as a share of the model's context window; hover a cell for the window",
     numeric: true,
     render: (c) =>
       c.peak_context_tokens == null ? (
         nil
       ) : (
-        <>
-          {fmt(c.peak_context_tokens)}
-          <span className="muted">
-            {" "}
-            · {pct(c.context_window_pct)} of {windowLabel(c.context_window)}
-          </span>
-        </>
+        <span title={`${fmt(c.peak_context_tokens)} of a ${windowLabel(c.context_window)} window · from a baseline_tokens of ${fmt(c.baseline_tokens)}`}>
+          {compact(c.peak_context_tokens)}
+          <span className="muted qual">· {pct(c.context_window_pct)}</span>
+        </span>
       ),
   },
   { key: "turns", name: "turns", label: "turns", title: "model API calls", numeric: true, render: (c) => orNil(c.turns, fmt(c.turns)) },
   {
     key: "tool_calls",
     name: "tool_calls",
-    label: "tool calls",
+    label: "tools",
     title: "tool invocations issued",
     numeric: true,
     render: (c) => orNil(c.tool_calls, fmt(c.tool_calls)),
@@ -175,7 +195,7 @@ const COLUMNS: Column[] = [
   {
     key: "coverage",
     name: "skill_coverage",
-    label: "skill coverage",
+    label: "coverage",
     title: "loaded/files · run/scripts, ignored files excluded",
     render: (c) => orNil(c.skill_coverage.files, coverageText(c)),
   },
@@ -185,7 +205,7 @@ const COLUMNS: Column[] = [
     label: "tok/s",
     title: "output tokens per second of API time",
     numeric: true,
-    render: (c) => (c.output_tokens_per_sec == null ? nil : dec2(c.output_tokens_per_sec)),
+    render: (c) => (c.output_tokens_per_sec == null ? nil : dec(c.output_tokens_per_sec, 2)),
   },
   {
     key: "wall_ms",
@@ -198,27 +218,49 @@ const COLUMNS: Column[] = [
 ];
 
 /**
- * The share the `skill coverage` cell prints, not the raw `loaded` count behind it. A sweep
- * spanning two skills has two catalogue sizes (discovery has 5 files, mermaidjs-diagrams 18),
- * so sorting on the count inverted the column's own meaning: `6/18` (33%) ranked above `5/5`
- * (100%). This is the same normalisation the neighbouring `peak context` column makes by
- * sorting on `context_window_pct` rather than `peak_context_tokens`. A cell with no catalogue
- * stays null, so it keeps going last in both directions.
+ * The identity columns a constant value may collapse out of. Only these four: a *measure* that
+ * happens to be equal on every row is a finding the reader wants to see repeated down the
+ * column, while an identity that is equal on every row is the table's subject, not its data.
  */
-const coverageShare = (c: Cell): number | null => {
-  const { files, loaded } = c.skill_coverage;
-  return files != null && files > 0 ? (loaded ?? 0) / files : null;
-};
+const COLLAPSIBLE: readonly SortKey[] = ["skill", "case", "harness", "model"] as const;
+
+/**
+ * The identity columns whose value is the same on every visible row, and that value.
+ *
+ * Empty below two rows: one row is not "every row agrees", it is one row, and collapsing four
+ * columns out of it would leave a caption where the data should be. A null (an ungraded skill)
+ * never collapses — "they are all null" is not a fact worth a caption.
+ */
+function constantColumns(rows: Cell[], ctx: RowContext): { key: SortKey; name: string; text: string }[] {
+  if (rows.length < 2) return [];
+  const out: { key: SortKey; name: string; text: string }[] = [];
+  for (const key of COLLAPSIBLE) {
+    const first = rows[0]![key as keyof Cell];
+    if (first == null || typeof first !== "string") continue;
+    if (!rows.every((r) => r[key as keyof Cell] === first)) continue;
+    const text = key === "case" ? caseShort(first) : key === "model" ? ctx.shortModel(first) : first;
+    out.push({ key, name: key, text });
+  }
+  return out;
+}
 
 const sortValue = (c: Cell, key: SortKey): string | number | null => (key === "coverage" ? coverageShare(c) : (c[key] as string | number | null));
 
-/** One row per captured session; click a header to sort (recorded as `sort=`/`dir=` in the hash), a row to open its SessionView. */
-export function SessionTable({ cells }: { cells: Cell[] }) {
+/**
+ * One row per captured session; click a header to sort (recorded as `sort=`/`dir=`), a row to
+ * open its SessionView.
+ *
+ * `shortModel` is derived once over the *unfiltered* sweep and passed down, so a model's printed
+ * name is a property of the sweep and never changes under a filter. It defaults to the plain
+ * rule for a caller that has no sweep to disambiguate against.
+ */
+export function SessionTable({ cells, shortModel = modelShort }: { cells: Cell[]; shortModel?: (model: string) => string }) {
   const route = useRoute();
   const routeSort = route.view === "overview" ? route.sort : null;
   const sortKey: SortKey = routeSort && COLUMNS.some((c) => c.key === routeSort.key) ? (routeSort.key as SortKey) : "at";
   const dir: 1 | -1 = routeSort ? (routeSort.dir === "asc" ? 1 : -1) : -1;
   const theme = route.theme;
+  const ctx: RowContext = { shortModel };
 
   const rows = useMemo(
     () =>
@@ -259,21 +301,39 @@ export function SessionTable({ cells }: { cells: Cell[] }) {
     box.scrollTo({ left: box.scrollLeft + delta, behavior: still ? "auto" : "smooth" });
   }, [sortKey]);
 
+  const constants = useMemo(() => constantColumns(rows, ctx), [rows, shortModel]);
+  const columns = useMemo(() => {
+    const collapsed = new Set(constants.map((c) => c.key));
+    return COLUMNS.filter((col) => !collapsed.has(col.key));
+  }, [constants]);
+
   /** What a click on this header would sort by — the direction the hint arrow promises. */
   const nextDir = (key: SortKey): SortDir => (key === sortKey ? (dir === 1 ? "desc" : "asc") : key === "at" ? "desc" : "asc");
-  const sortBy = (key: SortKey) => replaceRoute({ view: "overview", sort: { key, dir: nextDir(key) }, theme });
+  const sortBy = (key: SortKey) => replaceRoute(overviewWith(route, { sort: { key, dir: nextDir(key) } }));
   const open = (c: Cell) => pushRoute({ view: "session", sessionId: c.session_id, turn: null, turnView: null, axis: null, rec: null, line: null, theme });
 
   return (
     <Table id="SessionTable">
+      {constants.length ? (
+        /*
+         * Announced before the table, which is what a `<caption>` is for — a screen reader reads
+         * "every row: harness claude" and then the rows, instead of hearing the same cell twelve
+         * times. `caption-side` is flipped to `top` for this one table in index.css.
+         */
+        <caption>
+          every row:{" "}
+          {constants.map((c, i) => (
+            <span key={c.key}>
+              {i ? " · " : ""}
+              {c.name} <span className="const">{c.text}</span>
+            </span>
+          ))}
+        </caption>
+      ) : null}
       <TableHeader>
         <TableRow>
-          {COLUMNS.map((col) => {
+          {columns.map((col) => {
             const active = sortKey === col.key;
-            // The arrow is always in the DOM: an active column that grew one on click shifted
-            // every column to its right, and a sortable column that showed nothing until you
-            // hovered it never said it was sortable. Inactive arrows point where a click goes.
-            const Arrow = (active ? dir === 1 : nextDir(col.key) === "asc") ? ArrowUp : ArrowDown;
             return (
               <TableHead
                 key={col.key}
@@ -283,28 +343,29 @@ export function SessionTable({ cells }: { cells: Cell[] }) {
                 data-group={col.group ? "metrics" : undefined}
                 aria-sort={active ? (dir === 1 ? "ascending" : "descending") : "none"}
               >
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    {/*
-                     * The accessible name keeps the printed label *and* the canonical field
-                     * name (WCAG 2.5.3: what you can say has to be what you can see), so an
-                     * abbreviated head still answers to `estimated_cost_usd`.
-                     */}
-                    <button type="button" aria-label={col.label === col.name ? undefined : `${col.label} — ${col.name}`} onClick={() => sortBy(col.key)}>
-                      {col.label}
-                      <Arrow className="sort-ico" data-active={active || undefined} size={12} aria-hidden />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <span className="mono">{col.name}</span> — {col.title}
-                  </TooltipContent>
-                </Tooltip>
+                <ColumnHead
+                  defId={`SessionTable-def-${col.key}`}
+                  name={col.name}
+                  label={col.label}
+                  title={col.title}
+                  active={active}
+                  ascending={active ? dir === 1 : nextDir(col.key) === "asc"}
+                  onSort={() => sortBy(col.key)}
+                />
               </TableHead>
             );
           })}
         </TableRow>
       </TableHeader>
       <TableBody>
+        {rows.length === 0 ? (
+          <TableRow>
+            {/* The head stays, so the reader sees what would be there; the body says why it is not. */}
+            <TableCell className="empty" colSpan={columns.length}>
+              {NO_MATCH}
+            </TableCell>
+          </TableRow>
+        ) : null}
         {rows.map((c) => (
           <TableRow
             key={c.session_id}
@@ -335,9 +396,9 @@ export function SessionTable({ cells }: { cells: Cell[] }) {
               open(c);
             }}
           >
-            {COLUMNS.map((col) => (
-              <TableCell key={col.key} className={col.numeric ? "num" : undefined} data-group={col.group ? "metrics" : undefined}>
-                {col.render(c)}
+            {columns.map((col) => (
+              <TableCell key={col.key} className={col.numeric ? "num" : undefined} data-k={col.key} data-group={col.group ? "metrics" : undefined}>
+                {col.render(c, ctx)}
               </TableCell>
             ))}
           </TableRow>

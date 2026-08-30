@@ -12,8 +12,12 @@ interface Props {
   mode: AxisMode;
 }
 
-/** The five visible categories of the waterfall, in stacking order, coloured by the `waterfall` design tokens. */
-const CATEGORIES: { key: "baseline" | "read" | "context" | "thinking" | "output" | "sub"; label: string }[] = [
+/**
+ * The visible categories of the waterfall, in stacking order, coloured by the `waterfall` design
+ * tokens. Exported because `TokenWaterfallAggregateChart` draws the same decomposition averaged
+ * over many runs: one vocabulary, so a legend means the same thing on both charts.
+ */
+export const CATEGORIES: { key: "baseline" | "read" | "context" | "thinking" | "output" | "sub"; label: string }[] = [
   { key: "baseline", label: "baseline_tokens (harness)" },
   { key: "read", label: "cache read (re-read context)" },
   { key: "context", label: "new context (input + cache write)" },
@@ -21,7 +25,7 @@ const CATEGORIES: { key: "baseline" | "read" | "context" | "thinking" | "output"
   { key: "output", label: "visible output" },
   { key: "sub", label: "subagents (spawned threads' bill)" },
 ];
-const TOTAL = { key: "total" as const, label: "accumulative_billed_tokens" };
+export const TOTAL = { key: "total" as const, label: "accumulative_billed_tokens" };
 const COST_KEY = "cost";
 const COST_LABEL = "accumulative cost (est. USD)";
 

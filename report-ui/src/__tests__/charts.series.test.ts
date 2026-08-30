@@ -229,3 +229,46 @@ test("cumulativeCostByTurn mirrors pricing.breakdown, including the untagged-cac
   expect(cost[1]! - cost[0]!).toBeCloseTo(20 * 2e-7 + 30 * 2.5e-6 + 50 * 4e-6, 10);
   expect(cumulativeCostByTurn({ rates_applied: {}, calls: [] } as never)).toBeNull();
 });
+
+test("aggregateWaterfall averages the decomposition over the runs that reached each turn", async () => {
+  const { aggregateWaterfall } = await import("@/lib/series");
+  const cell = (session_id: string) => ({ session_id, has_ledger: true }) as never;
+  /*
+   * Two runs, deliberately unequal: one of three turns and one of two. Turn 3 exists in one run
+   * only, so its column must average over that ONE run rather than dividing a single run's
+   * tokens by two — a category is missing from a short run, never zero in it.
+   */
+  const run = (baseline: number, outputs: number[]) =>
+    ({
+      baseline_tokens: baseline,
+      calls: outputs.map((out, i) => ({
+        n: i + 1,
+        usage: { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: out, reasoning_tokens: 0 },
+      })),
+    }) as never;
+  const agg = aggregateWaterfall([cell("a"), cell("b")], { a: run(100, [10, 20, 30]), b: run(200, [40, 60]) });
+
+  expect(agg.runs).toBe(2);
+  // baseline, t1, t2, t3, total
+  expect(agg.columns.map((c) => c.label)).toEqual(["baseline", "t1", "t2", "t3", "total"]);
+  expect(agg.n).toEqual([2, 2, 2, 1, 2]);
+  expect(agg.columns[0]!.baseline).toBe(150);
+  expect(agg.columns[1]!.output).toBe(25);
+  expect(agg.columns[3]!.output).toBe(30);
+
+  /*
+   * The stack's top is the mean running total, because the mean base and the mean segments are
+   * taken over the same subset of runs. Run a: 100/110/130/160; run b: 200/240/300.
+   */
+  const top = (i: number) => agg.columns[i]!.base + agg.columns[i]!.baseline + agg.columns[i]!.output + agg.columns[i]!.total;
+  expect(top(1)).toBe(175);
+  expect(agg.min).toEqual([100, 110, 130, 160, 160]);
+  expect(agg.max).toEqual([200, 240, 300, 160, 300]);
+  // the `total` column is each run's OWN final total, so it sits above a last turn only one run reached
+  expect(agg.columns[4]!.total).toBe(230);
+});
+
+test("aggregateWaterfall reports nothing rather than dividing by zero when no run has a ledger", async () => {
+  const { aggregateWaterfall } = await import("@/lib/series");
+  expect(aggregateWaterfall([{ session_id: "a", has_ledger: false } as never], {})).toEqual({ runs: 0, columns: [], n: [], min: [], max: [] });
+});

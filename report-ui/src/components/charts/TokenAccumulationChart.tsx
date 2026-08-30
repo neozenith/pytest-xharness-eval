@@ -3,6 +3,7 @@ import type { Data } from "plotly.js";
 import { ChartPanel } from "@/components/charts/common";
 import { PlotWithLegend, useHiddenSeries } from "@/components/charts/Plot";
 import { axis, baseLayout, seriesColor, seriesDash, useChartTheme } from "@/components/charts/plotly";
+import { NO_MATCH } from "@/lib/facets";
 import { accumulationGroups } from "@/lib/series";
 import type { Cell, RunResult } from "@/lib/types";
 
@@ -93,8 +94,14 @@ export function TokenAccumulationChart({ cells, results }: Props) {
           onToggle={toggle}
         />
       ) : (
+        /*
+         * Two different nothings. Handed no cells at all the chart has been filtered to nothing
+         * and says so; only when there are cells but none of them carries a ledger is the
+         * no-ledger sentence true. A filtered-to-nothing chart must not accuse the reader of
+         * having no ledger.
+         */
         <p className="muted" style={{ fontSize: "0.875rem" }}>
-          No session with a per-call ledger yet; run the evals or the replay.
+          {cells.length === 0 ? NO_MATCH : "No session with a per-call ledger yet; run the evals or the replay."}
         </p>
       )}
     </ChartPanel>

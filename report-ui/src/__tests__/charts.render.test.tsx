@@ -1,6 +1,15 @@
-import { screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
 import { renderT as render } from "./render";
-import { ChartAxisToggle, ContextWindowChart, OutputPerTurnChart, TokenAccumulationChart, TokenWaterfallChart, TurnTiersChart } from "@/components/charts";
+import {
+  ChartAxisToggle,
+  ContextWindowChart,
+  OutputPerTurnChart,
+  TokenAccumulationChart,
+  TokenWaterfallAggregateChart,
+  TokenWaterfallChart,
+  TurnTiersChart,
+} from "@/components/charts";
+import { NO_MATCH } from "@/lib/facets";
 import type { Cell } from "@/lib/types";
 import { result } from "./charts.series.test";
 
@@ -52,6 +61,16 @@ test("ChartAxisToggle offers the two axes and reports a change", () => {
   expect(onChange).toHaveBeenCalledWith("line");
 });
 
+test("TokenAccumulationChart tells a filtered-to-nothing chart apart from a ledgerless one", () => {
+  const filtered = render(<TokenAccumulationChart cells={[]} results={{}} />);
+  expect(filtered.container).toHaveTextContent(NO_MATCH);
+  expect(filtered.container).not.toHaveTextContent(/per-call ledger/);
+  cleanup();
+  const ledgerless = render(<TokenAccumulationChart cells={[{ ...cell, has_ledger: false }]} results={{}} />);
+  expect(ledgerless.container).toHaveTextContent(/No session with a per-call ledger yet/);
+  expect(ledgerless.container).not.toHaveTextContent(NO_MATCH);
+});
+
 test("TokenAccumulationChart mounts with its glossary id and one series per ledgered session", () => {
   const { container } = render(<TokenAccumulationChart cells={[cell, { ...cell, session_id: "other", has_ledger: false }]} results={{ s: result }} />);
   expect(document.getElementById("TokenAccumulationChart")).toHaveAttribute("data-el", "TokenAccumulationChart");
@@ -64,6 +83,19 @@ test("TokenAccumulationChart mounts with its glossary id and one series per ledg
 test("TokenAccumulationChart says so when no session has a ledger", () => {
   render(<TokenAccumulationChart cells={[{ ...cell, has_ledger: false }]} results={{}} />);
   expect(screen.getByText(/No session with a per-call ledger/)).toBeInTheDocument();
+});
+
+test("TokenWaterfallAggregateChart names the population it averaged and falls back when there is none", () => {
+  const { container } = render(<TokenWaterfallAggregateChart cells={[cell, { ...cell, session_id: "other", has_ledger: false }]} results={{ s: result }} />);
+  expect(document.getElementById("TokenWaterfallAggregateChart")).toHaveAttribute("data-el", "TokenWaterfallAggregateChart");
+  expect(container.querySelector("[role='img']")).toBeInTheDocument();
+  // the ledgerless session is not averaged in, and the title says how many runs are behind the means
+  expect(screen.getByText("Token waterfall, averaged over 1 run")).toBeInTheDocument();
+  // the six categories plus the total plus the spread whisker, sharing TokenWaterfallChart's vocabulary
+  expect(container.querySelectorAll("[data-el='ChartLegend'] button")).toHaveLength(8);
+  cleanup();
+  render(<TokenWaterfallAggregateChart cells={[{ ...cell, has_ledger: false }]} results={{}} />);
+  expect(screen.getByText(/No session with a per-call ledger in view/)).toBeInTheDocument();
 });
 
 test("TokenWaterfallChart renders per turn and per line with the legacy note", () => {

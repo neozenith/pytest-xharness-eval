@@ -23,23 +23,25 @@ The e2e suite needs Playwright's browser once: `cd report-ui && bunx playwright 
 
 ## Layout
 
-| Path                      | What                                                                                                                               |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `src/lib/types.ts`        | The JSON contracts `report.py`, `history.py` and `runresult.py` write; names are the JSON keys                                     |
-| `src/lib/data.ts`         | Inline payload (`window.__XH_DATA__`) or fetch from beside the page; tracks `window.__XH_PENDING__`                                |
-| `src/lib/tokens.ts`       | `report.tokens.json` → `--xh-*` custom properties; Tamagui themes and index.css consume them                                       |
-| `src/lib/route.ts`        | The hash schema: every interactive state is addressable (`session`, `turn`, `view`, `axis`, `rec`, `line`, `sort`, `dir`, `theme`) |
-| `src/lib/permutations.ts` | The covering matrix of deeplink states with deterministic slugs; the e2e sweep and the app share it                                |
-| `src/lib/format.ts`       | Number, money, percentage and window-label formatting; `–` is the one "no value" glyph                                             |
-| `src/tamagui.config.ts`   | Tamagui themes whose every value is a `var(--xh-*)` reference (ADR 0031)                                                           |
-| `src/components/`         | Page components named after the glossary's element ids                                                                             |
-| `src/components/ui/`      | Hand-written Tamagui components (button, card, badge, switch, tooltip, toggle-group, collapsible)                                  |
-| `src/components/charts/`  | Plotly charts; `Plot.tsx` is the one mount point, `plotly.ts` resolves the theme                                                   |
-| `src/views/`              | `SweepOverview`, `SessionView`                                                                                                     |
-| `src/__tests__/`          | Vitest; `render.tsx` wraps renders in the Tamagui provider                                                                         |
-| `e2e/matrix.spec.ts`      | The singular permutation sweep: screenshot + console + network timings per slug under `tmp/e2e/`                                   |
-| `e2e/inline.spec.ts`      | The inline smoke: the populated build over `file://`, glossary-id parity, zero console errors                                      |
-| `scripts/inline.py`       | Populate a built page from a captured directory via `report.inline_page`                                                           |
+| Path                      | What                                                                                                                                                                                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/types.ts`        | The JSON contracts `report.py`, `history.py` and `runresult.py` write; names are the JSON keys                                                                                                                                            |
+| `src/lib/data.ts`         | Inline payload (`window.__XH_DATA__`) or fetch from beside the page; tracks `window.__XH_PENDING__`                                                                                                                                       |
+| `src/lib/tokens.ts`       | `report.tokens.json` → `--xh-*` custom properties; Tamagui themes and index.css consume them                                                                                                                                              |
+| `src/lib/route.ts`        | The hash schema: every interactive state is addressable (`session`, `turn`, `view`, `axis`, `rec`, `line`, `sort`, `dir`, `ssort`, `sdir`, `skill`, `harness`, `model`, `theme`); `overviewWith` is how every overview control writes one |
+| `src/lib/permutations.ts` | The covering matrix of deeplink states with deterministic slugs; the e2e sweep and the app share it                                                                                                                                       |
+| `src/lib/format.ts`       | Number, money, percentage and window-label formatting; `–` is the one "no value" glyph                                                                                                                                                    |
+| `src/lib/facets.ts`       | The overview's filter vocabulary: options, the AND-across / OR-within predicate, and the one `NO_MATCH` sentence (ADR 0042)                                                                                                               |
+| `src/lib/summary.ts`      | `SessionSummaryTable`'s arithmetic: one row per skill × case × harness × model, every aggregate a named mean (ADR 0042)                                                                                                                   |
+| `src/tamagui.config.ts`   | Tamagui themes whose every value is a `var(--xh-*)` reference (ADR 0031)                                                                                                                                                                  |
+| `src/components/`         | Page components named after the glossary's element ids                                                                                                                                                                                    |
+| `src/components/ui/`      | Hand-written Tamagui components (button, card, badge, switch, tooltip, toggle-group, collapsible)                                                                                                                                         |
+| `src/components/charts/`  | Plotly charts; `Plot.tsx` is the one mount point, `plotly.ts` resolves the theme                                                                                                                                                          |
+| `src/views/`              | `SweepOverview`, `SessionView`                                                                                                                                                                                                            |
+| `src/__tests__/`          | Vitest; `render.tsx` wraps renders in the Tamagui provider                                                                                                                                                                                |
+| `e2e/matrix.spec.ts`      | The singular permutation sweep: screenshot + console + network timings per slug under `tmp/e2e/`                                                                                                                                          |
+| `e2e/inline.spec.ts`      | The inline smoke: the populated build over `file://`, glossary-id parity, zero console errors                                                                                                                                             |
+| `scripts/inline.py`       | Populate a built page from a captured directory via `report.inline_page`                                                                                                                                                                  |
 
 ## Rules
 

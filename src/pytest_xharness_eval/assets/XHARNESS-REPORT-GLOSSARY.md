@@ -9,7 +9,7 @@ every session and turn has an id you can copy from the page and paste into a URL
 
 | Id | Form | Example | Where to find it |
 |----|------|---------|------------------|
-| `SessionId` | the harness-minted session UUID (Claude `--session-id`; Codex rollout id) | `87c58138-7c63-4c22-8eed-337d1b7cbd12` | the dashed badge in `SessionRow` and `SessionTitle`; click to copy |
+| `SessionId` | the harness-minted session UUID (Claude `--session-id`; Codex rollout id) | `87c58138-7c63-4c22-8eed-337d1b7cbd12` | the dashed badge in `SessionTitle`; click to copy. `SessionRow` carries it as `data-sid` but no longer prints it: the row opens the `SessionView` that does |
 | `SessionTurnId` | `<SessionId>/t<N>`, `N` = 1-based model call | `87c58138-7c63-4c22-8eed-337d1b7cbd12/t3` | the dashed badge in `SessionTurnRow`; click to copy |
 | `RecordCard` anchor | `L<line>` | `#L42` (element id inside the page) | each record card's `id`; the card header says `line 42` |
 
@@ -21,7 +21,11 @@ Shorthand in conversation: `S:87c58138` for a session, `S:87c58138/t3` for a tur
 
 ```text
 report.html                                           SweepOverview
-report.html?sort=turns&dir=desc                       SweepOverview, table sorted by that column
+report.html?sort=turns&dir=desc                       SweepOverview, SessionTable sorted by that column
+report.html?ssort=cost&sdir=desc                      SweepOverview, SessionSummaryTable sorted by that column
+report.html?skill=discovery                           SweepOverview, only that skill
+report.html?harness=claude,codex                      SweepOverview, either harness (comma-separated multi-select)
+report.html?skill=discovery&harness=claude&model=claude-opus-5   all three at once (OR within a facet, AND across facets)
 report.html?session=<SessionId>                       SessionView, summary view
 report.html?session=<SessionId>&view=detailed         every SessionTurnDetails expanded
 report.html?session=<SessionId>&turn=3                turn 3 expanded and scrolled into view
@@ -40,7 +44,11 @@ server rewrites and over `file://` (ADR 0020, ADR 0031). A param absent from the
 URL means its default — the URL alone reproduces the whole state — and a legacy
 `#session=…` fragment link is upgraded to its query form on load.
 `lib/permutations.ts` enumerates the covering matrix of these states for the
-Playwright sweep, one deterministic slug per state.
+Playwright sweep, one deterministic slug per state. An absent `skill`, `harness` or
+`model` means **every** value of that facet, and so does a present-but-empty one
+(`?skill=`); a value the sweep does not contain matches nothing, so a stale filter
+deeplink lands in a visible empty state rather than silently showing everything
+(ADR 0042).
 
 ## Turn boundaries
 
@@ -165,8 +173,11 @@ xharness_skill_ignore = [
 | `Report` | `ReportHeader`, `NavSidebar`, `SweepOverview`, `SessionView` | the page |
 | `NavSidebar` | `NavToggle`, an Overview link, then skill → suite → harness → model → one entry per session (verdict dot, case, short id); the open session lists section jump-links | the collapsible left navigation; every tree level starts collapsed (the reader opts in, and the active session's ancestors open themselves); collapse is remembered locally, never routed |
 | `ReportHeader` | `ReportTitle`, `ReportMeta`, `ThemeToggle` | sticky chrome; `ReportTitle` is the report's name on the sweep and the `eval · session · harness · model` tuple inside a `SessionView` (the tab title follows it) |
-| `SweepOverview` | `TokenAccumulationChart`, `SessionTable` | every captured session at a glance; the header meta names every skill the sweep spans |
-| `SessionTable` | one `SessionRow` per session | sortable; a row opens its `SessionView`; `accumulative_billed_tokens (billed)` is the cross-turn billed sum and `peak context` reads `peak_context_tokens · context_window_pct of window`, two different quantities; the `skill coverage` column reads `loaded/files · run/scripts` |
+| `SweepOverview` | `OverviewFilters`, `OverviewCharts`, `SessionSummaryTable`, `SessionTable` | every captured session at a glance; the header meta names every skill the sweep spans; the view owns the filtering and hands the same filtered cells to all three consumers |
+| `OverviewCharts` | `TokenAccumulationChart` and `TokenWaterfallAggregateChart`, side by side | the pair is one question asked two ways over the same filtered population — how fast the bill grows, and where it went — so they are read against each other rather than one at a time. A `repeat(auto-fit, minmax(460px, 1fr))` grid: side by side from ~1150px, stacked below it rather than squeezed to a width their axes cannot carry, and each chart's legend wraps beneath its own plot once its column is narrower than plot + legend rail. Both notes reserve four lines so the two plots start on the same line at every width the pair is a row |
+| `OverviewFilters` | one chip row per facet — skill, harness, model — each chip carrying its cross-filtered session count, and a status cluster holding `OverviewFiltersClear` and, set to the card's right edge, `OverviewFilterCount` | the one global filter on the overview, held in the URL, rippling through all three consumers. It is chrome, not a panel: an eyebrow heading in the page's eyebrow voice — 12/600/0.5 uppercase, muted, the same spec the `NavSidebar` sets — rather than a card title, so the data below it is not pushed down the page. `OverviewFilterCount` reads `N of M sessions` while a filter is on and `M sessions` when none is, so the selection is legible without reading the chips; a selected chip carries a mark as well as the accent, so lit and unlit are told apart at a glance and a chip is the same width either way; a facet with one distinct value says so; a chip that would select nothing is hollowed out, not hidden, and stays clickable; a *selected* value the sweep does not contain — what a stale deeplink leaves behind — still renders as a chip, lit, dashed and counting 0, so a selection is never invisible. Nothing in the bar changes size when it lights up, at any width: the chip mark is always in the DOM; `OverviewFiltersClear` is always rendered and merely hidden (`aria-hidden`, out of the tab order) while nothing is selected, so its box is reserved in both states; `OverviewFilterCount` holds a hidden sizer printing the widest sentence it can ever say, so its box is too; and each facet key holds a fixed column outside the wrapping chip box, so a wrapped chip line starts where every other chip line starts. The undo sits before the count so the count, the one part always present, holds the right edge in both states. `OverviewFilterCount` is a `role="status"` live region, so a chip toggle announces the new N of M; `OverviewFiltersClear` hands focus to the first chip as it unmounts |
+| `SessionSummaryTable` | one row per skill × case × harness × model group with its run count and its mean measures; `SummaryCount` in the title says how many groups, as `SessionCount` says how many sessions | the aggregate view of exactly the runs `SessionTable` lists, one row per line of `TokenAccumulationChart`; every mean is named `mean <field>` and is over the runs that carry that field. Sortable on its OWN param pair (`ssort=`/`sdir=`), because a reader ranks groups by mean cost while ranking sessions by when they ran, and a shared pair would make every click here silently reorder the table below. Unsorted, rows come out in a fixed key order and are banded by skill, and a value repeating the row above's recedes to the muted ink so the first row of each band leads; **both the banding and the repeat muting switch off the moment a column is sorted**, because under any other order "the row above" is whatever the reader last clicked and a band would be drawing a grouping the table is no longer in. A group that did not pass clean takes `bad` ink on its `pass rate` fraction, which is this table's answer to the `VerdictBadge` rail one table below. Its rows are a readout, not links: unlike `SessionTable`'s they take no hover wash and go nowhere, which is the whole of the altitude difference between the pair. Its heads are the same `ColumnHead` component `SessionTable`'s are, so the pair's heads are one object rather than two that happen to agree: the printed label is the short form, the accessible name keeps the canonical field name beside it, and the definition reaches a pointer through the tooltip and a screen reader through `aria-describedby` on a visually-hidden span (the tooltip alone opens for pointer events only, which left the only spelling-out of `mean output_tokens_per_sec` unreachable by keyboard). Nothing in its *body* is focusable, so its scroll box is itself the tab stop — `role="region"`, labelled, and focusable only while columns are actually clipped — or the data past its right edge would be reachable by pointer alone |
+| `SessionTable` | one `SessionRow` per session | sortable (`sort=`/`dir=`); a row opens its `SessionView`. **Budgeted to one screen**: every metric is present, but the session id is no longer a column (the row opens the view that prints it beside a `CopyId`; `data-sid` still carries it), `estimated_cost_usd` and `harness_reported_cost_usd` are one `cost` column reading the estimate with the harness's own figure as a muted signed drift from it, token counts are abbreviated (`1.5M`, `29.4k`) with the exact figure on the cell's `title`, `model` drops its vendor prefix and `case` the `eval_` every case shares, and each head prints the shortest form that still reads while keeping the canonical field name in its tooltip and accessible name. `accumulative_billed_tokens (billed)` is the cross-turn billed sum and `peak ctx` reads `peak_context_tokens · context_window_pct` (the window itself on the title), two different quantities; the `coverage` column reads `loaded/files · run/scripts` |
 | `SessionView` | in order: `SessionHeader`, `TokenWaterfallChart`, `ContextWindowChart`, `ReconciliationPanel`, `CostByTierPanel`, `OutputPerTurnChart`, `TurnTiersChart`, `SkillCoveragePanel`, `RecordKindsPanel`, `SessionTurnTable`, `FinalMessagePanel` | one session |
 | `SessionHeader` | `SessionTitle` (with the `SessionId` badge), `SessionMetaTable` | identity, verdict, the suite file / case / skill / fixture / prompt under test, evidence links, workspace, context window and peak / final consumption, time to first token, output tokens per second, timings, in one key/value table |
 | `ChartAxisToggle` | `per turn` / `per session-log line` | the x-axis of the four charts below (`axis=` in the fragment); per line, a value holds from the record that measured it until the next measurement (a step), turn starts are marked, nothing is interpolated |
@@ -174,6 +185,7 @@ xharness_skill_ignore = [
 | `ContextWindowChart` | per turn: one point per turn plus `final_context_pct`; per line: a step of the latest measured `context_pct` | how close the run came to the window, qualified by the window size in the axis title |
 | `ReconciliationPanel` | ledger versus harness aggregate, per tier | proves the ledger matches the CLI's own totals |
 | `CostByTierPanel` | USD per tier, harness per-model estimate, `RatesApplied` | how `estimated_cost_usd` was built and from which rates |
+| `TokenWaterfallAggregateChart` | the same six categories and total as `TokenWaterfallChart`, averaged over every run in view: one column per turn index plus `baseline` and `total`, with a min–max whisker per column | where the tokens went, across many runs rather than one — the decomposition to `TokenAccumulationChart`'s accumulation, over the same filtered population. Each column is the arithmetic mean over the runs that *reached* that turn (a short run is missing from a late turn, never zero in it), so the stack's top is the mean running total and the whisker brackets the real runs behind it; the hover reports how many runs each column averages. The `total` column is each run's own final total, so on runs of unequal length it sits above the last turn's column rather than level with it |
 | `TokenWaterfallChart` | per turn: `baseline_tokens`, then per turn cache read, new context, thinking, visible output and the whole bill of any subagents that turn spawned, ending at `accumulative_billed_tokens`; per line: the same categories as a stacked step area of cumulative tokens; the right-hand axis carries the running `estimated_cost_usd` as a line | where the tokens (and dollars) went |
 | `OutputPerTurnChart` | thinking and visible output stacked, per turn or at each turn's measuring line | how much of each turn's output was reasoning |
 | `TurnTiersChart` | the four billing tiers stacked, per turn or at each turn's measuring line | what each turn was billed for |
@@ -184,6 +196,43 @@ xharness_skill_ignore = [
 | `SessionTurnDetails` | `TurnRawRecords` | the session-log records attributed to that turn, untruncated |
 | `TurnRawRecords` | the turn's line range, then one `RecordCard` per log line (`records` in the ledger) | the evidence itself, line-numbered |
 | `RecordCard` | header: category-coloured kind pill, `L<line>`, the record's timestamp (`HH:MM:SS.mmm`), size, a context annotation (`ctx 7.2%` = the turn's measured prompt; `→ t4 7.5%` on a tool result = the next turn's prompt it became part of), a `raw`/`nice` flip and a permalink button (sets `line=` in the fragment and copies the URL); body: the rendered view or the raw JSON | one log line; `RecordViewToggle` flips every card at once. Harness-specific bases: `RecordCardClaude` renders the `claude/*` catalogue, `RecordCardCodex` the `codex/*` one; the card carries `data-harness` |
+
+### How `SessionSummaryTable` aggregates
+
+The grouping key is **skill × case × harness × model** — deliberately the same
+partition `accumulationGroups` draws with, so one summary row is one line of the
+`TokenAccumulationChart` above it and the two read as a pair. Rows come out in that
+key order ascending (a null skill last); the table is not sortable, because its
+sortable twin sits directly beneath it.
+
+**The one mean rule**, applied to every `mean_*` column: the arithmetic mean over the
+runs in the group that carry a value. A missing value is skipped, never zero-filled,
+and the divisor is the count of present values rather than `runs`; an aggregate over
+nothing is `–`, never `0`, so a sparse column reads as sparse.
+
+**Mean, not median**, deliberately: the chart beside it already draws a mean line with
+a min–max envelope, and a median row would disagree with that picture by construction;
+cost and tokens are additive, so `mean × runs` is the group's total — the arithmetic a
+reader actually does — while a median has no such relation; and a median over the group
+sizes this data produces (1–2) is either the single value or the mean of the two. The
+column names say `mean …` in full (ADR 0021), so the choice is never inferred.
+
+The **pass rate**'s denominator is the runs that carry a verdict, not `runs`: an
+ungraded run is never counted as a failure, and the cell says how many have no history.
+
+| Column | What it is |
+|--------|------------|
+| `skill`, `case`, `harness`, `model` | the group's key |
+| `runs` | captured sessions in this group; every mean below is over these runs |
+| `verdict pass rate` | runs whose verdict is `pass`, over the runs that carry a verdict |
+| `mean estimated_cost_usd` | arithmetic mean of `estimated_cost_usd` |
+| `mean accumulative_billed_tokens` | arithmetic mean of the cross-turn billed sum; a spend figure, not a context figure |
+| `mean peak_context_tokens` | arithmetic mean of the largest prompt one turn processed, with the mean `context_window_pct` and the window |
+| `mean turns` | arithmetic mean of model API calls |
+| `mean tool_calls` | arithmetic mean of tool invocations issued |
+| `mean skill_coverage loaded share` | arithmetic mean of `loaded/files` per run, ignored files excluded, runs with no catalogue skipped |
+| `mean output_tokens_per_sec` | arithmetic mean of output tokens per second of API time |
+| `mean wall_ms` | arithmetic mean of wall clock around the subprocess |
 
 ### How a `RecordCard` is rendered
 
@@ -286,7 +335,11 @@ treemap-beta
         "ReportMeta":::chrome
         "ThemeToggle":::chrome
     "SweepOverview":::overview
-        "TokenAccumulationChart":::overview
+        "OverviewFilters":::overview
+        "OverviewCharts":::overview
+            "TokenAccumulationChart":::overview
+            "TokenWaterfallAggregateChart":::overview
+        "SessionSummaryTable":::overview
         "SessionTable":::overview
             "SessionRow":::overview
     "SessionView":::session

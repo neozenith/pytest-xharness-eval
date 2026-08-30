@@ -146,6 +146,15 @@ button[aria-disabled="true"],
 .accentc {
   color: var(--xh-accent);
 }
+/*
+ * Digits that hold their width. `.xh-table` sets this for every table on the page; this is the
+ * class for the one number outside a table that changes in place — the `OverviewFilters` count,
+ * which is rewritten on every chip click and must not jitter the control beside it.
+ */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
 .mono {
   font-family: var(--xh-font-mono);
 }
@@ -184,6 +193,19 @@ button[aria-disabled="true"],
   mask-image: linear-gradient(to right, transparent 0, black var(--xh-fade-start), black calc(100% - var(--xh-fade-end)), transparent 100%);
 }
 
+/*
+ * A scroll box whose table holds nothing focusable is itself the tab stop (`scrollLabel` in
+ * components/ui/table.tsx sets `role`, `aria-label` and a measured `tabindex`), or the columns
+ * past its right edge are unreachable without a pointer — WCAG 2.1.1. The ring is drawn on the
+ * unmasked wrapper the same file adds, because the box's own edge mask erases an outline the box
+ * paints itself: it came out as a top and a bottom rule with no sides.
+ */
+.table-scroll-ring:has(> .table-scroll:focus-visible) {
+  outline: 2px solid var(--xh-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 .table-scroll[data-edge-start="true"] {
   --xh-fade-start: 28px;
 }
@@ -204,16 +226,23 @@ button[aria-disabled="true"],
  * at full page scroll. So this one box is given a real height instead. The rows scroll inside
  * it against a header pinned to its top edge, which is strictly better than pinning under the
  * app bar would have been — the header is present for every row, not only the ones below the
- * fold. `:has()` keeps it to this table; every other `.table-scroll` on the page is untouched.
+ * fold.
+ *
+ * `SessionSummaryTable` takes the same treatment. It is shorter, so on a small sweep it never
+ * reaches the cap and nothing changes — but at sixteen groups it is 567px of table, and reading
+ * its last row put its head off screen, leaving ten anonymous right-aligned numbers: the exact
+ * failure this rule was written for. The pair behaves identically or it is not a pair.
  */
-.table-scroll:has(#SessionTable) {
+.table-scroll:has(#SessionTable),
+.table-scroll:has(#SessionSummaryTable) {
   max-height: max(320px, calc(100dvh - 12rem));
   overflow-y: auto;
   /* Keyboard focus on a row lands clear of the pinned header, not behind it. */
   scroll-padding-block-start: 2.25rem;
 }
 
-#SessionTable thead th {
+#SessionTable thead th,
+#SessionSummaryTable thead th {
   position: sticky;
   top: 0;
   /* Above the rows passing beneath it, and opaque, or they show through. */
@@ -263,7 +292,13 @@ button[aria-disabled="true"],
 .xh-table thead th button {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  /*
+   * The arrow is in flow on every head so that activating one shifts nothing — but at 12px with
+   * a 4px gap it was 16px on fourteen heads, and on six of them (`turns`, `tools`, `tok/s`,
+   * `wall`, `harness`, `verdict`) it, not the data, was what set the column's width. 11px and a
+   * 2px gap keep the no-shift property and give the table back 70px of its own budget.
+   */
+  gap: 0.125rem;
   flex-direction: row;
   width: calc(100% + 1.25rem);
   margin: -0.375rem -0.625rem -0.5rem;
@@ -279,6 +314,28 @@ button[aria-disabled="true"],
 }
 
 /*
+ * A head owns its own voice, and anything it wraps inherits it. Tamagui's `is_View` base sets
+ * `font-weight: var(--f-weight-true)` on every view it renders — including the tooltip trigger
+ * wrapping a `SessionSummaryTable` label — which left the summary heads at 300 with no tracking
+ * beside `SessionTable`'s 600/0.04em: the one claim this pair of tables makes, that they differ
+ * in altitude and in nothing else, failed on the heads themselves.
+ */
+.xh-table thead th :is(span, button) {
+  font-weight: inherit;
+  letter-spacing: inherit;
+}
+
+/*
+ * The head of a column that defines itself but does not sort (`SessionSummaryTable`, which is a
+ * fixed-order readout). It is the same button box as a sortable head — same fill, same ring, same
+ * label geometry, so the pair reads as one object — and it differs where it must: no sort arrow,
+ * and the help cursor, so the affordance promises a definition rather than a re-order.
+ */
+.xh-table thead th button[data-def] {
+  cursor: help;
+}
+
+/*
  * On a numeric head the label has to stay flush right, above the digits it names — so the
  * arrow goes to its *left* rather than pushing it off the column's edge. `row-reverse` packs
  * from the right, which is why `justify-content` is start here and not end.
@@ -286,6 +343,49 @@ button[aria-disabled="true"],
 .xh-table thead th.num button {
   flex-direction: row-reverse;
   justify-content: flex-start;
+}
+
+/*
+ * The one visually-hidden utility on the page. A column head's definition is announced through
+ * `aria-describedby` pointing here, because the pointer-driven tooltip beside it opens for a
+ * mouse and for nothing else — and these definitions are the only place the canonical field
+ * names are spelled out. `clip-path` over `clip`, and `white-space: nowrap` so a screen reader
+ * still reads the phrase as one line.
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * A numeric cell's trailing qualifier — `· 33.8%` beside a peak-context figure, the cost drift
+ * beside an estimate — sits in a fixed box, so the *leading* figure holds a right edge down the
+ * column. Without it the qualifier's own width (`6.5%` against `33.8%`) walked the number it
+ * qualifies by ~20px, in the one place a right-aligned tabular-numeral column exists to prevent
+ * exactly that.
+ */
+.xh-table .num .qual {
+  display: inline-block;
+  /*
+   * The gap is a margin, not a leading space in the markup: an `inline-block` collapses white
+   * space at its own start, so `{" "}` before the qualifier vanished and the column rendered
+   * `$0.835+14.6%` and `58.0k· 22.4%` — two figures with no air between them.
+   */
+  margin-left: 0.3em;
+  min-width: 3.1em;
+  text-align: right;
+}
+
+/* A short qualifier (`+0.1%`, `=`) reserves less: 3.6em beside `$1.0276` was pure gutter. */
+.xh-table .num .qual.tight {
+  min-width: 2.2em;
 }
 
 /*
@@ -380,6 +480,13 @@ button[aria-disabled="true"],
  * auto-layout idiom that caps that contribution; `width: 100%` then re-fills the row. The
  * table's real columns are unaffected, so a genuinely wide table still scrolls.
  */
+/* The one-cell empty row of a table filtered to nothing: the head stays, the body says why. */
+.xh-table td.empty {
+  padding-block: 1.5rem;
+  color: var(--xh-muted);
+  text-align: left;
+}
+
 .xh-table tr.detail-row > td {
   max-width: 0;
   width: 100%;
@@ -405,6 +512,23 @@ button[aria-disabled="true"],
 /* A hair more air under the header rule than between two data rows. */
 .xh-table tbody tr:first-child > td {
   padding-top: 0.5rem;
+}
+
+/*
+ * The `SessionSummaryTable`'s skill bands (`data-band` in SessionSummaryTable.tsx). A collapsed
+ * table paints a cell's `border-top` against the previous cell's `border-bottom` and the earlier
+ * cell wins the tie, so the rule is an inset shadow, which no neighbour can outrank; the extra
+ * block padding is the half of the signal that survives a screenshot at a distance.
+ */
+.xh-table tbody tr[data-band] > td {
+  padding-top: 0.9375rem;
+  box-shadow: inset 0 1px 0 var(--xh-line);
+}
+
+/* A value that repeats the row above's (`repeat` in SessionSummaryTable.tsx): still printed,
+ * no longer competing. It is only ever set on a table whose row order is fixed. */
+.xh-table td[data-repeat] {
+  color: var(--xh-muted);
 }
 
 /* Flush outer edges so the first column lines up with the card title above it. */
@@ -447,6 +571,17 @@ button[aria-disabled="true"],
 
 .xh-table tbody tr:hover:not(.detail-row) {
   background: color-mix(in srgb, var(--xh-muted) 10%, transparent);
+}
+
+/*
+ * The hover wash above is a *click* affordance: on `#SessionTable` it tracks a row that opens a
+ * `SessionView`. `#SessionSummaryTable` is a readout — its rows go nowhere, and the route
+ * grammar has no `case` facet to send them to — so it must not wear one. This is the whole of
+ * the altitude difference between the pair: same hairlines, same numerals, same header voice,
+ * and only one of them is a list of links.
+ */
+#SessionSummaryTable tbody tr:hover {
+  background: none;
 }
 
 /*
@@ -591,20 +726,189 @@ button.filter-chip:active {
   transform: scale(0.97);
 }
 
-.filter-chip[data-on="true"] {
-  border-color: var(--xh-accent);
-  background: color-mix(in srgb, var(--xh-accent) 13%, transparent);
+button.filter-chip:focus-visible {
+  outline: 2px solid var(--xh-accent);
+  outline-offset: 2px;
 }
 
 /*
- * `button.filter-chip:hover` (0,2,1) outranks `.filter-chip[data-on="true"]` (0,2,0), so
- * without restating it here the selected chip lost its accent border to the grey hover border
- * at the same moment its fill went *more* accent — the selection visibly degraded under the
- * pointer. The border is restated at matching specificity.
+ * A facet value no session matches under the other two facets. It is still offered — the option
+ * list must not move as you filter, and clicking it is a legal way to reach the empty state —
+ * but it reads as spent: hollowed out rather than dimmed. `opacity` was taking the whole chip,
+ * ink included, below the contrast the rest of the page holds itself to; emptying the fill says
+ * the same thing with the label left at full strength.
+ */
+button.filter-chip[data-empty="true"] {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--xh-line) 70%, transparent);
+  color: var(--xh-muted);
+}
+
+/* It is still a live control, so it still answers the pointer — quietly, in its own key. */
+button.filter-chip[data-empty="true"]:hover {
+  background: color-mix(in srgb, var(--xh-muted) 8%, transparent);
+  border-color: color-mix(in srgb, var(--xh-muted) 45%, var(--xh-line));
+  color: var(--xh-ink);
+}
+
+/*
+ * The selected state. It has to be legible across a row of eight without being read — the
+ * reader must see *that* a filter is on before they work out which — so it carries three
+ * signals at once: the mark, an accent wash a clear step above the resting `--xh-code` fill,
+ * and accent ink. (An accent border and a 13% wash alone, which is where this started, was one
+ * signal, and at chip size it read as a hover.) Ink on that wash is ~6.6:1 in both themes.
+ *
+ * Specificity is deliberate: this is written at (0,3,1) to match `[data-empty]` and `:hover`,
+ * both of which would otherwise repaint a selected chip's border and fill from under it.
+ */
+button.filter-chip[data-on="true"] {
+  border-color: color-mix(in srgb, var(--xh-accent) 65%, transparent);
+  background: color-mix(in srgb, var(--xh-accent) 16%, transparent);
+  color: var(--xh-accent);
+}
+
+/*
+ * 20%, not the 24% this started at: the accent ink on a 24% wash measured 4.38:1 in light,
+ * under the 4.5:1 floor the rest of the page holds. Measured at 20%: the label is 4.62:1 light /
+ * 5.74:1 dark and the count 4.79:1 / 5.30:1, and the step up from the resting 16% is still the
+ * clearest fill change on the row.
  */
 button.filter-chip[data-on="true"]:hover {
   border-color: var(--xh-accent);
   background: color-mix(in srgb, var(--xh-accent) 20%, transparent);
+  color: var(--xh-accent);
+}
+
+/*
+ * Selected, and matching nothing under the other two facets — including a value the sweep does
+ * not contain at all, which a stale deeplink can select (`?skill=__gone__`). It keeps the lit
+ * fill, because a selection the reader cannot see is the failure this bar exists to prevent,
+ * and states the contradiction in the border rather than in a colour: dashed is "this is on and
+ * it is holding nothing back". Written at (0,3,1) to beat both single-attribute rules.
+ */
+button.filter-chip[data-on="true"][data-empty="true"] {
+  border-style: dashed;
+}
+
+/*
+ * The mark. Always in the DOM at a fixed size, so a chip is exactly as wide lit as unlit and
+ * toggling one never reflows the row under the pointer that clicked it.
+ */
+.filter-chip .chip-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-right: 0.4rem;
+  border-radius: 999px;
+  background: currentcolor;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.filter-chip[data-on="true"] .chip-dot {
+  opacity: 1;
+}
+
+/*
+ * On a lit chip the count joins the accent ink rather than staying grey on a tinted fill — but
+ * it still has to recede from the label beside it, and it may not do that with `opacity`. The
+ * 0.72 this carried put the count at 3.05:1 light / 4.07:1 dark against the *composited* chip
+ * fill (rgb(227,225,251) / rgb(46,51,70)), a clear AA failure on the smallest text in the bar.
+ * The recession is chroma instead: the accent pulled 30% toward the muted grey is visibly
+ * quieter than the saturated label without giving up any contrast. Measured on the composited
+ * fill: 5.10:1 light and 5.82:1 dark at rest, 4.79:1 / 5.30:1 on the hover wash. Never
+ * `opacity` on ink again.
+ */
+button.filter-chip[data-on="true"] > .muted {
+  color: color-mix(in srgb, var(--xh-accent) 70%, var(--xh-muted));
+}
+
+/*
+ * The bar's own outcome, set to the card's right edge: "12 of 24 sessions" is the one line that
+ * makes a filter legible at rest, before the reader has parsed which chips are lit.
+ *
+ * It is a one-cell grid holding two stacked copies of itself: the live sentence, and a hidden
+ * sizer printing the widest sentence it can ever hold (`M of M sessions`). The box is therefore
+ * exactly as wide filtered as unfiltered, so nothing to its left is ever re-flowed by a digit —
+ * the eyebrow row's wrap point cannot move, and with it the whole bar's height, when a chip is
+ * clicked. The live copy is set to the end of the cell, so the sentence itself stays flush right
+ * whatever it says.
+ */
+.filter-count {
+  display: inline-grid;
+  justify-items: end;
+  min-height: 28px;
+  align-items: center;
+  color: var(--xh-muted);
+  font-family: var(--xh-font-body);
+  font-size: 0.75rem;
+  line-height: 1.3333;
+  white-space: nowrap;
+}
+
+.filter-count > * {
+  grid-area: 1 / 1;
+}
+
+.filter-count > .sizer {
+  visibility: hidden;
+}
+
+/* The figure is the datum; "of 24 sessions" is its qualifier — the same split the chips make. */
+.filter-count .n {
+  color: var(--xh-ink);
+  font-weight: 600;
+}
+
+/*
+ * Clearing back to "all" is one action and it is not a fourth facet value, so it is not a chip:
+ * it sits in the bar's status cluster, beside the count it resets, in accent ink with the
+ * kit's 28px control height.
+ */
+.filter-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 28px;
+  padding: 0 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--xh-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 90ms ease;
+}
+
+/*
+ * With nothing selected the button is *still here* — same 102x28 box, in the same place in the
+ * same line — because mounting it on the first chip click grew the bar by 21px and slid every
+ * facet row, including the chip under the pointer that had just clicked it, down out of reach.
+ * Hidden rather than absent: `visibility` takes it out of the tab order and the a11y tree, and
+ * `aria-hidden` says so to anything that reads the tree without computing style.
+ */
+.filter-clear[aria-hidden="true"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.filter-clear:hover {
+  background: color-mix(in srgb, var(--xh-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--xh-accent) 40%, transparent);
+}
+
+.filter-clear:active {
+  transform: scale(0.97);
+}
+
+.filter-clear:focus-visible {
+  outline: 2px solid var(--xh-accent);
+  outline-offset: 2px;
 }
 
 .filter-chip[data-on="true"] b {
@@ -615,6 +919,16 @@ button.filter-chip[data-on="true"]:hover {
   color: var(--xh-muted);
   font-weight: 600;
   margin-right: 0.3rem;
+}
+
+/*
+ * A chip is an inline-flex box, so the space typed between a facet value and its count is a
+ * whitespace flex item the layout drops: `discovery 8` rendered as `discovery8`, and worse,
+ * `claude-opus-5 6` as a wholly plausible `claude-opus-56`. The gap is drawn instead of typed,
+ * the mirror of the `b` rule above, which is why the label form has never had the problem.
+ */
+.filter-chip > .muted {
+  margin-left: 0.3rem;
 }
 
 .tag {
@@ -1440,4 +1754,120 @@ button.filter-chip[data-on="true"]:hover {
 }
 .xh-target {
   animation: xh-target-flash 2.4s ease-out;
+}
+
+/*
+ * THE COLUMN BUDGET (the overview's two tables).
+ *
+ * Fifteen columns at the kit's 10px cell inset spent 300px — a fifth of the table — on gutter
+ * alone, which is what put the last columns past the card's edge and behind a scrollbar most
+ * readers never found. The overview pair steps down to a 5px inset: they are the densest
+ * surfaces in the report and the only ones where the inset is load-bearing rather than a matter
+ * of comfort — and they step down together, because a reader reading one against the other must
+ * not see two different column rhythms.
+ * The head keeps its own vertical padding (and its negative-margin button box keeps matching it),
+ * so only the horizontal figure moves.
+ */
+/*
+ * The two overview tables bleed to the card's edge. `CardContent`'s 20px inset frames prose —
+ * the title and the note above — but a dense table is the card's subject rather than something
+ * set inside it, and those 40px were the difference between the widest column being readable and
+ * being behind a scrollbar. The card's own padding still holds the header, so the table's first
+ * column lines up with the card edge and nothing else moves.
+ */
+/*
+ * Written against the scroll box itself rather than the focus-ring wrapper, because only a table
+ * that needs the wrapper has one (`scrollLabel` in components/ui/table.tsx): `SessionSummaryTable`
+ * is wrapped and `SessionTable` is not, and a rule on the wrapper silently missed the very table
+ * the width was being reclaimed for.
+ */
+.table-scroll:has(#SessionTable),
+.table-scroll:has(#SessionSummaryTable) {
+  margin-left: -20px;
+  margin-right: -20px;
+}
+
+#SessionTable :is(th, td),
+#SessionSummaryTable :is(th, td) {
+  padding-left: 0.3125rem;
+  padding-right: 0.3125rem;
+}
+
+#SessionTable thead th button,
+#SessionSummaryTable thead th button {
+  width: calc(100% + 0.625rem);
+  margin-left: -0.3125rem;
+  margin-right: -0.3125rem;
+  padding-left: 0.3125rem;
+  padding-right: 0.3125rem;
+}
+
+/*
+ * The two free-text identity columns are the only ones whose width is set by their longest
+ * value rather than by a figure, and `mermaidjs-diagrams` alone was 144px. They cap and elide;
+ * the full string is on the cell's `title`, where the exact token counts and the full model id
+ * already are. Every other column is a number and sizes itself.
+ */
+#SessionTable td[data-k="skill"] > *,
+#SessionTable td[data-k="case"] > * {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+/*
+ * `case` gets the wider cap of the two: it is the row's identity and the thing a reader is
+ * looking for, while `skill` is a filter facet with its own chips directly above, a level of the
+ * nav tree, and a column that collapses out of the table entirely the moment one is selected.
+ * When a name does elide, the whole of it is on the cell's `title`.
+ */
+#SessionTable td[data-k="case"] > * {
+  max-width: 18ch;
+}
+
+#SessionTable td[data-k="skill"] > * {
+  max-width: 12ch;
+}
+
+/*
+ * A column whose value is the same on every visible row is not telling the reader anything: it
+ * is a fact about the whole table, so it is stated once above the table and the column is gone.
+ * With the overview's filters this is the common case — filter to one harness and the harness
+ * column stops existing rather than repeating twelve times — which is where most of the width
+ * for a filtered read comes back from.
+ */
+/*
+ * The caption keeps the card's own 20px text inset that the table beneath it gives up: it is
+ * prose about the table, so it lines up with the title and the note above it rather than with
+ * the table's first column.
+ */
+#SessionTable caption,
+#SessionSummaryTable caption {
+  caption-side: top;
+  padding: 0 20px 0.5rem;
+  text-align: left;
+}
+
+#SessionTable caption .const,
+#SessionSummaryTable caption .const {
+  color: var(--xh-color);
+}
+
+/*
+ * The two overview charts are read as a pair, so their plots must start on the same line — and
+ * they did not: the notes above them are 2 and 4 lines at 1440px, which set the second plot 36px
+ * lower than the first and made the row look broken. Both notes reserve four lines, the most
+ * either says at the narrowest width the pair still sits side by side (~476px per card). CSS
+ * cannot take the max of two siblings' heights; a reserved box is the honest alternative to
+ * starving one note until the two happen to match.
+ */
+/*
+ * Named panels, not `[data-el]`: that attribute is also on each chart's `ChartLegend`, so the
+ * rule matched the legend's first chip and stretched it to 72px — a hole between the first two
+ * series that looked like a rendering fault. A third chart joining this row needs its id here.
+ */
+:is(#TokenAccumulationChart, #TokenWaterfallAggregateChart) > :first-child > :last-child {
+  min-height: 72px;
 }

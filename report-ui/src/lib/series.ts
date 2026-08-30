@@ -257,3 +257,68 @@ export function accumulationGroups(cells: Cell[], results: Record<string, RunRes
     return { key, label: `${label} · n=${series.length}`, runs: series.length, turns, mean, min, max };
   });
 }
+
+/** One column of the overview's aggregate waterfall: the mean of a category over the runs that reached it. */
+export interface AggregateWaterfall {
+  /** ledgered runs that contributed at all */
+  runs: number;
+  /** `baseline`, `t1`..`tN`, `total`; every field is a mean over `n[i]` runs */
+  columns: WaterfallColumn[];
+  /** per column, how many runs reached it — the last turns of a long run are a thinner mean */
+  n: number[];
+  /** per column, the min and max of the *running total* across the runs that reached it */
+  min: number[];
+  max: number[];
+}
+
+/**
+ * The `TokenWaterfallChart`'s decomposition, averaged across many runs (glossary:
+ * `TokenWaterfallAggregateChart`).
+ *
+ * Runs are aligned by turn index — turn 3 of one run against turn 3 of another — and each
+ * column is the arithmetic mean over the runs that *reached* that turn, never over all of them:
+ * a category is missing from a short run, not zero in it, and the divisor is `n[i]`. Because the
+ * mean of each run's running base and the mean of its segments are taken over that same subset,
+ * the top of a stacked column is the mean running total, which is what the whiskers bracket.
+ *
+ * The `total` column is the mean of each run's OWN final total, so on a group of unequal lengths
+ * it sits above the last turn's column rather than level with it: the last turn is a mean over
+ * the runs that got that far, and the total is a mean over all of them. That is the honest
+ * reading of "these runs, on average", and it is why `n` is reported per column.
+ */
+export function aggregateWaterfall(cells: Cell[], results: Record<string, RunResult | null | undefined>): AggregateWaterfall {
+  const perRun: WaterfallColumn[][] = [];
+  for (const c of cells) {
+    const result = results[c.session_id];
+    if (!c.has_ledger || !result?.calls?.length) continue;
+    perRun.push(waterfallColumns(result));
+  }
+  if (perRun.length === 0) return { runs: 0, columns: [], n: [], min: [], max: [] };
+
+  const KEYS = ["baseline", "read", "context", "thinking", "output", "sub", "total"] as const;
+  const turns = Math.max(...perRun.map((cols) => cols.length - 2));
+  const running = (col: WaterfallColumn): number => col.base + col.baseline + col.read + col.context + col.thinking + col.output + col.sub + col.total;
+
+  const columns: WaterfallColumn[] = [];
+  const n: number[] = [];
+  const min: number[] = [];
+  const max: number[] = [];
+
+  // `baseline`, then one column per turn index, then `total` — each run contributing its own
+  // column at that index, and its LAST column to `total`.
+  const at = (i: number): WaterfallColumn[] =>
+    i <= turns ? perRun.filter((cols) => i < cols.length - 1).map((cols) => cols[i]!) : perRun.map((cols) => cols[cols.length - 1]!);
+
+  for (let i = 0; i <= turns + 1; i++) {
+    const group = at(i);
+    const mean = (pick: (col: WaterfallColumn) => number): number => group.reduce((sum, col) => sum + pick(col), 0) / group.length;
+    const column = { label: i === 0 ? "baseline" : i > turns ? "total" : `t${i}`, base: mean((col) => col.base) } as WaterfallColumn;
+    for (const key of KEYS) column[key] = mean((col) => col[key]);
+    const totals = group.map(running);
+    columns.push(column);
+    n.push(group.length);
+    min.push(Math.min(...totals));
+    max.push(Math.max(...totals));
+  }
+  return { runs: perRun.length, columns, n, min, max };
+}
