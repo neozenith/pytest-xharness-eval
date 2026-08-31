@@ -5,7 +5,7 @@
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml/badge.svg" alt="CICD Checks"></a>
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml/badge.svg" alt="Build Status"></a>
     <!-- coverage-badge -->
-    <img src="https://img.shields.io/badge/coverage-97%25-brightgreen.svg" alt="Coverage">
+    <img src="https://img.shields.io/badge/coverage-96%25-brightgreen.svg" alt="Coverage">
     <!-- coverage-badge -->
 </p>
 <p align="center">
@@ -47,7 +47,7 @@ left behind. A skill opts in by adding an `evals/` directory; pytest does the re
 Every eval cell is live and costs money. There is no replay mode. Preview the spend
 with `--dry-run` before a sweep. The design rationale lives in
 [ARCHITECTURE.md](ARCHITECTURE.md) and the decision log in
-[docs/adrs/](docs/adrs/README.md); agents start at [AGENTS.md](AGENTS.md).
+[docs/adrs/](docs/adrs/index.md); agents start at [AGENTS.md](AGENTS.md).
 
 ----
 
@@ -78,6 +78,7 @@ with `--dry-run` before a sweep. The design rationale lives in
      evals/
        eval_<suite>.py
        fixtures/<name>/
+       goldens/<name>/                                  # optional known-good output (ADR 0046)
    .xharness_eval_cache/
      build/                                             # per-cell workspaces
      results/{skill}/{harness}/{model}/{run}/{session}/ # log.jsonl, result.json, history.json
@@ -85,13 +86,21 @@ with `--dry-run` before a sweep. The design rationale lives in
    ```
 
    ```python
-   from pytest_xharness_eval import evalcase
+   from pytest_xharness_eval import CaseOutput, evalcase
+   from pytest_xharness_eval.verify import check_files_written, check_rollout
 
-   @evalcase(prompt="...", skill="<skill>", fixture="<name>")
-   def eval_<case>(run, workspace):
-       assert run.exit_code == 0
-       assert (workspace / "OUTPUT.md").exists()
+   @evalcase(task="...", skill="<skill>", fixture="<name>")
+   def eval_<case>(output: CaseOutput) -> None:
+       check_rollout(output)                     # real session, billed, priced
+       check_files_written(output, "OUTPUT.md")  # this run is what produced it
+       assert "the thing" in output.read("OUTPUT.md")
    ```
+
+   `task` is what a user types *after* naming the skill, it never names the skill, a
+   CLI, or where a `SKILL.md` lives. Each harness renders its own invocation around it:
+   `/<skill> <task>` for `claude`, `$<skill> <task>` for `codex` (ADR 0044). The full
+   grader surface, every field you can assert on, the bundled verifiers, and the goldens
+   convention, is [docs/rollout.md](docs/rollout.md).
 
 4. Preview the matrix. Nothing is invoked:
 
@@ -132,10 +141,10 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    Each cell leaves its verbatim session log (`log.jsonl`), a normalised
    `result.json` with a per-turn ledger, and one `history.json` metrics record in
-   its own `results/{skill}/{harness}/{model}/{run}/{session}/` directory — no two
+   its own `results/{skill}/{harness}/{model}/{run}/{session}/` directory, no two
    cells share a file, so parallel workers never contend (ADR 0032). At session end
-   the one combine step aggregates everything under `results/` — every skill, every
-   run — into `report/`: `report.json`, the accumulated `history.jsonl`, and a
+   the one combine step aggregates everything under `results/`, every skill, every
+   run, into `report/`: `report.json`, the accumulated `history.jsonl`, and a
    browsable `report.html` with its glossary (`XHARNESS-REPORT-GLOSSARY.md`)
    beside it. Serve it with `python3 -m http.server --directory .xharness_eval_cache`
    and open `/report/report.html`; it fetches the JSON beside it.
@@ -257,42 +266,15 @@ verdict to the right log. [ARCHITECTURE.md](ARCHITECTURE.md) explains both.
 
 ## Development
 
-```sh
-make format   # ruff format + isort
-make check    # ruff check + isort --check-only + mypy --strict
-make test     # pytester-based suite, no mocks, coverage badge refresh
-make build    # wheel into dist/
-```
-
-The functions that spawn a CLI (`runner.run_claude`, `runner.run_codex` and their
-helpers, `plugin.EvalItem._run_live`) are excluded from coverage with a stated reason
-rather than faked. They are exercised by the paid evals in a consuming repository.
-
-Publishing happens from GitHub Releases via `.github/workflows/publish.yml` (PyPI
-trusted publishing).
-
-### The report page
-
-`report/report.html` is built from `report-ui/`, a bun workspace (Vite, React,
-TypeScript, Tamagui, Plotly, Tailwind, Vitest, Playwright) that emits one
-self-contained HTML file (ADR 0028, ADR 0031). bun is needed only to change the
-page; the plugin ships the built file.
-
-```sh
-make ui-dev CAPTURED=path/to/.xharness_eval_cache      # hot reload against real cached data
-make ui-check                                          # tsc + eslint + prettier
-make ui-test                                           # vitest component tests
-make ui-e2e CAPTURED=path/to/.xharness_eval_cache TIER=small  # Playwright permutation sweep
-make ui-smoke CAPTURED=path/to/.xharness_eval_cache    # build, populate inline, boot over file://
-make ui-promote                                        # ship the build as assets/report.html (CI checks it is current)
-```
+Build, test and release instructions live in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ----
 
 ## Read next
 
+- [docs/rollout.md](docs/rollout.md): what a rollout leaves you, the `CaseOutput` a grader is handed, every `RunResult` field it can assert on, the bundled `check_*` verifiers, and the goldens convention
 - [docs/token-accounting.md](docs/token-accounting.md): how `accumulative_billed_tokens` (billed across turns) and `peak_context_tokens` (the largest prompt) are derived from what each provider reports, with a worked session
 - [ARCHITECTURE.md](ARCHITECTURE.md): why the two CLIs need different capture
   contracts, how pricing works, and the vocabulary the code uses.
 - [AGENTS.md](AGENTS.md): operating instructions and hard boundaries for agents.
-- [docs/adrs/README.md](docs/adrs/README.md): the decision index.
+- [docs/adrs/index.md](docs/adrs/index.md): the decision index, generated from the records (ADR 0047).

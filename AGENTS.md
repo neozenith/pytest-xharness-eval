@@ -1,9 +1,13 @@
 # AGENTS.md: operating instructions for pytest-xharness-eval
 
 This repository is a pytest plugin that drives paid agent CLIs. Read this file, then
-check [docs/adrs/README.md](docs/adrs/README.md) before asking a design question:
+check [docs/adrs/index.md](docs/adrs/index.md) before asking a design question:
 most of them are already decided, and a new binding decision is recorded there as a
 new ADR, never as a rewrite of an old one.
+
+How this repository organises its documentation, where a doc belongs, how an ADR is
+authored, what each file's charter is, is [docs/CONVENTIONS.md](docs/CONVENTIONS.md).
+Consult it before creating, moving or renaming any document.
 
 ## Commands
 
@@ -39,15 +43,16 @@ Never use `pip install` or invoke `python` directly; use `uv`.
 All source lives under `src/pytest_xharness_eval/`, and the listing is the architecture
 (ADR 0039). Two entry-point modules sit at the root because importlib resolves them by
 name -- `plugin/` (the `pytest11` entry point, a package whose `__init__` is the hook
-manifest, ADR 0040) and `replay.py` (`python -m`) -- and the five layers each run is
+manifest, ADR 0040) and `replay.py` (`python -m`) -- and the six layers each run is
 pushed through are folders beneath them, each depending only on the ones above it in
 this list:
 
 | Layer | What lives there |
 |-------|------------------|
-| `model/` | the nouns: `runresult.py`, `case.py`, `suite.py`, `matrix.py`, `verdict.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
+| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
 | `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, and the record-kind catalogue `records.py` |
 | `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, and the bundled `prices.toml` |
+| `verify/` | what a *grader* is written with: `checks.py` (the shared `check_*` verifiers), `tolerance.py` (`Facet` and the six tolerances), `facets.py` (markdown/mermaid extractors), `golden.py` (`GoldenCase`) |
 | `emit/` | the documents that leave: `metrics.py`, `index.py`, `summary.py`, `tokens.py`, `page.py` |
 | `runtime/` | how a sweep is wired: `settings.py`, `pipeline.py`, and the transitional `legacy.py` |
 
@@ -57,6 +62,7 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | Change you want | Edit |
 |-----------------|------|
 | How a CLI is invoked or its log is found | `harness/claude.py` or `harness/codex.py`; the shared spawn contract is `harness/base.py` (ADR 0034) |
+| How a skill is *named* to a CLI, or registered with it | `Harness.invoke` in `harness/<provider>.py` -- `/<skill> <task>` for claude (registered by `skill_plugin`'s `--plugin-dir` wrapper), `$<skill> <task>` for codex (copied into the private `CODEX_HOME/skills/`). The one edge from beneath is `model/registry.invocation` (ADR 0044) |
 | A whole new agent CLI | one module under `harness/`: subclass `Harness`, implement `run`, `session_from_capture`, `classify_record`, `shell_tools` / `persistent_shells`, then `register()` it in `harness/__init__.py`. Nothing else dispatches on the name (ADR 0034) |
 | How subagent transcripts are found, attributed and billed | `harness/claude.py` and `harness/codex.py` (`subagents_of` per dialect), `runtime/pipeline.py`'s `capture_subagents` (capture into `subagents/`) (ADR 0033) |
 | How a session log maps to `RunResult` fields | the harness's `SessionLog.to_result` in `harness/<provider>.py`; the primitives both dialects fold with are `harness/normalise.py` |
@@ -85,12 +91,16 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | Rebuilding cached results without a paid run | `replay.py` (`uv run -m pytest_xharness_eval.replay <cache dir>`) |
 | Migrating a legacy pre-0032 `captured/` dir | `runtime/legacy.py` (`LegacyCapture`); transitional, deletable in one file (ADR 0040) |
 | How a workspace is built or diffed | `model/workspace.py` |
-| The `@evalcase` contract | `model/case.py` |
+| The `@evalcase` contract, or what a case declares | `model/case.py` (`task=`, never `prompt=`, ADR 0044) |
+| What a grader is handed, or an accessor over the workspace | `model/output.py` (`CaseOutput`), then the surface table in `docs/rollout.md` (ADR 0045) |
+| A shared `check_*` verifier | `verify/checks.py`, then `docs/rollout.md`'s verifier table and `tests/test_verify.py` (ADR 0045) |
+| A golden tolerance, or a markdown/mermaid facet extractor | `verify/tolerance.py` or `verify/facets.py`, then `docs/rollout.md` (ADR 0046) |
 | A behaviour of the plugin | `tests/test_plugin.py` (pytester), `tests/test_units.py` (pure modules) |
 
 Evals themselves do not live here. They live beside the skill they grade, in the
 consuming repository: `skills/<skill>/evals/eval_<suite>.py`, seed trees under
-`evals/fixtures/<name>/`. Run output never lands in the skills tree (ADR 0032): each
+`evals/fixtures/<name>/`, and known-good outputs under `evals/goldens/<name>/` mirroring
+them (ADR 0046). Run output never lands in the skills tree (ADR 0032): each
 session's evidence is `.xharness_eval_cache/results/{skill}/{harness}/{model}/{run}/{session}/`
 (`log.jsonl`, `result.json`, `history.json`, all git-ignored by the `.*_cache` convention),
 and the aggregated report is `.xharness_eval_cache/report/`. Per-cell metrics are built
@@ -118,6 +128,15 @@ in `emit/metrics.py`.
   session id, or zero tokens is a failure, not a skip.
 - Never price an unknown model as zero or `None` and continue. Add the bundled row or
   an `xharness_prices` ini line, or let the sweep stop at collection (ADR 0007, ADR 0030).
+- Never write a prompt that explains the harness to the agent. A case declares a `task`;
+  the invocation (`/<skill> ...`, `$<skill> ...`) is `Harness.invoke`'s to render, and a
+  `prompt=` reaching `@evalcase` is a `TypeError`, never an alias (ADR 0044).
+- Never copy a `check_*` block between suites. If two cases want it, it belongs in
+  `verify/checks.py` -- four drifted copies, two of them asserting nothing, is what that
+  layer exists to end (ADR 0045).
+- Never give a golden facet no tolerance, and never call `GoldenCase.record` from a
+  grader: a run that laundered its own output into the reference makes every later
+  comparison vacuous (ADR 0046).
 - Never write run output under `evals/fixtures/`. A fixture is copied into every
   workspace, so anything placed there leaks into the next agent's working directory.
 - Never add a runtime dependency beyond pytest and the standard library (ADR 0003).
@@ -146,11 +165,11 @@ in `emit/metrics.py`.
 
 ## Vocabulary
 
-Use the terms in [ARCHITECTURE.md](ARCHITECTURE.md#vocabulary) for identifiers,
-docs, and conversation: *case*, *cell*, *harness*, *matrix*, *fixture*, *workspace*,
-*session log*, *RunResult*, *captured*, *skills root*. The first matrix axis is
-*harness*, never *cli* (ADR 0015). When a new domain term enters the code, add it to
-that table in the same change.
+Use the terms in [GLOSSARY.md](GLOSSARY.md) for identifiers, docs, and conversation:
+*case*, *cell*, *harness*, *matrix*, *fixture*, *workspace*, *session log*,
+*RunResult*, *captured*, *skills root*. The first matrix axis is *harness*, never
+*cli* (ADR 0015). When a new domain term enters the code, add it to the glossary in
+the same change.
 
 ## When you change one thing, update the other
 
@@ -158,8 +177,9 @@ that table in the same change.
 |---------------|-------------|
 | A CLI flag in `harness/<provider>.py` | The isolation-levers table in `ARCHITECTURE.md` |
 | `RunResult` fields | both `harness/claude.py` and `harness/codex.py`, and the vocabulary table |
-| A term in the vocabulary table | The "How the terms relate" diagram beneath it in `ARCHITECTURE.md`; re-run the mermaid contrast and complexity gates |
+| A term in [GLOSSARY.md](GLOSSARY.md) | The "How the terms relate" diagram beneath it; re-run the mermaid contrast and complexity gates |
 | A plugin option or ini key | `README.md` tables and `tests/test_plugin.py` |
+| A `RunResult` field, a `CaseOutput` accessor, or a bundled verifier | `docs/rollout.md` -- it is the published grader surface, so a field a suite may assert on and cannot find there does not exist |
 | The default matrix | `README.md` Quickstart expected output, `tests/test_plugin.py` |
 | A decision recorded in an ADR | Write a new ADR that supersedes it; do not edit the old one |
 | A key `emit/index.py` or `emit/metrics.py` writes | `report-ui/src/lib/types.ts`, the glossary's metric table, the frozen key lists in `tests/test_units.py`, and the `SessionTable` column definitions if it is shown |
