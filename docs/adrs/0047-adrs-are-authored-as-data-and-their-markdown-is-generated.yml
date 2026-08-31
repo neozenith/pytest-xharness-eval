@@ -1,0 +1,102 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0047
+slug: adrs-are-authored-as-data-and-their-markdown-is-generated
+title: ADRs are authored as data, and the argument travels verbatim
+status: accepted
+status_note: |-
+  accepted, 2026-08-31. Refines
+  [0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (generated output
+  has one owner). Structural only: no record's argument changes, every id, slug,
+  anchor and inbound citation still resolves, and each generated `.md` is
+  byte-identical to the file it replaced from its `# NNNN:` heading down.
+accepted_on: '2026-08-31'
+last_changed_on: '2026-08-31'
+group: docs
+tags:
+- docs
+lens: |-
+  A schema earns its keep on the metadata a corpus actually carries, never on the
+  shape a template wishes it had. Where the source supplies a field, extract it;
+  where it does not, leave the field absent and say why -- filling it is authoring
+  new requirements under the cover of a migration, and nobody reviews a migration
+  the way they review a decision.
+relates_to:
+- relation: extends
+  target: ADR-0032
+  note: the record's status line says "refines"
+body:
+  context: |-
+    The index at `docs/adrs/README.md` carried the relation graph as prose in a
+    hand-maintained Status column -- "refines 0016, 0037, 0038 and 0039; supersedes
+    0040's placement of `Verdict`". Forty-six records, 109 cross-references, and one
+    table a human had to update by hand on every addition. It had already drifted, and
+    the drift is invisible: a missing row reads exactly like a record with no relations.
+
+    The librarian's `okf-yaml` convention exists for this, and its trigger fired. Its
+    record schema, however, decomposes an argument into `problem.symptom` +
+    `problem.pain_point` as two scalars, and `decision` into `given` / `we_prefer` /
+    `because` / `unless`. Measured against this corpus that shape does not fit:
+
+    | Section | median words | max | with tables | with code fences |
+    | --- | --- | --- | --- | --- |
+    | `## Context` | 117 | 416 | 10 | 2 |
+    | `## Decision` | 210 | 919 | 3 | 6 |
+    | `## Consequences` | 72 | 319 | 0 | 0 |
+
+    A 919-word Decision carrying six code fences has nowhere to go in four scalar
+    clauses. `consequences.cons` carries `minItems: 1`, while these records argue in
+    narrative rather than in pros and cons -- so adopting the shipped schema unchanged
+    would have meant writing 46 new `cons` lists. That is authoring decisions, not
+    recording them, and a requirement invented during a migration is a requirement
+    nobody agreed to.
+  decision: |-
+    **The record is the source of truth, and the argument is cargo.** Each ADR is
+    authored as `NNNN-slug.yml`; `body.context`, `body.decision` and
+    `body.consequences` hold their sections as verbatim markdown block scalars, tables
+    and fenced code included. The generator emits them unchanged, which is what makes
+    every generated `.md` byte-identical to the file it replaced from the `# NNNN:`
+    heading down. Nothing was reformatted in transit.
+
+    **The schema is tightened to the corpus, not the corpus to the schema.** The
+    librarian's own instruction is to copy the schema and tighten it to the adopting
+    repository's dialect, so `docs/adrs/record.schema.json` requires exactly what all
+    46 records demonstrably carry -- id, slug, title, status, the verbatim status
+    sentence, both dates, relations, body -- and makes optional what none of them do:
+    `description`, `tags`, `provenance`, `enforced_in`. An absent field is a fact about
+    the corpus. Four records have no `## Lens`; `lens` is therefore optional, and those
+    four keep no Lens rather than gaining an invented one.
+
+    **Typed edges are inferred from the sentence, and the sentence is kept.** The
+    status line's own vocabulary maps onto the closed relation set -- "refines" to
+    `extends`, "refined by" to `extended_by`, "supersedes" / "superseded by" to their
+    own pair -- and each edge's `note` records which verb produced it. The full
+    original sentence stays verbatim in `status_note` and is what the generated index
+    renders, so typing the relations adds a queryable graph without costing the
+    phrasing. This is the one-way conversion the convention warns about, declined:
+    both forms are kept.
+
+    **The title stays in an H1.** OKF's own preference is a frontmatter title with no
+    heading above the body, but the observed dialect of this repository puts it in
+    `# NNNN: Title`, every inbound citation resolves against that, and templates own
+    presentation while the schema owns structure. The generated frontmatter carries the
+    title as well, so a query reaches it without parsing the heading.
+  consequences: |-
+    `docs/adrs/*.md` becomes build output. Editing one is lost on the next `make adrs`;
+    the banner in each file's frontmatter says so, and CI fails when a generated file
+    differs from a fresh build.
+
+    `docs/adrs/README.md` is replaced by the generated `index.md`, because OKF reserves
+    `index.md` for the directory listing and requires any other `.md` in the bundle to
+    carry frontmatter. GitHub therefore no longer renders a landing page for
+    `docs/adrs/`; the ten inbound links that named `README.md` now name `index.md`.
+
+    The first symmetry run reports 109 one-way edges. That is the expected finding on a
+    corpus whose cross-references were only ever written in one direction, and it is
+    reported rather than failed: closing an edge is a decision about the record set,
+    which is the maintainer's, not the migration's.
+
+    A record is now edited in two files' worth of discipline -- the `.yml` and a rebuild
+    -- where it used to be one. That cost buys the schema gate, the typed graph, and an
+    index that cannot drift from the records it lists.

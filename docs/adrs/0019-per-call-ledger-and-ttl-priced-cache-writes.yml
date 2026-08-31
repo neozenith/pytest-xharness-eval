@@ -1,0 +1,85 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0019
+slug: per-call-ledger-and-ttl-priced-cache-writes
+title: Every run carries a per-call ledger; tokens are reported as context and billed; cache writes price
+  by TTL
+status: accepted
+status_note: |-
+  accepted, 2026-08-22. Refines [0003](0003-runresult-is-a-stdlib-dataclass.md),
+  [0006](0006-local-price-table-is-authoritative.md) and [0018](0018-fixtures-directory-and-metrics-history.md).
+accepted_on: '2026-08-22'
+last_changed_on: '2026-08-22'
+group: accounting
+tags:
+- accounting
+- pricing
+lens: |-
+  Keep the per-call evidence; a sum is a view of it, and a sum without its parts
+  cannot be audited.
+relates_to:
+- relation: extends
+  target: ADR-0003
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0006
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0018
+  note: the record's status line says "refines"
+body:
+  context: |-
+    An audit of six captured cells (2026-08-22) found every figure the plugin reported
+    was arithmetically exact and still misleading on three counts:
+
+    - `tokens` summed the four billed tiers over every model call. The cached prefix is
+      re-read on each call, so a 13-call opus run with a 51k peak context reported
+      526k "tokens", ten times what the model ever held. The number was right as a
+      billing quantity and wrong as the quantity readers took it for.
+    - `turns` meant two different things. For Claude it was the envelope's `num_turns`,
+      which equals tool calls plus one; for Codex it counted `task_complete` events,
+      which is always one for `codex exec`. Neither was the number of model calls,
+      although `_claude_usage` computed that number and discarded it.
+    - Claude's own `total_cost_usd` sat 15% to 23% above `cost_usd`. The price table
+      carried one cache-write rate, the 5-minute TTL (1.25x input), while every write in
+      every log was `ephemeral_1h` (2x input). The remainder, $0.00107 per session, is
+      Claude Code's `ai-title` side call, present in the envelope cost and absent from
+      the main model's usage.
+
+    The per-call detail that explained all three was in the session logs the plugin
+    already captures, and was thrown away during normalisation.
+  decision: |-
+    `RunResult` carries a per-call ledger, `calls: list[Call]`. One `Call` per model API
+    call holds its `Usage`, its stop reason, the tool calls it issued, the tool results
+    that entered its context since the previous call, and its text. Both adapters build
+    it: Claude keys on `message.id`; Codex keys on `token_count` events using
+    `last_token_usage`, with the outputs that precede a count attributed to the next
+    call's context (that is the order the rollout records them in).
+
+    From the ledger:
+
+    - `turns` is the number of model calls on both harnesses. The CLI's own figure is
+      kept as `reported_turns`.
+    - `usage` is the ledger's sum. The CLI's own aggregate is kept as `reported_usage`.
+    - `baseline_tokens` is the first call's context; `context_tokens` is the largest
+      context any call processed. `Usage.total_tokens` remains the billed sum and is
+      recorded as `billed_tokens`; the bare word `tokens` is retired from the history
+      record and the status word.
+
+    `Usage` gains `cache_write_1h_tokens` and `cache_write_5m_tokens` from Claude's
+    `usage.cache_creation`. `Rates` gains `cache_write_1h`; a row that omits it gets
+    `cache_write x 1.6`, the Anthropic ratio. `price()` bills tagged writes at their TTL
+    rate and untagged writes at `cache_write`, and records `cost_by_tier`.
+
+    The status word becomes
+    `PASSED  $0.6604 (cli $0.6615)  51,110 ctx  526,467 billed  87.1s  13 turns  12 tools`:
+    the CLI's own cost beside the plugin's whenever one exists, so drift is visible on
+    every cell rather than rediscovered by audit.
+  consequences: |-
+    `history.jsonl` records written before this decision carry `tokens` and no
+    `billed_tokens`; readers treat the two as the same quantity. Old `.result.json`
+    files have no `calls`; the report (ADR 0020) says so and offers nothing for them.
+    `Usage` keeps its positional field order and `total_tokens`, so graders that assert
+    `run.usage.total_tokens > 0` are unchanged. The $0.00107 title-call residue stays
+    outside `cost_usd` on purpose: it is not the model under test.

@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/neozenith/pytest-xharness-eval/docs/adrs/record.schema.json",
+  "title": "pytest-xharness-eval decision record",
+  "description": "One ADR, authored as data (ADR 0047). Derived from the librarian's okf-yaml record schema and tightened to this repository's observed dialect: the argument is carried VERBATIM in `body`, because these records argue in narrative prose with tables and code fences rather than in the shipped schema's symptom/pain_point and given/we_prefer/because/unless decomposition. Projecting them into that shape would have required authoring content the sources do not contain. Every field below is either lifted verbatim from the record's markdown or inferred from an explicit statement in it -- nothing here is invented. `additionalProperties` is false at every level, so a typo in a key is an error rather than a silently ignored field.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "slug",
+    "title",
+    "status",
+    "status_note",
+    "accepted_on",
+    "last_changed_on",
+    "relates_to",
+    "body",
+    "group",
+    "tags"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^ADR-[0-9]{4}$",
+      "description": "Record identifier. Immutable: every citation in the codebase and in prose resolves through the four digits, so renumbering is forbidden."
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "The filename stem after the number. Immutable for the same reason as `id`."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 10,
+      "description": "The decision as a short assertion; verbatim from the record's H1, minus its number prefix."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 160,
+      "not": {
+        "pattern": "\\.$"
+      },
+      "description": "Optional one-line routing summary. Absent on every migrated record: the sources carry no such line, and writing 46 of them would be authoring rather than shelving. The index falls back to the title."
+    },
+    "status": {
+      "enum": [
+        "proposed",
+        "accepted",
+        "superseded",
+        "retired"
+      ],
+      "description": "The lifecycle word only. Everything else the original status sentence said is kept verbatim in `status_note`."
+    },
+    "status_note": {
+      "type": "string",
+      "minLength": 8,
+      "description": "The record's original status sentence, verbatim and complete. The typed edges in `relates_to` are inferred FROM this sentence, never a replacement for it: converting prose relations to typed edges loses the phrasing, so the phrasing is kept here and the index renders it unchanged."
+    },
+    "accepted_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "last_changed_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "accounting",
+          "architecture",
+          "collection",
+          "docs",
+          "evidence",
+          "grading",
+          "harness",
+          "packaging",
+          "pricing",
+          "report",
+          "storage"
+        ]
+      },
+      "description": "The domains this record touches, primary first, drawn from the same closed set as `group`. Capped at two: a record needing three has usually not been read closely enough to say what it is mainly about."
+    },
+    "group": {
+      "enum": [
+        "accounting",
+        "architecture",
+        "collection",
+        "docs",
+        "evidence",
+        "grading",
+        "harness",
+        "packaging",
+        "pricing",
+        "report",
+        "storage"
+      ],
+      "description": "The record's primary domain, and the compound parent it sits in on the graph. A closed set: a new domain is a deliberate addition here, so a typo fails the build instead of silently creating a group of one. Each record has exactly one, because a compound node has exactly one parent."
+    },
+    "lens": {
+      "type": "string",
+      "minLength": 20,
+      "description": "The reusable rule the record leaves behind, verbatim from its `## Lens` section. Absent on the four records that never had one (0031, 0032, 0033, 0043) -- an absent Lens is a fact about the record, not a gap to fill."
+    },
+    "relates_to": {
+      "type": "array",
+      "description": "Typed edges over the closed vocabulary, inferred from the cross-links in `status_note`. Every relation is paired with its inverse so a validator can check symmetry; a missing inverse is reported, never failed.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "relation",
+          "target"
+        ],
+        "properties": {
+          "relation": {
+            "enum": [
+              "extends",
+              "extended_by",
+              "split_from",
+              "split_to",
+              "supersedes",
+              "superseded_by",
+              "tests",
+              "tested_by",
+              "depends_on",
+              "depended_on_by",
+              "excepts",
+              "excepted_by",
+              "see_also"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "pattern": "^ADR-[0-9]{4}$"
+          },
+          "note": {
+            "type": "string",
+            "description": "The governing phrase from the original status sentence, so the reason for the edge survives the typing."
+          }
+        }
+      }
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context",
+        "decision",
+        "consequences"
+      ],
+      "description": "The record's argument, carried verbatim. These are markdown block scalars, tables and fenced code included, and the generator emits them unchanged -- which is what makes each generated record byte-identical to the record it replaced from `## Context` onward.",
+      "properties": {
+        "context": {
+          "type": "string",
+          "minLength": 20,
+          "description": "The `## Context` section, verbatim."
+        },
+        "decision": {
+          "type": "string",
+          "minLength": 20,
+          "description": "The `## Decision` section, verbatim."
+        },
+        "consequences": {
+          "type": "string",
+          "minLength": 20,
+          "description": "The `## Consequences` section, verbatim."
+        }
+      }
+    }
+  }
+}
