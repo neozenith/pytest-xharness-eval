@@ -90,9 +90,14 @@ line count, nesting depth, name quality, and how much the unit is actually doing
 
 ## Extraction relocates complexity, and the total goes up
 
-This repository's worst-scoring function was `derive/skillcov.py::annotate` at
-`ruff` **9** and `radon` **16** (grade C). Extracting the persistent-shell
-bookkeeping into a `_Shell` dataclass drops it to `radon` **8** (grade B).
+Take `derive/skillcov.py::annotate`, which sits at the top of `ruff`'s ranking on
+**9** (tied with `parse_price_lines`) and scores `radon` **16**, grade C. The two
+tools do not even agree on which function is worst: `radon`'s own ceiling is
+`ClaudeSessionLog.to_result` at **26** -- a unit `ruff` scores **3**, because
+almost all of its density is in `or`-defaulting and comprehensions that `ruff`
+charges nothing for.
+Extracting the persistent-shell bookkeeping out of `annotate` into a `_Shell`
+dataclass drops it to `radon` **8** (grade B).
 
 Measure the whole neighbourhood, not just the function you touched:
 

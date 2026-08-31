@@ -1,9 +1,9 @@
 # Finding: the contrast gate cannot see the theme variables, and the prescribed header hides every edge label
 
 **Date:** 2026-08-31
-**Found while:** authoring [`maintainable.md`](maintainable.md) with the
+**Found while:** authoring [`cyclomatic-complexity.md`](cyclomatic-complexity.md) with the
 `mermaidjs-diagrams` skill.
-**Status:** fixed in `maintainable.md`; unfixed upstream in the skill's own
+**Status:** fixed in `cyclomatic-complexity.md`; unfixed upstream in the skill's own
 reference files.
 
 ## What broke

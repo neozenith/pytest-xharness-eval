@@ -56,6 +56,8 @@ misfiled.
 | `docs/adrs/*.md`, `index.md`, `graph.*` | Generated from the records; never hand-edited. `graph.html` is the browsable viewer: cytoscape.js for the graph, marked.js for the record, both payloads embedded so it opens over `file://`. Records cluster into compound nodes by `group`; fill is the domain, size is in-degree, a red ring is a superseded record. Its default layout is computed deterministically, so a rebuild draws the same picture | Both | `make adrs` runs |
 | `docs/rollout.md` | The grader surface: what a `CaseOutput` offers, the bundled verifiers, the goldens convention | Eval authors | A `RunResult` field, a verifier or a tolerance changes |
 | `docs/token-accounting.md` | How the token and cost figures are derived, with provider sources | Both | A provider's reporting or the derivation changes |
+| `docs/cyclomatic-complexity.md` | What the complexity gate measures and what it trades against, argued on this repository's own measured numbers | Both | The gate's threshold changes, or a measurement it cites stops reproducing |
+| `docs/YYYY-MM-DD-*.md` | Point-in-time findings: what broke, how it was measured, what to change. Never revised after the fact -- a later finding is a new dated file | Both | Never; a new finding is a new file |
 | `report-ui/README.md` | The report SPA's own build, test and component conventions | Contributors to the page | The page's toolchain changes |
 | `src/pytest_xharness_eval/assets/XHARNESS-REPORT-GLOSSARY.md` | Shipped asset: the report page's own element ids and metric definitions, distributed in the wheel beside the page | Report readers | A page id or metric name changes |
 
