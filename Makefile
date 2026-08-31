@@ -96,6 +96,23 @@ ui-promote: ui-check ui-test ui-build
 	$(MAKE) test
 
 ######################################################################
+# DECISION RECORDS (ADR 0047)
+# Records are authored as docs/adrs/NNNN-slug.yml; every .md, index.md,
+# graph.md and graph.json beside them is generated. Edit the YAML.
+######################################################################
+adrs:
+	uv run --no-project --with PyYAML --with Jinja2 --with jsonschema \
+		docs/adrs/okf_render.py docs/adrs --author "human:neozenith"
+
+# CI gate: a hand-edited generated file, or a record that was changed without a
+# rebuild, shows up as a dirty tree here rather than as drift nobody noticed.
+adrs-check: adrs
+	@git diff --quiet -- docs/adrs || { \
+		echo "docs/adrs is stale or hand-edited; run 'make adrs' and commit the result"; \
+		git --no-pager diff --stat -- docs/adrs; exit 1; }
+	@echo "docs/adrs: generated files match their records"
+
+######################################################################
 # BUILD AND PUBLISHING
 # https://docs.astral.sh/uv/guides/package/
 ######################################################################
@@ -122,4 +139,4 @@ clean:
 	rm -rf .mmdc_cache/
 	rm -rf node_modules/
 
-.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-e2e ui-promote
+.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-e2e ui-promote adrs adrs-check

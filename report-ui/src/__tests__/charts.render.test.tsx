@@ -22,6 +22,7 @@ const cell: Cell = {
   suite: null,
   skill: null,
   fixture: null,
+  task: null,
   prompt: null,
   harness: "claude",
   model: "m",

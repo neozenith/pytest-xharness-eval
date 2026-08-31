@@ -153,7 +153,11 @@ class EvalItem(pytest.Item):
 
         if self.config.option.eval_dry_run:
             self.stash[RECORD_KEY] = CellMetrics.dry_run(node=self.node, cell=self.cell)
-            pytest.skip(f"dry-run: would invoke {self.cell.id}")
+            # The rendered invocation, not the case's task: since ADR 0044 the prompt is
+            # harness-specific and no longer readable off the suite file, so a preview that
+            # did not show it would no longer be a preview of what is about to be sent.
+            prompt = harness.get(self.cell.harness).invoke(skill=self.case.skill, task=self.case.task)
+            pytest.skip(f"dry-run: would invoke {self.cell.id} with {prompt!r}")
 
         self._run_live(settings, skill_dir)
 

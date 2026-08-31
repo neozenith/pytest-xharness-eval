@@ -27,6 +27,7 @@ from pytest_xharness_eval import harness
 from pytest_xharness_eval.emit.metrics import Outcome
 from pytest_xharness_eval.model import workspace as ws
 from pytest_xharness_eval.model.clock import now_iso
+from pytest_xharness_eval.model.output import CaseOutput
 from pytest_xharness_eval.model.runresult import CaseRef
 from pytest_xharness_eval.model.verdict import Verdict
 from pytest_xharness_eval.plugin.results import RECORD_KEY
@@ -106,6 +107,16 @@ class CellRun:
         """A fresh copy of the fixture tree under ``<cache>/build/``, for this cell alone (ADR 0004)."""
         return ws.materialise(self.fixture_dir, self.cell_id, self.settings.cache.build)
 
+    @property
+    def prompt(self) -> str:
+        """This cell's invocation: the case's task in this harness's own syntax (ADR 0044).
+
+        A property rather than a field because it is a pure function of the cell, and free:
+        a ``--dry-run`` preview and the stored :class:`CaseRef` must show the same string
+        the CLI is about to be handed, not a second rendering of it.
+        """
+        return harness.get(self.cell.harness).invoke(skill=self.case.skill, task=self.case.task)
+
     def invoke(self, workspace: Path) -> Attempt:  # pragma: no cover - spawns a paid CLI (ADR 0002)
         """Run the harness's CLI in ``workspace``: the one step of a sweep that spends money.
 
@@ -115,7 +126,7 @@ class CellRun:
         started_at = now_iso()
         t0 = time.monotonic()
         result = harness.get(self.cell.harness).run(
-            prompt=self.case.prompt, model=self.cell.model, workspace=workspace, skill_dir=self.skill_dir
+            prompt=self.prompt, model=self.cell.model, workspace=workspace, skill_dir=self.skill_dir
         )
         return Attempt(result=result, started_at=started_at, wall_ms=int((time.monotonic() - t0) * 1000))
 
@@ -141,11 +152,21 @@ class CellRun:
             table=self.settings.price_table(),
             skill=self.case.skill,
             skill_files=self.skill_files,
-            case=CaseRef.of(self.case, self.suite),
+            case=CaseRef.of(self.case, self.suite, self.prompt),
         )
         session = self.session_dir(result.session_id)
         pipeline.capture(result, session)
         return session
+
+    def output(self, result: RunResult, workspace: Path) -> CaseOutput:
+        """The rollout as the grader sees it: the record, the workspace, and the seed list.
+
+        ``seeded`` is taken from the fixture tree rather than the workspace, because by
+        grading time the two are mixed together and only this side knows which was which
+        (ADR 0045).
+        """
+        seeded = frozenset(str(p.relative_to(self.fixture_dir)) for p in self.fixture_dir.rglob("*") if p.is_file())
+        return CaseOutput(run=result, workspace=workspace, seeded=seeded)
 
     def grade(self, result: RunResult, workspace: Path) -> Verdict:
         """Run the case's grader over the finished run, and name what happened.
@@ -155,7 +176,7 @@ class CellRun:
         else is an ``error``, and either way pytest gets the original exception (ADR 0012).
         """
         try:
-            self.case.fn(result, workspace)
+            self.case.fn(self.output(result, workspace))
         except AssertionError:
             self.verdict = Verdict.FAIL
             raise

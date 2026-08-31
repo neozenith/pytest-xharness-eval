@@ -1,0 +1,55 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0016
+slug: results-travel-on-the-test-report
+title: Results travel on the test report, and cells group by harness
+status: accepted
+status_note: |-
+  accepted, 2026-08-21. Refines
+  [0008](0008-evals-are-eval-prefixed-modules.md).
+accepted_on: '2026-08-21'
+last_changed_on: '2026-08-21'
+group: collection
+tags:
+- collection
+- storage
+lens: |-
+  State that must reach the controller rides on the report; state that stays in a
+  process belongs to that process only.
+relates_to:
+- relation: extends
+  target: ADR-0008
+  note: the record's status line says "refines"
+body:
+  context: |-
+    Per-cell records (verdict, USD, tokens, duration) were kept on `config.stash`,
+    which is per process. Under `pytest-xdist` the workers run the cells and the
+    controller renders the output, so the verbose status words fell back to plain
+    `PASSED` and `report.json` was empty. The cells themselves were already isolated:
+    each has its own workspace, its own private `CODEX_HOME`, and its own minted
+    Claude session id.
+
+    A second rule was missing: pytest's collection convention applies the `test_`
+    prefix to files and functions alike, and this plugin pivoted that prefix to
+    `eval_` for files only. Any function name was accepted.
+  decision: |-
+    The worker copies a cell's record onto its call `TestReport.user_properties`, the
+    one channel xdist serialises to the controller. The controller reads it there for
+    the status word and accumulates it in `pytest_runtest_logreport` for the summary and
+    `report.json`. The single-process path is the same code.
+
+    Every cell carries `xdist_group=<harness>`, so `-n 2 --dist loadgroup` runs the
+    harnesses in parallel and each harness's cells serially. That respects per-provider
+    rate limits and avoids concurrent copies of Codex credentials refreshing against
+    each other, a risk not yet measured.
+
+    `@evalcase` functions must be named `eval_*`; any other name is a `UsageError` at
+    collection. The `eval_` prefix is the collection rule for files and functions, as
+    `test_` is for pytest.
+  consequences: |-
+    `-v -n N` output is as itemised as a serial run. The pre-run permutation summary is
+    not printed under xdist because its controller does not call
+    `pytest_report_collectionfinish`; `--collect-only -q` shows the plan instead. Full
+    fan-out (`-n 6` without `--dist loadgroup`) is possible but is a deliberate choice,
+    not the documented default.

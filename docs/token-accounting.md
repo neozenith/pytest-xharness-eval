@@ -189,7 +189,7 @@ thread's own ledger lives on `result.subagents[*].calls`, attributed to the
 primary turn that spawned it (`parent_turn`). The harness aggregates do **not**
 fold: measured on the discovery sweep (2026-08-28), Claude's envelope `usage`
 equals the primary ledger's sum exactly and Codex's `total_token_usage` is the
-primary rollout's own sum — so on a spawning run the reconciliation delta
+primary rollout's own sum, so on a spawning run the reconciliation delta
 between the run's `usage` and the harness's figure is the subagents' bill, not
 a ledger error, and the report says so beside the comparison.
 

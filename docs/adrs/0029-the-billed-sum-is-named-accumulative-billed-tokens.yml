@@ -1,0 +1,56 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0029
+slug: the-billed-sum-is-named-accumulative-billed-tokens
+title: The billed sum is named `accumulative_billed_tokens`
+status: accepted
+status_note: |-
+  accepted, 2026-08-23. Supersedes one row of
+  [0021](0021-metric-names-carry-unit-and-provenance.md) (`billed_tokens` → `total_tokens`);
+  refines [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md).
+accepted_on: '2026-08-23'
+last_changed_on: '2026-08-23'
+group: accounting
+tags:
+- accounting
+lens: A name that can be read two ways will be; name the aggregation, not just the unit.
+relates_to:
+- relation: supersedes
+  target: ADR-0021
+  note: the record's status line says "supersedes"
+- relation: extends
+  target: ADR-0019
+  note: the record's status line says "refines"
+body:
+  context: |-
+    0019 recorded the run's billed sum as `billed_tokens`. 0021 renamed it `total_tokens`
+    on the grounds that "`billed` did not say billed what". That rename was made inside a
+    working session and was not put to the project's owner as a decision; it was noticed
+    when a report row read as "1,504,090 tokens consumed of a 1M context window, 12%".
+
+    `total_tokens` says neither what is totalled nor over what. Beside a context
+    percentage it invites exactly the misreading that occurred: the billed sum across
+    sixteen calls looked like a single quantity to compare with the window.
+    [docs/token-accounting.md](../token-accounting.md) works through why the two
+    figures differ by an order of magnitude for an ordinary run.
+  decision: |-
+    The billed sum is `accumulative_billed_tokens`: the four priced tiers (`input`,
+    `output`, `cache_read`, `cache_write`) summed over every model call of the run. The
+    name states the unit (tokens), the source (what was billed) and the aggregation
+    (accumulated over calls), which is 0021's own rule applied fully. The property on
+    `Usage`, the key in `.result.json` `usage`, the history line, `index.json`, the
+    verbose status word, both report pages and the glossary use the one name. The per-call
+    prompt size keeps its name, `context_tokens`, and its headline `peak_context_tokens`.
+
+    Two things keep the old spelling because they are not this metric: the Claude Code
+    record kind `claude/attachment/total_tokens_reminder`, and the vendors' own
+    `total_tokens` fields in raw usage objects (`reported_usage`, Codex `token_count`
+    events, any record JSON), which the reconciliation panel shows under the vendor's name
+    beside the plugin's figure.
+  consequences: |-
+    `run.usage.total_tokens` no longer exists; graders that asserted it assert
+    `run.usage.accumulative_billed_tokens > 0` instead (the two eval suites in the first
+    consuming repository are updated in the same change). Results and history lines
+    written before this record carry the old key until replayed; `make evals-replay`
+    rewrites them. The status word is longer by one long word, which is the point.

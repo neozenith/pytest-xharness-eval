@@ -98,9 +98,10 @@
   "case": {
     "fixture": "seed",
     "name": "eval_claude",
-    "prompt": "grade the skill",
+    "prompt": "/demo grade the skill",
     "skill": "demo",
-    "suite": "skills/demo/evals/eval_claude.py"
+    "suite": "skills/demo/evals/eval_claude.py",
+    "task": "grade the skill"
   },
   "context_window": 1000000,
   "context_window_pct": 0.21,

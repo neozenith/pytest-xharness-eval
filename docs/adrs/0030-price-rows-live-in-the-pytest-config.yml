@@ -1,0 +1,81 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0030
+slug: price-rows-live-in-the-pytest-config
+title: Project price rows live in the pytest config, not in a prices.toml beside it
+status: accepted
+status_note: |-
+  accepted, 2026-08-24. Refines [0006](0006-local-price-table-is-authoritative.md),
+  [0014](0014-register-through-the-pytest11-entry-point.md) and
+  [0026](0026-skill-ignore-lives-in-the-pytest-config.md); ADR 0007's
+  stop-before-spend rule is unchanged.
+accepted_on: '2026-08-24'
+last_changed_on: '2026-08-24'
+group: pricing
+tags:
+- pricing
+- storage
+lens: |-
+  The second file a tool asks a project to maintain should have to argue for itself
+  harder than the first; and state prices in the unit the price tag uses.
+relates_to:
+- relation: extends
+  target: ADR-0006
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0014
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0026
+  note: the record's status line says "refines"
+body:
+  context: |-
+    0026 moved skill-ignore rules out of a dotfile beside the skill and into the
+    `xharness_skill_ignore` ini key, on the grounds that a pytest plugin's permanent,
+    file-based configuration belongs where pytest keeps its own. Price overrides had the
+    same shape left over: the `xharness_prices` ini key named a *file* (`prices.toml` at
+    the rootdir) whose TOML rows layered over the bundled table. Same objection: a
+    second configuration file in a second format that nothing in `pytest --help` reveals
+    the contents of, one more thing to discover, and a unit trap inside it — rows were
+    USD **per token** (`5.0e-6`), while every provider publishes USD per million tokens.
+  decision: |-
+    `xharness_prices` becomes a linelist of price rows, in the way pytest's own
+    `markers` lines pair a name with its text:
+
+    ```toml
+    [tool.pytest.ini_options]
+    xharness_prices = [
+        "gpt-5.6-terra: input=1.25 output=10.00 cache_read=0.125",
+        "claude-sonnet-5: input=2.00 output=10.00 cache_read=0.20 cache_write=2.50 cache_write_1h=4.00",
+    ]
+    ```
+
+    Values are **USD per million tokens**, the unit providers publish; the plugin divides
+    by 1e6. `input` and `output` are required; `cache_read` and `cache_write` default to
+    `input`; `cache_write_1h` defaults to `cache_write` × 1.6 (Anthropic's 2.0/1.25 TTL
+    ratio), the same defaulting the bundled table has always had. The selector before the
+    colon is the model key, prefix-matched by `resolve` like any bundled row.
+
+    Because the bundled table stays per-token, a row pasted from it into the ini would
+    under-price by a factor of a million; a value below $0.001/MTok is therefore rejected
+    as "looks like a per-token rate". A malformed line, an unknown tier, or a missing
+    required tier stops the session at configure time, before any cell is collected —
+    the same never-price-as-zero posture as 0007.
+
+    The bundled `prices.toml` inside the package is unchanged: it is the plugin's own
+    versioned data file, not project configuration, and remains the one `__file__`
+    exception of 0014. The replay command resolves `xharness_prices` from the project's
+    pytest config the way it already resolves `xharness_skill_ignore` (the reader is now
+    `config_lines_of(captured, key)`), and its `--prices FILE` flag becomes `--price LINE`
+    (repeatable, same grammar). `rates_applied.source` records `xharness_prices` for ini
+    rows and the bundled file's path for bundled rows.
+  consequences: |-
+    A project that had a rootdir `prices.toml` moves each row onto one line, multiplying
+    by 1e6, and deletes the file; until it does, its overrides are silently gone and a
+    model priced only there stops the sweep at collection — loudly, per 0007. A project
+    whose ini still says `xharness_prices = "prices.toml"` now fails at configure time
+    with the line-grammar error, which is the migration signal. Dated overrides (an
+    introductory price) become one commented line in the pytest config instead of a
+    block in a side file, so their expiry note sits where the reviewer of the config
+    change will see it.

@@ -1,0 +1,30 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0011
+slug: inject-skill-through-each-cli-path
+title: The skill under test loads through each CLI's own skill path
+status: accepted
+status_note: accepted, 2026-08-20.
+accepted_on: '2026-08-20'
+last_changed_on: '2026-08-20'
+group: harness
+tags:
+- harness
+lens: |-
+  Evaluate a deliverable through the loading path its real users take; a shortcut
+  that bypasses loading changes what is being measured.
+relates_to: []
+body:
+  context: |-
+    The deliverable being evaluated is a skill. Inlining its body into the prompt
+    would grade a prompt while still attributing the score to the skill. Copying it
+    into the workspace as `.claude/skills/` only takes effect when settings sources
+    are loaded, which fights the isolation goal.
+  decision: |-
+    Claude receives the skill directory through `--add-dir`; Codex loads it from
+    `$CODEX_HOME/skills/<skill>`. Two mechanisms, each the path a real user's skill
+    travels.
+  consequences: |-
+    The eval exercises skill loading, not just skill text. Two injection paths must
+    be kept in step in `runner.py`.

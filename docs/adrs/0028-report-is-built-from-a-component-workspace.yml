@@ -1,0 +1,102 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0028
+slug: report-is-built-from-a-component-workspace
+title: The report page is built from a component workspace and shipped as one file
+status: accepted
+status_note: |-
+  accepted, 2026-08-23. Refines [0020](0020-captured-report-is-a-static-microsite.md),
+  [0021](0021-metric-names-carry-unit-and-provenance.md) and
+  [0024](0024-context-window-metrics-injected-messages-and-design-tokens.md); keeps
+  [0003](0003-runresult-is-a-stdlib-dataclass.md).
+accepted_on: '2026-08-23'
+last_changed_on: '2026-08-23'
+group: report
+tags:
+- report
+lens: |-
+  Hold a user-facing page to the tooling a page of that quality is built with, and
+  let the build, not the runtime, carry the dependencies.
+relates_to:
+- relation: extends
+  target: ADR-0020
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0021
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0024
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0003
+  note: the record's status line says "refines"
+body:
+  context: |-
+    `assets/report.html` grew to 870 lines of hand-written HTML, CSS and vanilla
+    JavaScript in one file: a component library built from template strings, a hash
+    router, two chart axes, a record-card renderer and the theme plumbing, with Plotly
+    and highlight.js pulled from a CDN at view time. It works, and 0021's named ids and
+    glossary keep it legible, but every change is made without types, without a test
+    runner that can mount a component, without a formatter, and without any way to see
+    the page against real data short of re-running a sweep or a replay. Composing a
+    table by concatenating strings is how the `total_tokens` / `context %` columns came
+    to sit beside each other and read as one quantity.
+
+    The bar the report is held to is a polished single-page application, and the tools
+    that produce those are well known: a typed component model, a design-system
+    component library, a bundler, a unit-test runner that renders components, a linter
+    and a formatter. None of them may become a runtime dependency of the Python package
+    (0003), and the page must still be one static file that `report.py` copies beside
+    the captured JSON, fetches from there or is populated inline, and is themed by
+    `report.tokens.json` (0020, 0024).
+  decision: |-
+    The page is authored in `report-ui/`, a bun workspace: Vite, React, TypeScript in
+    strict mode, Tailwind and shadcn/ui components, Vitest with Testing Library, ESLint
+    and Prettier. `bun run build` emits **one** self-contained `dist/index.html` with
+    every script, style and font inlined (`vite-plugin-singlefile`); nothing is fetched
+    from a CDN at view time any more. The built file is promoted into
+    `src/pytest_xharness_eval/assets/report.html` with `make ui-promote` and committed,
+    so the Python package ships a plain asset and keeps zero runtime dependencies;
+    bun is needed to change the page, never to use the plugin.
+
+    Three contracts from the first microsite are kept, so `report.py` does not change:
+    the `<!--XHARNESS_INLINE_DATA-->` marker at the top of `<head>`, the
+    `window.__XH_DATA__` inline payload as the alternative to fetching `index.json`,
+    `*.result.json`, `*.jsonl` and `report.tokens.json` from beside the page, and the
+    `#session/<id>[/turn/<n>]` hash routes. The element ids and names of 0021's glossary
+    are the component names: `SessionTable` is `<SessionTable>`, and a new panel gets
+    its id, its glossary row and its component in the same change.
+
+    Design tokens theme shadcn: `applyTokens` writes every token as an `--xh-*` custom
+    property at runtime, and `index.css` aliases shadcn's semantic variables
+    (`--background`, `--primary`, `--chart-1`, …) to them, so a project's
+    `xharness_report_design_tokens` file restyles every component without a rebuild.
+
+    Development is against real data: `make ui-dev CAPTURED=<skill>/evals/captured`
+    serves the captured directory under the Vite dev server, and
+    `make ui-smoke CAPTURED=…` builds the page, populates it through `report.inline_page`
+    (the same code path as `--xharness-report-inline`) and renders it headlessly in
+    jsdom, printing the rows it mounted. There are no fixture JSONs for the page to
+    drift from.
+
+    The move is panel by panel. This record lands the workspace, the contracts, the
+    theming, `ReportHeader`, `SweepOverview` with `SessionTable`, and `SessionView` with
+    `SessionMetaTable`. Still on the legacy template, and moved in later changes:
+    `TokenAccumulationChart`, the per-session charts (`ContextWindowChart`,
+    `TokenWaterfallChart`, `TurnTiersChart`, `OutputPerTurnChart`, `ChartAxisToggle`),
+    `SessionTurnTable` and `TurnRawRecords` with the record-card component library,
+    `SkillCoveragePanel`, `RecordKindsPanel`, `CostByTierPanel`, `ReconciliationPanel`
+    and `FinalMessagePanel`. Charts will use shadcn's chart components over Recharts,
+    replacing Plotly. Until parity, `assets/report.html` stays the legacy page and
+    `ui-promote` is not run.
+  consequences: |-
+    A contributor changing the page needs bun; one changing the plugin does not. The
+    built page is a ~330 kB committed artifact that changes on every UI change, which is
+    the price of a dependency-free wheel. CI type-checks, lints, tests and builds the
+    workspace on every push now; once the page is promoted, the same job rebuilds it
+    and fails on a difference from the committed asset, so the two cannot drift. `src/components/ui/` is
+    shadcn's generated code and is excluded from lint and format. The root
+    `.gitignore`'s Python patterns (`lib/`, `dist/`) are carved out for
+    `report-ui/src/lib/`. While the move is in progress the two pages coexist; nothing a
+    user sees changes until promotion.

@@ -31,6 +31,7 @@ from pytest_xharness_eval.harness.base import (
     Harness,
     RunError,
     SessionLog,
+    copy_skill,
     register,
     spawn,
 )
@@ -132,7 +133,7 @@ def run_codex(
     if skill_dir is not None:
         dest = private_home / "skills" / skill_dir.name
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(skill_dir, dest)
+        copy_skill(skill_dir, dest)
 
     env = {**os.environ, "CODEX_HOME": str(private_home)}
     cmd = [
@@ -444,6 +445,16 @@ class CodexHarness(Harness):
     name = "codex"
     shell_tools = frozenset({"exec", "shell", "CommandExecution", "bash", "exec_command"})
     persistent_shells = frozenset()  # every exec runs in its own process at ``workdir``
+
+    def invoke(self, *, skill: str, task: str) -> str:
+        """``$<skill> <task>``: the mention Codex's own instructions name as the trigger.
+
+        Codex tells the model "if the user names an available skill (with ``$SkillName`` or
+        plain text) ... you must use that skill for that turn", and resolves the name
+        against ``$CODEX_HOME/skills/`` -- which :func:`run_codex` seeds with the skill
+        under test (ADR 0044; verified against codex-cli 0.151.0).
+        """
+        return f"${skill} {task}"
 
     def run(
         self,

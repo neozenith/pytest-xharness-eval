@@ -11,7 +11,7 @@ explicit = true
 [project]
 requires-python = ">=3.12"
 name = "pytest-xharness-eval"
-version = "0.4.0"
+version = "0.5.0"
 description = "pytest plugin for running the same evaluation suite across AI agent harnesses (cross-harness eval)."
 readme = "README.md"
 license = "MIT"
@@ -98,8 +98,10 @@ unfixable = []
 # only by the layers above it, which are named in per-file-ignores below and nowhere else,
 # so an import that turns the stack upside down fails `make check` rather than review.
 # Owner: the maintainer of src/pytest_xharness_eval/. Review by: 2027-08-28 -- delete these
-# rules if the package is flattened again, rather than leaving them to mislead.
+# rules if the package is flattened again, rather than leaving them to mislead. `verify/`
+# joined the stack in ADR 0045, above `derive/` and below `emit/`.
 "pytest_xharness_eval.harness".msg = "the adapter layer is above the domain; resolve a harness through model.registry (ADR 0039)"
+"pytest_xharness_eval.verify".msg = "verify is above derive, harness and model; a check reads a finished rollout and never helps produce one (ADR 0045)"
 "pytest_xharness_eval.emit".msg = "emit is above derive, harness and model; a document must not be named from beneath it (ADR 0039)"
 "pytest_xharness_eval.runtime".msg = "runtime is the top layer below the entry points; nothing beneath it may name it (ADR 0039)"
 
@@ -114,6 +116,7 @@ unfixable = []
 "src/pytest_xharness_eval/replay.py" = ["TID251"]
 "src/pytest_xharness_eval/model/registry.py" = ["TID251"]
 "src/pytest_xharness_eval/harness/*" = ["TID251"]
+"src/pytest_xharness_eval/verify/*" = ["TID251"]
 "src/pytest_xharness_eval/emit/*" = ["TID251"]
 "src/pytest_xharness_eval/runtime/*" = ["TID251"]
 "tests/*" = ["TID251"]

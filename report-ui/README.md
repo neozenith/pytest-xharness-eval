@@ -51,4 +51,4 @@ The e2e suite needs Playwright's browser once: `cd report-ui && bunx playwright 
 - Never show `total_tokens` (billed across turns) and a context figure as one number.
 - No CDN: everything is inlined at build time so the page opens over `file://` when inline.
 - Chrome styles with Tamagui props; only document content (tables, records, code) uses the
-  semantic classes in `index.css` — no utility-class framework (ADR 0031).
+  semantic classes in `index.css`, no utility-class framework (ADR 0031).

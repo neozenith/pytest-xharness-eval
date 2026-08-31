@@ -75,17 +75,24 @@ def rebuild_result(
     # The same derivations the live cell runs, in the same order (ADR 0034). The case that
     # produced the run is not in the log: carry it forward, or derive it from the suite
     # that defines a case with the recorded name (ADR 0025).
-    case = CaseRef.stored(old.get("case")) or case_meta(session, skill, settings or Settings.from_cache(session_dir))
+    case = CaseRef.stored(old.get("case")) or case_meta(
+        session, skill, agent, settings or Settings.from_cache(session_dir)
+    )
     return pipeline.derive(result, table=table, skill=skill, skill_files=files, case=case)
 
 
-def case_meta(session: SessionDir, skill: str, settings: Settings) -> CaseRef | None:
+def case_meta(session: SessionDir, skill: str, agent: harness.Harness, settings: Settings) -> CaseRef | None:
     """The :class:`CaseRef` recovered from the skill's suites, or None when it cannot be.
 
     The case name comes from the session's own metrics record; the suites sit at
     ``<skills root>/<skill>/evals/eval_*.py`` and are searched by
     :func:`~pytest_xharness_eval.model.suite.find_case`, which is the same loader
     collection imports a suite with.
+
+    ``agent`` is the harness that produced this session, so the recovered reference can
+    carry the prompt that harness would render for the case's task -- the same string the
+    live cell sent (ADR 0044). Recovering only the task and leaving the prompt empty would
+    make a replayed record differ from the live one in a field the report displays.
     """
     previous = CellMetrics.stored(session.history)
     name = (previous.case if previous else None) or ""
@@ -99,7 +106,7 @@ def case_meta(session: SessionDir, skill: str, settings: Settings) -> CaseRef | 
         suite = str(suite_path.relative_to(Path.cwd()))
     except ValueError:
         suite = str(suite_path)
-    return CaseRef.of(case, suite)
+    return CaseRef.of(case, suite, agent.invoke(skill=case.skill, task=case.task))
 
 
 def rebuild(

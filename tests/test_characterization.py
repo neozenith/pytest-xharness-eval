@@ -44,7 +44,8 @@ def _case(name: str) -> dict[str, Any]:
         "name": f"eval_{name}",
         "skill": SKILL,
         "fixture": "seed",
-        "prompt": "grade the skill",
+        "task": "grade the skill",
+        "prompt": f"/{SKILL} grade the skill",
     }
 
 

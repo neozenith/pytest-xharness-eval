@@ -214,27 +214,50 @@ class CostStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CaseRef:
-    """The case that produced a run: suite file, case name, skill, fixture, prompt (ADR 0025).
+    """The case that produced a run: suite file, name, skill, fixture, task and prompt (ADR 0025).
 
     One type for the three places that used to hand-build this record — the live cell, a
     replay carrying it forward, and a replay recovering it from the suite — so they cannot
     disagree about its keys. The field names are the ``case`` keys of ``result.json``.
+
+    ``task`` and ``prompt`` are both kept, and they are not the same string (ADR 0044).
+    ``task`` is what the suite declared, identical across every cell of the case; ``prompt``
+    is the harness-native invocation actually sent, which differs per arm. So a reader
+    holding one ``result.json`` can see exactly what was asked without also holding the
+    suite file, and two arms of one case can be compared knowing how their asks differed.
     """
 
     suite: str = ""
     name: str = ""
     skill: str = ""
     fixture: str = ""
+    task: str = ""
     prompt: str = ""
 
     @classmethod
-    def of(cls, case: EvalCase, suite: str) -> Self:
-        """The reference to ``case`` as collected from the suite file ``suite``."""
-        return cls(suite=suite, name=case.name, skill=case.skill, fixture=case.fixture, prompt=case.prompt)
+    def of(cls, case: EvalCase, suite: str, prompt: str) -> Self:
+        """The reference to ``case`` from suite file ``suite``, sent to a CLI as ``prompt``.
+
+        ``prompt`` is supplied rather than derived here, because only the caller knows which
+        harness this run is for and the rendering belongs to that harness (ADR 0044).
+        """
+        return cls(
+            suite=suite,
+            name=case.name,
+            skill=case.skill,
+            fixture=case.fixture,
+            task=case.task,
+            prompt=prompt,
+        )
 
     @classmethod
     def stored(cls, raw: Mapping[str, Any] | None) -> Self | None:
-        """The reference a captured ``result.json`` carries, or None when it names no case."""
+        """The reference a captured ``result.json`` carries, or None when it names no case.
+
+        A capture written before ADR 0044 carries a ``prompt`` and no ``task``; its task
+        reads back empty rather than being reverse-engineered from the prompt, because a
+        tolerant reader degrades to its declaration and never invents a value (ADR 0038).
+        """
         if not raw:
             return None
         return cls(
@@ -242,6 +265,7 @@ class CaseRef:
             name=str(raw.get("name") or ""),
             skill=str(raw.get("skill") or ""),
             fixture=str(raw.get("fixture") or ""),
+            task=str(raw.get("task") or ""),
             prompt=str(raw.get("prompt") or ""),
         )
 

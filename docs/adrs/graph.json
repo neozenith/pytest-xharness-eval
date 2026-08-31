@@ -1,0 +1,1843 @@
+{
+  "elements": [
+    {
+      "data": {
+        "id": "group-accounting",
+        "label": "accounting",
+        "colour": "#ea580c"
+      }
+    },
+    {
+      "data": {
+        "id": "group-architecture",
+        "label": "architecture",
+        "colour": "#a16207"
+      }
+    },
+    {
+      "data": {
+        "id": "group-collection",
+        "label": "collection",
+        "colour": "#4d7c0f"
+      }
+    },
+    {
+      "data": {
+        "id": "group-docs",
+        "label": "docs",
+        "colour": "#059669"
+      }
+    },
+    {
+      "data": {
+        "id": "group-evidence",
+        "label": "evidence",
+        "colour": "#0d9488"
+      }
+    },
+    {
+      "data": {
+        "id": "group-grading",
+        "label": "grading",
+        "colour": "#0284c7"
+      }
+    },
+    {
+      "data": {
+        "id": "group-harness",
+        "label": "harness",
+        "colour": "#4f46e5"
+      }
+    },
+    {
+      "data": {
+        "id": "group-packaging",
+        "label": "packaging",
+        "colour": "#7c3aed"
+      }
+    },
+    {
+      "data": {
+        "id": "group-pricing",
+        "label": "pricing",
+        "colour": "#a21caf"
+      }
+    },
+    {
+      "data": {
+        "id": "group-report",
+        "label": "report",
+        "colour": "#db2777"
+      }
+    },
+    {
+      "data": {
+        "id": "group-storage",
+        "label": "storage",
+        "colour": "#64748b"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0001",
+        "label": "0001",
+        "parent": "group-packaging",
+        "colour": "#7c3aed",
+        "file": "0001-ship-as-a-pytest-plugin.md",
+        "title": "Ship as a pytest plugin with per-skill opt-in evals",
+        "description": "Ship as a pytest plugin with per-skill opt-in evals",
+        "status": "accepted",
+        "group": "packaging",
+        "tags": "packaging"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0002",
+        "label": "0002",
+        "parent": "group-evidence",
+        "colour": "#0d9488",
+        "file": "0002-every-cell-invokes-the-real-cli.md",
+        "title": "Every eval cell always invokes the real CLI",
+        "description": "Every eval cell always invokes the real CLI",
+        "status": "accepted",
+        "group": "evidence",
+        "tags": "evidence, harness"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0003",
+        "label": "0003",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0003-runresult-is-a-stdlib-dataclass.md",
+        "title": "RunResult is a stdlib dataclass serialised to JSON",
+        "description": "RunResult is a stdlib dataclass serialised to JSON",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0004",
+        "label": "0004",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0004-workspace-is-a-plain-copy.md",
+        "title": "A workspace is a plain copy of the fixture tree, with no git context",
+        "description": "A workspace is a plain copy of the fixture tree, with no git context",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0005",
+        "label": "0005",
+        "parent": "group-harness",
+        "colour": "#4f46e5",
+        "file": "0005-private-codex-home-per-run.md",
+        "title": "A private per-run CODEX_HOME, seeded with the credential files",
+        "description": "A private per-run CODEX_HOME, seeded with the credential files",
+        "status": "accepted",
+        "group": "harness",
+        "tags": "harness"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0006",
+        "label": "0006",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0006-local-price-table-is-authoritative.md",
+        "title": "A local prices.toml is authoritative, with an optional upstream seed",
+        "description": "A local prices.toml is authoritative, with an optional upstream seed",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0007",
+        "label": "0007",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0007-unpriced-model-aborts-before-spend.md",
+        "title": "An unpriced model aborts at matrix expansion and never prices as zero",
+        "description": "An unpriced model aborts at matrix expansion and never prices as zero",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing, collection"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0008",
+        "label": "0008",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0008-evals-are-eval-prefixed-modules.md",
+        "title": "Evals are `eval_*.py` modules collected by a directory-scoped hook",
+        "description": "Evals are `eval_*.py` modules collected by a directory-scoped hook",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0009",
+        "label": "0009",
+        "parent": "group-packaging",
+        "colour": "#7c3aed",
+        "file": "0009-register-via-rootdir-conftest.md",
+        "title": "Register the plugin from the rootdir conftest.py",
+        "description": "Register the plugin from the rootdir conftest.py",
+        "status": "superseded",
+        "group": "packaging",
+        "tags": "packaging"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0010",
+        "label": "0010",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0010-matrix-options-and-dry-run.md",
+        "title": "Global default matrix, per-case override, and --model / --cli / --dry-run",
+        "description": "Global default matrix, per-case override, and --model / --cli / --dry-run",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0011",
+        "label": "0011",
+        "parent": "group-harness",
+        "colour": "#4f46e5",
+        "file": "0011-inject-skill-through-each-cli-path.md",
+        "title": "The skill under test loads through each CLI's own skill path",
+        "description": "The skill under test loads through each CLI's own skill path",
+        "status": "accepted",
+        "group": "harness",
+        "tags": "harness"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0012",
+        "label": "0012",
+        "parent": "group-grading",
+        "colour": "#0284c7",
+        "file": "0012-grading-is-composable-not-prescribed.md",
+        "title": "Grading semantics are not prescribed; the plugin supplies primitives",
+        "description": "Grading semantics are not prescribed; the plugin supplies primitives",
+        "status": "accepted",
+        "group": "grading",
+        "tags": "grading"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0013",
+        "label": "0013",
+        "parent": "group-grading",
+        "colour": "#0284c7",
+        "file": "0013-verifiers-are-python-beside-the-case.md",
+        "title": "Custom verifiers are Python modules beside the case",
+        "description": "Custom verifiers are Python modules beside the case",
+        "status": "accepted",
+        "group": "grading",
+        "tags": "grading"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0014",
+        "label": "0014",
+        "parent": "group-packaging",
+        "colour": "#7c3aed",
+        "file": "0014-register-through-the-pytest11-entry-point.md",
+        "title": "Register through the pytest11 entry point of an extracted package",
+        "description": "Register through the pytest11 entry point of an extracted package",
+        "status": "accepted",
+        "group": "packaging",
+        "tags": "packaging"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0015",
+        "label": "0015",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0015-harness-is-the-axis-and-the-project-owns-the-matrix.md",
+        "title": "Harness is the axis name, and the project owns the default matrix",
+        "description": "Harness is the axis name, and the project owns the default matrix",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection, harness"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0016",
+        "label": "0016",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0016-results-travel-on-the-test-report.md",
+        "title": "Results travel on the test report, and cells group by harness",
+        "description": "Results travel on the test report, and cells group by harness",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection, storage"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0017",
+        "label": "0017",
+        "parent": "group-packaging",
+        "colour": "#7c3aed",
+        "file": "0017-distributed-through-pypi-with-trusted-publishing.md",
+        "title": "Distribute through PyPI with trusted publishing, released from a GitHub Release",
+        "description": "Distribute through PyPI with trusted publishing, released from a GitHub Release",
+        "status": "accepted",
+        "group": "packaging",
+        "tags": "packaging"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0018",
+        "label": "0018",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0018-fixtures-directory-and-metrics-history.md",
+        "title": "Fixtures live under evals/fixtures/, and every live cell appends to a metrics history",
+        "description": "Fixtures live under evals/fixtures/, and every live cell appends to a metrics history",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection, storage"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0019",
+        "label": "0019",
+        "parent": "group-accounting",
+        "colour": "#ea580c",
+        "file": "0019-per-call-ledger-and-ttl-priced-cache-writes.md",
+        "title": "Every run carries a per-call ledger; tokens are reported as context and billed; cache writes price by TTL",
+        "description": "Every run carries a per-call ledger; tokens are reported as context and billed; cache writes price by TTL",
+        "status": "accepted",
+        "group": "accounting",
+        "tags": "accounting, pricing"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0020",
+        "label": "0020",
+        "parent": "group-report",
+        "colour": "#db2777",
+        "file": "0020-captured-report-is-a-static-microsite.md",
+        "title": "`captured/report.html` is a static microsite over the captured JSON",
+        "description": "`captured/report.html` is a static microsite over the captured JSON",
+        "status": "accepted",
+        "group": "report",
+        "tags": "report"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0021",
+        "label": "0021",
+        "parent": "group-accounting",
+        "colour": "#ea580c",
+        "file": "0021-metric-names-carry-unit-and-provenance.md",
+        "title": "Metric names carry their unit and their source; the report has a named vocabulary and addressable ids",
+        "description": "Metric names carry their unit and their source; the report has a named vocabulary and addressable ids",
+        "status": "accepted",
+        "group": "accounting",
+        "tags": "accounting, report"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0022",
+        "label": "0022",
+        "parent": "group-accounting",
+        "colour": "#ea580c",
+        "file": "0022-record-kind-catalogue-and-skill-coverage.md",
+        "title": "A catalogued record kind per log line, and skill file coverage per run",
+        "description": "A catalogued record kind per log line, and skill file coverage per run",
+        "status": "accepted",
+        "group": "accounting",
+        "tags": "accounting, grading"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0023",
+        "label": "0023",
+        "parent": "group-evidence",
+        "colour": "#0d9488",
+        "file": "0023-turn-boundaries-skill-ignore-and-replay.md",
+        "title": "A turn owns its tools' results; skills declare what is not decision surface; captures replay without spend",
+        "description": "A turn owns its tools' results; skills declare what is not decision surface; captures replay without spend",
+        "status": "accepted",
+        "group": "evidence",
+        "tags": "evidence"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0024",
+        "label": "0024",
+        "parent": "group-accounting",
+        "colour": "#ea580c",
+        "file": "0024-context-window-metrics-injected-messages-and-design-tokens.md",
+        "title": "Context window consumption and timing are first-class metrics; injected messages are not prompts; the report is themed by design tokens and can be written standalone",
+        "description": "Context window consumption and timing are first-class metrics; injected messages are not prompts; the report is themed by design tokens and can be written standalone",
+        "status": "accepted",
+        "group": "accounting",
+        "tags": "accounting, report"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0025",
+        "label": "0025",
+        "parent": "group-report",
+        "colour": "#db2777",
+        "file": "0025-results-name-their-case-and-charts-have-a-log-line-axis.md",
+        "title": "A result names the case that produced it, and the per-turn charts have a session-log-line axis",
+        "description": "A result names the case that produced it, and the per-turn charts have a session-log-line axis",
+        "status": "accepted",
+        "group": "report",
+        "tags": "report, evidence"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0026",
+        "label": "0026",
+        "parent": "group-storage",
+        "colour": "#64748b",
+        "file": "0026-skill-ignore-lives-in-the-pytest-config.md",
+        "title": "What is not decision surface is declared in the project's pytest config, not in a dotfile beside the skill",
+        "description": "What is not decision surface is declared in the project's pytest config, not in a dotfile beside the skill",
+        "status": "accepted",
+        "group": "storage",
+        "tags": "storage"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0027",
+        "label": "0027",
+        "parent": "group-accounting",
+        "colour": "#ea580c",
+        "file": "0027-coverage-follows-the-shells-working-directory.md",
+        "title": "Skill coverage follows the shell's working directory",
+        "description": "Skill coverage follows the shell's working directory",
+        "status": "accepted",
+        "group": "accounting",
+        "tags": "accounting, grading"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0028",
+        "label": "0028",
+        "parent": "group-report",
+        "colour": "#db2777",
+        "file": "0028-report-is-built-from-a-component-workspace.md",
+        "title": "The report page is built from a component workspace and shipped as one file",
+        "description": "The report page is built from a component workspace and shipped as one file",
+        "status": "accepted",
+        "group": "report",
+        "tags": "report"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0029",
+        "label": "0029",
+        "parent": "group-accounting",
+        "colour": "#ea580c",
+        "file": "0029-the-billed-sum-is-named-accumulative-billed-tokens.md",
+        "title": "The billed sum is named `accumulative_billed_tokens`",
+        "description": "The billed sum is named `accumulative_billed_tokens`",
+        "status": "accepted",
+        "group": "accounting",
+        "tags": "accounting"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0030",
+        "label": "0030",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0030-price-rows-live-in-the-pytest-config.md",
+        "title": "Project price rows live in the pytest config, not in a prices.toml beside it",
+        "description": "Project price rows live in the pytest config, not in a prices.toml beside it",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing, storage"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0031",
+        "label": "0031",
+        "parent": "group-report",
+        "colour": "#db2777",
+        "file": "0031-plotly-tamagui-and-a-deeplink-permutation-matrix.md",
+        "title": "The report draws with Plotly on a Tamagui base, every state deeplinks, and a Playwright matrix sweeps them all",
+        "description": "The report draws with Plotly on a Tamagui base, every state deeplinks, and a Playwright matrix sweeps them all",
+        "status": "accepted",
+        "group": "report",
+        "tags": "report"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0032",
+        "label": "0032",
+        "parent": "group-storage",
+        "colour": "#64748b",
+        "file": "0032-all-run-output-consolidates-under-a-cache-dir.md",
+        "title": "All run output consolidates under `.xharness_eval_cache/`, and the report is one combine step",
+        "description": "All run output consolidates under `.xharness_eval_cache/`, and the report is one combine step",
+        "status": "accepted",
+        "group": "storage",
+        "tags": "storage"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0033",
+        "label": "0033",
+        "parent": "group-evidence",
+        "colour": "#0d9488",
+        "file": "0033-subagent-transcripts-are-captured-and-billed.md",
+        "title": "Subagent transcripts are captured evidence, and their tokens are billed",
+        "description": "Subagent transcripts are captured evidence, and their tokens are billed",
+        "status": "accepted",
+        "group": "evidence",
+        "tags": "evidence, accounting"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0034",
+        "label": "0034",
+        "parent": "group-harness",
+        "colour": "#4f46e5",
+        "file": "0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md",
+        "title": "A harness is a class, the registry is the only dispatch, and the layers are named",
+        "description": "A harness is a class, the registry is the only dispatch, and the layers are named",
+        "status": "accepted",
+        "group": "harness",
+        "tags": "harness, architecture"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0035",
+        "label": "0035",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0035-the-nouns-carry-their-own-invariants.md",
+        "title": "The nouns carry their own invariants",
+        "description": "The nouns carry their own invariants",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0036",
+        "label": "0036",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0036-a-folding-constructor-declares-its-keyword-fields.md",
+        "title": "A folding constructor declares its keyword fields",
+        "description": "A folding constructor declares its keyword fields",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0037",
+        "label": "0037",
+        "parent": "group-storage",
+        "colour": "#64748b",
+        "file": "0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md",
+        "title": "The emitted records are types, and the cache tree has one owner",
+        "description": "The emitted records are types, and the cache tree has one owner",
+        "status": "accepted",
+        "group": "storage",
+        "tags": "storage, architecture"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0038",
+        "label": "0038",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0038-a-tolerant-reader-still-honours-its-declaration.md",
+        "title": "A tolerant reader still honours its declaration",
+        "description": "A tolerant reader still honours its declaration",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0039",
+        "label": "0039",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0039-the-package-listing-is-the-architecture.md",
+        "title": "The package listing is the architecture",
+        "description": "The package listing is the architecture",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0040",
+        "label": "0040",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0040-the-plugin-is-a-hook-manifest.md",
+        "title": "The plugin is a hook manifest, and each job behind it is a module",
+        "description": "The plugin is a hook manifest, and each job behind it is a module",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture, packaging"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0041",
+        "label": "0041",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0041-the-vocabulary-is-a-domain-noun-and-the-manifest-is-a-manifest.md",
+        "title": "A shared vocabulary is a domain noun, and a manifest exports nothing of its own",
+        "description": "A shared vocabulary is a domain noun, and a manifest exports nothing of its own",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0042",
+        "label": "0042",
+        "parent": "group-report",
+        "colour": "#db2777",
+        "file": "0042-the-overview-is-filtered-by-the-url.md",
+        "title": "The overview is filtered by the URL, and the summary aggregates the chart's own groups",
+        "description": "The overview is filtered by the URL, and the summary aggregates the chart's own groups",
+        "status": "accepted",
+        "group": "report",
+        "tags": "report"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0043",
+        "label": "0043",
+        "parent": "group-report",
+        "colour": "#db2777",
+        "file": "0043-the-overview-tables-are-budgeted-to-one-screen.md",
+        "title": "The overview's tables are budgeted to one screen, and the aggregate has a decomposition as well as an accumulation",
+        "description": "The overview's tables are budgeted to one screen, and the aggregate has a decomposition as well as an accumulation",
+        "status": "accepted",
+        "group": "report",
+        "tags": "report"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0044",
+        "label": "0044",
+        "parent": "group-harness",
+        "colour": "#4f46e5",
+        "file": "0044-a-skill-is-invoked-the-way-its-user-invokes-it.md",
+        "title": "A skill is invoked the way its user invokes it, in each harness's own syntax",
+        "description": "A skill is invoked the way its user invokes it, in each harness's own syntax",
+        "status": "accepted",
+        "group": "harness",
+        "tags": "harness, collection"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0045",
+        "label": "0045",
+        "parent": "group-grading",
+        "colour": "#0284c7",
+        "file": "0045-the-verifiers-ship-with-the-plugin.md",
+        "title": "The verifiers ship with the plugin, and a rollout has one documented surface",
+        "description": "The verifiers ship with the plugin, and a rollout has one documented surface",
+        "status": "accepted",
+        "group": "grading",
+        "tags": "grading, architecture"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0046",
+        "label": "0046",
+        "parent": "group-grading",
+        "colour": "#0284c7",
+        "file": "0046-a-golden-is-compared-facet-by-facet-within-a-declared-tolerance.md",
+        "title": "A golden is compared facet by facet, and every facet declares its tolerance",
+        "description": "A golden is compared facet by facet, and every facet declares its tolerance",
+        "status": "accepted",
+        "group": "grading",
+        "tags": "grading, collection"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0047",
+        "label": "0047",
+        "parent": "group-docs",
+        "colour": "#059669",
+        "file": "0047-adrs-are-authored-as-data-and-their-markdown-is-generated.md",
+        "title": "ADRs are authored as data, and the argument travels verbatim",
+        "description": "ADRs are authored as data, and the argument travels verbatim",
+        "status": "accepted",
+        "group": "docs",
+        "tags": "docs"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0001-superseded_by-ADR-0014",
+        "source": "ADR-0001",
+        "target": "ADR-0014",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the record's status line says \"superseded by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0008-extended_by-ADR-0016",
+        "source": "ADR-0008",
+        "target": "ADR-0016",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0008-extended_by-ADR-0014",
+        "source": "ADR-0008",
+        "target": "ADR-0014",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0009-superseded_by-ADR-0014",
+        "source": "ADR-0009",
+        "target": "ADR-0014",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the record's status line says \"superseded by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0010-extended_by-ADR-0015",
+        "source": "ADR-0010",
+        "target": "ADR-0015",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0014-supersedes-ADR-0009",
+        "source": "ADR-0014",
+        "target": "ADR-0009",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "the record's status line says \"supersedes\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0014-extended_by-ADR-0017",
+        "source": "ADR-0014",
+        "target": "ADR-0017",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0014-extended_by-ADR-0026",
+        "source": "ADR-0014",
+        "target": "ADR-0026",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0015-extends-ADR-0010",
+        "source": "ADR-0015",
+        "target": "ADR-0010",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0016-extends-ADR-0008",
+        "source": "ADR-0016",
+        "target": "ADR-0008",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0017-extends-ADR-0014",
+        "source": "ADR-0017",
+        "target": "ADR-0014",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0018-extends-ADR-0004",
+        "source": "ADR-0018",
+        "target": "ADR-0004",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0018-extends-ADR-0016",
+        "source": "ADR-0018",
+        "target": "ADR-0016",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0019-extends-ADR-0003",
+        "source": "ADR-0019",
+        "target": "ADR-0003",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0019-extends-ADR-0006",
+        "source": "ADR-0019",
+        "target": "ADR-0006",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0019-extends-ADR-0018",
+        "source": "ADR-0019",
+        "target": "ADR-0018",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0020-extends-ADR-0018",
+        "source": "ADR-0020",
+        "target": "ADR-0018",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0021-extends-ADR-0019",
+        "source": "ADR-0021",
+        "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0021-extends-ADR-0020",
+        "source": "ADR-0021",
+        "target": "ADR-0020",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0021-superseded_by-ADR-0029",
+        "source": "ADR-0021",
+        "target": "ADR-0029",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the record's status line says \"superseded by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0022-extends-ADR-0019",
+        "source": "ADR-0022",
+        "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0022-extends-ADR-0021",
+        "source": "ADR-0022",
+        "target": "ADR-0021",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0022-extended_by-ADR-0027",
+        "source": "ADR-0022",
+        "target": "ADR-0027",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0023-extends-ADR-0019",
+        "source": "ADR-0023",
+        "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0023-extends-ADR-0022",
+        "source": "ADR-0023",
+        "target": "ADR-0022",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0023-extended_by-ADR-0026",
+        "source": "ADR-0023",
+        "target": "ADR-0026",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0023-extended_by-ADR-0027",
+        "source": "ADR-0023",
+        "target": "ADR-0027",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0024-extends-ADR-0019",
+        "source": "ADR-0024",
+        "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0024-extends-ADR-0020",
+        "source": "ADR-0024",
+        "target": "ADR-0020",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0024-extends-ADR-0022",
+        "source": "ADR-0024",
+        "target": "ADR-0022",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0025-extends-ADR-0018",
+        "source": "ADR-0025",
+        "target": "ADR-0018",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0025-extends-ADR-0024",
+        "source": "ADR-0025",
+        "target": "ADR-0024",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0026-extends-ADR-0023",
+        "source": "ADR-0026",
+        "target": "ADR-0023",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0026-extends-ADR-0014",
+        "source": "ADR-0026",
+        "target": "ADR-0014",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0027-extends-ADR-0022",
+        "source": "ADR-0027",
+        "target": "ADR-0022",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0027-extends-ADR-0023",
+        "source": "ADR-0027",
+        "target": "ADR-0023",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0028-extends-ADR-0020",
+        "source": "ADR-0028",
+        "target": "ADR-0020",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0028-extends-ADR-0021",
+        "source": "ADR-0028",
+        "target": "ADR-0021",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0028-extends-ADR-0024",
+        "source": "ADR-0028",
+        "target": "ADR-0024",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0028-extends-ADR-0003",
+        "source": "ADR-0028",
+        "target": "ADR-0003",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0029-supersedes-ADR-0021",
+        "source": "ADR-0029",
+        "target": "ADR-0021",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "the record's status line says \"supersedes\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0029-extends-ADR-0019",
+        "source": "ADR-0029",
+        "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0030-extends-ADR-0006",
+        "source": "ADR-0030",
+        "target": "ADR-0006",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0030-extends-ADR-0014",
+        "source": "ADR-0030",
+        "target": "ADR-0014",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0030-extends-ADR-0026",
+        "source": "ADR-0030",
+        "target": "ADR-0026",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0031-extends-ADR-0020",
+        "source": "ADR-0031",
+        "target": "ADR-0020",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0031-extends-ADR-0024",
+        "source": "ADR-0031",
+        "target": "ADR-0024",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0031-extends-ADR-0025",
+        "source": "ADR-0031",
+        "target": "ADR-0025",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0031-extends-ADR-0028",
+        "source": "ADR-0031",
+        "target": "ADR-0028",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0032-extends-ADR-0014",
+        "source": "ADR-0032",
+        "target": "ADR-0014",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0032-extends-ADR-0018",
+        "source": "ADR-0032",
+        "target": "ADR-0018",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0032-extends-ADR-0020",
+        "source": "ADR-0032",
+        "target": "ADR-0020",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0033-extends-ADR-0019",
+        "source": "ADR-0033",
+        "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0033-extends-ADR-0021",
+        "source": "ADR-0033",
+        "target": "ADR-0021",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0033-extends-ADR-0032",
+        "source": "ADR-0033",
+        "target": "ADR-0032",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0034-extends-ADR-0002",
+        "source": "ADR-0034",
+        "target": "ADR-0002",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0034-extends-ADR-0014",
+        "source": "ADR-0034",
+        "target": "ADR-0014",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0034-extends-ADR-0015",
+        "source": "ADR-0034",
+        "target": "ADR-0015",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0034-extends-ADR-0023",
+        "source": "ADR-0034",
+        "target": "ADR-0023",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0035-extends-ADR-0003",
+        "source": "ADR-0035",
+        "target": "ADR-0003",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0035-extends-ADR-0019",
+        "source": "ADR-0035",
+        "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0035-extends-ADR-0021",
+        "source": "ADR-0035",
+        "target": "ADR-0021",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0035-extends-ADR-0022",
+        "source": "ADR-0035",
+        "target": "ADR-0022",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0035-extends-ADR-0025",
+        "source": "ADR-0035",
+        "target": "ADR-0025",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0035-extends-ADR-0033",
+        "source": "ADR-0035",
+        "target": "ADR-0033",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0035-extends-ADR-0036",
+        "source": "ADR-0035",
+        "target": "ADR-0036",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0036-extends-ADR-0035",
+        "source": "ADR-0036",
+        "target": "ADR-0035",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0036-extends-ADR-0003",
+        "source": "ADR-0036",
+        "target": "ADR-0003",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0037-extends-ADR-0016",
+        "source": "ADR-0037",
+        "target": "ADR-0016",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0037-extends-ADR-0018",
+        "source": "ADR-0037",
+        "target": "ADR-0018",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0037-extends-ADR-0020",
+        "source": "ADR-0037",
+        "target": "ADR-0020",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0037-extends-ADR-0032",
+        "source": "ADR-0037",
+        "target": "ADR-0032",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0037-extends-ADR-0035",
+        "source": "ADR-0037",
+        "target": "ADR-0035",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0038-extends-ADR-0032",
+        "source": "ADR-0038",
+        "target": "ADR-0032",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0038-extends-ADR-0037",
+        "source": "ADR-0038",
+        "target": "ADR-0037",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0039-extends-ADR-0014",
+        "source": "ADR-0039",
+        "target": "ADR-0014",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0039-extends-ADR-0027",
+        "source": "ADR-0039",
+        "target": "ADR-0027",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0039-extends-ADR-0034",
+        "source": "ADR-0039",
+        "target": "ADR-0034",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0039-extends-ADR-0037",
+        "source": "ADR-0039",
+        "target": "ADR-0037",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0040-extends-ADR-0008",
+        "source": "ADR-0040",
+        "target": "ADR-0008",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0040-extends-ADR-0014",
+        "source": "ADR-0040",
+        "target": "ADR-0014",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0040-extends-ADR-0016",
+        "source": "ADR-0040",
+        "target": "ADR-0016",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0040-extends-ADR-0032",
+        "source": "ADR-0040",
+        "target": "ADR-0032",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0040-extends-ADR-0037",
+        "source": "ADR-0040",
+        "target": "ADR-0037",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0040-extends-ADR-0039",
+        "source": "ADR-0040",
+        "target": "ADR-0039",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0040-superseded_by-ADR-0041",
+        "source": "ADR-0040",
+        "target": "ADR-0041",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the record's status line says \"superseded by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0041-extends-ADR-0016",
+        "source": "ADR-0041",
+        "target": "ADR-0016",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0041-extends-ADR-0037",
+        "source": "ADR-0041",
+        "target": "ADR-0037",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0041-extends-ADR-0038",
+        "source": "ADR-0041",
+        "target": "ADR-0038",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0041-extends-ADR-0039",
+        "source": "ADR-0041",
+        "target": "ADR-0039",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0041-extends-ADR-0040",
+        "source": "ADR-0041",
+        "target": "ADR-0040",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0042-extends-ADR-0020",
+        "source": "ADR-0042",
+        "target": "ADR-0020",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0042-extends-ADR-0021",
+        "source": "ADR-0042",
+        "target": "ADR-0021",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0042-extends-ADR-0028",
+        "source": "ADR-0042",
+        "target": "ADR-0028",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0042-extends-ADR-0031",
+        "source": "ADR-0042",
+        "target": "ADR-0031",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0043-extends-ADR-0020",
+        "source": "ADR-0043",
+        "target": "ADR-0020",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0043-extends-ADR-0021",
+        "source": "ADR-0043",
+        "target": "ADR-0021",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0043-extends-ADR-0025",
+        "source": "ADR-0043",
+        "target": "ADR-0025",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0043-extends-ADR-0031",
+        "source": "ADR-0043",
+        "target": "ADR-0031",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0043-extends-ADR-0042",
+        "source": "ADR-0043",
+        "target": "ADR-0042",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0044-extends-ADR-0011",
+        "source": "ADR-0044",
+        "target": "ADR-0011",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0044-extends-ADR-0034",
+        "source": "ADR-0044",
+        "target": "ADR-0034",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0044-supersedes-ADR-0008",
+        "source": "ADR-0044",
+        "target": "ADR-0008",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "the record's status line says \"supersedes\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0045-extends-ADR-0012",
+        "source": "ADR-0045",
+        "target": "ADR-0012",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"delivers\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0045-extends-ADR-0013",
+        "source": "ADR-0045",
+        "target": "ADR-0013",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"delivers\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0045-extends-ADR-0039",
+        "source": "ADR-0045",
+        "target": "ADR-0039",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0046-extends-ADR-0012",
+        "source": "ADR-0046",
+        "target": "ADR-0012",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0046-extends-ADR-0018",
+        "source": "ADR-0046",
+        "target": "ADR-0018",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0046-extends-ADR-0045",
+        "source": "ADR-0046",
+        "target": "ADR-0045",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0047-extends-ADR-0032",
+        "source": "ADR-0047",
+        "target": "ADR-0032",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    }
+  ],
+  "layout": {
+    "name": "cose"
+  },
+  "height": 620
+}
