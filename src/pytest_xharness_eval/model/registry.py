@@ -7,7 +7,12 @@ and neither of them behaviour: which harnesses exist, so the matrix can reject a
 naming one that does not, and which tool names a harness runs shell commands with, so
 skill coverage can tell a script that was *run* from one that was merely read (ADR 0027).
 
-Those two lookups used to be two separate upward imports -- ``matrix`` named the harness
+Three questions now: the third is how a harness names a skill, so a case that declares a
+*task* can be rendered into the invocation each CLI's own user would type (ADR 0044). It
+is a lookup on the same registered object as the other two, and it belongs here for the
+same reason -- the alternative is ``model/case.py`` importing the adapter layer.
+
+The first two lookups used to be two separate upward imports -- ``matrix`` named the harness
 package, and ``skillcov.annotate`` called ``harness.get(result.harness)`` in the middle of
 its ledger walk, which is why annotating coverage needed a registered harness at all
 (ADR 0039). They are one declared edge now: this module names the adapter layer, the rest
@@ -50,3 +55,15 @@ class Shells:
         """The registered harness ``name``'s own vocabulary; an unknown name raises (ADR 0034)."""
         agent = harness.get(name)
         return cls(tools=agent.shell_tools, persistent=agent.persistent_shells)
+
+
+def invocation(harness_name: str, *, skill: str, task: str) -> str:
+    """How a user of the harness ``harness_name`` would ask it to run ``skill`` on ``task``.
+
+    The syntax lives on the harness class and nowhere else (ADR 0044); this is the one
+    edge that reaches it from below, so the case a suite declares stays free of both
+    dialects. An unknown name raises :class:`~pytest_xharness_eval.harness.UnknownHarness`
+    rather than falling back to a plain prompt: a cell that silently stopped invoking the
+    skill would grade the model, not the skill (ADR 0034).
+    """
+    return harness.get(harness_name).invoke(skill=skill, task=task)

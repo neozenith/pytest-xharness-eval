@@ -3,7 +3,7 @@
 *Harness* is the first matrix axis (ADR 0015). This module is where that axis stops
 being a bare string: everything a provider does differently lives behind one interface,
 so nothing outside this package branches on ``"claude"`` or ``"codex"`` again. Adding a
-third CLI is subclassing :class:`Harness`, implementing its five members, and calling
+third CLI is subclassing :class:`Harness`, implementing its six members, and calling
 :func:`register`; every dispatch site below picks it up with no further edit.
 
 The two shipped dialects differ in what a session log *contains*, not merely in its
@@ -23,6 +23,7 @@ paid live evals in a consuming repository.
 from __future__ import annotations
 
 # Standard Library
+import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from collections import Counter
@@ -58,6 +59,27 @@ def spawn(
     return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout_s)
 
 
+#: Directories never shipped to the agent under test, whatever a provider's loading path is.
+#:
+#: ``evals/`` is the exam. It holds the fixtures a case seeds from and, since ADR 0046, the
+#: goldens a case grades against -- so copying a skill wholesale hands the agent the answer
+#: key and the eval measures nothing. ``__pycache__`` is noise from the collector having
+#: imported the suites.
+NOT_SHIPPED_WITH_A_SKILL = ("evals", "__pycache__")
+
+
+def copy_skill(skill_dir: Path, dest: Path) -> Path:
+    """Copy the skill under test to ``dest``, minus the parts that are the test itself.
+
+    Both loading paths go through here (ADR 0011): Claude's wrapper plugin and Codex's
+    private ``CODEX_HOME/skills/``. A provider that copied the tree itself would reintroduce
+    the leak the moment it was added, which is why the exclusion is the shared contract's
+    rather than each adapter's.
+    """
+    shutil.copytree(skill_dir, dest, ignore=shutil.ignore_patterns(*NOT_SHIPPED_WITH_A_SKILL))
+    return dest
+
+
 class SessionLog(ABC):
     """One captured session in a provider's dialect, plus the side-channel that dialect needs.
 
@@ -88,6 +110,19 @@ class Harness(ABC):
         return f"<{type(self).__name__} {self.name}>"
 
     @abstractmethod
+    def invoke(self, *, skill: str, task: str) -> str:
+        """The prompt a user of *this* CLI would type to run ``skill`` on ``task`` (ADR 0044).
+
+        The two shipped dialects do not agree on the syntax -- Claude resolves a skill as a
+        slash command, Codex as a ``$`` mention -- and this is the only place either is
+        spelled. ``task`` never names the skill or a loading path; wrapping it in the
+        provider's own invocation is what this method is for.
+
+        A cell's prompt is therefore harness-specific, which is what makes the two arms of
+        a matrix the same experiment rather than two different ones (ADR 0044).
+        """
+
+    @abstractmethod
     def run(
         self,
         *,
@@ -98,6 +133,9 @@ class Harness(ABC):
         timeout_s: int = DEFAULT_TIMEOUT_S,
     ) -> RunResult:
         """Invoke the CLI in ``workspace`` and return the normalised result.
+
+        ``prompt`` is what :meth:`invoke` rendered; ``skill_dir`` is the skill to register
+        with this CLI so that the rendered invocation resolves (ADR 0011, ADR 0044).
 
         Implementations must correlate the run to its own session log without searching
         for it, and raise :class:`RunError` rather than grading a run whose evidence is

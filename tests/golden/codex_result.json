@@ -102,9 +102,10 @@
   "case": {
     "fixture": "seed",
     "name": "eval_codex",
-    "prompt": "grade the skill",
+    "prompt": "/demo grade the skill",
     "skill": "demo",
-    "suite": "skills/demo/evals/eval_codex.py"
+    "suite": "skills/demo/evals/eval_codex.py",
+    "task": "grade the skill"
   },
   "context_window": 400000,
   "context_window_pct": 0.65,

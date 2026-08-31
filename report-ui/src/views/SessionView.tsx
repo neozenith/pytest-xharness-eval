@@ -111,7 +111,17 @@ export function SessionView({ cell, route }: Props) {
     ["skill", cell.skill ?? "–"],
     ["fixture", cell.fixture ?? "–"],
     [
-      "prompt",
+      "task",
+      cell.task ? (
+        <span key="t" style={{ whiteSpace: "pre-wrap" }}>
+          {cell.task}
+        </span>
+      ) : (
+        "not recorded on this result; replay to recover it (ADR 0025, ADR 0044)"
+      ),
+    ],
+    [
+      "prompt sent",
       cell.prompt ? (
         <span key="p" style={{ whiteSpace: "pre-wrap" }}>
           {cell.prompt}

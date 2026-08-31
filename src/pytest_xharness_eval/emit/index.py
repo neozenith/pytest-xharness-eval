@@ -49,6 +49,7 @@ class IndexRow:
     suite: str | None
     skill: str | None
     fixture: str | None
+    task: str | None
     prompt: str | None
     harness: str | None
     model: str | None
@@ -101,6 +102,7 @@ class IndexRow:
             suite=meta.get("suite"),
             skill=meta.get("skill"),
             fixture=meta.get("fixture"),
+            task=meta.get("task"),
             prompt=meta.get("prompt"),
             harness=result.get("harness"),
             model=result.get("model"),

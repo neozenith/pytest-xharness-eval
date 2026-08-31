@@ -17,6 +17,7 @@ from __future__ import annotations
 # Standard Library
 import json
 import os
+import shutil
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -28,6 +29,7 @@ from pytest_xharness_eval.harness.base import (
     Harness,
     RunError,
     SessionLog,
+    copy_skill,
     register,
     spawn,
 )
@@ -64,6 +66,32 @@ def claude_log_path(config_dir: Path, workspace: Path, session_id: str) -> Path:
     return config_dir / "projects" / slug / f"{session_id}.jsonl"
 
 
+def skill_plugin(skill_dir: Path, run_dir: Path) -> Path:
+    """Wrap ``skill_dir`` as a single-skill Claude plugin, and return the plugin root.
+
+    ``--add-dir`` grants tool access to a path; it does not register a skill, so a prompt
+    relying on it had to tell the agent where to read a file from. ``--plugin-dir`` is the
+    registration, and a plugin is a manifest plus a ``skills/`` tree -- so the skill under
+    test is copied in beside a minimal ``plugin.json`` and reached as ``/<skill>``
+    (ADR 0011, ADR 0044; verified against claude 2.1.251).
+
+    A copy rather than a symlink: the CLI rejects symlinked skill trees, and a copy also
+    freezes the skill for the duration of the run.
+    """
+    root = run_dir / "plugin"
+    if root.exists():
+        shutil.rmtree(root)
+    (root / ".claude-plugin").mkdir(parents=True)
+    copy_skill(skill_dir, root / "skills" / skill_dir.name)
+    manifest = {
+        "name": skill_dir.name,
+        "version": "0.0.0",
+        "description": f"{skill_dir.name}, under evaluation by pytest-xharness-eval",
+    }
+    (root / ".claude-plugin" / "plugin.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return root
+
+
 def run_claude(
     prompt: str,
     model: str,
@@ -90,7 +118,8 @@ def run_claude(
         *_ISOLATION,
     ]
     if skill_dir is not None:
-        cmd += ["--add-dir", str(skill_dir)]
+        run_dir = workspace.parent / f"{workspace.name}.claude"
+        cmd += ["--plugin-dir", str(skill_plugin(skill_dir, run_dir))]
 
     before = ws.snapshot(workspace)
     proc = spawn(cmd, cwd=workspace, env=dict(os.environ), timeout_s=timeout_s)
@@ -400,6 +429,15 @@ class ClaudeHarness(Harness):
     name = "claude"
     shell_tools = frozenset({"Bash"})
     persistent_shells = frozenset({"Bash"})  # one shell process spans the session, so ``cd`` sticks
+
+    def invoke(self, *, skill: str, task: str) -> str:
+        """``/<skill> <task>``: the slash command a Claude Code user types (ADR 0044).
+
+        The skill is registered for the session by :func:`skill_plugin`, so an unresolvable
+        name comes back as "Unknown command" having billed nothing -- which the evidence
+        gate reads as a failed cell rather than a graded one (ADR 0045).
+        """
+        return f"/{skill} {task}"
 
     def run(
         self,

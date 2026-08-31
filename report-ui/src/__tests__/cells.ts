@@ -6,6 +6,7 @@ export const cell = (over: Partial<Cell>): Cell => ({
   suite: "skills/s/evals/eval_case.py",
   skill: "discovery",
   fixture: null,
+  task: null,
   prompt: null,
   harness: "claude",
   model: "claude-opus-5",

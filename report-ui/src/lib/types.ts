@@ -21,6 +21,9 @@ export interface Cell {
   suite: string | null;
   skill: string | null;
   fixture: string | null;
+  /** What the case declared (ADR 0044): the same string on every arm. */
+  task: string | null;
+  /** What this harness rendered around the task and actually sent. Differs per arm. */
   prompt: string | null;
   harness: string;
   model: string;
@@ -142,7 +145,7 @@ export interface RunResult {
   tool_calls: Record<string, number>;
   record_kinds: Record<string, number>;
   skill_coverage: Record<string, unknown>;
-  case: { suite?: string; name?: string; skill?: string; fixture?: string; prompt?: string };
+  case: { suite?: string; name?: string; skill?: string; fixture?: string; task?: string; prompt?: string };
   subagents?: Subagent[];
   [key: string]: unknown;
 }
