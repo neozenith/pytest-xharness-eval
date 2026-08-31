@@ -13,6 +13,7 @@ ones below it:
 * ``model/`` -- the nouns: a run, a case, a cell, a workspace, a cache tree, the clock.
 * ``harness/`` -- one adapter class per agent CLI, and the toolkit they fold with.
 * ``derive/`` -- what a folded run cost, and which of the skill it reached.
+* ``verify/`` -- the shared checks and the golden comparison a grader is written with.
 * ``emit/`` -- the documents that leave: the metrics record and the report microsite.
 * ``runtime/`` -- how a sweep is wired: settings, and the steps after the CLI returns.
 
@@ -25,12 +26,14 @@ from __future__ import annotations
 
 # Our Libraries
 from pytest_xharness_eval import emit as report
+from pytest_xharness_eval import verify as verify
 from pytest_xharness_eval.derive import pricing as pricing
 from pytest_xharness_eval.derive import skillcov as skillcov
 from pytest_xharness_eval.harness import normalise as normalise
 from pytest_xharness_eval.harness import records as records
 from pytest_xharness_eval.model.case import EvalCase, evalcase
 from pytest_xharness_eval.model.matrix import DEFAULT_MATRIX, Cell
+from pytest_xharness_eval.model.output import CaseOutput
 from pytest_xharness_eval.model.runresult import (
     Call,
     CaseRef,
@@ -45,6 +48,7 @@ from pytest_xharness_eval.model.runresult import (
 __all__ = [
     "DEFAULT_MATRIX",
     "Call",
+    "CaseOutput",
     "CaseRef",
     "Cell",
     "CostStatus",
@@ -60,5 +64,6 @@ __all__ = [
     "records",
     "report",
     "skillcov",
+    "verify",
 ]
 __version__ = "0.4.0"
