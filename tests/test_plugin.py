@@ -17,9 +17,9 @@ CASE = textwrap.dedent(
     """
     from pytest_xharness_eval import evalcase
 
-    @evalcase(prompt="say hi", skill="demo", fixture="seed"{models})
-    def eval_demo(run, workspace):
-        assert run.exit_code == 0
+    @evalcase(task="say hi", skill="demo", fixture="seed"{models})
+    def eval_demo(output):
+        assert output.run.exit_code == 0
     """
 )
 

@@ -20,6 +20,7 @@ import pytest
 from pytest_xharness_eval import (
     DEFAULT_MATRIX,
     Call,
+    CaseOutput,
     CaseRef,
     Cell,
     CostStatus,
@@ -168,8 +169,8 @@ def test_narrow_by_harness_and_model() -> None:
 
 
 def test_evalcase_without_models_inherits() -> None:
-    @evalcase(prompt="p", skill="s", fixture="f")
-    def eval_thing(run: RunResult, workspace: Path) -> None:
+    @evalcase(task="p", skill="s", fixture="f")
+    def eval_thing(output: CaseOutput) -> None:
         pass
 
     assert isinstance(eval_thing, EvalCase)
@@ -180,8 +181,8 @@ def test_evalcase_without_models_inherits() -> None:
 def test_evalcase_override_is_copied() -> None:
     models = ["codex/gpt-5.6-luna"]
 
-    @evalcase(prompt="p", skill="s", fixture="f", models=models)
-    def eval_thing(run: RunResult, workspace: Path) -> None:
+    @evalcase(task="p", skill="s", fixture="f", models=models)
+    def eval_thing(output: CaseOutput) -> None:
         pass
 
     assert eval_thing.models == models
@@ -692,14 +693,22 @@ def test_from_codex_context_window_latency_and_ttft(tmp_path: Path) -> None:
 
 
 def test_case_metadata_round_trips_and_reaches_history(tmp_path: Path) -> None:
-    """The case that produced a run (suite, name, skill, fixture, prompt) rides on the result (ADR 0025)."""
+    """The case that produced a run rides on the result: task and rendered prompt both (ADR 0025, ADR 0044)."""
     r = _result("m", Usage(1, 2, 3, 4))
     r.estimated_cost_usd = 0.1
     r.case = CaseRef(
-        suite="skills/demo/evals/eval_demo.py", name="eval_demo", skill="demo", fixture="seed", prompt="say hi"
+        suite="skills/demo/evals/eval_demo.py",
+        name="eval_demo",
+        skill="demo",
+        fixture="seed",
+        task="say hi",
+        prompt="/demo say hi",
     )
     data = json.loads(r.write(tmp_path / "r.json").read_text(encoding="utf-8"))
-    assert data["case"]["suite"] == "skills/demo/evals/eval_demo.py" and data["case"]["prompt"] == "say hi"
+    assert data["case"]["suite"] == "skills/demo/evals/eval_demo.py"
+    # Both are serialised, and they differ: the task is the declaration, the prompt is what
+    # this harness rendered around it (ADR 0044).
+    assert (data["case"]["task"], data["case"]["prompt"]) == ("say hi", "/demo say hi")
     rec = _metrics(r).to_dict()
     assert (rec["suite"], rec["case"], rec["skill"], rec["fixture"]) == (
         "skills/demo/evals/eval_demo.py",
@@ -1523,6 +1532,9 @@ class _ProbeHarness(harnesses.Harness):
     shell_tools = frozenset({"Terminal"})
     persistent_shells = frozenset({"Terminal"})
 
+    def invoke(self, *, skill: str, task: str) -> str:
+        return f"probe:{skill} {task}"
+
     def run(self, **kwargs: object) -> RunResult:  # type: ignore[override]
         raise NotImplementedError("the probe harness never invokes anything")
 
@@ -1675,15 +1687,21 @@ def test_derive_prices_annotates_and_names_the_case_in_one_order(tmp_path: Path)
     r.workspace = "/x/ws"
     r.calls = [Call(n=1, at="t", tools=[ToolCall("Read", "", {"file_path": "/x/skills/demo/SKILL.md"})])]
     case = CaseRef.of(
-        evalcase(prompt="go", skill="demo", fixture="seed")(lambda result, workspace: None),
+        evalcase(task="go", skill="demo", fixture="seed")(lambda output: None),
         "skills/demo/evals/eval_x.py",
+        "/demo go",
     )
     out = pipeline.derive(r, table=pricing.load_table(), skill="demo", skill_files=files, case=case)
     assert out is r
     assert r.cost_status is CostStatus.PRICED and r.estimated_cost_usd == pytest.approx(5.0)
     assert r.skill_coverage is not None and r.skill_coverage.loaded == ["SKILL.md"]
     assert r.case == CaseRef(
-        suite="skills/demo/evals/eval_x.py", name="<lambda>", skill="demo", fixture="seed", prompt="go"
+        suite="skills/demo/evals/eval_x.py",
+        name="<lambda>",
+        skill="demo",
+        fixture="seed",
+        task="go",
+        prompt="/demo go",
     )
 
 
@@ -1695,32 +1713,32 @@ SUITE = textwrap.dedent(
 
     NOT_A_CASE = "a module-level value the loader must not mistake for one"
 
-    @evalcase(prompt="{prompt}", skill="demo", fixture="seed")
-    def {name}(run, workspace):
+    @evalcase(task="{task}", skill="demo", fixture="seed")
+    def {name}(output):
         pass
     """
 )
 
 
-def _suite_file(path: Path, *, name: str = "eval_demo", prompt: str = "go") -> Path:
+def _suite_file(path: Path, *, name: str = "eval_demo", task: str = "go") -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(SUITE.format(name=name, prompt=prompt), encoding="utf-8")
+    path.write_text(SUITE.format(name=name, task=task), encoding="utf-8")
     return path
 
 
 def test_a_suite_is_imported_by_path_and_offers_only_its_cases(tmp_path: Path) -> None:
     """Collection and a replay import a suite through this one loader (ADR 0040)."""
-    suite = EvalSuite.load(_suite_file(tmp_path / "a" / "evals" / "eval_demo.py", prompt="alpha"))
+    suite = EvalSuite.load(_suite_file(tmp_path / "a" / "evals" / "eval_demo.py", task="alpha"))
     assert [c.name for c in suite.cases] == ["eval_demo"]
     found = suite.case_named("eval_demo")
-    assert found is not None and found.prompt == "alpha"
+    assert found is not None and found.task == "alpha"
     assert suite.case_named("eval_absent") is None
     # Registered while it executes, under a name derived from its path, so two skills may
     # both declare an eval_demo.py without the second shadowing the first.
     assert sys.modules[suite.module.__name__] is suite.module
-    other = EvalSuite.load(_suite_file(tmp_path / "b" / "evals" / "eval_demo.py", prompt="beta"))
+    other = EvalSuite.load(_suite_file(tmp_path / "b" / "evals" / "eval_demo.py", task="beta"))
     assert other.module.__name__ != suite.module.__name__
-    assert (other.cases[0].prompt, suite.cases[0].prompt) == ("beta", "alpha")
+    assert (other.cases[0].task, suite.cases[0].task) == ("beta", "alpha")
 
 
 def test_a_file_python_has_no_loader_for_is_an_import_error(tmp_path: Path) -> None:
@@ -1737,14 +1755,14 @@ def test_find_case_searches_the_skills_suites_and_a_broken_one_does_not_stop_it(
     evals = tmp_path / "evals"
     evals.mkdir()
     (evals / "eval_broken.py").write_text("import does_not_exist_anywhere\n", encoding="utf-8")
-    _suite_file(evals / "eval_late.py", name="eval_late", prompt="late")
+    _suite_file(evals / "eval_late.py", name="eval_late", task="late")
 
     with caplog.at_level(logging.WARNING):
         found = suites.find_case(evals, "eval_late")
 
     assert found is not None
     path, case = found
-    assert path.name == "eval_late.py" and case.prompt == "late"
+    assert path.name == "eval_late.py" and case.task == "late"
     assert "could not import eval_broken.py" in caplog.text
     assert suites.find_case(evals, "eval_nobody_declares") is None
 
@@ -1752,16 +1770,16 @@ def test_find_case_searches_the_skills_suites_and_a_broken_one_does_not_stop_it(
 # -- one cell's live run, step by step (ADR 0002, ADR 0040) ----------------------------
 
 
-def eval_ok(run: RunResult, workspace: Path) -> None:
+def eval_ok(output: CaseOutput) -> None:
     """A grader that passes."""
 
 
-def eval_fails(run: RunResult, workspace: Path) -> None:
+def eval_fails(output: CaseOutput) -> None:
     """A grader whose assertion fails the cell."""
     raise AssertionError("the agent did not do the thing")
 
 
-def eval_errors(run: RunResult, workspace: Path) -> None:
+def eval_errors(output: CaseOutput) -> None:
     """A grader that is itself broken."""
     raise RuntimeError("boom")
 
@@ -1776,7 +1794,7 @@ def _cell_run(tmp_path: Path, grader: Any = eval_ok) -> cellrun.CellRun:
     fixture_dir = skill / "evals" / "fixtures" / "seed"
     fixture_dir.mkdir(parents=True, exist_ok=True)
     (fixture_dir / "README.md").write_text("seed\n", encoding="utf-8")
-    case = evalcase(prompt="go", skill="demo", fixture="seed")(grader)
+    case = evalcase(task="go", skill="demo", fixture="seed")(grader)
     return cellrun.CellRun(
         case=case,
         cell=Cell(harness="claude", model="claude-opus-5"),
@@ -2041,7 +2059,7 @@ def _stale_cache(tmp_path: Path) -> tuple[Path, Path]:
     # No `case` on the stale result: replay recovers it from the suite that defines eval_demo,
     # via the case name recorded on the session's own history.json (ADR 0032).
     (skill / "evals" / "eval_demo.py").write_text(
-        'from pytest_xharness_eval import evalcase\n\n@evalcase(prompt="go", skill="demo", fixture="seed")\n'
+        'from pytest_xharness_eval import evalcase\n\n@evalcase(task="go", skill="demo", fixture="seed")\n'
         "def eval_demo(run, workspace):\n    pass\n",
         encoding="utf-8",
     )
@@ -2079,16 +2097,19 @@ def test_replay_rebuilds_results_history_and_report_from_cached_logs(tmp_path: P
     assert fresh["calls"][0]["records"] == [1, 2]
     # Recovered from the suite under the skills root, since the log does not know which case produced it.
     assert fresh["case"]["suite"].endswith("evals/eval_demo.py")
-    assert (fresh["case"]["name"], fresh["case"]["skill"], fresh["case"]["fixture"], fresh["case"]["prompt"]) == (
-        "eval_demo",
-        "demo",
-        "seed",
-        "go",
-    )
+    # The task is the suite's declaration; the prompt is what the *claude* harness renders
+    # around it, so a replayed record carries the same string the live cell sent (ADR 0044).
+    assert (
+        fresh["case"]["name"],
+        fresh["case"]["skill"],
+        fresh["case"]["fixture"],
+        fresh["case"]["task"],
+        fresh["case"]["prompt"],
+    ) == ("eval_demo", "demo", "seed", "go", "/demo go")
     # The combine step (ADR 0032): one index and one aggregated history under report/.
     index = json.loads((cache / "report" / "index.json").read_text(encoding="utf-8"))
     row = index["cells"][0]
-    assert row["suite"].endswith("evals/eval_demo.py") and row["prompt"] == "go"
+    assert row["suite"].endswith("evals/eval_demo.py") and row["prompt"] == "/demo go"
     assert row["run"] == "20260822T000000Z"
     assert row["result"] == "../results/demo/claude/claude-opus-5/20260822T000000Z/sid1/result.json"
     assert row["log"] == "../results/demo/claude/claude-opus-5/20260822T000000Z/sid1/log.jsonl"
@@ -2566,6 +2587,7 @@ INDEX_ROW_KEYS = [
     "skill_coverage",
     "subagents",
     "suite",
+    "task",
     "tool_calls",
     "ttft_ms",
     "turns",
