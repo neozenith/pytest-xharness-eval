@@ -118,6 +118,15 @@ const R: Record<string, (r: Rec) => ReactNode> = {
     const p = obj(r.payload);
     const base = obj(p.base_instructions);
     const baseText = typeof base.text === "string" ? base.text : "";
+    /*
+     * On a primary rollout `source` is the bare word `exec`; on a thread another one forked
+     * it is the spawn itself — who spawned it, as what, and how deep (ADR 0033). That is the
+     * record that says why this thread exists, so it is read out rather than stringified:
+     * `String({...})` printed `[object Object]` over exactly the fields worth reading. An
+     * object of any other shape falls back to its JSON rather than to that same nothing.
+     */
+    const spawn = obj(obj(obj(p.source).subagent).thread_spawn);
+    const spawned = Object.keys(spawn).length > 0;
     return (
       <>
         <Kvs
@@ -125,7 +134,10 @@ const R: Record<string, (r: Rec) => ReactNode> = {
             ["cwd", code(p.cwd)],
             ["cli", str(p.cli_version)],
             ["provider", str(p.model_provider)],
-            ["source", str(p.source)],
+            ["source", spawned ? `subagent thread_spawn (depth ${num(spawn.depth) ?? "?"})` : isObj(p.source) ? pretty(p.source) : str(p.source)],
+            ["agent", spawned ? code(spawn.agent_nickname) : undefined],
+            ["agent path", spawned ? code(spawn.agent_path) : undefined],
+            ["forked from", spawned ? code(spawn.parent_thread_id ?? p.parent_thread_id ?? p.forked_from_id) : undefined],
             ["originator", str(p.originator)],
             ["history mode", str(p.history_mode)],
             ["context window", fmt(num(p.context_window))],

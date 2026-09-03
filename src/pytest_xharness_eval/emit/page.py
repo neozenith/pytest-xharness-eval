@@ -14,7 +14,8 @@ tree -- every skill, every run -- and produces the microsite (ADR 0020, ADR 0032
 
 The page fetches relative paths, so the *cache root* is served over HTTP and the page
 opened at ``/report/report.html`` -- unless it is written ``inline``: then the index, every
-result, every session log and the tokens are embedded and the single file opens anywhere.
+result, every session log (including each spawned thread's transcript under
+``subagents/``, ADR 0033) and the tokens are embedded and the single file opens anywhere.
 """
 
 from __future__ import annotations
@@ -40,15 +41,59 @@ if TYPE_CHECKING:
 INLINE_MARKER = "<!--XHARNESS_INLINE_DATA-->"
 
 
+def subagent_log_key(session_id: str, subagent_id: str) -> str:
+    """``<session id>/<subagent id>``: how a spawned thread's transcript is keyed inline.
+
+    The inline ``logs`` map is keyed by session id, and a subagent has a transcript of its
+    own (ADR 0033) whose line numbers its ledger's ``records`` point at. Qualifying the key
+    with the session keeps two runs that spawned the same agent apart. The page builds the
+    identical key in ``report-ui/src/lib/data.ts``; change one and change the other.
+    """
+    return f"{session_id}/{subagent_id}"
+
+
+def _subagent_logs(session_dir: Path, session_id: str, result: dict[str, Any]) -> dict[str, str]:
+    """Each captured subagent transcript of one session, keyed by :func:`subagent_log_key`.
+
+    ``Subagent.log`` is the path the capture step rewrote to ``subagents/<name>.jsonl``
+    (ADR 0033), relative to the session directory. A result captured before that rewrite --
+    or one whose transcript never made it into the cache -- still carries the harness's own
+    absolute path, which is not evidence this cache holds: it is skipped, and the page says
+    so rather than inlining a file from outside the tree.
+
+    Every field is read defensively, as every reader of a stored ``result.json`` is
+    (:class:`~pytest_xharness_eval.emit.index.IndexRow`): the combine step inlines whatever
+    a cache holds, and one thread missing an ``id`` must cost that thread its transcript,
+    never the whole microsite. ``session_dir`` is resolved here rather than assumed
+    resolved, so the containment check compares two paths of the same kind -- an unresolved
+    caller (a symlinked temp dir, say) would otherwise fail it for *every* thread and
+    silently inline nothing.
+    """
+    logs: dict[str, str] = {}
+    session_dir = session_dir.resolve()
+    for sub in result.get("subagents") or []:
+        rel = str(sub.get("log") or "")
+        agent = str(sub.get("id") or "")
+        if not rel or not agent:
+            continue
+        path = (session_dir / rel).resolve()
+        if not path.is_relative_to(session_dir) or not path.is_file():
+            continue
+        logs[subagent_log_key(session_id, agent)] = path.read_text(encoding="utf-8")
+    return logs
+
+
 def _inline_payload(report_dir: Path, index: dict[str, Any], tokens: dict[str, Any]) -> str:
     """Everything the page would otherwise fetch, as one ``<script>`` that sets ``window.__XH_DATA__``."""
     results: dict[str, Any] = {}
     logs: dict[str, str] = {}
     for cell in index["cells"]:
         sid = str(cell["session_id"])
-        results[sid] = json.loads((report_dir / cell["result"]).resolve().read_text(encoding="utf-8"))
+        result_path = (report_dir / cell["result"]).resolve()
+        results[sid] = json.loads(result_path.read_text(encoding="utf-8"))
         if cell.get("log"):
             logs[sid] = (report_dir / cell["log"]).resolve().read_text(encoding="utf-8")
+        logs.update(_subagent_logs(result_path.parent, sid, results[sid]))
     payload = json.dumps({"index": index, "results": results, "logs": logs, "tokens": tokens})
     # A "</script>" inside a log would end the tag early; "<\/" is the same string to JSON.
     return f"<script>window.__XH_DATA__ = {payload.replace('</', '<\\/')};</script>"

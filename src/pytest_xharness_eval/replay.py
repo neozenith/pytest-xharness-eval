@@ -72,6 +72,11 @@ def rebuild_result(
     # rather than being read as Codex (ADR 0034).
     agent = harness.get(str(old.get("harness") or ""))
     result = agent.session_from_capture(session, old).to_result(workspace, files_written)
+    # Re-folding found the forks by walking the session directory, so their `log` came back
+    # as the path this replay was invoked with. Naming them is the same step the live cell
+    # runs, and the only one that spells `subagents/<name>` (ADR 0033); nothing is copied,
+    # because the transcripts are already the captured copies.
+    pipeline.capture_subagents(result, session)
     # The same derivations the live cell runs, in the same order (ADR 0034). The case that
     # produced the run is not in the log: carry it forward, or derive it from the suite
     # that defines a case with the recorded name (ADR 0025).

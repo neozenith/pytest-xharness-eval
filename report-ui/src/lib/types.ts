@@ -183,6 +183,11 @@ export interface DesignTokens {
 export interface InlineData {
   index: Index;
   results: Record<string, RunResult>;
+  /**
+   * Every captured transcript: a session's own log under its session id, and each thread it
+   * spawned under `subagentLogKey(sessionId, subagentId)` (`lib/data.ts`, mirroring
+   * `emit/page.py`).
+   */
   logs: Record<string, string>;
   tokens: DesignTokens;
 }

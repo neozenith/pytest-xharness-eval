@@ -68,7 +68,17 @@ export interface MatrixTier {
   /** which turn-table views participate */
   views: TurnView[];
   /** which single-param variants are included */
-  variants: { sortedOverview: boolean; darkOverview: boolean; filteredOverview: boolean; axisLine: boolean; dark: boolean; recRaw: boolean; line: boolean };
+  variants: {
+    sortedOverview: boolean;
+    darkOverview: boolean;
+    filteredOverview: boolean;
+    axisLine: boolean;
+    dark: boolean;
+    recRaw: boolean;
+    line: boolean;
+    /** the `subturn=`/`subline=` states of a session that spawned parallel threads */
+    sub: boolean;
+  };
 }
 
 const firstBy = (cells: Cell[], keyOf: (c: Cell) => string): Cell[] => {
@@ -89,23 +99,52 @@ export const TIERS: Record<TierName, MatrixTier> = {
     cells: (cells) => firstBy(cells, (c) => c.harness),
     turns: (n) => (n ? [mid(n)] : []),
     views: ["detailed"],
-    variants: { sortedOverview: false, darkOverview: false, filteredOverview: false, axisLine: false, dark: false, recRaw: false, line: false },
+    variants: { sortedOverview: false, darkOverview: false, filteredOverview: false, axisLine: false, dark: false, recRaw: false, line: false, sub: false },
   },
   medium: {
     name: "medium",
     cells: (cells) => firstBy(cells, (c) => `${c.harness}/${c.model}`),
     turns: (n) => (n ? [...new Set([1, mid(n), n])] : []),
     views: ["summary", "detailed"],
-    variants: { sortedOverview: true, darkOverview: true, filteredOverview: true, axisLine: true, dark: true, recRaw: true, line: true },
+    variants: { sortedOverview: true, darkOverview: true, filteredOverview: true, axisLine: true, dark: true, recRaw: true, line: true, sub: true },
   },
   large: {
     name: "large",
     cells: (cells) => cells,
     turns: (n) => Array.from({ length: n }, (_, i) => i + 1),
     views: ["summary", "detailed"],
-    variants: { sortedOverview: true, darkOverview: true, filteredOverview: true, axisLine: true, dark: true, recRaw: true, line: true },
+    variants: { sortedOverview: true, darkOverview: true, filteredOverview: true, axisLine: true, dark: true, recRaw: true, line: true, sub: true },
   },
 };
+
+/**
+ * The `subturn=`/`subline=` pair for a session that spawned parallel threads (ADR 0033):
+ * the first thread's middle turn opened, and a deeplink to the first record of that turn.
+ * A session that spawned nothing contributes neither — there is no state there to sweep.
+ */
+function subagentPermutations(cell: Cell, result: RunResult | null | undefined, base: string, name: string): Permutation[] {
+  // A thread with no id is not addressable by URL, so there is no state of it to sweep.
+  const sub = result?.subagents?.find((s) => s.id);
+  const call = sub?.calls?.[mid(sub.calls.length) - 1];
+  if (!sub || !call) return [];
+  const agent = slugify(sub.agent, sub.id.slice(0, 8));
+  const perms: Permutation[] = [
+    {
+      slug: `${base}--subturn-${agent}-${String(call.n).padStart(2, "0")}`,
+      search: sessionSearch(cell.session_id, null, null, { subTurn: { id: sub.id, n: call.n } }),
+      description: `SessionView: ${name}, subagent ${sub.agent} turn ${call.n} open`,
+    },
+  ];
+  const line = call.records?.[0];
+  if (line != null) {
+    perms.push({
+      slug: `${base}--subline-${agent}-${String(line).padStart(3, "0")}`,
+      search: sessionSearch(cell.session_id, null, null, { subLine: { id: sub.id, n: line } }),
+      description: `SessionView: ${name}, scrolled to line ${line} of subagent ${sub.agent}'s transcript`,
+    });
+  }
+  return perms;
+}
 
 /**
  * The overview's filter states (ADR 0042), derived from the data rather than hardcoded: one
@@ -153,7 +192,8 @@ function filterPermutations(cells: Cell[]): Permutation[] {
 /**
  * Enumerate the tier's covering matrix: the overview (plain, sorted, dark), then per
  * participating session its landing state, the per-line chart axis, the dark theme, the raw
- * record view, a record-level `line=` deeplink, and the tier's turns in the tier's views.
+ * record view, a record-level `line=` deeplink, the `subturn=`/`subline=` states of any
+ * thread it spawned, and the tier's turns in the tier's views.
  * In `large` every route param appears in at least one permutation per view type; the full
  * cross-product of params is reachable by URL but is not swept (it would multiply the
  * matrix without exercising any new code path).
@@ -228,6 +268,7 @@ export function enumeratePermutations(
         });
       }
     }
+    if (t.variants.sub) perms.push(...subagentPermutations(cell, results[cell.session_id], base, name));
     const turns = t.turns(turnCount(cell, results[cell.session_id]));
     for (const view of t.views) {
       // Compose onto the already-slugified base: re-slugifying would collapse its `--` separators.

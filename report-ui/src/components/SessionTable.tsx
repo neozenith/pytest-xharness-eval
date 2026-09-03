@@ -310,7 +310,19 @@ export function SessionTable({ cells, shortModel = modelShort }: { cells: Cell[]
   /** What a click on this header would sort by — the direction the hint arrow promises. */
   const nextDir = (key: SortKey): SortDir => (key === sortKey ? (dir === 1 ? "desc" : "asc") : key === "at" ? "desc" : "asc");
   const sortBy = (key: SortKey) => replaceRoute(overviewWith(route, { sort: { key, dir: nextDir(key) } }));
-  const open = (c: Cell) => pushRoute({ view: "session", sessionId: c.session_id, turn: null, turnView: null, axis: null, rec: null, line: null, theme });
+  const open = (c: Cell) =>
+    pushRoute({
+      view: "session",
+      sessionId: c.session_id,
+      turn: null,
+      turnView: null,
+      axis: null,
+      rec: null,
+      line: null,
+      subTurn: null,
+      subLine: null,
+      theme,
+    });
 
   return (
     <Table id="SessionTable">

@@ -41,6 +41,7 @@ from pytest_xharness_eval.emit.summary import RunSummary
 from pytest_xharness_eval.harness import claude as claude_harness
 from pytest_xharness_eval.harness import codex as codex_harness
 from pytest_xharness_eval.harness import records
+from pytest_xharness_eval.harness.normalise import read_jsonl_numbered
 from pytest_xharness_eval.model import clock
 from pytest_xharness_eval.model import matrix as mx
 from pytest_xharness_eval.model import runresult
@@ -1516,6 +1517,50 @@ def test_primary_rollout_skips_subagent_forks(tmp_path: Path) -> None:
         codex_harness.primary_rollout([tmp_path / "rollout-2-s1.jsonl"])
 
 
+def test_two_forks_of_one_session_are_told_apart_by_their_own_session_meta(tmp_path: Path) -> None:
+    """A fork replays its parent's history, so its rollout carries *two* ``session_meta``.
+
+    Its own opens the file; the parent's follows it. Taking the last would give both forks
+    of one session the same id -- the parent's -- and the report keys every per-thread
+    thing on that id: the inline transcript key, the map a band reads, the element ids of
+    its records and its ``subturn=`` link (ADR 0033).
+    """
+
+    def fork(own: str, nickname: str, at: str) -> str:
+        parent_meta = {"timestamp": at, "type": "session_meta", "payload": {"id": "p1", "session_id": "p1"}}
+        own_meta = {
+            "timestamp": at,
+            "type": "session_meta",
+            "payload": {
+                "id": own,
+                # the parent's id sits *beside* the fork's own, which is what made this subtle
+                "session_id": "p1",
+                "parent_thread_id": "p1",
+                "agent_nickname": nickname,
+                "agent_path": f"/root/{nickname}",
+                "source": {"subagent": {"thread_spawn": {"parent_thread_id": "p1", "depth": 1}}},
+            },
+        }
+        usage = {
+            "type": "event_msg",
+            "timestamp": at,
+            "payload": {"type": "token_count", "info": {"last_token_usage": {"input_tokens": 5, "output_tokens": 1}}},
+        }
+        return "".join(json.dumps(r) + "\n" for r in (own_meta, parent_meta, usage))
+
+    (tmp_path / "rollout-a.jsonl").write_text(fork("s-aaa", "Turing", "2026-09-02T12:24:10Z"), encoding="utf-8")
+    (tmp_path / "rollout-b.jsonl").write_text(fork("s-bbb", "Bohr", "2026-09-02T12:24:14Z"), encoding="utf-8")
+    primary = [Call(n=1, at="2026-09-02T12:24:20Z", usage=Usage(1, 1, 0, 0))]
+
+    subs = codex_harness.subagents_of(sorted(tmp_path.glob("rollout-*.jsonl")), primary)
+    assert [s.agent for s in subs] == ["Turing", "Bohr"]
+    # each thread carries its own id, and no thread carries the parent's
+    assert [s.id for s in subs] == ["s-aaa", "s-bbb"]
+    assert len({s.id for s in subs}) == 2 and "p1" not in {s.id for s in subs}
+    # folding a rollout reports the id it opens with, not the last one it mentions
+    assert codex_harness.fold(read_jsonl_numbered(tmp_path / "rollout-a.jsonl"))[0] == "s-aaa"
+
+
 # -- the extension point (ADR 0034) ---------------------------------------------------
 
 
@@ -1614,6 +1659,33 @@ def test_coverage_can_be_handed_a_shell_vocabulary_instead_of_looking_one_up(tmp
 
 
 # -- pipeline: the sequence both the live cell and a replay run ------------------------
+
+
+def test_capturing_an_already_captured_transcript_names_it_without_rewriting_it(tmp_path: Path) -> None:
+    """Re-folding a captured session finds its forks by walking the session directory, so
+    ``Subagent.log`` comes back as whatever path shape the caller used -- absolute, or
+    relative to its cwd -- and not the ``subagents/<name>`` the field is declared to hold and
+    the report resolves against the session directory. Naming it again is a replay's job, and
+    it must not rewrite the evidence to do it (ADR 0033).
+    """
+    session = SessionDir(tmp_path / "results" / "sid-1")
+    session.subagents.mkdir(parents=True)
+    captured = session.subagents / "agent-a1.jsonl"
+    captured.write_text('{"type": "user"}\n', encoding="utf-8")
+    before = captured.stat()
+
+    r = _result("m", Usage(1, 2, 3, 4))
+    # the shape a replay hands back: the captured file, named from outside the session dir
+    r.subagents = [Subagent(agent="Explore", id="a1", log=str(captured), turns=1, usage=Usage(1, 1))]
+    pipeline.capture_subagents(r, session)
+    assert r.subagents[0].log == "subagents/agent-a1.jsonl"
+    assert captured.read_text(encoding="utf-8") == '{"type": "user"}\n'
+    # the same file, untouched -- not read and written back over itself on every replay
+    assert captured.stat().st_mtime_ns == before.st_mtime_ns
+
+    # and naming it a second time is the same answer, not a relative path joined onto itself
+    pipeline.capture_subagents(r, session)
+    assert r.subagents[0].log == "subagents/agent-a1.jsonl"
 
 
 def test_capture_writes_the_log_subagent_transcripts_and_the_result(tmp_path: Path) -> None:
@@ -2129,6 +2201,53 @@ def test_replay_rebuilds_results_history_and_report_from_cached_logs(tmp_path: P
     assert (cache / "report" / "report.html").is_file()
 
 
+def test_replay_names_a_spawned_threads_transcript_relative_to_its_session(tmp_path: Path) -> None:
+    """A replayed result must carry ``subagents/<name>``, which is what the page resolves.
+
+    Re-folding finds the forks by walking ``<session dir>/subagents/``, so their ``log``
+    comes back as whatever path shape the replay was invoked with -- here an absolute one,
+    because that is what a cache under ``tmp_path`` produces. Left that way, the report
+    resolves it against the session directory and fetches a path that does not exist, and
+    every record of every spawned thread is unreadable (ADR 0033).
+    """
+    cache, session_dir = _stale_cache(tmp_path)
+    subagents = session_dir / "subagents"
+    subagents.mkdir()
+    _jsonl(
+        subagents / "agent-a1.jsonl",
+        [
+            {"type": "user", "message": {"content": "research"}},
+            {
+                "type": "assistant",
+                "message": {
+                    "id": "m2",
+                    "model": "claude-opus-5",
+                    "usage": {"input_tokens": 3, "output_tokens": 4},
+                    "content": [{"type": "text", "text": "found it"}],
+                },
+            },
+        ],
+    )
+    (subagents / "agent-a1.meta.json").write_text(
+        json.dumps({"agentType": "Explore", "description": "d"}), encoding="utf-8"
+    )
+
+    replay.rebuild(cache)
+
+    fresh = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
+    (sub,) = fresh["subagents"]
+    assert sub["log"] == "subagents/agent-a1.jsonl"
+    assert not Path(sub["log"]).is_absolute()
+    # the transcript the page will read is the one still sitting beside the result
+    assert (session_dir / sub["log"]).is_file()
+    # replaying again is stable: the name does not accumulate, and the evidence is unchanged
+    before = (subagents / "agent-a1.jsonl").read_bytes()
+    replay.rebuild(cache)
+    again = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
+    assert again["subagents"][0]["log"] == "subagents/agent-a1.jsonl"
+    assert (subagents / "agent-a1.jsonl").read_bytes() == before
+
+
 def test_replay_main_rebuilds_the_cache_named_on_its_command_line(tmp_path: Path) -> None:
     """The ``python -m`` entry point: parse, rebuild, report -- and spend nothing (ADR 0032)."""
     cache, session_dir = _stale_cache(tmp_path)
@@ -2423,6 +2542,61 @@ def test_report_inline_embeds_data_and_user_design_tokens(tmp_path: Path) -> Non
     assert payload["results"]["sid1"]["model"] == "claude-opus-5"
     assert "<script>alert(1)</script>" in payload["logs"]["sid1"]
     assert "<script>alert(1)</script>" not in html  # it is escaped as <\/script> inside the payload
+
+
+def test_report_inline_embeds_each_spawned_threads_transcript(tmp_path: Path) -> None:
+    """An inline page carries the subagent transcripts too, or their records are unreadable."""
+    cache = tmp_path / ".xharness_eval_cache"
+    session_dir = cache / "results" / "demo" / "claude" / "claude-opus-5" / "20260101T000000Z" / "sid1"
+    (session_dir / "subagents").mkdir(parents=True)
+    (session_dir / "subagents" / "agent-abc.jsonl").write_text('{"n":1}\n', encoding="utf-8")
+    outside = tmp_path / "elsewhere.jsonl"
+    outside.write_text('{"secret":1}\n', encoding="utf-8")
+    r = _result("claude-opus-5", Usage(1, 2, 3, 4))
+    r.harness, r.session_id = "claude", "sid1"
+    r.subagents = [
+        Subagent(agent="Explore", id="abc", log="subagents/agent-abc.jsonl"),
+        # never captured into the cache: the harness's own path, still absolute
+        Subagent(agent="Explore", id="gone", log=str(outside)),
+        # captured, but the file is not there any more
+        Subagent(agent="Explore", id="missing", log="subagents/agent-missing.jsonl"),
+        # a relative path that climbs back out of the session directory
+        Subagent(agent="Explore", id="escapes", log="subagents/../../../../elsewhere.jsonl"),
+        # no transcript path at all
+        Subagent(agent="Explore", id="unlogged", log=""),
+    ]
+    r.write(session_dir / "result.json")
+    (session_dir / "log.jsonl").write_text('{"type":"user"}\n', encoding="utf-8")
+    # A thread with no id at all: one hand-edited or pre-Subagent result must cost that
+    # thread its transcript, never the whole microsite (every reader here is defensive).
+    stored = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
+    stored["subagents"].append({"agent": "Explore", "log": "subagents/agent-abc.jsonl"})
+    (session_dir / "result.json").write_text(json.dumps(stored), encoding="utf-8")
+
+    html = page.write(CacheLayout(cache), inline=True).read_text(encoding="utf-8")
+    start = html.index("window.__XH_DATA__ = ") + len("window.__XH_DATA__ = ")
+    payload = json.loads(html[start : html.index(";</script>", start)].replace("<\\/", "</"))
+    # the session's own log under its id, each captured thread under `<session>/<agent id>`
+    assert payload["logs"]["sid1"] == '{"type":"user"}\n'
+    assert payload["logs"][page.subagent_log_key("sid1", "abc")] == '{"n":1}\n'
+    # every other thread contributes no key at all: absent, missing, escaping, unlogged, id-less
+    assert set(payload["logs"]) == {"sid1", "sid1/abc"}
+    assert "secret" not in html
+
+
+def test_subagent_logs_resolves_the_session_directory_it_is_handed(tmp_path: Path) -> None:
+    """The containment check compares like with like, so an unresolved caller still works.
+
+    ``tmp_path`` on macOS is under a symlinked ``/var``, which is exactly the shape that
+    made the guard reject every thread when only one side of the comparison was resolved.
+    """
+    session_dir = tmp_path / "sid1"
+    (session_dir / "subagents").mkdir(parents=True)
+    (session_dir / "subagents" / "a.jsonl").write_text('{"n":1}\n', encoding="utf-8")
+    result = {"subagents": [{"id": "a", "log": "subagents/a.jsonl"}]}
+    # handed unresolved (as any caller might) and resolved (as `_inline_payload` does)
+    assert page._subagent_logs(session_dir, "sid1", result) == {"sid1/a": '{"n":1}\n'}
+    assert page._subagent_logs(session_dir.resolve(), "sid1", result) == {"sid1/a": '{"n":1}\n'}
 
 
 def test_report_refuses_missing_or_malformed_design_tokens(tmp_path: Path) -> None:

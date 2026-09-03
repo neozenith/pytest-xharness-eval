@@ -33,6 +33,8 @@ report.html?session=87c58138&turn=3&view=detailed     prefix form, both at once
 report.html?session=<SessionId>&axis=line             the four charts on the session-log-line axis
 report.html?session=<SessionId>&rec=raw               every RecordCard as raw JSON
 report.html?session=<SessionId>&line=17               log line 17's RecordCard, its turn opened, flashed
+report.html?session=<SessionId>&subturn=<AgentId>/2   turn 2 of that spawned thread, its transcript records shown
+report.html?session=<SessionId>&subline=<AgentId>/12  line 12 of that thread's transcript, its turn opened, flashed
 report.html?…&theme=dark                              forced theme, on any route
 ```
 
@@ -194,10 +196,12 @@ xharness_skill_ignore = [
 | `SkillCoveragePanel` | `SkillCoverageSummary` chips (the `files`, `loaded`, `run`, `not_loaded`, `not_run`, `ignored` chips are filters; click again to clear), one row per catalogued skill file with its loaded / run turns and status | which decision paths the run took through the skill |
 | `RecordKindsPanel` | one pill per record kind with its count | the census of this session's log |
 | `SessionTurnTable` | `ViewToggle`, `RecordViewToggle`, one `SessionTurnRow` per turn, each with a `SessionTurnDetails`; a turn that spawned subagents is followed by a `SubagentBand` | the ledger; Summary shows rows, Detailed expands every turn. Harness-specific: `SessionTurnTableClaude` carries the explicit cache-write tiers (`cache_write`, `1h`), `SessionTurnTableCodex` drops them (implicit caching) and shows `cached input` / `input (uncached)`; the panel carries `data-harness` |
-| `SubagentBand` | per spawned thread: an agent pill in the waterfall's `sub` colour, its id, the spawn description, its turn/billed-token totals, and one `SubagentTurnRow` per call of its own ledger | the parallel threads a turn spawned (`subagents` in `result.json`); each thread's transcript is captured under `subagents/` beside `log.jsonl` and its bill is folded into the session's `usage` and `estimated_cost_usd`, attributed to the spawning turn (`parent_turn`) |
+| `SubagentBand` | per spawned thread: an agent pill in the waterfall's `sub` colour, its id, the spawn description, its turn/billed-token totals, and one `SubagentTurnRow` per call of its own ledger, each opening a `SubagentTurnDetails` | the parallel threads a turn spawned (`subagents` in `result.json`); each thread's transcript is captured under `subagents/` beside `log.jsonl` and its bill is folded into the session's `usage` and `estimated_cost_usd`, attributed to the spawning turn (`parent_turn`) |
+| `SubagentTurnDetails` | `SubagentRawRecords` | the transcript records of one spawned turn; a click on its `SubagentTurnRow` opens it and records `subturn=<AgentId>/<n>`, and Detailed opens every one |
+| `SubagentRawRecords` | the turn's line range, then one `RecordCard` per line of *that thread's* transcript | the spawned thread's own evidence, line-numbered from 1 the way its ledger's `records` count it. The numbering is the thread's, not the session's, so a card's element id and its permalink are qualified by the agent (`<AgentId>/L12`, `subline=<AgentId>/12`) and the two threads' `L12`s never collide |
 | `SessionTurnDetails` | `TurnRawRecords` | the session-log records attributed to that turn, untruncated |
 | `TurnRawRecords` | the turn's line range, then one `RecordCard` per log line (`records` in the ledger) | the evidence itself, line-numbered |
-| `RecordCard` | header: category-coloured kind pill, `L<line>`, the record's timestamp (`HH:MM:SS.mmm`), size, a context annotation (`ctx 7.2%` = the turn's measured prompt; `→ t4 7.5%` on a tool result = the next turn's prompt it became part of), a `raw`/`nice` flip and a permalink button (sets `line=` in the fragment and copies the URL); body: the rendered view or the raw JSON | one log line; `RecordViewToggle` flips every card at once. Harness-specific bases: `RecordCardClaude` renders the `claude/*` catalogue, `RecordCardCodex` the `codex/*` one; the card carries `data-harness` |
+| `RecordCard` | header: category-coloured kind pill, `L<line>`, the record's timestamp (`HH:MM:SS.mmm`), size, a context annotation (`ctx 7.2%` = the turn's measured prompt; `→ t4 7.5%` on a tool result = the next turn's prompt it became part of), a `raw`/`nice` flip and a permalink button (sets `line=` — or `subline=` inside a `SubagentBand` — and copies the URL); body: the rendered view or the raw JSON | one log line; `RecordViewToggle` flips every card at once. The card carries the `harness` of the transcript it came from, classifies and renders through that harness's catalogue (`claude/*` vs `codex/*`), and exposes it as `data-harness` |
 
 ### How `SessionSummaryTable` aggregates
 
@@ -329,6 +333,9 @@ Also catalogued without a live example yet: `claude/system`,
 
 ## Containment
 
+Two views of the same tree. The first is the page down to the `SessionTurnTable`; the
+second opens that table up, where the evidence itself lives.
+
 ```mermaid
 treemap-beta
 "Report":::page
@@ -358,18 +365,31 @@ treemap-beta
         "RecordKindsPanel":::session
         "FinalMessagePanel":::session
         "SessionTurnTable":::turns
-            "ViewToggle":::turns
-            "RecordViewToggle":::turns
-            "SessionTurnRow":::turns
-                "SessionTurnDetails":::details
-                    "TurnRawRecords":::details
-                        "RecordCard":::details
-                "SubagentBand":::turns
-                    "SubagentTurnRow":::turns
 classDef page fill:#1e3a8a,stroke:#bfdbfe,color:#fff
 classDef chrome fill:#475569,stroke:#e2e8f0,color:#fff
 classDef overview fill:#7c3aed,stroke:#ddd6fe,color:#fff
 classDef session fill:#065f46,stroke:#a7f3d0,color:#fff
+classDef turns fill:#b45309,stroke:#fde68a,color:#fff
+classDef details fill:#b91c1c,stroke:#fecaca,color:#fff
+```
+
+Inside the `SessionTurnTable`, a row leads to its own records; a row that spawned
+parallel threads also leads to a band whose rows lead to *theirs*. The two `RecordCard`
+runs are the same component over two different transcripts.
+
+```mermaid
+treemap-beta
+"SessionTurnTable":::turns
+    "ViewToggle":::turns
+    "RecordViewToggle":::turns
+    "SessionTurnRow":::turns
+        "SessionTurnDetails":::details
+            "TurnRawRecords":::details
+                "RecordCard":::details
+        "SubagentBand":::turns
+            "SubagentTurnRow":::turns
+                "SubagentTurnDetails":::details
+                    "SubagentRawRecords":::details
 classDef turns fill:#b45309,stroke:#fde68a,color:#fff
 classDef details fill:#b91c1c,stroke:#fecaca,color:#fff
 ```
