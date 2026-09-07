@@ -1,346 +1,491 @@
-# Reviewability is the split, not the sum
+# Reviewability is the leftover, not the total
 
-You probably arrived believing that if description length measures complexity, then the shortest description is the best one.
-One boundary matters more than any other here: **the theory that formalises "shortest description" explicitly rejects shortest-as-a-goal, and names the failure case in its own vocabulary.** Code golf is not a hole in the theory.
-It is a worked example inside it, and the theory's answer to it is the thing you actually want to measure.
+**Before you start.** You need nothing but arithmetic.
+Where a formula appears, the sentence before it says the same thing in words, and you can skip the formula.
 
-Terms in code font name an exact quantity from the literature -- `K(x)`, `L(H)`, `AIC`, `alpha`.
-Plain language names its role: a *model* is what a reader learns once and reuses; a *residual* is what a reader must take in case by case.
+You probably arrived believing that shorter code is easier code.
+One boundary matters more than any other here: **the theory of "shortest description" says the shortest version is usually the worst one.** Code golf is not a gap in that theory.
+It is an example inside it, and the theory's answer is the thing you actually want to measure.
 
-Every formula below is cited to a primary source in [`research/lit-mdl.md`](research/lit-mdl.md), which also records what could not be verified.
+Terms in code font name an exact quantity.
+Plain language names its role.
+A *rule* is something you learn once and reuse.
+A *leftover* is something you have to take in one case at a time.
 
 ---
 
-## The whole thesis: one description, two halves, and only the halves matter
+<details>
+<summary><b>Table of Contents</b></summary>
+<!--TOC-->
 
-Any description of anything splits into a part that generalises and a part that does not.
-Reviewing cost tracks the split between them, not the total.
+- [Reviewability is the leftover, not the total](#reviewability-is-the-leftover-not-the-total)
+  - [Start with a list of numbers, not with code](#start-with-a-list-of-numbers-not-with-code)
+  - [Now break the pattern, and a second part appears](#now-break-the-pattern-and-a-second-part-appears)
+  - [The two parts have standard names](#the-two-parts-have-standard-names)
+  - [Code splits the same way](#code-splits-the-same-way)
+  - [Reviewing cost is the leftover, not the total](#reviewing-cost-is-the-leftover-not-the-total)
+  - [The shortest possible description has a name](#the-shortest-possible-description-has-a-name)
+  - [You can never compute it](#you-can-never-compute-it)
+  - [MDL is the approximation you can actually run](#mdl-is-the-approximation-you-can-actually-run)
+  - [Extracting a function moves length between the two parts](#extracting-a-function-moves-length-between-the-two-parts)
+  - [Because the parts move opposite ways, there is a bottom](#because-the-parts-move-opposite-ways-there-is-a-bottom)
+  - [What does one new name cost?](#what-does-one-new-name-cost)
+  - [One number cannot answer two different questions](#one-number-cannot-answer-two-different-questions)
+  - [Code golf wins the "shortest total" contest](#code-golf-wins-the-shortest-total-contest)
+  - [The fix: the smallest rule that still explains everything](#the-fix-the-smallest-rule-that-still-explains-everything)
+  - [People prefer predictable code, not short code](#people-prefer-predictable-code-not-short-code)
+  - [Diagnosis: which half is out of balance](#diagnosis-which-half-is-out-of-balance)
+  - [The compact rule](#the-compact-rule)
+  - [References](#references)
+
+<!--TOC-->
+</details>
+
+---
+
+## Start with a list of numbers, not with code
+
+Here is a list.
+
+```
+2, 4, 6, 8, 10, ... 196, 198, 200
+```
+
+You can write that list down two ways.
+
+Write out all one hundred numbers.
+Or write five words: **"even numbers from 2 to 200"**.
+
+Both descriptions are exact.
+Someone reading either one can rebuild the list perfectly.
+One is a hundred numbers long and one is five words long.
+
+**Takeaway:** The short version is short because it found the rule, not because it left anything out.
+
+---
+
+## Now break the pattern, and a second part appears
+
+Change the last number.
+
+```
+2, 4, 6, 8, 10, ... 196, 198, 201
+```
+
+The five-word description no longer works.
+But you do not throw it away.
+You keep it and add a note.
+
+> **"even numbers from 2 to 200, except the last one is 201"**
+
+That description now has two parts, and they do different jobs.
 
 ```mermaid
 %%{init: {"theme":"base","flowchart":{"htmlLabels":false},"themeVariables":{"primaryTextColor":"#1e293b","textColor":"#1e293b","lineColor":"#94a3b8","edgeLabelBackground":"#f1f5f9"}}}%%
 flowchart LR
-    D[["A diff to review"]]:::formal --> M["Model half<br/>what you learn once<br/>and reuse"]:::model
-    D --> R["Residual half<br/>what you take in<br/>case by case"]:::residual
-    M --> S{{"The sum is what<br/>compression measures"}}:::total
-    R --> S
-    M --> V{{"The ratio is what<br/>review costs"}}:::total
-    R --> V
+    D["The list"]:::formal --> R["The rule<br/>even numbers<br/>from 2 to 200"]:::rule
+    D --> L["The leftover<br/>except the last<br/>one is 201"]:::leftover
+    R --> U["Learn it once.<br/>Works for all<br/>100 numbers."]:::good
+    L --> V["Learn it once.<br/>Works for<br/>exactly one."]:::warning
 
-    classDef model fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
-    classDef residual fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
+    classDef rule fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
+    classDef leftover fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
     classDef total fill:#fef3c7,stroke:#b45309,color:#1e293b,stroke-width:2px
     classDef formal fill:#334155,stroke:#cbd5e1,color:#ffffff,stroke-width:2px
-    classDef code fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
+    classDef good fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
     classDef warning fill:#b91c1c,stroke:#fecaca,color:#ffffff,stroke-width:2px
 ```
 
-**Takeaway:** Two diffs with identical total description length can differ completely in review cost, so any single-number compression score is measuring the wrong axis.
+**Takeaway:** A rule pays you back every time it applies, and a leftover pays you back once.
 
 ---
 
-## `K(x)` is the shortest program, and you can never compute it
+## The two parts have standard names
 
-Kolmogorov complexity is the length in bits of the shortest program that outputs `x` on a fixed universal machine and halts.
-Three people defined it independently: Solomonoff (1960, 1964), Kolmogorov (1965), and Chaitin (1966).
+You will meet these two names everywhere in this document.
+They are the same two parts from the list above.
 
-Two properties decide everything downstream.
-The **invariance theorem** says the choice of machine costs you only an additive constant: `|K1(x) - K2(x)| <= C`, where `C` depends on the two machines and nothing else. **Uncomputability** says no program computes `K`, by a formalisation of Berry's paradox.
+| Plain name | Standard name | The number list | Your code |
+|---|---|---|---|
+| The rule | `L(H)` | "even numbers from 2 to 200" | the abstractions you learn once |
+| The leftover | `L(D given H)` | "except the last is 201" | the lines that follow no rule |
+
+Three letters, and each one is one word.
+
+| Letter | Means | In the list above |
+|---|---|---|
+| `L` | length of | how many characters it takes to write down |
+| `H` | the rule | "even numbers from 2 to 200" |
+| `D` | the data | the hundred numbers themselves |
+
+So `L(H)` reads "how long the rule is".
+And `L(D given H)` reads "how long the data is, once you already know the rule".
+
+That second one is the important one, so read it slowly.
+You know the rule.
+The rule gets you 99 of the 100 numbers.
+What is left to write down is the one exception, and that is `L(D given H)`.
+
+**Takeaway:** `L`, `H` and `D` are length, rule and data, and this document never uses another symbol you have not been given.
+
+---
+
+## Code splits the same way
+
+A codebase has rules too.
+A registry, a base class, a naming convention, a layer boundary.
+Learn one and it explains many files.
+
+It also has leftovers.
+Lines that follow from nothing, that you simply have to read.
 
 ```mermaid
 %%{init: {"theme":"base","flowchart":{"htmlLabels":false},"themeVariables":{"primaryTextColor":"#1e293b","textColor":"#1e293b","lineColor":"#94a3b8","edgeLabelBackground":"#f1f5f9"}}}%%
 flowchart LR
-    X["A string x"]:::formal --> P[["Every program<br/>that outputs x"]]:::formal
-    P -->|"take the shortest"| K["K of x<br/>in bits"]:::total
-    K -->|"invariance"| I["Machine choice costs<br/>an additive constant C"]:::model
-    K -->|"Berry paradox"| U["No program<br/>computes K"]:::warning
-    U -->|"so you must"| A["Approximate it"]:::code
+    C[["A codebase"]]:::formal --> R["Rules<br/>a registry,<br/>a base class,<br/>a convention"]:::rule
+    C --> L["Leftovers<br/>lines that follow<br/>from nothing"]:::leftover
+    R --> RA["Read once,<br/>reused everywhere"]:::good
+    L --> LA["Read every time,<br/>reused nowhere"]:::warning
 
-    classDef model fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
-    classDef residual fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
+    classDef rule fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
+    classDef leftover fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
     classDef total fill:#fef3c7,stroke:#b45309,color:#1e293b,stroke-width:2px
     classDef formal fill:#334155,stroke:#cbd5e1,color:#ffffff,stroke-width:2px
-    classDef code fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
+    classDef good fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
     classDef warning fill:#b91c1c,stroke:#fecaca,color:#ffffff,stroke-width:2px
 ```
 
-**Takeaway:** `K` is the right idea and an unusable instrument, so every practical score in this document is an approximation to it and inherits that status honestly.
+`ADR 0034` in this repo is a rule.
+"A harness is a class, the registry is the only dispatch." Learn it once and six modules stop surprising you.
+
+**Takeaway:** Every codebase already has both parts; the question is only how big each one is.
 
 ---
 
-## MDL is the computable stand-in, and it arrives already split in two
+## Reviewing cost is the leftover, not the total
 
-Rissanen's Minimum Description Length principle replaces "the shortest program" with a **two-part code** you can actually count: minimise `L(H) + L(D|H)` over candidate hypotheses `H`.
+Now the point of all this.
 
-The second term is not a free choice. `L(D|H) = -log P(D|H)` is forced by a consistency argument.
-The first term, `L(H)`, is genuinely arbitrary in crude MDL, which is exactly where a per-codebase convention gets to live.
+You review a diff.
+The rules you already know cost you nothing, because you learned them last month.
+The leftovers cost you attention, every single one, every single time.
+
+So two diffs of exactly the same size can cost completely different amounts.
+
+**Takeaway:** Measure the leftover, because that is the part you actually pay for.
+
+---
+
+## The shortest possible description has a name
+
+Take anything at all.
+Call it `x`.
+Lots of different programs would print `x` and stop.
+One of them is the shortest.
+
+**`K(x)` is a number.** It is how many characters long that shortest program is.
+Nothing else.
+
+It is not a machine, not a program, and not a diff.
+It is a length, the way "412" is the length of this paragraph in characters.
+
+| If you see | Read it as |
+|---|---|
+| `x` | the thing you are describing |
+| `K(x)` | the length of the shortest description of `x` |
+| "`K` is high" | even the best description of this is long |
+| "`K` is low" | there is a short description, so there is a pattern |
+
+For the number list from the start of this document, `K` is small.
+"Even numbers from 2 to 200" is a very short program.
+For a hundred random numbers, `K` is large, because there is no rule to find and you must write them all out.
+
+Three people found this idea separately: Solomonoff, Kolmogorov, and Chaitin, between 1960 and 1966.
+
+**Takeaway:** `K(x)` is one number -- the length of the best possible description -- and low `K` means a pattern exists.
+
+---
+
+## You can never compute it
+
+This sounds like a problem and it is the useful part.
+
+No program can calculate `K(x)`.
+Not a slow one, not a clever one.
+It is impossible, and there is a proof.
 
 ```mermaid
 %%{init: {"theme":"base","flowchart":{"htmlLabels":false},"themeVariables":{"primaryTextColor":"#1e293b","textColor":"#1e293b","lineColor":"#94a3b8","edgeLabelBackground":"#f1f5f9"}}}%%
 flowchart LR
-    H["L of H<br/>cost of stating<br/>the hypothesis"]:::model --> S{{"Minimise<br/>L of H plus<br/>L of D given H"}}:::total
-    E["L of D given H<br/>cost of the data<br/>once H is known"]:::residual --> S
-    S --> C1["Forced:<br/>L of D given H<br/>equals minus log P"]:::formal
-    S --> C2["Free:<br/>L of H is a<br/>chosen convention"]:::code
+    X["Any thing x"]:::formal --> P[["Every program<br/>that prints x"]]:::formal
+    P -->|"the shortest one"| K["K of x"]:::total
+    K --> U["No program can<br/>work this out"]:::warning
+    U --> A["So every real score<br/>is an approximation"]:::good
 
-    classDef model fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
-    classDef residual fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
+    classDef rule fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
+    classDef leftover fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
     classDef total fill:#fef3c7,stroke:#b45309,color:#1e293b,stroke-width:2px
     classDef formal fill:#334155,stroke:#cbd5e1,color:#ffffff,stroke-width:2px
-    classDef code fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
+    classDef good fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
     classDef warning fill:#b91c1c,stroke:#fecaca,color:#ffffff,stroke-width:2px
 ```
 
-**Takeaway:** MDL hands you the spring and the damper as two named terms, not one blended score.
-The arbitrary term is the one you get to calibrate.
+**Takeaway:** Nobody is computing the true answer, so every metric in this space is an approximation and should be treated as one.
 
 ---
 
-## The two terms move in opposite directions, which is why a minimum exists
+## MDL is the approximation you can actually run
 
-Map the two-part code onto refactoring and the regulator appears on its own.
-Every abstraction you introduce is a sentence added to `L(H)` -- a name the reader must learn -- and a saving subtracted from `L(D|H)`.
+`MDL` stands for **Minimum Description Length**.
+Rissanen published it in 1978.
 
-Extraction does not reduce description length.
-It **moves** description length across the split.
+It replaces "find the shortest program", which is impossible, with something you can count.
+
+> Add up the rule and the leftover.
+> Pick whichever version makes that total smallest.
+
+In symbols, minimise `L(H) + L(D given H)`.
+Which is the same sentence, shorter.
 
 ```mermaid
 %%{init: {"theme":"base","flowchart":{"htmlLabels":false},"themeVariables":{"primaryTextColor":"#1e293b","textColor":"#1e293b","lineColor":"#94a3b8","edgeLabelBackground":"#f1f5f9"}}}%%
 flowchart LR
-    A["One giant function<br/>no names to learn"]:::warning -->|"L of H tiny"| B["L of D given H<br/>enormous"]:::residual
-    C["Three hundred<br/>tiny functions"]:::warning -->|"L of H enormous"| D["L of D given H<br/>tiny"]:::model
-    B --> E{{"The sum has a minimum<br/>somewhere between them"}}:::total
-    D --> E
-    E --> F["That minimum is the<br/>regulating term you<br/>were looking for"]:::code
+    A["Length of<br/>the rule"]:::rule --> S{{"Add them up"}}:::total
+    B["Length of<br/>the leftover"]:::leftover --> S
+    S --> C["Pick the version<br/>with the smallest total"]:::good
 
-    classDef model fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
-    classDef residual fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
+    classDef rule fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
+    classDef leftover fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
     classDef total fill:#fef3c7,stroke:#b45309,color:#1e293b,stroke-width:2px
     classDef formal fill:#334155,stroke:#cbd5e1,color:#ffffff,stroke-width:2px
-    classDef code fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
+    classDef good fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
     classDef warning fill:#b91c1c,stroke:#fecaca,color:#ffffff,stroke-width:2px
 ```
 
-**Takeaway:** A metric that charges nothing for the model half has no minimum.
-It will be optimised to absurdity, which is the failure of every per-unit complexity gate.
+**Takeaway:** `MDL` keeps the two parts separate instead of blending them, which is exactly what a single complexity score fails to do.
 
 ---
 
-## `AIC` and `BIC` set the price of one name, and the price is the spring constant
+## Extracting a function moves length between the two parts
 
-Both criteria are the same shape: goodness of fit, plus a penalty that is linear in `k`, the number of parameters.
-For code, `k` is the count of names a reader must hold.
+Here is where this touches your day job.
+
+Pull three branches out into a helper.
+The branches leave the caller, so the leftover shrinks.
+But you invented a name, and now every reader must learn it, so the rule grows.
+
+Nothing was deleted.
+It moved.
+
+**Takeaway:** Extraction is a transfer, not a saving, which is why the per-unit score always improves and the codebase often does not.
+
+---
+
+## Because the parts move opposite ways, there is a bottom
+
+Now imagine doing it over and over.
+
+Extract everything, down to two-line functions.
+The leftover is almost nothing.
+The rule is three hundred names you must learn.
+
+Or extract nothing at all.
+The rule is nothing.
+The leftover is a two-thousand-line function.
+
+Both are terrible, and they are terrible in opposite directions.
+
+![Splitting trades one cost for another and the total has a minimum](img/axis-opposition.png)
+
+*Illustrative shape, not measured data.*
+
+Somewhere between them the total is smallest.
+That bottom is the regulator you have been looking for.
+
+**Takeaway:** A score that charges nothing for new names has no bottom, so it can be pushed down forever while the code gets worse.
+
+---
+
+## What does one new name cost?
+
+That is the whole design question, and statistics already answers it.
+
+Two standard formulas both say: take how well the thing fits, then subtract a penalty for each new name you introduced.
 
 ```
-AIC = 2k - 2 ln L         penalty per parameter: 2
-BIC = k ln(n) - 2 ln L    penalty per parameter: ln(n)
+AIC = 2k  - 2 ln(L)         penalty per name: 2
+BIC = k ln(n) - 2 ln(L)     penalty per name: ln(n)
 ```
 
-`BIC` charges more as the dataset grows, which is the property you want: in a larger codebase, each additional name costs the reader more.
+Read `k` as **how many names**.
+Read `n` as **how big the codebase is**.
+Ignore `ln(L)` entirely; it is the same in both and it is about fit, not names.
+
+The interesting part is the penalty column, so here it is drawn.
+
+![AIC charges a flat 2 per name; BIC charges ln(n), which grows with the codebase](img/aic-bic-penalty.png)
+
+Read the **left panel** across. `AIC`'s line is flat: one new name always costs 2, in a 100-line script and in a 100,000-line system alike. `BIC`'s line climbs, because `ln(n)` climbs.
+
+Read the **right panel** for what that means in practice.
+This repository is 6,882 lines, and `ln(6882)` is **8.8**.
+So `BIC` charges 8.8 per new name where `AIC` charges 2.
+That is **4.4 times more**, in this repo, today.
+
+Add thirty new names and the two criteria disagree by roughly 200.
+They will often pick different answers.
+
+**Takeaway:** `BIC` says the right price of a new name is not a fixed threshold; it rises with the size of the codebase it lands in.
+
+---
+
+## One number cannot answer two different questions
+
+There are two things you might want from a score.
+
+*Will the next diff be easier to review?* That is a prediction.
+
+*Is this the right way to split up the module?* That is an identification.
+
+Yang proved in 2005 that no single criterion does both well.
+You get one or the other.
 
 ```mermaid
 %%{init: {"theme":"base","flowchart":{"htmlLabels":false},"themeVariables":{"primaryTextColor":"#1e293b","textColor":"#1e293b","lineColor":"#94a3b8","edgeLabelBackground":"#f1f5f9"}}}%%
 flowchart LR
-    K["k<br/>names to learn"]:::model --> P{{"Penalty term"}}:::total
-    N["n<br/>size of the corpus"]:::residual --> P
-    P -->|"penalty 2 per name"| AIC["AIC<br/>targets prediction"]:::code
-    P -->|"penalty ln n per name"| BIC["BIC<br/>targets identification"]:::code
-    AIC --> Y["Yang 2005:<br/>no single criterion<br/>can do both"]:::warning
-    BIC --> Y
+    Q1["Will the next diff<br/>be easier?"]:::leftover --> A["Prediction<br/>AIC side"]:::good
+    Q2["Is this the right<br/>decomposition?"]:::rule --> B["Identification<br/>BIC side"]:::good
+    A --> N["Proved 2005:<br/>no one number<br/>does both"]:::warning
+    B --> N
 
-    classDef model fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
-    classDef residual fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
+    classDef rule fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
+    classDef leftover fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
     classDef total fill:#fef3c7,stroke:#b45309,color:#1e293b,stroke-width:2px
     classDef formal fill:#334155,stroke:#cbd5e1,color:#ffffff,stroke-width:2px
-    classDef code fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
+    classDef good fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
     classDef warning fill:#b91c1c,stroke:#fecaca,color:#ffffff,stroke-width:2px
 ```
 
-Two cautions that matter more than the formulae. **"MDL equals BIC" is wrong** -- Grunwald names it as an error in Burnham and Anderson (2002, p. 286); the asymptotic agreement holds only with `k` fixed and `n` going to infinity.
-And Yang (2005) proves the two goals are exclusive.
-*Will the next diff be easier to review* is a prediction question.
-*Is this the right decomposition* is an identification question.
-One number cannot serve both.
-
-**Takeaway:** Pricing a name is the whole design decision.
-`BIC`'s `ln(n)` says that price rises with codebase size rather than staying a fixed threshold.
+**Takeaway:** Your scorecard has to be multidimensional because a theorem says so, not because it is nicer that way.
 
 ---
 
-## Code golf has a formal name, and it is the singleton model
+## Code golf wins the "shortest total" contest
 
-Here is the objection stated in the theory's own terms.
-Models are finite sets; the data `x` is one member.
-Two degenerate models are always available.
+Go back to the number list one last time.
+
+There is a third way to describe it, and it is cheating.
+
+> **"the list is: 2, 4, 6, ... 201"**
+
+Call the whole thing one rule with no leftover at all.
+This is technically a valid description.
+By total length it can even be the winner.
+
+And it teaches you nothing.
+You learned one fact about one list, and it transfers to nothing else.
 
 ```mermaid
 %%{init: {"theme":"base","flowchart":{"htmlLabels":false},"themeVariables":{"primaryTextColor":"#1e293b","textColor":"#1e293b","lineColor":"#94a3b8","edgeLabelBackground":"#f1f5f9"}}}%%
 flowchart TB
-    X["The data x"]:::formal --> S1["Model: all strings<br/>of length n"]:::warning
-    X --> S2["Model: the singleton<br/>set containing x"]:::warning
-    X --> S3["Model: the minimal<br/>sufficient statistic"]:::code
-    S1 --> R1["Cheap to state,<br/>explains nothing.<br/>Boilerplate."]:::residual
-    S2 --> R2["Shortest two-part code,<br/>explains nothing.<br/>Code golf."]:::model
-    S3 --> R3["Captures all structure,<br/>leaves only noise"]:::total
+    X["The list"]:::formal --> A["Rule: none.<br/>Leftover: everything."]:::warning
+    X --> B["Rule: the whole list.<br/>Leftover: none."]:::warning
+    X --> C["Rule: even 2 to 200.<br/>Leftover: one exception."]:::good
+    A --> A2["Boilerplate"]:::leftover
+    B --> B2["Code golf"]:::rule
+    C --> C2["The one that<br/>teaches you something"]:::total
 
-    classDef model fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
-    classDef residual fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
+    classDef rule fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
+    classDef leftover fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
     classDef total fill:#fef3c7,stroke:#b45309,color:#1e293b,stroke-width:2px
     classDef formal fill:#334155,stroke:#cbd5e1,color:#ffffff,stroke-width:2px
-    classDef code fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
+    classDef good fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
     classDef warning fill:#b91c1c,stroke:#fecaca,color:#ffffff,stroke-width:2px
 ```
 
-Grunwald and Vitanyi (2008), section 6.1.2, say it directly:
+The theory has a formal name for that middle option.
+Grunwald and Vitanyi call it out directly, and their word for it is that it is still "not sufficient to capture meaningful information".
 
-> "Both the largest set {0,1}^n [having low complexity of about K(n)] and the
-> singleton set {x} [having high complexity of about K(x)], while certainly
-> statistics for x, would indeed be considered poor explanations."
-
-And the sentence that settles it:
-
-> "the fact that {x} is still an optimal set for x shows that it is still not
-> sufficient by itself to capture the notion of 'meaningful information'."
-
-Read this as: **golfed code is the singleton model.**
-It achieves the shortest two-part code by pushing everything into the model half and leaving no residual.
-It has therefore learned nothing that transfers to the next diff.
-
-**Takeaway:** "Shortest total description" is not a criterion the theory endorses, because the degenerate model wins it.
+**Takeaway:** "Shortest total" is a contest that cheating wins, so it is not the criterion you want.
 
 ---
 
-## The fix is minimality, and three independent measures agree
+## The fix: the smallest rule that still explains everything
 
-The theory refines its criterion from *shortest two-part code* to **minimal sufficient statistic**.
-Among the models achieving the shortest code, take the one with the smallest model complexity `alpha`.
+So change what you are asking for.
 
-Two other measures, defined for unrelated reasons, punish golf the same way.
-Bennett's **logical depth** counts the running time of the near-shortest program.
-Koppel's **sophistication** counts the size of the model half alone.
+Do not ask for the shortest total.
+Ask for the **smallest rule that still accounts for all the structure**.
 
-```mermaid
-%%{init: {"theme":"base","flowchart":{"htmlLabels":false},"themeVariables":{"primaryTextColor":"#1e293b","textColor":"#1e293b","lineColor":"#94a3b8","edgeLabelBackground":"#f1f5f9"}}}%%
-flowchart LR
-    G["Golfed code"]:::warning --> A["K of x<br/>total length"]:::total
-    G --> B["Logical depth<br/>Bennett 1988"]:::formal
-    G --> C["Sophistication<br/>Koppel 1987"]:::model
-    G --> D["Model complexity<br/>at the minimal<br/>sufficient statistic"]:::code
-    A -->|"minimised"| W["Golf wins<br/>on this one only"]:::warning
-    B -->|"maximised"| L["Golf loses"]:::code
-    C -->|"maximised"| L
-    D -->|"not minimal"| L
+Everything left over after that is genuine one-off detail, and it is supposed to be there.
 
-    classDef model fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
-    classDef residual fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
-    classDef total fill:#fef3c7,stroke:#b45309,color:#1e293b,stroke-width:2px
-    classDef formal fill:#334155,stroke:#cbd5e1,color:#ffffff,stroke-width:2px
-    classDef code fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
-    classDef warning fill:#b91c1c,stroke:#fecaca,color:#ffffff,stroke-width:2px
-```
+Two other measures, invented for unrelated reasons, punish golf the same way.
 
-Kolmogorov's **structure function** `h_x(alpha)` makes the point geometric: it plots fit quality against a budget on model complexity.
-The theory's own criterion is the *shape of that curve*, not a scalar.
+| Measure | What it counts | Golfed code |
+|---|---|---|
+| Total length | how short overall | **wins** |
+| Logical depth | how long it takes to work out | loses |
+| Sophistication | how big the rule half is | loses |
+| Smallest sufficient rule | how big the rule half is, at the best fit | loses |
 
-**Takeaway:** Every measure that scores the model half separately punishes golf, and only the measure that blends both halves into one number rewards it.
+Three of the four agree.
+Only the one that blends both halves into a single number is fooled.
+
+**Takeaway:** Score the rule half on its own and golf stops winning automatically.
 
 ---
 
-## Humans prefer the predictable expression, not the short one
+## People prefer predictable code, not short code
 
 The theory says score the split.
-The one direct human study agrees, and it agrees on the sharper point that *predictable* and *short* are different things.
+The one direct study of real programmers agrees, and sharpens it.
 
-Casalnuovo et al.
-(2020) generated meaning-preserving transformations of real Java and Python expressions and asked which people preferred.
+Casalnuovo and colleagues took real Java and Python expressions in 2020.
+They rewrote them into equivalent versions that mean exactly the same thing.
+Then they asked programmers which they preferred.
 
-> "we find that programmers do prefer more predictable variants, and that stronger
-> language models like the transformer align more often and more consistently
-> with these preferences."
+Programmers picked the version a language model found **least surprising**.
+Not the shortest one.
 
-This sits on top of Hindle et al. (2012), who measured that code is far more repetitive than English.
-English falls from about 10 bits per token at unigram to under 8 at 10-gram.
-Java saturates at tri- and 4-grams around 3 to 4 bits, against a uniform ceiling of 13 to 20 bits.
-
-```mermaid
-%%{init: {"theme":"base","flowchart":{"htmlLabels":false},"themeVariables":{"primaryTextColor":"#1e293b","textColor":"#1e293b","lineColor":"#94a3b8","edgeLabelBackground":"#f1f5f9"}}}%%
-flowchart LR
-    S["Shortest<br/>expression"]:::warning -->|"minimises"| U["Unconditional<br/>length"]:::total
-    P["Predictable<br/>expression"]:::code -->|"minimises"| CD["Conditional length<br/>given the corpus"]:::model
-    U --> R{{"Humans chose<br/>predictable, not short"}}:::total
-    CD --> R
-    R --> H["Code saturates near<br/>3 to 4 bits per token<br/>English stays above 8"]:::residual
-
-    classDef model fill:#7c3aed,stroke:#ede9fe,color:#ffffff,stroke-width:2px
-    classDef residual fill:#1d4ed8,stroke:#dbeafe,color:#ffffff,stroke-width:2px
-    classDef total fill:#fef3c7,stroke:#b45309,color:#1e293b,stroke-width:2px
-    classDef formal fill:#334155,stroke:#cbd5e1,color:#ffffff,stroke-width:2px
-    classDef code fill:#047857,stroke:#d1fae5,color:#ffffff,stroke-width:2px
-    classDef warning fill:#b91c1c,stroke:#fecaca,color:#ffffff,stroke-width:2px
-```
-
-**Takeaway:** Predictability is conditional description length, cheap because the reader already holds the model.
-That is why writing what the codebase already says beats writing less of it.
-
----
-
-## What each measure does to the two failure poles
-
-State the invariant before comparing, which the beats above have now done.
-
-| Measure | Golfed code | Boilerplate | Scores the split? |
-|---|---|---|---|
-| `K(x)` / raw compression | **rewards** it | punishes it | no |
-| Logical depth (Bennett) | punishes it | rewards it | partially |
-| Sophistication (Koppel) | punishes it | rewards it | **yes, model half only** |
-| Model complexity at the minimal sufficient statistic | punishes it | punishes it | **yes, both halves** |
-| `BIC` penalty `k ln(n)` | punishes it | punishes it | **yes, via `k`** |
-| Cyclomatic complexity per unit | neutral | neutral | no |
-
-Note the last row.
-A per-unit branch count is blind to both failure poles, which is why it can be optimised without bound.
+**Takeaway:** Writing what the codebase already says beats writing less of it, which is the opposite of what a length score rewards.
 
 ---
 
 ## Diagnosis: which half is out of balance
 
-| Symptom | Half out of balance | First thing to inspect |
+| What you notice | Which half | First thing to check |
 |---|---|---|
-| Reviewers ask "what does this function do?" repeatedly | `L(H)` too large | Count names introduced per diff; each is a `k` the reader pays for |
-| Reviewers approve without reading | `L(D\|H)` too large and too uniform | Sample three residual blocks; if they differ only in literals, the model half is missing |
-| A clever one-liner draws a comment every time | golf: model half swallowed the residual | Whether the expression is the *predictable* form or merely the short one |
-| The diff is small but takes an hour | high logical depth | Time to first correct paraphrase, not line count |
-| Every abstraction is used exactly once | model half is not sufficient | Reuse count per introduced name; one use means it is not a model |
-| The score improves and reviewers do not | the metric blends the halves | Whether the score is a sum; if so, split it and report both |
+| "What does this function even do?" asked repeatedly | rule too big | How many new names one diff introduces |
+| Reviewers approve without really reading | leftover too big and too samey | Take three blocks; if they differ only in literals, a rule is missing |
+| A clever one-liner draws a comment every time | golf | Is it the predictable form, or just the short one |
+| Small diff, takes an hour | logical depth | Time until someone can restate it correctly |
+| Every abstraction is used exactly once | the rule is not a rule | Count uses per name; one use means it never became a rule |
+| Score improved, reviewers did not notice | the metric blended the halves | Is it a sum? Split it and report both |
 
 ---
 
 ## The compact rule
 
-**Description length splits into a model half you learn once and a residual half you pay for every time.**
-**Reviewing cost tracks that split, never the sum.**
-**Score a diff by total length and the singleton model wins, which is code golf stated formally.**
-**Price a name explicitly, because a metric that charges nothing for the model half has no minimum.**
+**A description has a rule half you learn once and a leftover half you pay for every time.** **Reviewing cost is the leftover, never the total.** **Never reward "shortest overall", because code golf wins that and teaches nothing.** **Charge for every new name, because a score that does not has no bottom.**
 
 ---
 
 ## References
 
-Full citations, verbatim quotations and a could-not-verify list are in [`research/lit-mdl.md`](research/lit-mdl.md).
+Full citations, exact quotations and a could-not-verify list are in [`research/lit-mdl.md`](research/lit-mdl.md).
 
 | Source | Contributes |
 |---|---|
-| Solomonoff, *Information and Control* 7(1) and 7(2), 1964; Kolmogorov, *Problems of Information Transmission* 1(1):1-7, 1965; Chaitin, *JACM* 13(4):547-569, 1966 | the three independent formulations of `K` |
-| Li and Vitanyi, *An Introduction to Kolmogorov Complexity and Its Applications*, Springer | invariance and uncomputability |
-| Rissanen, "Modeling by shortest data description," *Automatica* 14(5):465-471, 1978 | the two-part code |
-| Grunwald, *The Minimum Description Length Principle*, MIT Press, 2007; tutorial at [arXiv:math/0406077](https://arxiv.org/abs/math/0406077) | modern MDL, and the correction of "MDL equals BIC" |
-| Schwarz, *Annals of Statistics* 6(2):461-464, 1978 | `BIC` |
-| Akaike, *IEEE TAC*, 1974 | `AIC`. Primary text unreachable; formula reported from secondary sources |
-| Yang, *Biometrika* 92(4):937-950, 2005 | the impossibility result. Reported from the title and the field's summary, not the proof |
-| Vereshchagin and Vitanyi, *IEEE TIT* 50(12):3265-3290, 2004 | the structure function and the minimal sufficient statistic |
-| Bennett, 1988 | logical depth. Year and pages are cited inconsistently across sources |
-| Koppel, 1987 | sophistication |
-| Hindle et al., *ICSE 2012* | the cross-entropy measurements |
-| Casalnuovo et al., *Cognitive Science* 44(12), 2020, DOI [10.1111/cogs.12921](https://doi.org/10.1111/cogs.12921) | the human-preference study |
+| Solomonoff (1964); Kolmogorov (1965); Chaitin (1966) | `K(x)`, found three times independently |
+| Li and Vitanyi, *An Introduction to Kolmogorov Complexity* | why `K` cannot be computed |
+| Rissanen, *Automatica* 14(5), 1978 | `MDL` and the two-part split |
+| Grunwald, *The MDL Principle*, MIT Press, 2007 | the modern treatment |
+| Schwarz, *Annals of Statistics* 6(2), 1978 | `BIC` |
+| Akaike, *IEEE TAC*, 1974 | `AIC`. Primary text unreachable; formula from secondary sources |
+| Yang, *Biometrika* 92(4), 2005 | no single criterion does both jobs. Reported from the title, not the proof |
+| Vereshchagin and Vitanyi, *IEEE TIT* 50(12), 2004 | the smallest sufficient rule |
+| Bennett (1988); Koppel (1987) | logical depth; sophistication |
+| Casalnuovo et al., *Cognitive Science* 44(12), 2020 | programmers prefer predictable over short |
 
-**Status note.** No published work applies logical depth, sophistication, or the structure function to source-code comprehensibility.
-The bridge from this theory to a reviewability score is drawn here and in `research/lit-mdl.md`, and it is not a cited result.
+**Status note.** Nobody has published work applying logical depth or sophistication to how hard code is to read.
+That bridge is drawn here, and it is not a cited result.
