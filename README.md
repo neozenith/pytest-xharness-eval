@@ -277,4 +277,4 @@ Build, test and release instructions live in [CONTRIBUTING.md](CONTRIBUTING.md).
 - [ARCHITECTURE.md](ARCHITECTURE.md): why the two CLIs need different capture
   contracts, how pricing works, and the vocabulary the code uses.
 - [AGENTS.md](AGENTS.md): operating instructions and hard boundaries for agents.
-- [docs/adrs/index.md](docs/adrs/index.md): the decision index, generated from the records (ADR 0047).
+- [docs/adrs/index.md](docs/adrs/index.md): the decision index, generated from the records (ADR 0048).

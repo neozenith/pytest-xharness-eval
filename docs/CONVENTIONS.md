@@ -18,25 +18,47 @@ describes what the tree already did, except where marked *(baseline)*.
   `ARCHITECTURE.md#vocabulary`, 2026-08-31.)*
 - **ADR layout:** file-per-decision at `docs/adrs/NNNN-slug.{yml,md}`, generated
   `index.md`.
-- **ADR surface:** `okf-yaml`. Records are authored in `docs/adrs/NNNN-slug.yml` and
-  their markdown is generated (ADR 0047).
+- **ADR surface:** `okf-yaml`, **adopted strictly** (ADR 0048, superseding ADR 0047).
+  Records are authored in `docs/adrs/NNNN-slug.yml` and their markdown is generated.
+  `docs/adrs/record.schema.json` is the librarian's shipped record schema with nothing
+  relaxed: every field it requires is required here. The only edits are the tightenings
+  the convention asks an adopter to make — the `ADR-` id prefix, and `group`/`tags` drawn
+  from this repository's closed domain enum.
 - **Record domains:** every record declares one `group` (its primary domain, and the
   compound parent it sits in on the graph) and a `tags` list of one or two domains,
   primary first. Both are a closed enum in `record.schema.json`, so a typo fails the
   build rather than creating a group of one. The eleven domains are `accounting`,
   `architecture`, `collection`, `docs`, `evidence`, `grading`, `harness`, `packaging`,
   `pricing`, `report` and `storage`. A record needing a third tag has usually not been
-  read closely enough to say what it is mainly about. The schema is `docs/adrs/record.schema.json`, tightened to this
-  repository's dialect: the argument is carried verbatim in `body`, and the fields the
-  corpus does not supply (`description`, `tags`, `provenance`, `enforced_in`) are
-  optional rather than invented.
-- **ADR format:** `# NNNN: Title`, a `Status:` sentence, then `## Context`,
-  `## Decision`, `## Consequences`, and a closing `## Lens` carrying the reusable rule.
-  Four early records (0031, 0032, 0033, 0043) have no Lens; an absent Lens is a fact
-  about the record, not a gap to fill.
+  read closely enough to say what it is mainly about.
+- **Record shape:** seventeen fields, all required. Identity (`id`, `slug`, `plan_id`),
+  routing (`title`, `description`, `group`, `tags`), lifecycle (`status`, `accepted_on`,
+  `last_changed_on`), the reusable rule (`lens`), the grounding (`provenance`,
+  `enforced_in`), the typed edges (`relates_to`), and the argument in three decomposed
+  parts: `problem` (`symptom`, `pain_point`), `decision` (`given`, `we_prefer`,
+  `because`, `unless`, `in_practice`) and `consequences` (`pros`, `cons`, each with at
+  least one entry). `we_prefer` names the rejected alternative; `unless` is the escape
+  hatch or the word `never`. A clause that argued with a table or a fenced example keeps
+  it, as a markdown block scalar inside `in_practice`.
+- **ADR format:** the librarian's shipped record template. The title lives in
+  frontmatter, the record opens with its **Lens** blockquote, then `## Relates to`,
+  `## Problem`, `## Decision` and `## Consequences`. There is no H1 and no `Status:`
+  sentence — the lifecycle word is `status`, and the scope of a supersession travels on
+  the edge that caused it, in its `note`.
 - **Generated paths:** `docs/adrs/*.md`, `docs/adrs/index.md`, `docs/adrs/graph.md`,
   `docs/adrs/graph.json`, `docs/adrs/graph.html`.
-- **Regenerate:** `make adrs`. `make adrs-check` is the CI gate.
+- **Regenerate:** `make adrs`. `make adrs-check` is the CI gate: it renders (which
+  refuses a record that fails the schema or names a target that does not exist), runs
+  `docs/adrs/okf_verify.py` for OKF conformance of the output, then fails on a dirty
+  tree.
+- **Prose:** the generated records pass `gooddocs`' `prose_gates.ts` with zero body
+  findings: one sentence per line, a 25-word sentence budget, no em-dash, and no list
+  disguised as comma- or semicolon-joined prose. The gate reads the generated markdown,
+  so a finding is fixed in the `.yml` and the bundle is rebuilt, never in the `.md`. Two
+  things the gate cannot see: it has no frontmatter parser, so it reads each record's
+  YAML header as prose (those findings are not defects), and the record template adds
+  `Lens :`, `Given :` or `We prefer :` to a field's first sentence, which counts against
+  that sentence's budget.
 - **Agent files:** `AGENTS.md` is canonical; `CLAUDE.md` is a symlink to it.
 - **Changelog:** not used. Releases are GitHub Releases tagged `vX.Y.Z` (ADR 0017).
 - **Proposals/RFCs:** not used. A decision is recorded once it is made, never before.
@@ -79,6 +101,7 @@ misfiled.
 - ADR index: `docs/adrs/index.md` (generated)
 - ADR schema: `docs/adrs/record.schema.json`
 - ADR generator: `docs/adrs/okf_render.py`, run by `make adrs`
+- ADR conformance gate: `docs/adrs/okf_verify.py`, run by `make adrs-check`
 - Docs site source: none
 - Design tokens: `src/pytest_xharness_eval/assets/report.tokens.json`
 
@@ -89,14 +112,16 @@ misfiled.
 - `AGENTS.md` → `GLOSSARY.md` with both standing instructions: use the canonical terms
   for all naming; add a new domain term in the same change that introduces it.
 - `README.md` → `CONTRIBUTING.md`.
-- Every ADR that supersedes or refines another links it from its `Status:` sentence; the
-  typed edge in the record's `relates_to` is inferred from that sentence, never a
-  replacement for it (ADR 0047).
+- Every ADR that supersedes or refines another declares a typed edge in `relates_to`,
+  and carries the governing clause — which part was replaced, and which stands — in
+  that edge's `note`. There is no `Status:` sentence for the relation to be inferred
+  from: the edge and its note are where the phrasing now lives (ADR 0048).
 
 ## Split/merge triggers
 
 - `docs/` adopts Diátaxis folders when the flat tree passes ~10 topic documents.
 - A scoped `AGENTS.md` appears beside any subtree with rules that bind only it
   (`report-ui/` is the candidate if its conventions outgrow the root file's pointer).
-- A record's `description` and `tags` become required once enough records carry them
-  that writing the rest is filling a gap rather than inventing a field.
+- A twelfth `group` / `tags` domain is added to `record.schema.json` when two records
+  would otherwise be filed under a domain that describes neither. Adding one is a
+  deliberate edit to the enum, never a value a record introduces.

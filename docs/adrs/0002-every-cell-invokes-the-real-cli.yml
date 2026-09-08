@@ -1,14 +1,12 @@
-# Authored record (ADR 0047). The .md beside this file is GENERATED:
+# Authored record (ADR 0048). The .md beside this file is GENERATED:
 #   make adrs
 # Edit this file, never the markdown.
 id: ADR-0002
 slug: every-cell-invokes-the-real-cli
+plan_id: null
 title: Every eval cell always invokes the real CLI
+description: no replay tier and no --live flag; a cell that did not spawn an agent has measured nothing
 status: accepted
-status_note: |-
-  accepted, 2026-08-20. Inside this package the boundary is the
-  `pragma: no cover` on every function that spawns a CLI
-  ([0014](0014-register-through-the-pytest11-entry-point.md)).
 accepted_on: '2026-08-20'
 last_changed_on: '2026-08-20'
 group: evidence
@@ -16,21 +14,47 @@ tags:
 - evidence
 - harness
 lens: |-
-  Never let a cell report a verdict without a real session log behind it. If a run
-  cannot be real, fail the cell; do not fake it.
-relates_to: []
-body:
-  context: |-
-    Two project rules appeared to conflict: tests never mock, and paid agent runs are
-    never a dependency of the free `ci` target. A record-and-replay tier was the first
-    idea for reconciling them.
-  decision: |-
-    There is no replay layer, no recorded-fixture tier, and no `--live` flag. A cell
-    always runs the real `claude` or `codex` process and always costs money. The eval
-    suite is a declared exception to the `ci` rule, recorded as a carve-out in the
-    consuming project's rules. The free `ci` target covers only `test_*.py` unit tests.
-  consequences: |-
-    The only signal the harness produces is real agent behaviour; a cell that did not
-    invoke an agent has measured nothing. The rules are reconciled by scoping, not by
-    recording: unit tests are free and mock-free, evals are paid and mock-free. Every
-    sweep spends money, so the matrix became an explicit spend dial (ADR 0010).
+  Never let a cell report a verdict without a real session log behind it.
+  If a run cannot be real, fail the cell; do not fake it.
+provenance: |-
+  Two project rules appeared to conflict: tests never mock, and paid agent runs are never a dependency of the free `ci` target.
+enforced_in:
+- "src/pytest_xharness_eval/plugin/cell.py (the `pragma: no cover` sits on the paid call only)"
+- src/pytest_xharness_eval/harness/base.py
+- CLAUDE.md (the hard boundary forbidding a mocked CLI, subprocess or session log)
+relates_to:
+- relation: see_also
+  target: ADR-0014
+  note: >-
+    inside this package the boundary is the `pragma: no cover` on every function
+    that spawns a CLI
+problem:
+  symptom: |-
+    Two project rules appeared to conflict: tests never mock, and paid agent runs are never a dependency of the free `ci` target.
+  pain_point: |-
+    A record-and-replay tier was the first idea for reconciling them, which would have let a cell report a verdict with no real agent behind it.
+decision:
+  given: |-
+    A cell's only worthwhile signal is what a real agent CLI actually did.
+  we_prefer: |-
+    Always spawning the real `claude` or `codex` process and always paying for it.
+    That is preferred over a replay layer, a recorded-fixture tier, or a `--live` flag.
+  because: |-
+    The rules reconcile by scoping rather than by recording: unit tests are free and mock-free, evals are paid and mock-free.
+  unless: never
+  in_practice:
+  - |-
+    There is no replay layer, no recorded-fixture tier, and no `--live` flag.
+    A cell always runs the real `claude` or `codex` process and always costs money.
+  - |-
+    The eval suite is a declared exception to the `ci` rule, recorded as a carve-out in the consuming project's rules.
+    The free `ci` target covers only `test_*.py` unit tests.
+consequences:
+  pros:
+  - |-
+    The only signal the harness produces is real agent behaviour; a cell that did not invoke an agent has measured nothing.
+  - |-
+    The rules are reconciled by scoping, not by recording: unit tests are free and mock-free, evals are paid and mock-free.
+  cons:
+  - |-
+    Every sweep spends money, so the matrix became an explicit spend dial (ADR 0010).

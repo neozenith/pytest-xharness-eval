@@ -96,17 +96,21 @@ ui-promote: ui-check ui-test ui-build
 	$(MAKE) test
 
 ######################################################################
-# DECISION RECORDS (ADR 0047)
-# Records are authored as docs/adrs/NNNN-slug.yml; every .md, index.md,
-# graph.md and graph.json beside them is generated. Edit the YAML.
+# DECISION RECORDS (ADR 0048)
+# Records are authored as docs/adrs/NNNN-slug.yml against the librarian's shipped
+# okf-yaml schema, adopted strictly; every .md, index.md, graph.md, graph.json and
+# graph.html beside them is generated. Edit the YAML.
 ######################################################################
 adrs:
 	uv run --no-project --with PyYAML --with Jinja2 --with jsonschema \
 		docs/adrs/okf_render.py docs/adrs --author "human:neozenith"
 
-# CI gate: a hand-edited generated file, or a record that was changed without a
-# rebuild, shows up as a dirty tree here rather than as drift nobody noticed.
+# CI gate, three questions. The render refuses a record that fails the schema or
+# names a target that does not exist; okf_verify checks the OKF conformance of what
+# it produced; and a hand-edited generated file, or a record changed without a
+# rebuild, shows up as a dirty tree rather than as drift nobody noticed.
 adrs-check: adrs
+	@uv run --no-project --with PyYAML docs/adrs/okf_verify.py docs/adrs
 	@git diff --quiet -- docs/adrs || { \
 		echo "docs/adrs is stale or hand-edited; run 'make adrs' and commit the result"; \
 		git --no-pager diff --stat -- docs/adrs; exit 1; }

@@ -3,40 +3,57 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: A workspace is a plain copy of the fixture tree, with no git context
+description: no git init and no worktree, so diff-reading skills stay out of scope until the seam is used
 tags: [collection]
 status: accepted
 accepted_on: 2026-08-20
 last_changed_on: 2026-08-20
+provenance: Several skills a consuming project may want to evaluate reason about diffs and history. The user ruled git-dependent skills out of scope for this iteration.
+enforced_in:
+  - src/pytest_xharness_eval/model/workspace.py
+  - CLAUDE.md ("Out of scope this iteration")
 generated: { by: human:neozenith, at: 2026-08-20T00:00:00Z }
 ---
 
-# 0004: A workspace is a plain copy of the fixture tree, with no git context
+> **Lens**: Do not give a workspace capabilities no in-scope skill reads.
+> Add them at the workspace seam when a skill that needs them enters scope.
 
-Status: accepted, 2026-08-20. The project `tmp/` location is now
-the `xharness_workdir` ini key, default `tmp/evals`
-([0014](0014-register-through-the-pytest11-entry-point.md)).
+## Relates to
 
-## Context
+- Superseded by [ADR-0014](0014-register-through-the-pytest11-entry-point.md) (the project `tmp/` location is now the `xharness_workdir` ini key, default `tmp/evals`)
 
-Several skills a consuming project may want to evaluate reason about diffs and
-history. Giving every
-workspace a git repository costs setup time and forces fixtures to be committed
-subtrees. The user ruled git-dependent skills out of scope for this iteration.
+## Problem
+
+### Symptom
+
+Several skills a consuming project may want to evaluate reason about diffs and history.
+
+### Pain point
+
+Giving every workspace a git repository costs setup time and forces fixtures to be committed subtrees.
 
 ## Decision
 
-Each cell's workspace is `shutil.copytree` of the fixture into the project `tmp/`,
-discarded and rebuilt per cell. No `git init`, no worktree. A case that needs git
-must fail loudly rather than run in a git-less workspace and report a score.
+### The lens
+
+- **Given**: The user ruled git-dependent skills out of scope for this iteration.
+- **We prefer**: `shutil.copytree` of the fixture into the project `tmp/`, discarded and rebuilt per cell, over a `git init` or a worktree per workspace.
+- **Because**: No in-scope skill reads git history, so the setup cost and the committed-subtree constraint would buy nothing.
+- **Unless**: a skill that needs git enters scope, at which point the `workspace` fixture is the seam where a git strategy is added.
+
+### In practice
+
+- Each cell's workspace is `shutil.copytree` of the fixture into the project `tmp/`, discarded and rebuilt per cell.
+  No `git init`, no worktree.
+- A case that needs git must fail loudly rather than run in a git-less workspace and report a score.
 
 ## Consequences
 
-Materialisation is fast and trivially resettable, and keeps run artefacts under
-the project's `tmp/`. Code-review, change-walkthrough, refactoring and similar
-diff-reading skills cannot be evaluated yet. The `workspace` fixture is the seam where a git strategy is added
-later, without a rewrite.
+### Pros
 
-## Lens
+- Materialisation is fast and trivially resettable, and keeps run artefacts under the project's `tmp/`.
+- The `workspace` fixture is the seam where a git strategy is added later, without a rewrite.
 
-Do not give a workspace capabilities no in-scope skill reads; add them at the
-workspace seam when a skill that needs them enters scope.
+### Cons
+
+- Code-review, change-walkthrough, refactoring and similar diff-reading skills cannot be evaluated yet.

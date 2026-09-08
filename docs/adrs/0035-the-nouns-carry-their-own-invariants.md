@@ -3,40 +3,40 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: The nouns carry their own invariants
+description: put the sum on the type that owns it, so the illegal state stops being a reviewer's job
 tags: [architecture]
 status: accepted
 accepted_on: 2026-08-28
 last_changed_on: 2026-08-28
-relates_to:
-  - { relation: extends, target: ADR-0003 }
-  - { relation: extends, target: ADR-0019 }
-  - { relation: extends, target: ADR-0021 }
-  - { relation: extends, target: ADR-0022 }
-  - { relation: extends, target: ADR-0025 }
-  - { relation: extends, target: ADR-0033 }
-  - { relation: extends, target: ADR-0036 }
+provenance: "`attach_subagents` mutated `result.usage` in place, so calling it twice silently doubled the bill of every spawned thread. The four cost fields were written in sequence from a foreign module, so any one could be written, or left, alone."
+enforced_in:
+  - src/pytest_xharness_eval/model/runresult.py
+  - src/pytest_xharness_eval/model/case.py
+  - src/pytest_xharness_eval/derive/skillcov.py
+  - src/pytest_xharness_eval/derive/ignorerules.py
 generated: { by: human:neozenith, at: 2026-08-28T00:00:00Z }
 ---
 
-# 0035: The nouns carry their own invariants
+> **Lens**: A rule that lives in a docstring is enforced by whoever read it last.
+> Put the sum on the type that owns it, make the multi-field write a single method, and give the record a name.
+> The illegal state then stops being something reviewers have to watch for.
 
-Status: accepted, 2026-08-28. Refines
-[0003](0003-runresult-is-a-stdlib-dataclass.md) (RunResult is a stdlib dataclass),
-[0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) (the per-call ledger),
-[0021](0021-metric-names-carry-unit-and-provenance.md) (rates travel with the
-estimate), [0022](0022-record-kind-catalogue-and-skill-coverage.md) (skill
-coverage), [0025](0025-results-name-their-case-and-charts-have-a-log-line-axis.md)
-(a result names its case) and
-[0033](0033-subagent-transcripts-are-captured-and-billed.md) (subagents are
-billed). Structural only: no serialised key and no metric's value changes. The
-folding constructors' keyword fields are declared and type-checked by
-[0036](0036-a-folding-constructor-declares-its-keyword-fields.md).
+## Relates to
 
-## Context
+- Extends [ADR-0003](0003-runresult-is-a-stdlib-dataclass.md) (the record's status line says "refines")
+- Extends [ADR-0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) (the record's status line says "refines"; the per-call ledger)
+- Extends [ADR-0021](0021-metric-names-carry-unit-and-provenance.md) (the record's status line says "refines"; rates travel with the estimate)
+- Extends [ADR-0022](0022-record-kind-catalogue-and-skill-coverage.md) (the record's status line says "refines"; skill coverage)
+- Extends [ADR-0025](0025-results-name-their-case-and-charts-have-a-log-line-axis.md) (the record's status line says "refines"; a result names its case)
+- Extends [ADR-0033](0033-subagent-transcripts-are-captured-and-billed.md) (the record's status line says "refines"; subagents are billed)
+- Extended by [ADR-0036](0036-a-folding-constructor-declares-its-keyword-fields.md) (the folding constructors' keyword fields are declared and type-checked there)
 
-0034 gave the *harness* axis a type and ended four dispatch idioms. Everything
-downstream of `SessionLog.to_result` was still dict-and-string plumbing, and four
-of this plugin's load-bearing rules survived only as prose repeated in docstrings:
+## Problem
+
+### Symptom
+
+0034 gave the *harness* axis a type and ended four dispatch idioms.
+Everything downstream of `SessionLog.to_result` was still dict-and-string plumbing, and four of this plugin's load-bearing rules survived only as prose repeated in docstrings:
 
 | Rule | How it was held | How it could break |
 | --- | --- | --- |
@@ -45,87 +45,72 @@ of this plugin's load-bearing rules survived only as prose repeated in docstring
 | `cost_status` is `priced` or `unpriced` | a `str` field with two string literals in two modules | a third spelling type-checked |
 | The case and the coverage records have fixed shapes | `dict[str, Any]`, hand-built in `pipeline.case_record`, `replay.case_meta` and `skillcov.annotate`/`catalog` | three hand-built copies of one key set, and `history.metrics_of` `.get()`-ing keys nothing guaranteed |
 
-Two of those are not stylistic. `Usage.add` was the only mutable accumulator in
-the model, and the one thing that must be summed exactly once is the number every
-verdict's cost is computed from. And the four cost fields written in sequence by
-another module is the same shape of defect 0034 removed from classification: the
-invariant lived in the caller, so every caller had to be trusted with it.
+### Pain point
 
-Each harness adapter also still exposed a `from_<provider>` module function that
-its `SessionLog.to_result` forwarded to in one line — the last remnant of the
-pre-0034 signatures, and the reason the fold sat outside the class that owns it.
+Two of those are not stylistic.
+`Usage.add` was the only mutable accumulator in the model.
+The one thing that must be summed exactly once is the number every verdict's cost is computed from.
+And the four cost fields written in sequence by another module is the same shape of defect 0034 removed from classification.
+The invariant lived in the caller, so every caller had to be trusted with it.
+
+Each harness adapter also still exposed a `from_<provider>` module function that its `SessionLog.to_result` forwarded to in one line.
+That was the last remnant of the pre-0034 signatures, and the reason the fold sat outside the class that owns it.
 
 ## Decision
 
-**A total is a value, not an accumulator.** `Usage` is frozen and gains `__add__`
-and `Usage.total(...)`. `Usage.add` is gone, and with it `normalise.sum_usage`
-and `normalise.attach_subagents`.
+### The lens
 
-**One folding constructor computes the bill once.** `RunResult.folded(calls,
-subagents, **fields)` sets `turns = len(calls)` and
-`usage = Σ calls + Σ subagents`, and sorts the subagents. `Subagent.folded(calls,
-...)` is its counterpart for one spawned thread. Both adapters build their result
-through it, so a second fold cannot bill a subagent twice — the failure mode is
-now unrepresentable rather than merely undocumented.
+- **Given**: A rule that lives in a docstring is enforced by whoever read it last.
+- **We prefer**: Invariants held by the types that own the data, over rules repeated in docstrings and trusted to every caller.
+  Those invariants are a frozen `Usage`, one folding constructor, an atomic `apply_cost`, and named records.
+- **Because**: The failure mode is then unrepresentable rather than merely undocumented.
+- **Unless**: the code is `pragma: no cover` by 0002.
+  The paid `run_claude` / `run_codex` spawn functions stay module-level, because a motion bug in them would be discovered only by spending money.
 
-**A price is applied atomically.** `pricing.CostEstimate` (total, per-tier split,
-`AppliedRates` provenance) is built by `CostEstimate.of(usage, rates)` and
-applied by the single method `RunResult.apply_cost`. `Rates` owns the arithmetic
-that prices a `Usage`. No module outside `runresult.py` writes a cost field.
-`cost_status` is a `StrEnum`: a `str` subclass, so `asdict` keeps the member and
-`json.dumps` writes the same word the wire format has always carried.
+### In practice
 
-**The two hand-built records become types.** `CaseRef` (`of` from a live case,
-`stored` from a capture) replaces `pipeline.case_record` and the mapping
-`replay.case_meta` returned. `SkillFile`, `FileCoverage`, `CoverageSummary` and
-`SkillCoverage` replace the mappings `skillcov.catalog` and `annotate` built;
-`SkillCoverage.over` derives the four path sets and the summary from the
-annotated rows in one place, so they cannot disagree with each other. `FileKind`
-and `Access` are `StrEnum`s.
-
-**The fold belongs to the session log.** `from_claude` and `from_codex` are gone;
-their bodies are `ClaudeSessionLog.to_result` and `CodexSessionLog.to_result`.
-The paid `run_claude` / `run_codex` spawn functions stay module-level: they are
-`pragma: no cover` by 0002, so a motion bug in them would be discovered only by
-spending money.
-
-**`ignorerules.py` is its own module.** The `xharness_skill_ignore` line
-selection and the gitignore-pattern subset know nothing about skills, runs or
-harnesses; `IgnoreRules.for_skill(skill, lines)` compiles them once and
-`.matches(rel)` is the only question asked of them. `skillcov.py` is now about
-coverage alone.
-
-**`asdict` stays the serialiser.** `RunResult.to_dict` is still `asdict(self)`
-plus derived keys, and never a per-field `.to_dict()` walk. That is what renders
-the typed records into the exact key sets they declare while passing a plain
-mapping straight through, and it is why `usage` stays a field rather than
-becoming a computed property — `asdict` drops properties, and `usage` is a key of
-`result.json`. The three optional records (`case`, `skill_coverage`,
-`rates_applied`) serialise as `{}` when absent, as they always have.
+- **A total is a value, not an accumulator.** `Usage` is frozen and gains `__add__` and `Usage.total(...)`.
+  `Usage.add` is gone, and with it `normalise.sum_usage` and `normalise.attach_subagents`.
+- **One folding constructor computes the bill once**.
+  `RunResult.folded(calls, subagents, **fields)` sets `turns = len(calls)` and `usage = Σ calls + Σ subagents`, and sorts the subagents.
+  `Subagent.folded(calls, ...)` is its counterpart for one spawned thread.
+  Both adapters build their result through it, so a second fold cannot bill a subagent twice.
+  The failure mode is now unrepresentable rather than merely undocumented.
+- **A price is applied atomically.** `pricing.CostEstimate` (total, per-tier split, `AppliedRates` provenance) is built by `CostEstimate.of(usage, rates)` and applied by the single method `RunResult.apply_cost`.
+  `Rates` owns the arithmetic that prices a `Usage`.
+  No module outside `runresult.py` writes a cost field.
+  `cost_status` is a `StrEnum`: a `str` subclass, so `asdict` keeps the member and `json.dumps` writes the same word the wire format has always carried.
+- **The two hand-built records become types.** `CaseRef` (`of` from a live case, `stored` from a capture) replaces `pipeline.case_record` and the mapping `replay.case_meta` returned.
+  `SkillFile`, `FileCoverage`, `CoverageSummary` and `SkillCoverage` replace the mappings `skillcov.catalog` and `annotate` built.
+  `SkillCoverage.over` derives the four path sets and the summary from the annotated rows in one place, so they cannot disagree with each other.
+  `FileKind` and `Access` are `StrEnum`s.
+- **The fold belongs to the session log.** `from_claude` and `from_codex` are gone; their bodies are `ClaudeSessionLog.to_result` and `CodexSessionLog.to_result`.
+  The paid `run_claude` / `run_codex` spawn functions stay module-level.
+  They are `pragma: no cover` by 0002, so a motion bug in them would be discovered only by spending money.
+- **`ignorerules.py` is its own module.** The `xharness_skill_ignore` line selection and the gitignore-pattern subset know nothing about skills, runs or harnesses.
+  `IgnoreRules.for_skill(skill, lines)` compiles them once, and `.matches(rel)` is the only question asked of them.
+  `skillcov.py` is now about coverage alone.
+- **`asdict` stays the serialiser.** `RunResult.to_dict` is still `asdict(self)` plus derived keys, and never a per-field `.to_dict()` walk.
+  That is what renders the typed records into the exact key sets they declare, while passing a plain mapping straight through.
+  It is also why `usage` stays a field rather than becoming a computed property.
+  `asdict` drops properties, and `usage` is a key of `result.json`.
+  The three optional records (`case`, `skill_coverage`, `rates_applied`) serialise as `{}` when absent, as they always have.
 
 ## Consequences
 
-Every serialised contract is unchanged, and that is checked rather than claimed:
-`tests/test_characterization.py` pins the whole `RunResult` of a rich capture per
-dialect, and pins that a replay reproduces the live result from the captured
-directory alone. Both goldens are byte-identical across this change, so
-`report.py`, `report-ui/src/lib/types.ts` and the glossary stay valid.
+### Pros
 
-`history.metrics_of` reads attributes instead of `.get()`-ing keys, but still
-emits a flat mapping of builtins: that record travels to the xdist controller on
-`TestReport.user_properties`, which serialises builtins only (0016). The dict
-boundary is deliberate and now stated where it is crossed.
+- Every serialised contract is unchanged, and that is checked rather than claimed.
+  `tests/test_characterization.py` pins the whole `RunResult` of a rich capture per dialect.
+  It also pins that a replay reproduces the live result from the captured directory alone.
+  Both goldens are byte-identical across this change, so `report.py`, `report-ui/src/lib/types.ts` and the glossary stay valid.
+- `skillcov.py` drops from 491 to 397 lines; `runresult.py` grows to 382 as the invariants move next to the data they constrain.
+- The unit tests changed shape with the API.
+  Mapping subscripts became attribute access, and the two `from_<provider>` call sites became their session-log classes.
+  No assertion was weakened to accommodate the move.
 
-`skillcov.py` drops from 491 to 397 lines; `runresult.py` grows to 382 as the
-invariants move next to the data they constrain.
+### Cons
 
-The unit tests changed shape with the API — mapping subscripts became attribute
-access, the two `from_<provider>` call sites became their session-log classes —
-and no assertion was weakened to accommodate the move.
-
-## Lens
-
-A rule that lives in a docstring is enforced by whoever read it last. Put the
-sum on the type that owns it, make the multi-field write a single method, and
-give the record a name — then the illegal state stops being something reviewers
-have to watch for.
+- `history.metrics_of` reads attributes instead of `.get()`-ing keys, but still emits a flat mapping of builtins.
+  That record travels to the xdist controller on `TestReport.user_properties`, which serialises builtins only (0016).
+  The dict boundary is deliberate and now stated where it is crossed.
