@@ -284,6 +284,26 @@ def test_resolve_is_prefix_tolerant_both_ways() -> None:
     assert pricing.resolve("gpt-5.6", table) in (table["gpt-5.6-sol"], table["gpt-5.6-luna"])
 
 
+def test_a_blank_model_is_unknown_not_the_first_row() -> None:
+    """A session that ended before naming a model has no price, not the priciest one.
+
+    ``key.startswith("")`` is true for every row, so an empty model used to resolve to
+    whichever row ``prices.toml`` declares first -- ``claude-opus-5`` -- and reported a
+    confident figure. Nineteen sessions in a real corpus fold this way. The assertions
+    below pin both halves: that it raises, and that it does not quietly return the row it
+    used to.
+    """
+    table = pricing.load_table()
+    for blank in ("", " ", "\t", "  \n "):
+        with pytest.raises(pricing.PricingError, match="blank model"):
+            pricing.resolve(blank, table)
+    # The row it used to resolve to, named explicitly: this test fails loudly if a future
+    # change reinstates first-match-wins for the empty string rather than merely changing
+    # the message.
+    assert "claude-opus-5" in table
+    assert next(iter(table)) == "claude-opus-5"
+
+
 def test_unknown_model_raises_rather_than_pricing_zero() -> None:
     table = pricing.load_table()
     with pytest.raises(pricing.PricingError, match="Refusing to price as zero"):
