@@ -2,7 +2,8 @@
 
 **Status:** exploration, no decision made. **Before you start:** you need nothing but arithmetic.
 
-This is the distillation of one long research session on whether "reviewable code" can be measured well enough to gate on, or to hand an AI as a target.
+This is the distillation of one long research session.
+The question was whether "reviewable code" can be measured well enough to gate on, or to hand an AI as a target.
 Everything below was either measured against this repository or traced to a primary source.
 
 The full working set -- five research files, about 200 verified citations, and two long illustrative guides -- was collapsed into this file.
@@ -33,6 +34,13 @@ git checkout 1751e95 -- docs/plans/maintainability/research/
   - [What is still open](#what-is-still-open)
   - [The compact rule](#the-compact-rule)
   - [References](#references)
+  - [How conductance on a call graph measures maintainability](#how-conductance-on-a-call-graph-measures-maintainability)
+    - [What the graph is](#what-the-graph-is)
+    - [What conductance measures on it](#what-conductance-measures-on-it)
+    - [Why it is a damper and length is not](#why-it-is-a-damper-and-length-is-not)
+    - [How this raises model and lowers residual](#how-this-raises-model-and-lowers-residual)
+    - [Why you cannot just minimise the leftover](#why-you-cannot-just-minimise-the-leftover)
+    - [What this does not yet do](#what-this-does-not-yet-do)
 
 <!--TOC-->
 </details>
@@ -134,7 +142,8 @@ flowchart LR
 ```
 
 This is not an analogy we invented.
-Grunwald and Vitanyi use exactly it: a sequence of observations of heavenly bodies splits into `p`, the laws of gravity, and `d`, the measurement errors.
+Grunwald and Vitanyi use exactly it.
+A sequence of observations of heavenly bodies splits into `p`, the laws of gravity, and `d`, the measurement errors.
 
 **Minimum Description Length** (Rissanen, 1978) makes it countable: minimise `L(H) + L(D given H)`, where `L` is length, `H` is the model and `D` is the data.
 
@@ -182,8 +191,8 @@ BIC = k ln(n)  - 2 ln(L)      penalty per name: ln(n)
 
 ![AIC charges a flat 2 per name; BIC charges ln(n), rising with the codebase](img/aic-bic-penalty.png)
 
-This repository is 6,882 lines. `ln(6882)` is **8.8**.
-So `BIC` charges 8.8 per new name where `AIC` charges 2 -- **4.4 times more**.
+This repository is 6,974 lines. `ln(6974)` is **8.85**.
+So `BIC` charges 8.85 per new name where `AIC` charges 2 -- **4.4 times more**.
 
 **Takeaway:** The right price of a new abstraction is not a fixed threshold.
 It rises with the size of the codebase it lands in, which is a calibration with a derivation behind it rather than a percentile.
@@ -211,7 +220,8 @@ The discriminator is **leverage**: how many sites does this one name save you fr
 The ADR 0034 registry has leverage 6 and rising.
 A wrapper around one ternary has leverage 1.
 
-**Takeaway:** Leverage per name is computable from an LSP call graph today, and it is the one measurement that separates the refactor worth doing from the one that only improves the score.
+**Takeaway:** Leverage per name is computable from an LSP call graph today.
+It is the one measurement here that separates the refactor worth doing from the one that only improves the score.
 
 ---
 
@@ -231,8 +241,8 @@ Yang (2005) proved no single criterion does both well.
 
 Three findings that should stop us reinventing anything.
 
-**Distribution beats per-unit caps.** The SIG maintainability model gates on the *percentage of code in each risk band*, across four mutually damping axes, with thresholds calibrated on ~200 systems.
-Its 4-star bands:
+**Distribution beats per-unit caps.** The SIG maintainability model gates on the *percentage of code in each risk band*, across four mutually damping axes.
+Its thresholds are calibrated on ~200 systems, and its 4-star bands are these:
 
 | Axis | Band 1 | Band 2 | Band 3 |
 |---|---|---|---|
@@ -248,7 +258,11 @@ Its actual recommended policy is softer than the folklore: limit to 10 **or prov
 **The vendors moved to ratchets.** Google's Tricorder abandoned whole-codebase bug-filing after **84% of filed bugs were never fixed**, and now gates only the change under review.
 SonarSource's own docs say they do not recommend adding conditions for overall code to a quality gate.
 
-**Takeaway:** Gate the change, not the codebase; gate a distribution, not a unit; and let an exceedance buy its way out with a written reason -- which is the policy this repo's ADR habit already implements.
+**Takeaway:** Three rules, and this repo's ADR habit already implements the third.
+
+- Gate the change, not the codebase.
+- Gate a distribution, not a unit.
+- Let an exceedance buy its way out with a written reason.
 
 ---
 
@@ -277,7 +291,8 @@ Two lessons that cost us a rewrite:
 - **Count only terms a reader cannot learn by doing.** `--dry-run` is free because you can run it. `L(D given H)` is not.
   By that measure this repo's `README.md` carries 1 formal term and the MDL guide carried 30.
 
-**Takeaway:** Declare prerequisites in the first paragraph and define every symbol at first use, because a missing definition costs a reader more than a hard idea does.
+**Takeaway:** Declare prerequisites in the first paragraph, and define every symbol at first use.
+A missing definition costs a reader more than a hard idea does.
 
 ---
 
@@ -289,12 +304,17 @@ Four options remain, and the evidence points unevenly.
 | Option | What it is | Strongest point against |
 |---|---|---|
 | **Enforced gate portfolio** | Opposing per-unit caps in `make check`: `C901` plus `PLR0913` args, `PLR0915` statements, `PLR1702` nesting | Every threshold is a convention; per-unit maxima are what the industry moved away from |
-| **Distribution gate** | SIG-style risk profiles over four damping axes | No Python implementation exists; at 6,882 lines one function moves a band by ~1% |
+| **Distribution gate** | SIG-style risk profiles over four damping axes | No Python implementation exists; at 6,974 lines one function moves a band by ~1% |
 | **Change ratchet** | `complexipy --diff` fails only on regression | Ratcheting has no peer-reviewed evaluation; agents rewrite whole files, so "the diff" is often the module |
 | **Doctrine, no gate** | Delete the gate that measures nothing; route exceedances through an ADR with an owner and a review date | Nothing stops drift; relies on someone reading |
 
 **The cheapest high-value change is none of the four:** add a function-length limit.
-It is the best-evidenced static predictor of comprehension difficulty there is, this repo's largest files are 478 / 472 / 468 lines, and it costs one line of `ruff` config.
+It is the best-evidenced static predictor of comprehension difficulty there is, and it costs one line of `ruff` config.
+
+It would also cost nothing to adopt.
+This repo's longest functions are 70 / 49 / 45 / 42 NLOC.
+A cap at 50 binds exactly one of the 310, `pytest_addoption`, which is an argparse registration block.
+That is the argument for adopting it now rather than later, when the debt is real.
 
 **The most promising new measurement is leverage per name**, from an LSP call graph.
 It is the only candidate here that separates deduplication from tidying, and nothing in the literature does it yet.
@@ -303,7 +323,10 @@ It is the only candidate here that separates deduplication from tidying, and not
 
 ## The compact rule
 
-**Cyclomatic complexity scores branching per unit, and extraction only moves that branching, so a gate on it has no floor.** **Reviewing cost is the leftover after the rules you already know, never the total, so score the split rather than a blended number.** **Pair a metric only with one that rises when it falls, and price every new name explicitly, because the cheapest move an optimiser can make is always to add one.**
+> Cyclomatic complexity scores branching per unit, and extraction only moves that branching, so a gate on it has no floor.
+> Reviewing cost is the leftover after the rules you already know, never the total, so score the split rather than a blended number.
+> Pair a metric only with one that rises when it falls.
+> Price every new name explicitly, because the cheapest move an optimiser can make is always to add one.
 
 ---
 
@@ -332,3 +355,109 @@ git checkout 1751e95 -- docs/plans/maintainability/research/
 
 **Status note.** Nobody has published work applying description-length ideas to source-code reviewability.
 The mapping from `L(H) + L(D given H)` onto code is ours, and it is not a cited result.
+
+---
+
+## How conductance on a call graph measures maintainability
+
+This section answers three questions asked after the first draft.
+The measurements behind it are in [scorecard.md](scorecard.md), which computes everything named here against this repository.
+
+### What the graph is
+
+An LSP gives you a call graph for free.
+`textDocument/prepareCallHierarchy` and `callHierarchy/incomingCalls` return, for any name, the places that call it.
+Run that over every callable and you have a directed graph: **each node is a name, each edge is one call site**.
+
+This repository has 312 callables and 380 call edges.
+
+### What conductance measures on it
+
+Conductance scores a *set* of nodes, not a unit of code.
+
+```
+cut(S)   edges with exactly one endpoint in S
+vol(S)   edge endpoints incident to S
+phi(S) = cut(S) / min(vol(S), vol(rest))
+```
+
+Take the set to be one folder.
+Then `cut` is the calls that leave the folder, and `vol` is all the calls the folder participates in.
+So `phi` is **the share of a module's call traffic that crosses its own boundary**.
+
+A `phi` near 0 means a module you can read on its own.
+A `phi` near 1 means a module whose every line sends you somewhere else.
+That is the same thing a reviewer means by a module being self-contained, and it is now a number.
+
+### Why it is a damper and length is not
+
+This is the part that matters for gating.
+
+Every metric we already gate on is a **count**: lines, statements, branches, nesting.
+Counts fall when you subdivide, and subdivision is what extraction *is*.
+So a gate on any count can always be satisfied by extracting, without changing the program at all.
+That is the "no floor" problem, and it is why the existing gate measures nothing.
+
+Conductance is a **ratio**.
+Subdividing a module raises `cut` and `vol` together, so the ratio does not fall for free.
+An extraction that genuinely groups related code lowers it, and an extraction that only moves code around raises it.
+
+> The rule that generalises the whole two-springs table: a spring is a count, and a damper has to be a ratio.
+
+### How this raises model and lowers residual
+
+Here is the connection back to [Split a description into a model and a leftover](#split-a-description-into-a-model-and-a-leftover).
+
+A folder structure is not filing.
+It is a **model** of the code, and it makes exactly one prediction: *a call stays inside its folder*.
+
+Every call that crosses a folder boundary is a prediction that model got wrong.
+It is a fact the reader has to carry individually, because no rule produced it.
+That is `L(D given H)`, the leftover, made countable.
+
+So the two halves have concrete meanings on this graph.
+
+| Half | On a call graph | Lower is better because |
+|---|---|---|
+| `L(H)`, the model | how many folders you must learn | each one is a name with a price, exactly like `BIC`'s `ln(n)` |
+| `L(D given H)`, the leftover | the calls that cross a folder boundary | each one is an exception you memorise |
+
+**Conductance of the declared partition is the leftover, normalised.** That is the link between the two documents.
+A codebase whose folders match its call graph has a small leftover, which is what "high model, low residual" means in practice.
+A codebase whose folders cut through cohesive clusters makes you memorise the difference.
+
+### Why you cannot just minimise the leftover
+
+The trap is worth stating, because we walked into it.
+
+A community detection algorithm such as `graph_leiden` will happily lower the leftover by inventing more clusters.
+At the limit, one cluster per name has no leftover at all and explains nothing.
+Comparing two partitions by their leftover alone therefore rewards shredding the codebase.
+
+Both halves have to be scored.
+Doing that over this repository's 276 connected names:
+
+| Partition | Clusters | `L(H)` | `L(D given H)` | **Bits saved per boundary** |
+|---|---|---|---|---|
+| One cluster, no architecture | 1 | 0 | 3081 | 0 |
+| **The declared folders** | **8** | 828 | 2446 | **90.7** |
+| One cluster per file | 37 | 1438 | 2216 | 24.0 |
+| Leiden communities | 85 | 1769 | 1746 | 15.9 |
+| One cluster per name | 276 | 2238 | 3081 | 0 |
+
+Read the last column.
+The eight hand-drawn folders save 90.7 bits of leftover for every boundary they ask you to learn.
+A file boundary saves 24.0 and a Leiden community saves 15.9.
+
+That is the same shape as leverage per name, asked of a boundary instead of a name.
+
+**Takeaway:** conductance turns "does this structure match how the code actually works" into one measurable number.
+The two-part code stops that number from being gamed by adding structure.
+
+### What this does not yet do
+
+Three honest limits, expanded in [scorecard.md](scorecard.md).
+
+- No thresholds exist. Every band is a guess, and nothing like the SIG calibration has been done for conductance.
+- The measure degenerates below a volume floor. A module with no internal calls scores 1.0 and a module whose callers are out of tree scores 0.0, and both are noise.
+- Nothing here is validated against review effort. These are better arguments than cyclomatic complexity, which is not the same as being better predictors.
