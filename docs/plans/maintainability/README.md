@@ -41,6 +41,12 @@ git checkout 1751e95 -- docs/plans/maintainability/research/
     - [How this raises model and lowers residual](#how-this-raises-model-and-lowers-residual)
     - [Why you cannot just minimise the leftover](#why-you-cannot-just-minimise-the-leftover)
     - [What this does not yet do](#what-this-does-not-yet-do)
+  - [Session 2: what conductance is for, and what we still cannot extract](#session-2-what-conductance-is-for-and-what-we-still-cannot-extract)
+    - [Why conductance, in one paragraph](#why-conductance-in-one-paragraph)
+    - [What we still cannot extract, and the skepticism is correct](#what-we-still-cannot-extract-and-the-skepticism-is-correct)
+    - [What would actually settle it](#what-would-actually-settle-it)
+    - [The rest of what this session established](#the-rest-of-what-this-session-established)
+    - [Where to pick this up](#where-to-pick-this-up)
 
 <!--TOC-->
 </details>
@@ -461,3 +467,114 @@ Three honest limits, expanded in [scorecard.md](scorecard.md).
 - No thresholds exist. Every band is a guess, and nothing like the SIG calibration has been done for conductance.
 - The measure degenerates below a volume floor. A module with no internal calls scores 1.0 and a module whose callers are out of tree scores 0.0, and both are noise.
 - Nothing here is validated against review effort. These are better arguments than cyclomatic complexity, which is not the same as being better predictors.
+
+---
+
+## Session 2: what conductance is for, and what we still cannot extract
+
+Two questions survived the last session's explanations.
+They are answered first, because the rest of this section only matters if these land.
+
+The code that produced everything below is in [tools/](tools/).
+It was lifted into this folder so it runs without the `.claude` skill tree.
+
+### Why conductance, in one paragraph
+
+Every other code metric scores something you can see by opening a file.
+Lines, branches, parameters, nesting: all of them are properties of the text in front of you.
+
+**Conductance scores the thing you cannot see by reading.** That is the whole claim.
+
+When you open a module you cannot tell how much of it reaches outside itself.
+That information is spread across every other file in the repository.
+Conductance is that number, and nothing else on the list is it.
+
+Concretely, it answers one question a reviewer genuinely cannot answer alone.
+
+> If I change this module, how much of the rest of the codebase do I need to hold in my head?
+
+`verify/` scores 0.091, so the answer there is "almost none".
+`<root>` scores 0.756, so the answer there is "most of it".
+
+That is why the word for what we are measuring is *reviewability* rather than *quality*.
+
+
+**What it does not do yet.** There is no threshold separating a good score from a bad one.
+Conductance cannot gate anything today.
+It ranks modules against each other in an order an architect recognises.
+That is the entire demonstrated value.
+Anyone who tells you a `phi` of 0.4 is a problem is making that up.
+
+### What we still cannot extract, and the skepticism is correct
+
+The skepticism about open-source extraction of a program's real call structure is **right**.
+This session produced evidence for that position rather than against it.
+
+Every one of these was found by accident, while doing something else.
+
+| What happened | How it failed |
+|---|---|
+| The skill's index recorded 0 references | `semanticTokens` is a Pylance feature, pyright returns empty, code read `if not data: return 0` |
+| `index` reported success with an empty graph | exit code 0, `files_indexed: 0`, error buried in the JSON payload |
+| Closing each file after indexing it | a server answers a position in a closed file with an empty result, not an error |
+| Pointing the server at a subdirectory | pyright resolved fewer imports and found **189 edges instead of 380** |
+| Matching a caller by line alone | a parameter is a definition on the same line as its function, so the wrong symbol matched |
+| 187 phantom TypeScript symbols | `map() callback` reported as a named function |
+| 39 renderers invisible | reached through a `Record<string, fn>` dispatch table |
+
+Six of those seven produce a **plausible wrong answer rather than an error**.
+That is the actual problem, and it is worse than the tooling simply being absent.
+
+There is a further gap that is not a bug in anything.
+
+- **Dynamic dispatch is invisible by construction.** A lookup table has no static call edge.
+- **Registry and decorator indirection is invisible.** `pluggy` calls this repo's pytest hooks and no static edge exists.
+- **We under-count call sites by a third.** 380 distinct edges against 515 actual sites, because `fromRanges` was being discarded.
+
+**So treat every graph in this work as a lower bound, never a census.**
+
+### What would actually settle it
+
+We never did the one test that would.
+Nothing here has been checked against a call graph somebody wrote down by hand.
+
+The honest next step is a **ground-truth fixture**.
+A small program whose every call is known, committed with an expected edge list, asserted against per language.
+Two implementations of the same *metric* agreeing says nothing about whether the input graph is right.
+We have that agreement exactly, against `sqlite-muninn`, and it does not settle this.
+
+**Takeaway:** the metric arithmetic is cross-validated and the extraction is not.
+The next piece of work is a fixture, not a feature.
+
+### The rest of what this session established
+
+**`sqlite-muninn` 0.6.0 implements `graph_conductance`**, from [issue 31](https://github.com/neozenith/sqlite-muninn/issues/31) raised during this session.
+Its C implementation and our Python one agree to 0.00046 across 14 clusters in two languages.
+That is rounding.
+It scores any caller-supplied labelling, which is the operation Leiden cannot do.
+
+**Speed is not the reason to use it.** A single-pass Python implementation beats it at every size we tested.
+Crossing the SQL boundary costs more than dict operations on data already in memory.
+
+The 8 to 11 times speedup it appears to offer is entirely against our own naive `O(k*E)` loop.
+Use it because the graph already lives in SQLite, and because it composes with Leiden and PageRank in one query.
+Do not use it because it is fast.
+
+**The measurement survives the call-site correction.** Weighting each edge by its true site count moves `phi` by at most 0.059.
+
+No layer moves into a different band.
+The conductance numbers in [scorecard.md](scorecard.md) and [scorecard-webapp.md](scorecard-webapp.md) stand.
+The leverage numbers in both are conservative by about a third.
+
+**Both codebases beat every alternative partition.** The hand-drawn folders beat per-file and Leiden.
+That is measured as bits of residual saved per boundary.
+That holds in Python and in TypeScript.
+Python scores 90.7 and the webapp 46.5.
+The difference is what a lint-enforced layering rule buys over organising by convention.
+
+### Where to pick this up
+
+- **To re-run anything:** [tools/](tools/), which is self-contained. `lsp.py` is the amended fork of the skill's indexer and its docstring lists every amendment with the failure it was hiding.
+- **To understand the metric:** [scorecard.md](scorecard.md).
+- **To see it on a second language:** [scorecard-webapp.md](scorecard-webapp.md).
+- **The one thing worth building next:** the ground-truth fixture described above.
