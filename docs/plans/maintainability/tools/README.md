@@ -52,6 +52,9 @@ uv run --python 3.13 tools/mdl.py --graph tmp/conductance/callgraph.json
 | `bench.py` | three conductance implementations timed against each other at increasing graph size |
 | `validate_muninn.py` | cross-checks our Python conductance against `sqlite-muninn` 0.6.0 |
 | `weighted.py` | whether counting call sites rather than distinct callers changes the verdict |
+| `treesitter.py` | the second extractor: parses source directly, resolves by name, carries the full boundary nesting |
+| `levels.py` | conductance at every boundary level, language through class |
+| `compare.py` | edge-by-edge diff of two extractions of the same code |
 
 ## Two ways to run the indexer
 
@@ -83,3 +86,38 @@ If it reports zero edges it now says so loudly rather than exiting 0.
 Dynamic dispatch, decorator and plugin registries, and anything reached by reflection.
 Treat every graph these produce as a lower bound rather than a census.
 Read [../README.md](../README.md), "What we still cannot extract", before trusting a score.
+
+## The second extractor: tree-sitter
+
+`treesitter.py` parses source directly, with no language server.
+
+```bash
+uv run tools/treesitter.py src/pytest_xharness_eval --out tmp/conductance/ts-py.json
+uv run tools/treesitter.py report-ui/src --out tmp/conductance/ts-ui.json --exclude "__tests__,.test."
+uv run tools/treesitter.py src/pytest_xharness_eval report-ui/src --out tmp/conductance/ts-all.json --exclude "__tests__,.test."
+
+uv run tools/levels.py tmp/conductance/ts-all.json     # conductance at every boundary
+uv run tools/compare.py tmp/conductance/callgraph.json tmp/conductance/ts-py.json
+```
+
+It resolves calls by **name**, not by type, so it trades precision for reach.
+Two rules keep the guessing honest.
+
+- A call with a receiver (`x.foo()`) may only match a definition inside a class, and a bare call only one outside. Without that rule every `d.get(k)` on a dict resolved to the module-level `get` in `harness/base.py`.
+- Resolution never crosses a language. A Python `of` and a TypeScript `of` share a name and nothing else.
+
+## The two extractors disagree, and that is the finding
+
+Measured on this repository, LSP against tree-sitter:
+
+| | LSP edges | tree-sitter edges | agreed | tree-sitter precision | tree-sitter recall |
+|---|---|---|---|---|---|
+| Python | 380 | 225 | 207 | 92% | 54% |
+| TypeScript | 247 | 542 | 246 | 45% | **100%** |
+
+On Python the LSP wins, because pyright resolves types and tree-sitter cannot.
+On TypeScript tree-sitter finds every edge the LSP found, and 296 more.
+That is the first real explanation for the 57% orphan rate in `scorecard-webapp.md`.
+
+Neither is ground truth and they agree on about half the union.
+Use both and read the disagreement.

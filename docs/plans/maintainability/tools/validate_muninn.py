@@ -24,7 +24,7 @@ from pathlib import Path
 import sqlite_muninn
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[3]
+REPO = HERE.parents[4]
 # Graph JSON lives with the run output, not beside the script.
 DATA = Path(os.environ.get("CONDUCTANCE_DATA", REPO / "tmp" / "conductance"))
 

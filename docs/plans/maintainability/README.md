@@ -22,7 +22,8 @@ git checkout 1751e95 -- docs/plans/maintainability/research/
 
 - [Measuring maintainability: what we learned, and what is still open](#measuring-maintainability-what-we-learned-and-what-is-still-open)
   - [The gate we already have measures almost nothing](#the-gate-we-already-have-measures-almost-nothing)
-  - [Cyclomatic complexity does not predict comprehension. Length does.](#cyclomatic-complexity-does-not-predict-comprehension-length-does)
+  - [Cyclomatic complexity does not predict comprehension.
+    Length does.](#cyclomatic-complexity-does-not-predict-comprehension-length-does)
   - [Most metric pairs are two springs](#most-metric-pairs-are-two-springs)
   - [Split a description into a model and a leftover](#split-a-description-into-a-model-and-a-leftover)
   - [You can always refactor more, and that is a theorem](#you-can-always-refactor-more-and-that-is-a-theorem)
@@ -54,6 +55,9 @@ git checkout 1751e95 -- docs/plans/maintainability/research/
     - [The thought experiment that shows it](#the-thought-experiment-that-shows-it)
     - [Boundaries nest](#boundaries-nest)
     - [The cross-language boundary is real and already here](#the-cross-language-boundary-is-real-and-already-here)
+  - [Measured at every boundary, with a second extractor](#measured-at-every-boundary-with-a-second-extractor)
+    - [The cross-language edge is missing, and the tool proves it](#the-cross-language-edge-is-missing-and-the-tool-proves-it)
+    - [What the second extractor settled](#what-the-second-extractor-settled)
 
 <!--TOC-->
 </details>
@@ -378,8 +382,7 @@ The measurements behind it are in [scorecard.md](scorecard.md), which computes e
 
 ### What the graph is
 
-An LSP gives you a call graph for free.
-`textDocument/prepareCallHierarchy` and `callHierarchy/incomingCalls` return, for any name, the places that call it.
+An LSP gives you a call graph for free. `textDocument/prepareCallHierarchy` and `callHierarchy/incomingCalls` return, for any name, the places that call it.
 Run that over every callable and you have a directed graph: **each node is a name, each edge is one call site**.
 
 This repository has 312 callables and 380 call edges.
@@ -471,9 +474,12 @@ The two-part code stops that number from being gamed by adding structure.
 
 Three honest limits, expanded in [scorecard.md](scorecard.md).
 
-- No thresholds exist. Every band is a guess, and nothing like the SIG calibration has been done for conductance.
-- The measure degenerates below a volume floor. A module with no internal calls scores 1.0 and a module whose callers are out of tree scores 0.0, and both are noise.
-- Nothing here is validated against review effort. These are better arguments than cyclomatic complexity, which is not the same as being better predictors.
+- No thresholds exist.
+  Every band is a guess, and nothing like the SIG calibration has been done for conductance.
+- The measure degenerates below a volume floor.
+  A module with no internal calls scores 1.0 and a module whose callers are out of tree scores 0.0, and both are noise.
+- Nothing here is validated against review effort.
+  These are better arguments than cyclomatic complexity, which is not the same as being better predictors.
 
 ---
 
@@ -500,8 +506,7 @@ Concretely, it answers one question a reviewer genuinely cannot answer alone.
 
 > If I change this module, how much of the rest of the codebase do I need to hold in my head?
 
-`verify/` scores 0.091, so the answer there is "almost none".
-`<root>` scores 0.756, so the answer there is "most of it".
+`verify/` scores 0.091, so the answer there is "almost none". `<root>` scores 0.756, so the answer there is "most of it".
 
 That is why the word for what we are measuring is *reviewability* rather than *quality*.
 
@@ -655,8 +660,10 @@ That was convenient and it is not the interesting structure.
 
 Take `src/pytest_xharness_eval/` and flatten it.
 
-- **Every module in one folder.** Worse, and it should register as worse. It should not register as a catastrophe, because nothing about the code changed.
-- **Every module in one file.** Worse again. Still capable of being a well-structured codebase with a minimal, correct expression of the same behaviour.
+- **Every module in one folder.** Worse, and it should register as worse.
+  It should not register as a catastrophe, because nothing about the code changed.
+- **Every module in one file.** Worse again.
+  Still capable of being a well-structured codebase with a minimal, correct expression of the same behaviour.
 
 If a metric reports either of those as a large regression, the metric is scoring filing rather than code.
 The structure that survives both moves is the one worth measuring.
@@ -686,9 +693,7 @@ A folder boundary is filing, which a reviewer can change without touching a line
 A frontend calling a REST endpoint is a call site.
 The compiler cannot see it, both sides depend on it, and breaking it breaks the system.
 
-This repository has exactly that edge, with no HTTP involved.
-`emit/index.py` writes `report/index.json`.
-`report-ui/src/lib/types.ts` declares the shape it reads back, and [CLAUDE.md](../../../CLAUDE.md) names them as a pair that must change together.
+This repository has exactly that edge, with no HTTP involved. `emit/index.py` writes `report/index.json`. `report-ui/src/lib/types.ts` declares the shape it reads back, and [CLAUDE.md](../../../CLAUDE.md) names them as a pair that must change together.
 
 That is a call across a language boundary mediated by a document rather than a wire.
 Scoring the two codebases separately treats that edge as absent from both.
@@ -696,3 +701,65 @@ That is the whole problem with measuring per-language and stopping there.
 
 **Takeaway:** conductance is a function of a partition, so the question is never "what is the score".
 It is "at which boundary", and folders are the weakest candidate on the list.
+
+---
+
+## Measured at every boundary, with a second extractor
+
+The prediction in the section above was that the signal sits in the middle of the boundary table, and that folders are the weakest candidate.
+Both codebases were re-extracted with tree-sitter and scored at every level.
+
+`inside %` is the share of call edges that do **not** cross that boundary.
+A boundary almost nothing crosses cannot discriminate, and neither can one almost everything crosses.
+
+| Level | Python `src/` | TypeScript `report-ui/src/` |
+|---|---|---|
+| language | 100% | 100% |
+| folder | 74% | 61% |
+| **file** | **63%** | **39%** |
+| class | 40% | 39% |
+
+The folder row separates the two codebases by 13 points and the file row by 24.
+The file boundary discriminates roughly twice as well as the folder, on the only two codebases we have.
+That is weak evidence and it points the way the intuition said it would.
+
+The class row collapses to about 40% for both, which is what a boundary that is crossed by almost everything looks like.
+It is approaching the function level, where a crossing is the definition of a call.
+
+### The cross-language edge is missing, and the tool proves it
+
+Scoring both trees together, 635 callables and 767 edges:
+
+| Level | Clusters | Inside % |
+|---|---|---|
+| **language** | **2** | **100%** |
+| folder | 18 | 65% |
+| file | 99 | 46% |
+| class | 143 | 40% |
+
+**Zero edges cross the language boundary.** By the graph, `src/pytest_xharness_eval/` and `report-ui/src/` are unrelated programs that happen to share a repository.
+
+That is false. `emit/index.py` writes `report/index.json` and `report-ui/src/lib/types.ts` declares the shape it reads back, which [CLAUDE.md](../../../CLAUDE.md) already requires to change together.
+No parser can see that edge, because it is a contract rather than a call.
+
+**Takeaway:** a cross-language score is not a matter of parsing both languages, which we now do.
+The edges that matter are the ones no grammar contains, so they have to be declared.
+
+### What the second extractor settled
+
+`treesitter.py` resolves by name, `callgraph.py` resolves by type, and they disagree on about half the union of their edges.
+
+| | LSP | tree-sitter | agreed | tree-sitter precision | tree-sitter recall |
+|---|---|---|---|---|---|
+| Python | 380 | 225 | 207 | 92% | 54% |
+| TypeScript | 247 | 542 | 246 | 45% | **100%** |
+
+On Python the LSP is the better instrument, because pyright resolves types and a grammar cannot.
+On TypeScript tree-sitter found every edge the LSP found, and 296 more.
+That is the first real explanation for the 57% orphan rate in [scorecard-webapp.md](scorecard-webapp.md).
+
+The webapp numbers in that document were computed on a graph missing more than half its edges.
+The conclusions there about which folders are deep should be treated as provisional until it is re-run.
+
+**Takeaway:** two extractors that disagree by half are two lower bounds.
+The ground-truth fixture is now the blocking piece of work rather than a nice-to-have.

@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import lsp as lx  # noqa: E402  -- the amended fork in this directory
