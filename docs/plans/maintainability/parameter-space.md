@@ -21,6 +21,7 @@ It also runs the TypeScript codebase for the first time, and records four intuit
   - [Granularity saturates in both languages](#granularity-saturates-in-both-languages)
   - [A codebase as a network, and its hyperparameters](#a-codebase-as-a-network-and-its-hyperparameters)
   - [Double descent: not observed, and not yet ruled out](#double-descent-not-observed-and-not-yet-ruled-out)
+  - [The classic metrics, run over the same rearrangements](#the-classic-metrics-run-over-the-same-rearrangements)
   - [The concerns to run to ground](#the-concerns-to-run-to-ground)
 
 <!--TOC-->
@@ -232,3 +233,67 @@ Carried forward explicitly so none of them is lost.
 **The honest summary.** The sweep now covers filing thoroughly, structure partially, and two of the four archetypes named as likely to differ.
 It has produced one genuine metric failure, one working damper, and a first archetype comparison.
 It has produced no evidence at all that any of these numbers track what a reviewer would call better code.
+
+---
+
+## The classic metrics, run over the same rearrangements
+
+`ruff` C901, `radon`, `lizard` and `complexipy` were run across every variant.
+The point was not to rank the tools but to test one prediction from [You can always refactor more, and that is a theorem](README.md#you-can-always-refactor-more-and-that-is-a-theorem).
+
+Extraction is subdivision, and subdivision lowers every per-unit count for free.
+So adding do-nothing wrappers must lower cyclomatic complexity while changing nothing a program does.
+
+It does.
+
+```plotly
+{ "data": "data/cap-response.json" }
+```
+
+Percent change from the real codebase, on three metric families at once.
+
+| Transform | modularity `Q` | mean cyclomatic | tokens |
+|---|---|---|---|
+| **Every module in one folder** | **-100%** | **0%** | **0%** |
+| Every module in one file | -100% | 0% | 0% |
+| Every function folded into a class | -48% | 0% | 0% |
+| **Extract a wrapper per statement** | **0%** | **-44%** | +24% |
+| Extract every 3 statements | 0% | -29% | +11% |
+| **Duplicate shared functions** | **+6%** | -0.3% | +6% |
+| Delete single-caller functions | -7% | -14% | -28% |
+
+Read the diagonal of blind spots.
+
+- **Cyclomatic complexity cannot see filing at all.** Flattening the tree into one folder, collapsing it into one file, or folding every function into a class leaves `radon`, `lizard` and `complexipy` byte-identical.
+  The same holds in TypeScript, where `lizard` gives the flattened webapp exactly the baseline's 688 functions and 2.45 mean.
+- **Modularity cannot see extraction.** Adding 505 stub wrappers moves `Q` by nothing.
+- **Neither can see duplication.** `Q` moves the wrong way and cyclomatic complexity moves 0.3%.
+
+Only the token count responds to both extraction and duplication, and it cannot tell them apart, because it only knows the code got bigger.
+
+### Adding 505 do-nothing functions cuts complexity by 44%
+
+The strongest single number in this work.
+
+| | functions | `C901` over 10 | radon mean | radon **max** | cognitive mean | cognitive **max** |
+|---|---|---|---|---|---|---|
+| the real codebase | 310 | **0** | 3.47 | **26** | 2.45 | **31** |
+| extract every 12 statements | 446 | 0 | 2.72 | 26 | 1.71 | 31 |
+| extract every 3 statements | 527 | 0 | 2.45 | 26 | 1.44 | 31 |
+| **extract every statement** | **815** | **0** | **1.94** | **26** | **0.93** | **31** |
+
+Mean cyclomatic complexity falls 44% and mean cognitive complexity falls 62%, for a change that adds five hundred names and no behaviour.
+
+**The maximum does not move.** It is 26 for radon and 31 for cognitive across every single variant, because subdivision adds trivial functions and never touches the worst one.
+
+That is the argument for the SIG model's risk bands over any average.
+A mean is gamed by adding units; a distribution over thresholds is not.
+
+### The existing gate never fires, under any rearrangement
+
+`C901` at `max-complexity = 10` reports **zero violations in all thirteen Python variants**, including the ones built to be as bad as possible.
+
+It reports zero while `radon` reports a maximum of 26 and `complexipy` reports 31 on the very same function.
+
+**Takeaway:** the three metric families are blind in different directions, so a scorecard needs at least one of each.
+The one currently in `make check` is inert under every transformation tested.
