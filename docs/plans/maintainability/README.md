@@ -591,6 +591,7 @@ The difference is what a lint-enforced layering rule buys over organising by con
 - **To see it on a second language:** [scorecard-webapp.md](scorecard-webapp.md).
 - **To see forty rearrangements scored:** [experiments.md](experiments.md).
 - **To see the parameter space and what is unexplored:** [parameter-space.md](parameter-space.md).
+- **To see what tree-sitter actually provides:** [treesitter-view.md](treesitter-view.md).
 - **The one thing worth building next:** the ground-truth fixture described above.
 
 ---
