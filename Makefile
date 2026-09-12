@@ -143,4 +143,31 @@ clean:
 	rm -rf .mmdc_cache/
 	rm -rf node_modules/
 
-.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-e2e ui-promote adrs adrs-check
+.PHONY: reviewable-install reviewable-data reviewable-dev reviewable-check reviewable-test reviewable-build format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-e2e ui-promote adrs adrs-check
+
+# --- reviewable-ui: the tree-sitter graph explorer -------------------------
+RU_SOURCES ?= --source src/pytest_xharness_eval:python --source report-ui/src:typescript
+
+reviewable-ui/node_modules:
+	bun install --cwd reviewable-ui
+
+reviewable-install: reviewable-ui/node_modules
+
+reviewable-data:
+	uv run docs/plans/maintainability/tools/graphdata.py $(RU_SOURCES) \
+		--skip "__tests__,.test." --out reviewable-ui/public/graph.json
+
+reviewable-dev: reviewable-ui/node_modules reviewable-ui/public/graph.json
+	bun run --cwd reviewable-ui dev
+
+reviewable-ui/public/graph.json:
+	$(MAKE) reviewable-data
+
+reviewable-check: reviewable-ui/node_modules
+	bun run --cwd reviewable-ui check
+
+reviewable-test: reviewable-ui/node_modules
+	bun run --cwd reviewable-ui test
+
+reviewable-build: reviewable-ui/node_modules
+	bun run --cwd reviewable-ui build
