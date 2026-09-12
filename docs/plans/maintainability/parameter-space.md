@@ -22,6 +22,7 @@ It also runs the TypeScript codebase for the first time, and records four intuit
   - [A codebase as a network, and its hyperparameters](#a-codebase-as-a-network-and-its-hyperparameters)
   - [Double descent: not observed, and not yet ruled out](#double-descent-not-observed-and-not-yet-ruled-out)
   - [The classic metrics, run over the same rearrangements](#the-classic-metrics-run-over-the-same-rearrangements)
+  - [Halstead: vocabulary reuse as compressibility](#halstead-vocabulary-reuse-as-compressibility)
   - [The concerns to run to ground](#the-concerns-to-run-to-ground)
 
 <!--TOC-->
@@ -297,3 +298,94 @@ It reports zero while `radon` reports a maximum of 26 and `complexipy` reports 3
 
 **Takeaway:** the three metric families are blind in different directions, so a scorecard needs at least one of each.
 The one currently in `make check` is inert under every transformation tested.
+
+---
+
+## Halstead: vocabulary reuse as compressibility
+
+Halstead counts the distinct operators and operands in a program, `n`, and their total occurrences, `N`.
+From those, `volume = N log2(n)`, the bits needed to write the program down once you have been handed its vocabulary.
+
+That is a description length, published in 1977, a year before Rissanen named MDL.
+It maps onto the two-part code directly.
+
+| Two-part code | Halstead |
+|---|---|
+| `L(H)`, the model | `n`, the vocabulary someone has to learn |
+| `L(D given H)`, the leftover | `N log2(n)`, the program spelled out with it |
+
+And the ratio `N / n` is **leverage measured at the token level** rather than at the call site.
+A program where every name appears once compresses badly.
+One where a small vocabulary is worked hard compresses well.
+
+This is not a fringe metric.
+In the Peitek fMRI study Halstead volume correlated **-0.45** with measured comprehension, against -0.46 for lines of code and -0.09 for McCabe.
+
+**`radon hal` is not usable for this.** Its Halstead counts a narrow arithmetic operator set.
+It reports 2,158 tokens where `lizard` counts 22,792, and returns all zeros for a module built from calls.
+The numbers below come from the tree-sitter token stream instead, which also makes them work on TypeScript.
+
+### The four-way blindness map
+
+```plotly
+{ "data": "data/cap-blindness.json" }
+```
+
+| Transform | `Q` | cyclomatic | Halstead volume | operand reuse |
+|---|---|---|---|---|
+| Every module in one folder | **-100%** | 0% | 0% | 0% |
+| Every module in one file | -100% | 0% | +0.1% | 0% |
+| Every function into a class | -48% | 0% | +0.3% | +0.2% |
+| Extract a wrapper per statement | 0% | **-44%** | **+28%** | -4.9% |
+| Extract every 3 statements | 0% | -29% | +12% | -2.4% |
+| Delete single-caller functions | -7% | -14% | **-23%** | -7.2% |
+| **Duplicate shared functions** | **+6%** | -0.3% | **+4.4%** | **+4.0%** |
+
+**Halstead volume is the third metric that catches tidying.** Extraction moves `Q` by nothing and cyclomatic complexity by -44%.
+Both are useless here, while volume rises 28% and says plainly that there is more program to read.
+
+Operand reuse falls under extraction, from 6.57 to 6.25.
+New names are added and each is used less, which is leverage dropping, measured on tokens instead of calls.
+
+### Where compressibility and quality come apart
+
+Duplication raises token reuse by 4%.
+
+That is not a bug in the metric.
+Duplicated code genuinely **is** more compressible, because a compressor will squeeze the repeats out.
+It is also worse code.
+
+> Compressibility is maximised by repetition.
+> Reviewing cost is not.
+
+This is the Kolmogorov subtlety from [README.md](README.md) arriving with a number attached.
+`K(x)` is low for a program full of copies, because a short generator produces it.
+The reviewer still has to read every copy and check they have not drifted.
+Reviewing cost is the leftover after the rules you know, never the total, and duplication inflates the leftover while shrinking the total.
+
+**So the two halves of Halstead behave differently and both are wanted.**
+
+- **Volume** behaves like description length.
+  It catches extraction, which `Q` cannot see.
+- **Reuse** behaves like compressibility.
+  It is fooled by duplication, exactly as `Q` is.
+
+### The two archetypes again
+
+| | Python library | TypeScript webapp |
+|---|---|---|
+| vocabulary `n` | 2,075 | 2,523 |
+| length `N` | 33,321 | **60,591** |
+| **token reuse `N/n`** | **16.06** | **24.02** |
+| operand reuse | 6.57 | 7.90 |
+| volume per name | 176.9 | 271.4 |
+
+The webapp works a vocabulary 22% larger **50% harder**.
+That is the same signature the call graph showed, where it had 2.3 times the edges per name, seen now at the token level.
+
+**A caveat on `split`.** The one-file-per-definition variant reports reuse up 63%, which is an artefact.
+The transform copies the whole preamble into every part file, so `N` rises while `n` does not.
+It measures the transform, not the idea.
+
+**Takeaway:** Halstead splits into a description length that catches tidying, and a compressibility ratio that duplication games.
+The useful pairing is volume against call-site leverage, not either Halstead half alone.
