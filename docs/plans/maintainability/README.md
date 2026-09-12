@@ -47,6 +47,9 @@ git checkout 1751e95 -- docs/plans/maintainability/research/
     - [What would actually settle it](#what-would-actually-settle-it)
     - [The rest of what this session established](#the-rest-of-what-this-session-established)
     - [Where to pick this up](#where-to-pick-this-up)
+  - [Conductance is a derivative, not a position](#conductance-is-a-derivative-not-a-position)
+    - [The stopping rule we said did not exist](#the-stopping-rule-we-said-did-not-exist)
+    - [What we are actually minimising](#what-we-are-actually-minimising)
 
 <!--TOC-->
 </details>
@@ -578,3 +581,61 @@ The difference is what a lint-enforced layering rule buys over organising by con
 - **To understand the metric:** [scorecard.md](scorecard.md).
 - **To see it on a second language:** [scorecard-webapp.md](scorecard-webapp.md).
 - **The one thing worth building next:** the ground-truth fixture described above.
+
+---
+
+## Conductance is a derivative, not a position
+
+This is the framing that finally made the metric usable, and it came from the reader rather than the measurement.
+
+**Conductance has no fixed threshold and never will.** A folder of UI primitives is *supposed* to leak.
+Everything uses it.
+A parser is not.
+The same number is a pass for one and a failure for the other, so there is no line to draw.
+
+**Read the change instead.** Compare a module to itself across a diff.
+The job it does has not changed, so the job cancels out.
+What is left is the direction of travel.
+
+```
+model/   phi 0.34  ->  0.41     this change made it leakier
+```
+
+That is a regression signal that needs no threshold, only a previous value.
+Position is unreadable and velocity is readable, which is the whole of the idea.
+
+### The stopping rule we said did not exist
+
+[You can always refactor more, and that is a theorem](#you-can-always-refactor-more-and-that-is-a-theorem) records that nothing tells you when to stop.
+A saturating derivative does.
+
+When each further refactor moves conductance less than the one before it, the work has stopped paying.
+You stop because you stopped travelling, not because you arrived somewhere.
+
+### What we are actually minimising
+
+Not the shortest description of the code.
+That is code golf, and [Kolmogorov complexity](#you-can-always-refactor-more-and-that-is-a-theorem) says the shortest program producing a behaviour is unreadable.
+
+The target is Vereshchagin and Vitanyi's **minimal sufficient statistic**.
+Shrink the *model* half until it explains everything it can, and leave the rest.
+What remains is irreducible, and reviewing cost is that remainder.
+
+So the plateau and the minimum are the same thing seen from two sides.
+The plateau is the minimal sufficient statistic, observed from outside.
+
+`K` is uncomputable, so you can never know you have arrived.
+You can see that you have stopped moving.
+The derivative is the only observable proxy for a destination that is provably unreachable.
+
+| Question | Instrument |
+|---|---|
+| Did this change make it worse? | the sign of the change in `phi` |
+| Should I keep refactoring? | the size of that change, falling |
+| Am I at the minimum? | unanswerable, and that is the theorem |
+
+**The one catch.** Extraction moves conductance in both directions.
+Pulling genuinely shared code into a shared module raises it while improving the codebase.
+So a change in `phi` flags *look at this*, never *this is wrong*.
+
+**Takeaway:** conductance is an instrument for measuring motion, so gate on the delta and never on the value.
