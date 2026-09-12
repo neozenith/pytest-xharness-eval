@@ -50,6 +50,10 @@ git checkout 1751e95 -- docs/plans/maintainability/research/
   - [Conductance is a derivative, not a position](#conductance-is-a-derivative-not-a-position)
     - [The stopping rule we said did not exist](#the-stopping-rule-we-said-did-not-exist)
     - [What we are actually minimising](#what-we-are-actually-minimising)
+  - [A folder is the weakest boundary, not the only one](#a-folder-is-the-weakest-boundary-not-the-only-one)
+    - [The thought experiment that shows it](#the-thought-experiment-that-shows-it)
+    - [Boundaries nest](#boundaries-nest)
+    - [The cross-language boundary is real and already here](#the-cross-language-boundary-is-real-and-already-here)
 
 <!--TOC-->
 </details>
@@ -639,3 +643,56 @@ Pulling genuinely shared code into a shared module raises it while improving the
 So a change in `phi` flags *look at this*, never *this is wrong*.
 
 **Takeaway:** conductance is an instrument for measuring motion, so gate on the delta and never on the value.
+
+---
+
+## A folder is the weakest boundary, not the only one
+
+Everything above scored folders, because folders were the partition sitting in front of us.
+That was convenient and it is not the interesting structure.
+
+### The thought experiment that shows it
+
+Take `src/pytest_xharness_eval/` and flatten it.
+
+- **Every module in one folder.** Worse, and it should register as worse. It should not register as a catastrophe, because nothing about the code changed.
+- **Every module in one file.** Worse again. Still capable of being a well-structured codebase with a minimal, correct expression of the same behaviour.
+
+If a metric reports either of those as a large regression, the metric is scoring filing rather than code.
+The structure that survives both moves is the one worth measuring.
+
+### Boundaries nest
+
+A call site crosses a boundary at several levels at once, and each level is its own partition.
+
+| Level | The boundary | Crossed when |
+|---|---|---|
+| Function | a scope | any call at all |
+| Class | the receiver | a call leaves the object |
+| Module | a file | a call leaves the file |
+| Folder | a directory | a call leaves the package |
+| Language | a process or a wire | a request, or a written and re-read document |
+
+Conductance is defined on any partition, so it can be computed at every one of these.
+We computed one and drew conclusions about architecture from it.
+
+**The open question is which level carries the signal.** It is empirical and we have not asked it.
+Our expectation is the middle of the table rather than either end.
+A function boundary is crossed by definition, so it cannot discriminate.
+A folder boundary is filing, which a reviewer can change without touching a line of logic.
+
+### The cross-language boundary is real and already here
+
+A frontend calling a REST endpoint is a call site.
+The compiler cannot see it, both sides depend on it, and breaking it breaks the system.
+
+This repository has exactly that edge, with no HTTP involved.
+`emit/index.py` writes `report/index.json`.
+`report-ui/src/lib/types.ts` declares the shape it reads back, and [CLAUDE.md](../../../CLAUDE.md) names them as a pair that must change together.
+
+That is a call across a language boundary mediated by a document rather than a wire.
+Scoring the two codebases separately treats that edge as absent from both.
+That is the whole problem with measuring per-language and stopping there.
+
+**Takeaway:** conductance is a function of a partition, so the question is never "what is the score".
+It is "at which boundary", and folders are the weakest candidate on the list.
