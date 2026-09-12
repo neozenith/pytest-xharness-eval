@@ -1,5 +1,12 @@
 /** The controls, the selected-node detail, and the cluster table. */
-import { BAND, METRICS, phiBand, type Metric } from "@/lib/metrics";
+import {
+  BAND,
+  BAND_SHAPE,
+  METRICS,
+  phiBand,
+  type BandKey,
+  type Metric,
+} from "@/lib/metrics";
 import { shortCluster, type Filters } from "@/lib/graph";
 import {
   LEVELS,
@@ -155,38 +162,66 @@ export const Controls = ({
   );
 };
 
+/** Each band's shape, rendered as a small CSS icon so colour is never the only channel. */
+const ShapeIcon = ({ band }: { band: BandKey }) => (
+  <i
+    className={`swatch-shape shape-${BAND_SHAPE[band]}`}
+    style={{ background: BAND[band] }}
+    aria-hidden="true"
+  />
+);
+
 export const Legend = ({ metric }: { metric: Metric }) => (
   <div className="legend" data-testid="legend">
+    <p className="note">
+      Colour <em>and</em> shape both encode <strong>{metric.label}</strong>.
+    </p>
     {(["low", "mid", "high", "none"] as const).map((b) => (
       <span key={b} className="swatch">
-        <i style={{ background: BAND[b] }} />
+        <ShapeIcon band={b} />
         {b === "none" ? "no callers" : `${b} band`}
       </span>
     ))}
     <span className="caveat">
       Bands are uncalibrated: they show a distribution, they do not grade it.
     </span>
-    <span className="sr-only">{metric.label}</span>
   </div>
 );
 
 export const Detail = ({
   node,
   graph,
+  onSelect,
 }: {
   node: GraphNode | null;
   graph: Graph;
+  /** Optional: lets "called by" / "calls" entries jump the selection there too. */
+  onSelect?: (id: string) => void;
 }) => {
-  if (!node) return <p className="empty">Tap a node to inspect it.</p>;
+  // The empty state keeps the same testid as the populated one. A panel that changes
+  // its identity with its state ("I am `detail` when full, an anonymous <p> when
+  // empty") makes the empty state unaddressable -- to a test runner, and to anything
+  // else that wants to point at the inspector regardless of what is in it.
+  if (!node)
+    return (
+      <p className="empty" data-testid="detail">
+        Tap a node to inspect it.
+      </p>
+    );
   const callers = graph.edges.filter((e) => e.target === node.id);
   const callees = graph.edges.filter((e) => e.source === node.id);
   const byId = (id: string) => graph.nodes.find((n) => n.id === id)?.name ?? id;
   return (
     <div className="detail" data-testid="detail">
-      <h3>{node.name}</h3>
-      <p className="mono small">
-        {node.file}:{node.line}
-      </p>
+      {/* Only the identity line is announced on selection change (WCAG 4.1.3):
+          the full metric dump below would make every click read out a wall of
+          text, which is worse than saying nothing. */}
+      <div aria-live="polite">
+        <h3>{node.name}</h3>
+        <p className="mono small">
+          {node.file}:{node.line}
+        </p>
+      </div>
       <dl>
         <dt>leverage</dt>
         <dd>
@@ -202,15 +237,23 @@ export const Detail = ({
         <dd>{node.cls ?? "—"}</dd>
       </dl>
       <h4>Called by ({callers.length})</h4>
-      <ul>
+      <ul className="jump-list">
         {callers.slice(0, 12).map((e) => (
-          <li key={e.source}>{byId(e.source)}</li>
+          <li key={e.source}>
+            <button type="button" onClick={() => onSelect?.(e.source)}>
+              {byId(e.source)}
+            </button>
+          </li>
         ))}
       </ul>
       <h4>Calls ({callees.length})</h4>
-      <ul>
+      <ul className="jump-list">
         {callees.slice(0, 12).map((e) => (
-          <li key={e.target}>{byId(e.target)}</li>
+          <li key={e.target}>
+            <button type="button" onClick={() => onSelect?.(e.target)}>
+              {byId(e.target)}
+            </button>
+          </li>
         ))}
       </ul>
     </div>
@@ -229,27 +272,28 @@ export const ClusterTable = ({
   <table className="clusters" data-testid="cluster-table">
     <thead>
       <tr>
-        <th>cluster</th>
-        <th>names</th>
-        <th>internal</th>
-        <th>cut</th>
-        <th>phi</th>
+        <th scope="col">cluster</th>
+        <th scope="col">names</th>
+        <th scope="col">internal</th>
+        <th scope="col">cut</th>
+        <th scope="col">phi</th>
       </tr>
     </thead>
     <tbody>
-      {clusters.map(([key, c]) => (
-        <tr key={key}>
-          <td title={key}>{shortCluster(key, level, roots)}</td>
-          <td>{c.names}</td>
-          <td>{c.internal}</td>
-          <td>{c.cut}</td>
-          <td style={{ color: BAND[phiBand(c.phi, c.measurable)] }}>
-            {c.measurable && c.phi !== null
-              ? c.phi.toFixed(3)
-              : "not measurable"}
-          </td>
-        </tr>
-      ))}
+      {clusters.map(([key, c]) => {
+        const band = phiBand(c.phi, c.measurable);
+        return (
+          <tr key={key}>
+            <td title={key}>{shortCluster(key, level, roots)}</td>
+            <td>{c.names}</td>
+            <td>{c.internal}</td>
+            <td>{c.cut}</td>
+            <td className={`phi-cell band-${band}`} style={{ color: BAND[band] }}>
+              {c.measurable && c.phi !== null ? c.phi.toFixed(3) : "not measurable"}
+            </td>
+          </tr>
+        );
+      })}
     </tbody>
   </table>
 );

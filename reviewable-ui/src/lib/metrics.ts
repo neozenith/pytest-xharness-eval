@@ -9,15 +9,38 @@
  */
 import type { GraphNode } from "./types";
 
-/** Data-encoding colours: they mean a band, not a brand, so they never re-skin. */
+/**
+ * Data-encoding colours: they mean a band, not a brand, so they never re-skin.
+ *
+ * Chosen for WCAG 2.2 AAA: every value clears 7:1 against both panel (#111a2e)
+ * and canvas (#0b1120) backgrounds, the two surfaces a band colour is ever read
+ * against (legend swatch, cluster-table text, node fill) — comfortably above
+ * the 3:1 a graphical object alone would need. Ratios (WebAIM formula):
+ *   low  #34d399 on panel 9.02:1, on bg 9.79:1
+ *   mid  #fb923c on panel 7.66:1, on bg 8.32:1
+ *   high #fca5a5 on panel 9.14:1, on bg 9.92:1
+ *   none #a3b3c9 on panel 8.13:1, on bg 8.83:1
+ */
 export const BAND = {
-  low: "#047857",
-  mid: "#b45309",
-  high: "#b91c1c",
-  none: "#64748b",
+  low: "#34d399",
+  mid: "#fb923c",
+  high: "#fca5a5",
+  none: "#a3b3c9",
 } as const;
 
 export type BandKey = keyof typeof BAND;
+
+/**
+ * Colour is never the only channel a band is carried on (WCAG 1.4.1): every band
+ * also gets a distinct cytoscape node shape, drawn in the legend and on the
+ * canvas alike.
+ */
+export const BAND_SHAPE: Record<BandKey, string> = {
+  low: "ellipse",
+  mid: "hexagon",
+  high: "diamond",
+  none: "rectangle",
+};
 
 export interface Metric {
   id: string;

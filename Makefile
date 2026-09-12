@@ -143,7 +143,7 @@ clean:
 	rm -rf .mmdc_cache/
 	rm -rf node_modules/
 
-.PHONY: reviewable-install reviewable-data reviewable-dev reviewable-check reviewable-test reviewable-build format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-e2e ui-promote adrs adrs-check
+.PHONY: reviewable-storybook reviewable-storybook-build reviewable-e2e reviewable-all reviewable-install reviewable-data reviewable-dev reviewable-check reviewable-test reviewable-build format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-e2e ui-promote adrs adrs-check
 
 # --- reviewable-ui: the tree-sitter graph explorer -------------------------
 RU_SOURCES ?= --source src/pytest_xharness_eval:python --source report-ui/src:typescript
@@ -171,3 +171,15 @@ reviewable-test: reviewable-ui/node_modules
 
 reviewable-build: reviewable-ui/node_modules
 	bun run --cwd reviewable-ui build
+
+reviewable-storybook: reviewable-ui/node_modules
+	bun run --cwd reviewable-ui storybook
+
+reviewable-storybook-build: reviewable-ui/node_modules
+	bun run --cwd reviewable-ui build-storybook
+
+reviewable-e2e: reviewable-ui/node_modules reviewable-ui/public/graph.json
+	bun run --cwd reviewable-ui e2e
+
+# Everything the webapp has to pass: types, lint, format, units, component tier, e2e.
+reviewable-all: reviewable-check reviewable-test reviewable-storybook-build reviewable-e2e

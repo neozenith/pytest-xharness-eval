@@ -245,3 +245,4 @@ reviewable-ui/dist/
 reviewable-ui/public/graph.json
 reviewable-ui/test-results/
 reviewable-ui/playwright-report/
+reviewable-ui/storybook-static/

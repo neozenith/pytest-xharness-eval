@@ -10,7 +10,10 @@
     "format": "prettier --write . && eslint . --fix",
     "test": "vitest run",
     "e2e": "playwright test",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "storybook": "storybook dev -p 6106 --no-open",
+    "build-storybook": "storybook build",
+    "test:a11y": "vitest run --project=storybook"
   },
   "dependencies": {
     "@tamagui/config": "^2.7.7",
@@ -23,8 +26,13 @@
     "tamagui": "^2.7.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
+    "@storybook/addon-a11y": "^10.6.0",
+    "@storybook/addon-docs": "^10.6.0",
+    "@storybook/addon-vitest": "^10.6.0",
+    "@storybook/react-vite": "^10.6.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/cytoscape": "^3.31.0",
@@ -32,12 +40,17 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "@vitest/browser": "^5.0.0",
+    "@vitest/coverage-v8": "^5.0.0",
+    "axe-playwright": "^2.2.2",
     "eslint": "^10.9.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
     "globals": "^17.11.0",
     "jsdom": "^30.0.1",
+    "playwright": "^1.63.0",
     "prettier": "^3.9.6",
+    "storybook": "^10.6.0",
     "typescript": "~5.9",
     "typescript-eslint": "^8.67.0",
     "vite": "^8.2.2",

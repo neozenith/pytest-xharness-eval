@@ -52,7 +52,9 @@ export const App = () => {
     return (
       <main className="fatal" data-testid="fatal">
         <h1>No graph</h1>
-        <p className="mono">{error}</p>
+        <p className="mono" role="alert">
+          {error}
+        </p>
         <p>
           Generate one with <code>make reviewable-data</code>, or point the dev
           server at an existing file with{" "}
@@ -61,11 +63,23 @@ export const App = () => {
       </main>
     );
   }
-  if (!graph || !slice) return <main className="loading">Loading graph…</main>;
+  if (!graph || !slice) {
+    return (
+      <main className="loading" role="status" aria-live="polite">
+        <span className="spinner" aria-hidden="true" />
+        <h1>Loading graph…</h1>
+        <p className="note">
+          Reading <code>graph.json</code>. Large graphs can take a few seconds
+          to parse.
+        </p>
+      </main>
+    );
+  }
 
   const t = graph.totals;
+  const capped = slice.hiddenByLimit > 0;
   return (
-    <main className="app">
+    <div className="shell">
       <header data-testid="header">
         <h1>reviewable</h1>
         <div className="totals">
@@ -94,53 +108,81 @@ export const App = () => {
             .join("  ·  ")}
         </p>
         {t.orphanPct > 40 && (
-          <p className="warn banner">
+          <p className="warn banner" role="status">
             {t.orphanPct}% of definitions have no caller in this graph. Read
             that as an extraction problem before reading any score.
           </p>
         )}
       </header>
 
-      <div className="body">
-        <aside className="left">
-          <Controls
-            graph={graph}
-            level={level}
-            metric={metric}
-            layout={layout}
-            filters={filters}
-            onLevel={setLevel}
-            onMetric={setMetricId}
-            onLayout={setLayout}
-            onFilters={setFilters}
-          />
-          <Legend metric={metric} />
-          <p className="note" data-testid="shown">
-            showing {slice.shown} of {slice.total}
-            {slice.hiddenByLimit > 0
-              ? ` · ${slice.hiddenByLimit} hidden by the node cap`
-              : ""}
-          </p>
-        </aside>
+      <main className="app">
+        <div className="body">
+          <aside className="left" aria-labelledby="controls-heading">
+            <h2 id="controls-heading" className="panel-heading">
+              Controls
+            </h2>
+            <Controls
+              graph={graph}
+              level={level}
+              metric={metric}
+              layout={layout}
+              filters={filters}
+              onLevel={setLevel}
+              onMetric={setMetricId}
+              onLayout={setLayout}
+              onFilters={setFilters}
+            />
+            <h2 className="panel-heading">Legend</h2>
+            <Legend metric={metric} />
+            <p
+              className={capped ? "note banner warn" : "note"}
+              role="status"
+              aria-live="polite"
+              data-testid="shown"
+            >
+              {capped ? (
+                <>
+                  <b>
+                    {slice.hiddenByLimit} of {slice.total}
+                  </b>{" "}
+                  definitions are hidden by the {filters.limit}-node cap.
+                  Raise &ldquo;Max nodes&rdquo; above to see them — this is
+                  data loss, not a footnote.
+                </>
+              ) : (
+                <>
+                  showing {slice.shown} of {slice.total}
+                </>
+              )}
+            </p>
+          </aside>
 
-        <section className="middle">
-          <GraphCanvas
-            elements={slice.elements}
-            layout={layout}
-            onSelect={setSelected}
-          />
-        </section>
+          <section className="middle" aria-labelledby="graph-heading">
+            <h2 id="graph-heading" className="sr-only">
+              Call graph
+            </h2>
+            <GraphCanvas
+              elements={slice.elements}
+              layout={layout}
+              selected={selected}
+              onSelect={setSelected}
+            />
+          </section>
 
-        <aside className="right">
-          <Detail node={node} graph={graph} />
-          <h4>Clusters at this boundary</h4>
-          <ClusterTable
-            clusters={slice.clusters}
-            level={level}
-            roots={graph.sources.map((s) => s.root)}
-          />
-        </aside>
-      </div>
-    </main>
+          <aside className="right" aria-labelledby="inspector-heading">
+            <h2 id="inspector-heading" className="sr-only">
+              Inspector
+            </h2>
+            <Detail node={node} graph={graph} onSelect={setSelected} />
+            <h3 className="panel-heading">Clusters at this boundary</h3>
+            <ClusterTable
+              clusters={slice.clusters}
+              level={level}
+              roots={graph.sources.map((s) => s.root)}
+            />
+          </aside>
+        </div>
+      </main>
+    </div>
   );
 };
