@@ -36,11 +36,18 @@ from collections import defaultdict
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[4]
+
+# Set by main() from --src / --ext so the same transforms run on any tree.
 SRC = REPO / "src" / "pytest_xharness_eval"
+EXTS = (".py",)
+SKIP: list[str] = []
 
 
 def py_files() -> list[Path]:
-    return sorted(f for f in SRC.rglob("*.py") if f.is_file())
+    return sorted(
+        f for f in SRC.rglob("*")
+        if f.is_file() and f.suffix in EXTS and not any(k in str(f) for k in SKIP)
+    )
 
 
 def flat_name(f: Path) -> str:
@@ -48,7 +55,7 @@ def flat_name(f: Path) -> str:
     rel = f.relative_to(SRC)
     if len(rel.parts) == 1:
         return rel.name
-    return f"{'_'.join(rel.parts[:-1])}_{rel.stem}.py"
+    return f"{'_'.join(rel.parts[:-1])}_{rel.stem}{f.suffix}"
 
 
 def write(dest_root: Path, rel: str, text: str) -> None:
@@ -74,7 +81,7 @@ def t_flatten(dest: Path) -> str:
 
 def t_single(dest: Path) -> str:
     parts = [f"# ---- {f.relative_to(SRC)} ----\n{f.read_text(encoding='utf-8')}" for f in py_files()]
-    write(dest, "everything.py", "\n\n".join(parts))
+    write(dest, f"everything{EXTS[0]}", "\n\n".join(parts))
     return "every module concatenated into one file"
 
 
@@ -111,7 +118,7 @@ def t_onefile_per_folder(dest: Path) -> str:
         groups[rel.parts[0] if len(rel.parts) > 1 else "_root"].append(f)
     for name, files in groups.items():
         body = "\n\n".join(f"# ---- {f.relative_to(SRC)} ----\n{f.read_text(encoding='utf-8')}" for f in files)
-        write(dest, f"{name}.py", body)
+        write(dest, f"{name}{EXTS[0]}", body)
     return "the declared folders kept, each collapsed to one module"
 
 
@@ -138,7 +145,7 @@ def t_split(dest: Path) -> str:
             continue
         preamble = "\n".join(header)
         for i, chunk in enumerate(chunks):
-            write(dest, str(stem_dir / f"part{i:02d}.py"), f"{preamble}\n\n{chunk}\n")
+            write(dest, str(stem_dir / f"part{i:02d}{f.suffix}"), f"{preamble}\n\n{chunk}\n")
     return "one file per top-level definition"
 
 
@@ -263,6 +270,81 @@ def t_god_class(dest: Path) -> str:
     return "every module-level function folded into one class per file"
 
 
+def t_inline(dest: Path, graph: Path, max_callers: int) -> str:
+    """Delete every definition reached from at most `max_callers` places.
+
+    The opposite move to extraction. A leverage-1 name is one the README calls
+    tidying: it costs a name and saves no reading. Removing it should be
+    neutral-to-good, and this measures which.
+
+    The body is not spliced into the caller, because the call graph does not
+    care where the statements live, only that the name is gone.
+    """
+    import tree_sitter_python as tsp
+    from tree_sitter import Language, Parser
+
+    data = json.loads(graph.read_text(encoding="utf-8"))
+    indeg: dict[str, int] = defaultdict(int)
+    for e in data["edges"]:
+        indeg[e["target"]] += 1
+    doomed: dict[str, set[int]] = defaultdict(set)
+    for n in data["nodes"]:
+        if 0 < indeg[n["id"]] <= max_callers and n.get("cls") is None:
+            doomed[n["file"]].add(n["line"])
+
+    parser = Parser(Language(tsp.language()))
+    removed = 0
+    for f in py_files():
+        rel_repo = str(f.relative_to(REPO))
+        lines = doomed.get(rel_repo, set())
+        src = f.read_bytes()
+        if not lines:
+            write(dest, str(f.relative_to(SRC)), src.decode("utf-8", "replace"))
+            continue
+        tree = parser.parse(src)
+        keep = []
+        for child in tree.root_node.children:
+            if child.type == "function_definition" and (child.start_point[0] + 1) in lines:
+                removed += 1
+                continue
+            keep.append(src[child.start_byte : child.end_byte].decode("utf-8", "replace"))
+        write(dest, str(f.relative_to(SRC)), "\n".join(keep) + "\n")
+    return f"every function with 1..{max_callers} callers deleted ({removed} removed)"
+
+
+def t_extract(dest: Path, every: int) -> str:
+    """Wrap every `every`-th run of statements in a new single-caller function.
+
+    The tidying failure the README names, applied deliberately: names that add
+    a boundary and save nobody any reading.
+    """
+    import tree_sitter_python as tsp
+    from tree_sitter import Language, Parser
+
+    parser = Parser(Language(tsp.language()))
+    added = 0
+    for f in py_files():
+        src = f.read_bytes()
+        tree = parser.parse(src)
+        out, extracted = [], []
+        for child in tree.root_node.children:
+            text = src[child.start_byte : child.end_byte].decode("utf-8", "replace")
+            out.append(text)
+            if child.type != "function_definition":
+                continue
+            body = child.child_by_field_name("body")
+            if body is None:
+                continue
+            stmts = [c for c in body.children if c.is_named]
+            for i in range(0, len(stmts) - 1, max(every, 1)):
+                added += 1
+                name = f"_step_{f.stem}_{added}"
+                extracted.append(f"def {name}(*a, **k):\n    return None\n")
+                out.append(f"# extracted step {added}\n{name}()\n")
+        write(dest, str(f.relative_to(SRC)), "\n".join(out + extracted) + "\n")
+    return f"one single-caller helper extracted per {every} statements ({added} added)"
+
+
 TRANSFORMS = {
     "baseline": lambda d, a: t_baseline(d),
     "flatten": lambda d, a: t_flatten(d),
@@ -275,6 +357,8 @@ TRANSFORMS = {
     "leiden": lambda d, a: t_leiden(d, a.graph),
     "duplicate": lambda d, a: t_duplicate(d, a.k),
     "god-class": lambda d, a: t_god_class(d),
+    "inline": lambda d, a: t_inline(d, a.graph, a.k),
+    "extract": lambda d, a: t_extract(d, a.k),
 }
 
 
@@ -285,7 +369,15 @@ def main() -> None:
     ap.add_argument("--k", type=int, default=4)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--graph", type=Path, default=REPO / "tmp" / "conductance" / "ts-py.json")
+    ap.add_argument("--src", default="src/pytest_xharness_eval")
+    ap.add_argument("--ext", default=".py")
+    ap.add_argument("--skip", default="")
     args = ap.parse_args()
+
+    global SRC, EXTS, SKIP
+    SRC = (REPO / args.src).resolve()
+    EXTS = tuple(e.strip() for e in args.ext.split(","))
+    SKIP = [k.strip() for k in args.skip.split(",") if k.strip()]
 
     dest = REPO / "tmp" / f"exp-{args.n}-pytest-xharness-evals"
     if dest.exists():
@@ -293,7 +385,7 @@ def main() -> None:
     dest.mkdir(parents=True)
 
     note = TRANSFORMS[args.transform](dest, args)
-    files = list(dest.rglob("*.py"))
+    files = [f for f in dest.rglob("*") if f.is_file() and f.suffix in EXTS]
     folders = {f.parent for f in files}
     (dest / "_experiment.json").write_text(
         json.dumps({"n": args.n, "transform": args.transform, "k": args.k,

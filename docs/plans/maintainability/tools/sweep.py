@@ -161,22 +161,32 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("wave", type=Path)
     ap.add_argument("--tag", default="wave")
+    ap.add_argument("--src", default="")
+    ap.add_argument("--ext", default="")
+    ap.add_argument("--skip", default="")
     args = ap.parse_args()
 
     spec = json.loads(args.wave.read_text(encoding="utf-8"))
+    args_src = {"src": args.src, "ext": args.ext, "skip": args.skip}
     rows = []
 
     for item in spec:
         cmd = ["uv", "run", str(TOOLS / "experiment.py"), item["transform"], "--n", str(item["n"])]
-        for opt in ("k", "seed"):
+        for opt in ("k", "seed", "graph"):
             if opt in item and item[opt] != "":
                 cmd += [f"--{opt}", str(item[opt])]
+        for opt in ("src", "ext", "skip"):
+            if args_src.get(opt):
+                cmd += [f"--{opt}", args_src[opt]]
         label = run(cmd).strip().split(": ", 1)
         note = label[1] if len(label) > 1 else ""
 
         src = f"tmp/exp-{item['n']}-pytest-xharness-evals"
         graph = OUT / f"exp-{item['n']}.json"
-        run(["uv", "run", str(TOOLS / "treesitter.py"), src, "--out", str(graph.relative_to(REPO))])
+        tcmd = ["uv", "run", str(TOOLS / "treesitter.py"), src, "--out", str(graph.relative_to(REPO))]
+        if args_src.get("skip"):
+            tcmd += ["--exclude", args_src["skip"]]
+        run(tcmd)
 
         row = {"n": item["n"], "transform": item["transform"],
                "k": item.get("k", ""), "note": note, **score(graph)}
