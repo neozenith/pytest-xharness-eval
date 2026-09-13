@@ -3,99 +3,104 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: The overview is filtered by the URL, and the summary aggregates the chart's own groups
+description: two views of the same data on one page group it the same way, or they are not a pair
 tags: [report]
 status: accepted
 accepted_on: 2026-08-29
 last_changed_on: 2026-08-29
-relates_to:
-  - { relation: extends, target: ADR-0020 }
-  - { relation: extends, target: ADR-0021 }
-  - { relation: extends, target: ADR-0028 }
-  - { relation: extends, target: ADR-0031 }
+provenance: The sweep grew to 24 sessions across 2 skills x 2 harnesses x 4 models, and both overview consumers stopped scaling with it.
+enforced_in:
+  - report-ui/src/views/SweepOverview.tsx
+  - report-ui/src/lib/facets.ts
+  - report-ui/src/lib/summary.ts
+  - report-ui/src/lib/permutations.ts
 generated: { by: human:neozenith, at: 2026-08-29T00:00:00Z }
 ---
 
-# 0042: The overview is filtered by the URL, and the summary aggregates the chart's own groups
+> **Lens**: **An interactive state that changes what the reader is looking at belongs in the URL**.
+> **A derived view names its own arithmetic**.
+> If two views of the same data sit on one page, they group it the same way, or they are not a pair.
 
-Status: accepted, 2026-08-29. Refines
-[0020](0020-captured-report-is-a-static-microsite.md) (the captured report is a static microsite),
-[0021](0021-metric-names-carry-unit-and-provenance.md) (a metric name
-carries its unit and its source),
-[0028](0028-report-is-built-from-a-component-workspace.md) (the report page is
-built from a component workspace) and
-[0031](0031-plotly-tamagui-and-a-deeplink-permutation-matrix.md) (every state
-deeplinks, and a Playwright matrix sweeps them all). Nothing the Python side
-emits changes: no new JSON key, no ini key, no CLI option, no metric's value.
+## Relates to
 
-## Context
+- Extends [ADR-0020](0020-captured-report-is-a-static-microsite.md) (the record's status line says "refines")
+- Extends [ADR-0021](0021-metric-names-carry-unit-and-provenance.md) (the record's status line says "refines")
+- Extends [ADR-0028](0028-report-is-built-from-a-component-workspace.md) (the record's status line says "refines")
+- Extends [ADR-0031](0031-plotly-tamagui-and-a-deeplink-permutation-matrix.md) (the record's status line says "refines")
 
-The sweep grew to 24 sessions across 2 skills × 2 harnesses × 4 models, and both
-overview consumers stopped scaling with it. `TokenAccumulationChart` draws 16
-lines whose legend already overflows its card, and `SessionTable` is 24 rows of
-18 columns. There was no way to ask "just claude" or "just this skill", and no
-aggregate view at all: every comparison between two harnesses was done by eye,
-across 24 rows.
+## Problem
+
+### Symptom
+
+The sweep grew to 24 sessions across 2 skills × 2 harnesses × 4 models, and both overview consumers stopped scaling with it.
+`TokenAccumulationChart` draws 16 lines whose legend already overflows its card, and `SessionTable` is 24 rows of 18 columns.
+
+### Pain point
+
+There was no way to ask "just claude" or "just this skill", and no aggregate view at all.
+Every comparison between two harnesses was done by eye, across 24 rows.
 
 ## Decision
 
-Three binding parts.
+### The lens
 
-### 1. The overview's filter state is URL state, like every other interactive state of this page
+- **Given**: Every other interactive state of this page already lives in the URL (0031).
+- **We prefer**: Three multi-select facet params on the overview route, with the filtering owned by `SweepOverview`.
+  That is preferred over per-component filter state or no filtering at all.
+  A mean aggregate over the chart's own grouping key, over a median or a different partition.
+- **Because**: If two views of the same data sit on one page they group it the same way, or they are not a pair.
+  The chart beside the summary already draws a mean line with a min-max envelope, so a median row would disagree with the picture by construction.
+- **Unless**: never
 
-Three params — `skill`, `harness`, `model` — on the overview route only. They are
-multi-select, because a reader compares two harnesses far more often than one, so
-a facet serialises as a comma-separated list: **OR within a facet, AND across
-facets**. An absent param means every value, which keeps `?`, `?sort=…` and
-`?theme=dark` byte-identical to what they were, and a present-but-empty param
-still means every value, never none. A value the data does not contain is kept in
-route state and matches nothing, so a stale deeplink lands in a visible empty
-state rather than silently widening.
+### In practice
 
-Changing a facet **replaces** the history entry rather than pushing one, because a
-filter refines the page you are already on — the same rule the neighbouring `sort`
-control follows; `OverviewFiltersClear` is the undo. Per 0031 the params are
-enumerated in `lib/permutations.ts` in this same change, including one permutation
-(`overview--filter-none`) that deliberately selects zero sessions.
+- Three binding parts.
+- ### 1. The overview's filter state is URL state, like every other interactive state of this page
 
-### 2. `SweepOverview` owns the filtering; its children are presentational
+  Three params, `skill`, `harness` and `model`, on the overview route only.
+  They are multi-select, because a reader compares two harnesses far more often than one.
+  A facet therefore serialises as a comma-separated list: **OR within a facet, AND across facets**.
+  An absent param means every value, which keeps `?`, `?sort=…` and `?theme=dark` byte-identical to what they were.
+  A present-but-empty param still means every value, never none.
+  A value the data does not contain is kept in route state and matches nothing.
+  A stale deeplink therefore lands in a visible empty state rather than silently widening.
 
-The view derives the visible `Cell[]` once and passes it down.
-`TokenAccumulationChart`, `SessionSummaryTable` and `SessionTable` take the cells
-they are given and know nothing about facets. The only concession is a shared
-`NO_MATCH` sentence all three print when handed nothing, so a filtered-to-nothing
-overview says so three times in one voice instead of rendering three empty boxes.
+  Changing a facet **replaces** the history entry rather than pushing one, because a filter refines the page you are already on.
+  That is the same rule the neighbouring `sort` control follows, and `OverviewFiltersClear` is the undo.
+  Per 0031 the params are enumerated in `lib/permutations.ts` in this same change, including one permutation (`overview--filter-none`) that deliberately selects zero sessions.
+- ### 2. `SweepOverview` owns the filtering; its children are presentational
 
-`OverviewFilters` is the producer, not a consumer, so it alone reads and writes the
-route. It derives its option lists from the whole sweep, never from the filtered
-subset, so the control never moves under the reader's hand, and a value that would
-select nothing is dimmed rather than removed.
+  The view derives the visible `Cell[]` once and passes it down.
+  `TokenAccumulationChart`, `SessionSummaryTable` and `SessionTable` take the cells they are given and know nothing about facets.
+  The only concession is a shared `NO_MATCH` sentence all three print when handed nothing.
+  A filtered-to-nothing overview therefore says so three times in one voice, instead of rendering three empty boxes.
 
-### 3. `SessionSummaryTable` aggregates the chart's own groups, by mean
+  `OverviewFilters` is the producer, not a consumer, so it alone reads and writes the route.
+  It derives its option lists from the whole sweep, never from the filtered subset, so the control never moves under the reader's hand.
+  A value that would select nothing is dimmed rather than removed.
+- ### 3. `SessionSummaryTable` aggregates the chart's own groups, by mean
 
-Its grouping key — skill × case × harness × model — is deliberately the same
-partition `accumulationGroups` draws with, so one summary row is one line of the
-chart above it and the two read as a pair. Every aggregate is named `mean <field>`
-in full, per 0021: the name carries the operation as well as the unit.
+  Its grouping key, skill × case × harness × model, is deliberately the same partition `accumulationGroups` draws with.
+  One summary row is therefore one line of the chart above it, and the two read as a pair.
+  Every aggregate is named `mean <field>` in full, per 0021: the name carries the operation as well as the unit.
 
-Mean, not median, because the chart beside it already draws a mean line with a
-min–max envelope and a median row would disagree with the picture by construction;
-because cost and tokens are additive, so `mean × runs` is the group's total; and
-because a median over the group sizes this data produces (1–2) is either the single
-value or the mean of the two. A missing value is skipped, never zero-filled, and an
-aggregate over nothing is null, never zero — a sparse column must read as sparse.
-The pass rate's denominator is the runs that carry a verdict, so an ungraded run is
-never counted as a failure.
+  Mean, not median.
+  The chart beside it already draws a mean line with a min-max envelope, and a median row would disagree with the picture by construction.
+  Cost and tokens are additive, so `mean × runs` is the group's total.
+  And a median over the group sizes this data produces (1-2) is either the single value or the mean of the two.
+  A missing value is skipped, never zero-filled, and an aggregate over nothing is null, never zero.
+  A sparse column must read as sparse.
+  The pass rate's denominator is the runs that carry a verdict, so an ungraded run is never counted as a failure.
 
 ## Consequences
 
-The three params join the deeplink matrix and the tiered sweep. `lib/facets.ts` and
-`lib/summary.ts` join `lib/series.ts` as pure, unit-tested derivations over `Cell[]`.
-`coverageShare` and the fixed-decimal formatter move into `lib/format.ts`, so the
-table and the summary compute one number from one place. Nothing the Python side
-emits changes.
+### Pros
 
-## Lens
+- `lib/facets.ts` and `lib/summary.ts` join `lib/series.ts` as pure, unit-tested derivations over `Cell[]`.
+  `coverageShare` and the fixed-decimal formatter move into `lib/format.ts`, so the table and the summary compute one number from one place.
+- Nothing the Python side emits changes.
 
-**An interactive state that changes what the reader is looking at belongs in the
-URL, and a derived view names its own arithmetic.** If two views of the same data
-sit on one page, they group it the same way, or they are not a pair.
+### Cons
+
+- The three params join the deeplink matrix and the tiered sweep.
+  Every one of them must be enumerated in `lib/permutations.ts`, or the matrix silently stops covering it.

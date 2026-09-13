@@ -3,62 +3,76 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: "`captured/report.html` is a static microsite over the captured JSON"
+description: a static page over relative-path JSON is the cheapest reader that survives the next run
 tags: [report]
 status: accepted
 accepted_on: 2026-08-22
 last_changed_on: 2026-08-22
-relates_to:
-  - { relation: extends, target: ADR-0018 }
+provenance: The first token audit was built as a one-off page by hand; the shape it needed is the shape every sweep needs.
+enforced_in:
+  - src/pytest_xharness_eval/emit/page.py
+  - src/pytest_xharness_eval/emit/index.py
+  - src/pytest_xharness_eval/assets/report.html
 generated: { by: human:neozenith, at: 2026-08-22T00:00:00Z }
 ---
 
-# 0020: `captured/report.html` is a static microsite over the captured JSON
+> **Lens**: Evidence that is already JSON on disk needs a reader, not a database.
+> A static page over relative paths is the cheapest reader that survives the next run.
 
-Status: accepted, 2026-08-22. Refines [0018](0018-fixtures-directory-and-metrics-history.md).
+## Relates to
 
-## Context
+- Extends [ADR-0018](0018-fixtures-directory-and-metrics-history.md) (the record's status line says "refines")
 
-A sweep leaves `<skill>/evals/captured/` holding one `.result.json` and one session
-log per cell, plus `history.jsonl`. Reading them meant a terminal and `jq`, and the
-per-call ledger introduced by [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md)
-is too wide for a status word. The first token audit was built as a one-off page
-by hand; the shape it needed is the shape every sweep needs.
+## Problem
+
+### Symptom
+
+A sweep leaves `<skill>/evals/captured/` holding one `.result.json` and one session log per cell, plus `history.jsonl`.
+Reading them meant a terminal and `jq`.
+
+### Pain point
+
+The per-call ledger introduced by [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) is too wide for a status word.
+The first token audit was built as a one-off page by hand; the shape it needed is the shape every sweep needs.
 
 ## Decision
 
-After every sweep that captured at least one cell, the plugin writes into each
-touched `captured/` directory:
+### The lens
 
-- `index.json`: one summary row per captured cell (case, harness, model, session,
-  verdict and timestamp from `history.jsonl`, cost, baseline / context / billed
-  tokens, turns, tool calls, and the relative paths of its `.result.json` and log).
-- `report.html`: one static page that fetches `index.json`, renders the sweep (cost
-  and token charts, a sortable cell table), and drills into a cell's `.result.json`
-  to show its reconciliation against the CLI's own aggregate, cost by tier, and the
-  per-call ledger with each call's tools, tool results, and text.
+- **Given**: The evidence is already JSON on disk beside the page that would read it.
+- **We prefer**: A static page fetching relative-path JSON, over a database, a server-side report, or a page that embeds its data.
+- **Because**: The JSON files beside it are the source, so re-running a cell and refreshing the page is the whole loop.
+- **Unless**: never
 
-The page is vanilla JavaScript with one pinned CDN chart library and no build step,
-in the manner of the richdocs skill: templated HTML plus relative-path JSON is a
-microsite. It reads its theme from the OS, remembers a toggle in `localStorage`,
-and cache-busts every fetch. It never embeds data: the JSON files beside it are the
-source, so re-running a cell and refreshing the page is the whole loop.
+### In practice
 
-The template ships inside the package under `assets/` and is read with
-`importlib.resources`, the same way the bundled `prices.toml` is found; it is the
-second and last bundled resource.
+- After every sweep that captured at least one cell, the plugin writes into each touched `captured/` directory:
 
-Because the page fetches relative paths it is served over HTTP, never opened from
-`file://`. The terminal summary prints the page path and the one-line
-`python3 -m http.server` command that serves it.
+  - `index.json`: one summary row per captured cell.
+    The row carries the case, harness, model, session, verdict and timestamp from `history.jsonl`.
+    It also carries cost, baseline / context / billed tokens, turns and tool calls.
+    It also carries the relative paths of its `.result.json` and log.
+  - `report.html`: one static page that fetches `index.json`.
+    It renders the sweep as cost and token charts and a sortable cell table.
+    It drills into a cell's `.result.json` to show its reconciliation against the CLI's own aggregate, cost by tier, and the per-call ledger.
+    That ledger carries each call's tools, tool results, and text.
+- The page is vanilla JavaScript with one pinned CDN chart library and no build step, in the manner of the richdocs skill.
+  Templated HTML plus relative-path JSON is a microsite.
+  It reads its theme from the OS, remembers a toggle in `localStorage`, and cache-busts every fetch.
+  It never embeds data: the JSON files beside it are the source, so re-running a cell and refreshing the page is the whole loop.
+- The template ships inside the package under `assets/`, and is read with `importlib.resources`, the same way the bundled `prices.toml` is found.
+  It is the second and last bundled resource.
+- Because the page fetches relative paths it is served over HTTP, never opened from `file://`.
+  The terminal summary prints the page path and the one-line `python3 -m http.server` command that serves it.
 
 ## Consequences
 
-A dry run writes nothing under `captured/`, so no report appears for it. A result
-written before 0019 lists in the index with its totals and no ledger; the page says
-so rather than drawing an empty chart. The plugin's runtime dependencies are still
-pytest and the standard library (ADR 0003); the chart library loads in the browser.
+### Pros
 
-## Lens
+- The plugin's runtime dependencies are still pytest and the standard library (ADR 0003); the chart library loads in the browser.
 
-Evidence that is already JSON on disk needs a reader, not a database: a static
-page over relative paths is the cheapest reader that survives the next run.
+### Cons
+
+- A dry run writes nothing under `captured/`, so no report appears for it.
+- A result written before 0019 lists in the index with its totals and no ledger; the page says so rather than drawing an empty chart.
+- Because the page fetches relative paths it must be served over HTTP, never opened from `file://`.

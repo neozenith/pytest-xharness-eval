@@ -3,12 +3,12 @@
 # requires-python = ">=3.12"
 # dependencies = ["PyYAML>=6.0", "Jinja2>=3.1", "jsonschema>=4.0"]
 # ///
-"""Render this repository's ADR bundle: authored YAML records -> OKF markdown (ADR 0047).
+"""Render this repository's ADR bundle: authored YAML records -> OKF markdown (ADR 0048).
 
-Vendored from the librarian skill's reference implementation and adapted in two
-places for this repository's dialect: the schema sits beside this script, and
-`description` is optional (the migrated records carry none, and writing 46 of
-them would have been authoring rather than shelving).
+Vendored from the librarian skill's reference implementation and adapted in one
+place for this repository's dialect: the schema sits beside this script. The
+record shape is the shipped `okf-yaml` schema adopted strictly -- every field it
+requires is required here (ADR 0048, superseding ADR 0047's verbatim `body`).
 
     <dir>/NNNN-slug.yml  ->  NNNN-slug.md   OKF-conformant record markdown
                              index.md       OKF reserved directory listing
@@ -378,7 +378,7 @@ def render(
             "file": f"{r['id'].split('-')[-1]}-{r['slug']}.md",
             "title": r["title"],
             "status": r["status"],
-            "status_note": r.get("status_note", ""),
+            "description": r["description"],
             "markdown": strip_frontmatter((source_dir / f"{r['id'].split('-')[-1]}-{r['slug']}.md").read_text(encoding="utf-8")),
         }
         for r in records

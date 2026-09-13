@@ -3,74 +3,88 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Metric names carry their unit and their source; the report has a named vocabulary and addressable ids
+description: a metric name is read without its definition beside it, so it must carry unit and source
 tags: [accounting, report]
 status: accepted
 accepted_on: 2026-08-22
 last_changed_on: 2026-08-22
-relates_to:
-  - { relation: extends, target: ADR-0019 }
-  - { relation: extends, target: ADR-0020 }
-  - { relation: superseded_by, target: ADR-0029 }
+provenance: Read cold, the first report built on 0019 showed a `cost` that did not say whose. It showed a `billed` that did not say billed what, and a `context` that needed a paragraph to justify.
+enforced_in:
+  - src/pytest_xharness_eval/emit/metrics.py
+  - src/pytest_xharness_eval/model/runresult.py
+  - src/pytest_xharness_eval/assets/XHARNESS-REPORT-GLOSSARY.md
+  - report-ui/src/lib/route.ts
 generated: { by: human:neozenith, at: 2026-08-22T00:00:00Z }
 ---
 
-# 0021: Metric names carry their unit and their source; the report has a named vocabulary and addressable ids
+> **Lens**: A metric name is read without its definition beside it, so the name must carry the unit and the source.
+> A number nobody can trace to its inputs is an opinion.
 
-Status: accepted, 2026-08-22. Refines [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md)
-and [0020](0020-captured-report-is-a-static-microsite.md). The `total_tokens` row is
-superseded by [0029](0029-the-billed-sum-is-named-accumulative-billed-tokens.md):
-the billed sum is `accumulative_billed_tokens`.
+## Relates to
 
-## Context
+- Extends [ADR-0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) (the record's status line says "refines")
+- Extends [ADR-0020](0020-captured-report-is-a-static-microsite.md) (the record's status line says "refines")
+- Superseded by [ADR-0029](0029-the-billed-sum-is-named-accumulative-billed-tokens.md) (the `total_tokens` row is superseded; the billed sum is `accumulative_billed_tokens`)
 
-The first report built on 0019 showed a `cost` and a `cli cost` column, a
-`baseline` and a `context` and a `billed` column. Read cold, `cost` did not say
-whose cost, `billed` did not say billed what, and `context` needed a paragraph to
-justify. When the two cost columns disagreed, nothing recorded which price row had
-produced the estimate, so a reader could not tell a stale table from a wrong
-formula without re-deriving both. Feedback on the report had no shared names for
-its parts, and no way to point at one turn of one session.
+## Problem
+
+### Symptom
+
+The first report built on 0019 showed a `cost` and a `cli cost` column, a `baseline` and a `context` and a `billed` column.
+Read cold, three of those names said too little:
+
+- `cost` did not say whose cost.
+- `billed` did not say billed what.
+- `context` needed a paragraph to justify.
+
+### Pain point
+
+When the two cost columns disagreed, nothing recorded which price row had produced the estimate.
+A reader could not tell a stale table from a wrong formula without re-deriving both.
+Feedback on the report had no shared names for its parts, and no way to point at one turn of one session.
 
 ## Decision
 
-Metric names state the unit and, where two sources exist, the source:
+### The lens
 
-| Was | Is | Meaning |
-|-----|----|---------|
-| `cost_usd` | `estimated_cost_usd` | this plugin's price-table estimate |
-| `reported_cost_usd` | `harness_reported_cost_usd` | the harness CLI's own figure |
-| `billed_tokens` / `tokens` | `total_tokens` | every billed token summed over turns |
-| `baseline` | `baseline_tokens` | the first turn's context |
-| `context_tokens` (headline) | removed | stays only per turn, inside the ledger |
+- **Given**: A metric name is read without its definition beside it.
+- **We prefer**: Names that state the unit and, where two sources exist, the source.
+  That is preferred over short names that need a paragraph of definition beside them.
+- **Because**: A number nobody can trace to its inputs is an opinion.
+  A decision made on a bad rate needs a source to point at.
+- **Unless**: never
 
-Every priced result records `rates_applied`: the per-tier USD-per-token rates, the
-`prices.toml` row key, the file the row came from, and when it was applied. The
-same block rides on the history line, so a decision made on a bad rate has a
-source to point at.
+### In practice
 
-The ledger keeps everything: tool inputs, tool results and assistant text are
-stored whole, thinking text is captured, and each turn lists the 1-based line
-numbers of the captured session log it was built from. The report's detailed view
-renders all of it, including the raw records.
+- Metric names state the unit and, where two sources exist, the source:
 
-The report's parts have CamelCase names, carried as element ids and listed in a
-glossary shipped beside the page (`XHARNESS-REPORT-GLOSSARY.md`). A session is
-addressed by its harness-minted `SessionId` (a unique prefix is accepted); a turn
-by `SessionTurnId` = `<SessionId>/t<N>`. Both are shown as click-to-copy badges and
-both appear in the URL fragment (`#session=…&turn=…&view=…`), which the page
-keeps current as the reader navigates.
+  | Was | Is | Meaning |
+  |-----|----|---------|
+  | `cost_usd` | `estimated_cost_usd` | this plugin's price-table estimate |
+  | `reported_cost_usd` | `harness_reported_cost_usd` | the harness CLI's own figure |
+  | `billed_tokens` / `tokens` | `total_tokens` | every billed token summed over turns |
+  | `baseline` | `baseline_tokens` | the first turn's context |
+  | `context_tokens` (headline) | removed | stays only per turn, inside the ledger |
+- Every priced result records `rates_applied`: the per-tier USD-per-token rates, the `prices.toml` row key, the file the row came from, and when it was applied.
+  The same block rides on the history line, so a decision made on a bad rate has a source to point at.
+- The ledger keeps everything.
+  Tool inputs, tool results and assistant text are stored whole, and thinking text is captured.
+  Each turn lists the 1-based line numbers of the captured session log it was built from.
+  The report's detailed view renders all of it, including the raw records.
+- The report's parts have CamelCase names, carried as element ids and listed in a glossary shipped beside the page (`XHARNESS-REPORT-GLOSSARY.md`).
+  A session is addressed by its harness-minted `SessionId` (a unique prefix is accepted); a turn by `SessionTurnId` = `<SessionId>/t<N>`.
+  Both are shown as click-to-copy badges and both appear in the URL fragment (`#session=…&turn=…&view=…`), which the page keeps current as the reader navigates.
 
 ## Consequences
 
-`history.jsonl` lines written under 0019 carry the old keys; readers that merge
-histories treat `cost_usd` as `estimated_cost_usd`, `reported_cost_usd` as
-`harness_reported_cost_usd`, and `billed_tokens` (or `tokens`) as `total_tokens`.
-`RunResult.cost_usd` is gone: graders assert `run.estimated_cost_usd`. Result
-files grow to roughly the size of the session log they summarise; that is the
-price of a view that cuts nothing.
+### Pros
 
-## Lens
+- A decision made on a bad rate has a source to point at.
+  Every priced result records the row it used and where the row came from.
 
-A metric name is read without its definition beside it, so the name must carry
-the unit and the source; and a number nobody can trace to its inputs is an
-opinion.
+### Cons
+
+- `history.jsonl` lines written under 0019 carry the old keys.
+  Readers that merge histories treat `cost_usd` as `estimated_cost_usd`, `reported_cost_usd` as `harness_reported_cost_usd`, and `billed_tokens` (or `tokens`) as `total_tokens`.
+- `RunResult.cost_usd` is gone: graders assert `run.estimated_cost_usd`.
+- Result files grow to roughly the size of the session log they summarise; that is the price of a view that cuts nothing.

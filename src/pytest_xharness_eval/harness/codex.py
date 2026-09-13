@@ -308,7 +308,13 @@ class _Ledger:
 
 
 def fold(records: Numbered) -> tuple[str, str, _Ledger]:
-    """Fold one rollout's records into a ledger; returns (session id, model, ledger)."""
+    """Fold one rollout's records into a ledger; returns (session id, model, ledger).
+
+    The *first* ``session_meta`` names the rollout; a later one does not rename it. A forked
+    subagent rollout replays the parent's history into its own file, so it opens with its own
+    ``session_meta`` and then carries the parent's -- and last-write-wins gave every fork of
+    one session the parent's id, which is not an id that tells two threads apart (ADR 0033).
+    """
     session_id = ""
     model = ""
     ledger = _Ledger()
@@ -317,7 +323,7 @@ def fold(records: Numbered) -> tuple[str, str, _Ledger]:
         rtype = rec.get("type")
         payload = rec.get("payload") or {}
         if rtype == "session_meta":
-            session_id = str(payload.get("id") or session_id)
+            session_id = session_id or str(payload.get("id") or "")
         elif rtype == "turn_context":
             model = str(payload.get("model") or model)
         elif rtype == "response_item":
@@ -381,6 +387,11 @@ def subagents_of(rollouts: list[Path], primary_calls: list[Call]) -> list[Subage
     nickname, agent path) and its timestamp. The primary turn that owns it is the first
     call measured at or after that moment — a turn's tool calls run before its
     ``token_count`` is written — else the last turn.
+
+    The thread's identity is the ``id`` on *its own* opening ``session_meta``, not the
+    ``session_id`` beside it: that names the thread this one was forked from, so two threads
+    of one session carry the same value and neither the report's per-thread keys nor its
+    ``subturn=`` links could tell them apart.
     """
     subs: list[Subagent] = []
     for rollout in rollouts:
@@ -401,7 +412,7 @@ def subagents_of(rollouts: list[Path], primary_calls: list[Call]) -> list[Subage
             Subagent.folded(
                 ledger.calls,
                 agent=str(meta.get("agent_nickname") or "subagent"),
-                id=session_id or str(meta.get("id") or ""),
+                id=str(meta.get("id") or "") or session_id,
                 log=str(rollout),
                 parent_turn=parent,
                 description=str(meta.get("agent_path") or ""),

@@ -2,21 +2,27 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/neozenith/pytest-xharness-eval/docs/adrs/record.schema.json",
   "title": "pytest-xharness-eval decision record",
-  "description": "One ADR, authored as data (ADR 0047). Derived from the librarian's okf-yaml record schema and tightened to this repository's observed dialect: the argument is carried VERBATIM in `body`, because these records argue in narrative prose with tables and code fences rather than in the shipped schema's symptom/pain_point and given/we_prefer/because/unless decomposition. Projecting them into that shape would have required authoring content the sources do not contain. Every field below is either lifted verbatim from the record's markdown or inferred from an explicit statement in it -- nothing here is invented. `additionalProperties` is false at every level, so a typo in a key is an error rather than a silently ignored field.",
+  "description": "One ADR, authored as data (ADR 0048). This is the librarian's shipped okf-yaml record schema adopted strictly: every field it requires is required here, and the only edits are the tightenings the convention asks an adopting repository to make -- the `ADR-` id prefix, and `group`/`tags` drawn from this repository's closed domain enum so a typo fails the build rather than creating a group of one. Nothing is relaxed. `additionalProperties` is false at every level. ADR 0047's `body` and `status_note` are gone: the argument is redistributed across `problem`, `decision` and `consequences`, and the status sentence's cross-link phrasing survives in each edge's `note`.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "id",
     "slug",
+    "plan_id",
+    "group",
     "title",
+    "description",
     "status",
-    "status_note",
     "accepted_on",
     "last_changed_on",
+    "tags",
+    "lens",
+    "provenance",
+    "enforced_in",
     "relates_to",
-    "body",
-    "group",
-    "tags"
+    "problem",
+    "decision",
+    "consequences"
   ],
   "properties": {
     "id": {
@@ -29,19 +35,39 @@
       "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
       "description": "The filename stem after the number. Immutable for the same reason as `id`."
     },
+    "plan_id": {
+      "type": ["string", "null"],
+      "description": "Optional external identifier: a planning-era id, a ticket, an upstream record. Null throughout this repository -- no record was ever raised against a planning axis -- but declared rather than absent, so the field means 'none applies' instead of 'nobody considered it'."
+    },
+    "group": {
+      "enum": [
+        "accounting",
+        "architecture",
+        "collection",
+        "docs",
+        "evidence",
+        "grading",
+        "harness",
+        "packaging",
+        "pricing",
+        "report",
+        "storage"
+      ],
+      "description": "The record's primary domain, and the compound parent it sits in on the graph. A closed set: a new domain is a deliberate addition here, so a typo fails the build instead of silently creating a group of one. Each record has exactly one, because a compound node has exactly one parent."
+    },
     "title": {
       "type": "string",
       "minLength": 10,
-      "description": "The decision as a short assertion; verbatim from the record's H1, minus its number prefix."
+      "description": "The decision as a short assertion."
     },
     "description": {
       "type": "string",
       "minLength": 20,
-      "maxLength": 160,
+      "maxLength": 120,
       "not": {
         "pattern": "\\.$"
       },
-      "description": "Optional one-line routing summary. Absent on every migrated record: the sources carry no such line, and writing 46 of them would be authoring rather than shelving. The index falls back to the title."
+      "description": "One-line routing summary for the index and the OKF frontmatter. Must not end in a full stop: it is a label, not a sentence. Anchored to the end rather than banning '.', or any value containing a path such as `~/.claude` would fail."
     },
     "status": {
       "enum": [
@@ -50,12 +76,7 @@
         "superseded",
         "retired"
       ],
-      "description": "The lifecycle word only. Everything else the original status sentence said is kept verbatim in `status_note`."
-    },
-    "status_note": {
-      "type": "string",
-      "minLength": 8,
-      "description": "The record's original status sentence, verbatim and complete. The typed edges in `relates_to` are inferred FROM this sentence, never a replacement for it: converting prose relations to typed edges loses the phrasing, so the phrasing is kept here and the index renders it unchanged."
+      "description": "The lifecycle word. Scope -- which part of a record a later one replaced -- is carried on the edge that replaced it, in its `note`."
     },
     "accepted_on": {
       "type": "string",
@@ -87,30 +108,27 @@
       },
       "description": "The domains this record touches, primary first, drawn from the same closed set as `group`. Capped at two: a record needing three has usually not been read closely enough to say what it is mainly about."
     },
-    "group": {
-      "enum": [
-        "accounting",
-        "architecture",
-        "collection",
-        "docs",
-        "evidence",
-        "grading",
-        "harness",
-        "packaging",
-        "pricing",
-        "report",
-        "storage"
-      ],
-      "description": "The record's primary domain, and the compound parent it sits in on the graph. A closed set: a new domain is a deliberate addition here, so a typo fails the build instead of silently creating a group of one. Each record has exactly one, because a compound node has exactly one parent."
-    },
     "lens": {
       "type": "string",
       "minLength": 20,
-      "description": "The reusable rule the record leaves behind, verbatim from its `## Lens` section. Absent on the four records that never had one (0031, 0032, 0033, 0043) -- an absent Lens is a fact about the record, not a gap to fill."
+      "description": "The reusable rule. Read this to apply the decision without opening the record."
+    },
+    "provenance": {
+      "type": "string",
+      "minLength": 10,
+      "description": "The evidence the decision rests on: what forced it, in prose."
+    },
+    "enforced_in": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      },
+      "description": "The surfaces where the decision is actually binding -- a module, a config key, a CI gate, a doc. Repository-relative paths, so a reader can open one."
     },
     "relates_to": {
       "type": "array",
-      "description": "Typed edges over the closed vocabulary, inferred from the cross-links in `status_note`. Every relation is paired with its inverse so a validator can check symmetry; a missing inverse is reported, never failed.",
+      "description": "Typed edges over the closed vocabulary. Every relation is paired with its inverse so a validator can check symmetry; a missing inverse is reported, never failed.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -142,35 +160,93 @@
           },
           "note": {
             "type": "string",
-            "description": "The governing phrase from the original status sentence, so the reason for the edge survives the typing."
+            "description": "What the relation means, in a clause. Carries the governing phrase from the record's original status sentence, so the scope of a supersession survives the typing."
           }
         }
       }
     },
-    "body": {
+    "problem": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "context",
-        "decision",
-        "consequences"
+        "symptom",
+        "pain_point"
       ],
-      "description": "The record's argument, carried verbatim. These are markdown block scalars, tables and fenced code included, and the generator emits them unchanged -- which is what makes each generated record byte-identical to the record it replaced from `## Context` onward.",
       "properties": {
-        "context": {
+        "symptom": {
           "type": "string",
           "minLength": 20,
-          "description": "The `## Context` section, verbatim."
+          "description": "What was observed. The behaviour, not the theory."
         },
-        "decision": {
+        "pain_point": {
           "type": "string",
           "minLength": 20,
-          "description": "The `## Decision` section, verbatim."
+          "description": "What it cost, and why that cost matters."
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "given",
+        "we_prefer",
+        "because",
+        "unless",
+        "in_practice"
+      ],
+      "properties": {
+        "given": {
+          "type": "string",
+          "minLength": 10,
+          "description": "The fact the decision rests on."
         },
-        "consequences": {
+        "we_prefer": {
           "type": "string",
-          "minLength": 20,
-          "description": "The `## Consequences` section, verbatim."
+          "minLength": 10,
+          "description": "Must name the rejected alternative; the shape is 'X, over Y'."
+        },
+        "because": {
+          "type": "string",
+          "minLength": 10
+        },
+        "unless": {
+          "type": "string",
+          "minLength": 5,
+          "description": "The escape hatch, or 'never' when the decision is unconditional."
+        },
+        "in_practice": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "How the decision shows up in the work. Markdown block scalars: a clause that argued with a table or a fenced example keeps it here."
+        }
+      }
+    },
+    "consequences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pros",
+        "cons"
+      ],
+      "properties": {
+        "pros": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "cons": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "A record with no cons has not been thought about."
         }
       }
     }

@@ -3,57 +3,70 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Harness is the axis name, and the project owns the default matrix
+description: one word for the first axis, and a project scope between the case and the plugin default
 tags: [collection, harness]
 status: accepted
 accepted_on: 2026-08-21
 last_changed_on: 2026-08-21
-relates_to:
-  - { relation: extends, target: ADR-0010 }
+provenance: The package is named for cross-harness evaluation while the code said "cli". A six-cell sweep printed as dots, with a verbose line saying only `PASSED`.
+enforced_in:
+  - src/pytest_xharness_eval/model/matrix.py
+  - src/pytest_xharness_eval/model/runresult.py
+  - src/pytest_xharness_eval/plugin/options.py
+  - GLOSSARY.md (the first axis is *harness*, never *cli*)
 generated: { by: human:neozenith, at: 2026-08-21T00:00:00Z }
 ---
 
-# 0015: Harness is the axis name, and the project owns the default matrix
+> **Lens**: Name an axis once, in the word the package is named for.
+> Give every configurable default a project scope between the case and the plugin.
 
-Status: accepted, 2026-08-21. Refines
-[0010](0010-matrix-options-and-dry-run.md).
+## Relates to
 
-## Context
+- Extends [ADR-0010](0010-matrix-options-and-dry-run.md) (the record's status line says "refines")
 
-The first design named the first matrix axis "cli" (`--cli`, `Cell.cli`, `RunResult.cli`),
-while the package is named for cross-*harness* evaluation. Two words for one axis
-is the kind of drift the vocabulary table exists to prevent. Separately, the only
-way to change a repository's sweep was to edit the plugin's `DEFAULT_MATRIX` or to
-repeat `models=` on every case; there was no project scope between the two.
+## Problem
 
-Visibility was also thin: a six-cell sweep printed as dots, and the verbose line
-said only `PASSED`, hiding the cost that had just been incurred.
+### Symptom
+
+The first design named the first matrix axis "cli" (`--cli`, `Cell.cli`, `RunResult.cli`), while the package is named for cross-*harness* evaluation.
+Two words for one axis is the kind of drift the vocabulary table exists to prevent.
+
+### Pain point
+
+Separately, the only way to change a repository's sweep was to edit the plugin's `DEFAULT_MATRIX` or to repeat `models=` on every case.
+There was no project scope between the two.
+Visibility was also thin.
+A six-cell sweep printed as dots, and the verbose line said only `PASSED`, hiding the cost that had just been incurred.
 
 ## Decision
 
-The axis is called **harness** everywhere: the `--harness` option, `Cell.harness`,
-`RunResult.harness`, `KNOWN_HARNESSES`, and the `harness` key in `report.json`.
-Matrix entries stay `harness/model`.
+### The lens
 
-The matrix has three scopes, highest precedence first: a case's `models=`, the
-project's `xharness_matrix` ini key, and the plugin's `DEFAULT_MATRIX`. A case that
-omits `models=` inherits; `EvalCase.models` is `None` in that state so inheritance
-is distinguishable from an explicit choice.
+- **Given**: The package is named for cross-harness evaluation, and pytest offers hooks that itemise collection and per-test status.
+- **We prefer**: The single word **harness** for the axis and a three-scope matrix, over the parallel "cli" vocabulary and a two-scope one.
+  Hooks inside pytest's own output, over a second pivot report.
+- **Because**: The requirement was visibility inside pytest's own output, not a second report.
+  One word for one axis is what the vocabulary table exists to protect.
+- **Unless**: never
 
-Two hooks carry the itemised view inside ordinary pytest output. Before the first
-cell runs, `pytest_report_collectionfinish` lists every permutation grouped by case.
-As each cell lands, `pytest_report_teststatus` replaces the verbose status word with
-the verdict, USD, token count, and duration, and shows `DRY-RUN` for a dry-run skip.
+### In practice
+
+- The axis is called **harness** everywhere: the `--harness` option, `Cell.harness`, `RunResult.harness`, `KNOWN_HARNESSES`, and the `harness` key in `report.json`.
+  Matrix entries stay `harness/model`.
+- The matrix has three scopes, highest precedence first: a case's `models=`, the project's `xharness_matrix` ini key, and the plugin's `DEFAULT_MATRIX`.
+  A case that omits `models=` inherits; `EvalCase.models` is `None` in that state so inheritance is distinguishable from an explicit choice.
+- Two hooks carry the itemised view inside ordinary pytest output.
+  Before the first cell runs, `pytest_report_collectionfinish` lists every permutation grouped by case.
+  As each cell lands, `pytest_report_teststatus` replaces the verbose status word with the verdict, USD, token count, and duration, and shows `DRY-RUN` for a dry-run skip.
 
 ## Consequences
 
-Captured `.result.json` files written before this change carry a `cli` key; they are
-git-ignored run artefacts and are not migrated. Consumers see `--cli` rejected as an
-unknown option, which is the loud failure wanted. The report header names which
-matrix scope applied, so a surprising cell count is diagnosable from the first two
-lines of output. A pivot report was considered and deferred: the requirement was
-visibility inside pytest's own output, not a second report.
+### Pros
 
-## Lens
+- The report header names which matrix scope applied, so a surprising cell count is diagnosable from the first two lines of output.
+- Consumers see `--cli` rejected as an unknown option, which is the loud failure wanted.
 
-Name an axis once, in the word the package is named for, and give every
-configurable default a project scope between the case and the plugin.
+### Cons
+
+- Captured `.result.json` files written before this change carry a `cli` key; they are git-ignored run artefacts and are not migrated.
+- A pivot report was considered and deferred: the requirement was visibility inside pytest's own output, not a second report.

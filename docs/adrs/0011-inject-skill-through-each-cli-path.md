@@ -3,36 +3,53 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: The skill under test loads through each CLI's own skill path
+description: the eval exercises skill loading, not skill text pasted into a prompt
 tags: [harness]
 status: accepted
 accepted_on: 2026-08-20
 last_changed_on: 2026-08-20
+provenance: "The deliverable being evaluated is a skill. Two shortcuts are available: inlining its body into the prompt, or copying it into the workspace as `.claude/skills/`. Each changes what is measured."
+enforced_in:
+  - src/pytest_xharness_eval/harness/claude.py
+  - src/pytest_xharness_eval/harness/codex.py
+  - ARCHITECTURE.md (the isolation-levers table)
 generated: { by: human:neozenith, at: 2026-08-20T00:00:00Z }
 ---
 
-# 0011: The skill under test loads through each CLI's own skill path
+> **Lens**: Evaluate a deliverable through the loading path its real users take; a shortcut that bypasses loading changes what is being measured.
 
-Status: accepted, 2026-08-20.
+## Problem
 
-## Context
+### Symptom
 
-The deliverable being evaluated is a skill. Inlining its body into the prompt
-would grade a prompt while still attributing the score to the skill. Copying it
-into the workspace as `.claude/skills/` only takes effect when settings sources
-are loaded, which fights the isolation goal.
+The deliverable being evaluated is a skill.
+Inlining its body into the prompt would grade a prompt while still attributing the score to the skill.
+
+### Pain point
+
+Copying it into the workspace as `.claude/skills/` only takes effect when settings sources are loaded, which fights the isolation goal.
 
 ## Decision
 
-Claude receives the skill directory through `--add-dir`; Codex loads it from
-`$CODEX_HOME/skills/<skill>`. Two mechanisms, each the path a real user's skill
-travels.
+### The lens
+
+- **Given**: Each CLI already has a skill path its real users' skills travel.
+- **We prefer**: Injection through each CLI's own skill path.
+  That is preferred over inlining the skill body into the prompt, or copying it into the workspace as `.claude/skills/`.
+- **Because**: Only the real loading path measures skill loading rather than skill text.
+- **Unless**: never
+
+### In practice
+
+- Claude receives the skill directory through `--add-dir`; Codex loads it from `$CODEX_HOME/skills/<skill>`.
+  Two mechanisms, each the path a real user's skill travels.
 
 ## Consequences
 
-The eval exercises skill loading, not just skill text. Two injection paths must
-be kept in step in `runner.py`.
+### Pros
 
-## Lens
+- The eval exercises skill loading, not just skill text.
 
-Evaluate a deliverable through the loading path its real users take; a shortcut
-that bypasses loading changes what is being measured.
+### Cons
+
+- Two injection paths must be kept in step in `runner.py`.

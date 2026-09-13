@@ -1,0 +1,123 @@
+# Authored record (ADR 0048). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0048
+slug: the-record-schema-is-the-shipped-one-adopted-strictly
+plan_id: null
+title: The record schema is the librarian's shipped one, adopted strictly
+description: the corpus is re-authored into the strict shape rather than the schema loosened to fit it
+status: accepted
+accepted_on: '2026-09-08'
+last_changed_on: '2026-09-08'
+group: docs
+tags:
+- docs
+lens: |-
+  A migration that only re-encodes is cheap and reversible.
+  One that re-authors is neither, so it is a decision and must be recorded as one.
+  When a corpus is coerced into a shape it did not have, name the fields nobody could extract and say who wrote them.
+  A reader must be able to tell the argument the record made from the clauses the migration composed out of it.
+provenance: |-
+  Asked to coerce every ADR into the librarian's strict `okf-yaml` format, with the argument redistributed into the strict fields rather than condensed away.
+enforced_in:
+- docs/adrs/record.schema.json
+- docs/adrs/templates/record.md.j2
+- docs/CONVENTIONS.md (the dialect lines)
+- Makefile (`adrs`, `adrs-check`)
+relates_to:
+- relation: supersedes
+  target: ADR-0047
+  note: >-
+    replaces the verbatim `body` and the four loosened optional fields; the
+    authored-YAML arrangement and the relation vocabulary stand
+problem:
+  symptom: |-
+    ADR 0047 adopted the librarian's `okf-yaml` convention, but copied its record schema and *loosened* it.
+    `body.context` / `body.decision` / `body.consequences` carried each record's sections as verbatim markdown, and `status_note` carried the status sentence.
+    `description`, `provenance`, `enforced_in` and `lens` were optional, because no record supplied them.
+
+    The result validates against `docs/adrs/record.schema.json` and against nothing else.
+    Two fields of the shipped schema had no counterpart at all, and four of its required fields were absent from all 47 records.
+  pain_point: |-
+    A named convention whose schema an adopter may relax at will is a convention in name only.
+    The point of `okf-yaml` is that a consumer knows what a record carries without reading the adopter's copy of the schema first.
+    The loosened form also left the corpus unable to answer the questions the shape exists for.
+    Which alternative was rejected, what the escape hatch is, and what the decision cost.
+    Those clauses were dissolved inside a narrative block nothing could address.
+decision:
+  given: |-
+    The librarian ships `resources/okf_yaml/record.schema.json` as the contract, and asks an adopter to tighten its patterns rather than to relax its requirements.
+  we_prefer: |-
+    The shipped schema adopted strictly, with every record re-authored into it.
+    That is preferred over ADR 0047's loosened copy carrying a verbatim `body`, and over condensing the argument to whatever fits the clauses.
+  because: |-
+    A record that answers `we_prefer`, `unless` and `cons` in named fields is queryable.
+    It is reviewable in a way a narrative block is not.
+    Nothing of the argument has to be discarded to get there.
+  unless: |-
+    a tightening is at stake.
+    `id` and `relates_to[].target` keep this repository's `ADR-` prefix, and `group` and `tags` are drawn from the eleven-domain enum, so a typo fails the build.
+    Nothing is relaxed.
+  in_practice:
+  - |-
+    **The schema is the shipped one**.
+    `docs/adrs/record.schema.json` requires all fifteen fields the librarian's copy requires, plus `plan_id` and `group`, which this repository declares on every record.
+    `body` and `status_note` are gone; `additionalProperties` stays false at every level.
+  - |-
+    **The argument is redistributed, not condensed**.
+    Each record's `## Context` became `problem.symptom` and `problem.pain_point`.
+    Its `## Decision` became `given`, `we_prefer`, `because`, `unless` and a list of `in_practice` block scalars.
+    Those carry the fourteen comparison tables and eight fenced examples unchanged.
+    Its `## Consequences` became `pros` and `cons`.
+    No sentence was dropped.
+  - |-
+    **The status sentence survives on the edges it described**.
+    Where 0047 kept the prose in `status_note` and typed the relations beside it, the governing clause is now each edge's `note`.
+    A partial supersession therefore still says which part.
+    Citations that 0047 left untyped because they lived only in that sentence are now `see_also` edges: there is no prose field left to hold them.
+  - |-
+    **The generated markdown is the librarian's own template**.
+    The title moves into frontmatter, the record opens with its Lens blockquote, and `provenance` and `enforced_in` join the frontmatter.
+    The relations render as a `## Relates to` list.
+    No inbound link used an `#nnnn-title` anchor, so nothing citing a record breaks.
+    The regenerate banner stays: the convention's verification gate requires every generated file to carry one.
+  - |-
+    **Four fields could not be extracted, and were written**.
+    `description`, `provenance` and `enforced_in` did not exist in any record.
+    Each was composed from that record's own text and, for `enforced_in`, from the surfaces the change map already names.
+    Four records (0031, 0032, 0033, 0043) had no `## Lens`, and the strict schema requires one.
+    Each was drawn from a rule the record itself states in prose.
+    This is the authoring ADR 0047 declined to do, done deliberately and under its own record rather than inside a migration.
+consequences:
+  pros:
+  - |-
+    Every record now validates against the librarian's shipped schema.
+    The bundle is therefore portable to any `okf-yaml` consumer, without that consumer reading this repository's copy of the contract first.
+  - |-
+    The corpus is queryable on the clauses that matter.
+    `yq` over `decision.we_prefer` lists every rejected alternative, over `decision.unless` every escape hatch, and over `consequences.cons` every accepted cost.
+  - |-
+    Typing the citations that 0047 left in prose closes gaps in the graph.
+    Edges exist now for references that were previously visible only to a human reading a status sentence.
+  cons:
+  - |-
+    The verbatim `## Context` / `## Decision` / `## Consequences` prose is gone as prose.
+    Every sentence survives inside a named field.
+    But the reading order and the paragraphing of 47 accepted records changed, and the byte-identity ADR 0047 established against the pre-0047 markdown is permanently broken.
+    Git history is the only place the original rendering now exists.
+  - |-
+    Four fields per record were composed rather than extracted, which is a migration authoring content.
+    That is exactly what ADR 0047's Lens warns against.
+    It is recorded here so the provenance of those fields is legible.
+    A reader who wants only what the author wrote should read `problem`, `decision` and `consequences`.
+  - |-
+    A record is more work to write.
+    Fifteen required fields, a rejected alternative that must be named, and at least one cost that must be stated.
+    0047 asked for three prose blocks.
+  - |-
+    A prose-gate pass over the generated markdown then split and reworded the sentences themselves.
+    Every claim survives.
+    But 412 sentences were divided at a clause boundary, and 110 em-dashes became commas, colons or full stops.
+    The wording is no longer the author's throughout.
+    The gate is `prose_gates.ts`, from the `gooddocs` skill.
+    Its rules are one sentence per line, a 25-word budget, no em-dash, and no list disguised as prose.

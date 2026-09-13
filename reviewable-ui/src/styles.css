@@ -1,0 +1,757 @@
+/* Chrome only. Every colour that encodes a metric band lives in lib/metrics.ts,
+   because a re-skin must never change what a colour means. Nothing in this file
+   ever sets a band's colour: `.band-*` and `.phi-cell` classes below add shape,
+   weight or border — never a colour value — so a band still means the same thing
+   however this stylesheet changes.
+
+   Every colour below was checked against the WCAG 2.2 AAA thresholds (7:1 normal
+   text, 4.5:1 large text, 3:1 UI components/graphical objects), against the actual
+   background it sits on — see the ratios noted next to each token. */
+:root {
+  --bg: #0b1120;
+  --panel: #111a2e;
+  /* Decorative dividers only (header rule, aside seam, table rows). Not a UI
+     component boundary, so AAA's 3:1 non-text threshold does not apply to it. */
+  --line: #1e293b;
+  /* Boundary of an actual control (select, input, fieldset, table/card edges that
+     carry meaning). #64748b: 3.64:1 on --panel, 3.96:1 on --bg — both clear 3:1. */
+  --control-line: #64748b;
+  --fg: #e2e8f0;
+  /* #a3b3c9: 8.13:1 on --panel, 8.83:1 on --bg — both clear the 7:1 AAA floor for
+     normal text (the old #94a3b8 read 6.76:1 on --panel and failed it).
+
+     It does NOT clear it inside `.banner`, and which background the banner sits on
+     decides it: over --panel the composite is #2c2a2a and --muted reads 6.69:1, a
+     AAA failure; over --bg the composite is #27221d and it reads 7.39:1, a pass with
+     0.39 to spare. `.note.banner` below overrides the colour to --fg (11.57:1 and
+     12.78:1) and that override is the only thing keeping the inspector's off-slice
+     notice — a `.note.banner` inside `aside.right`, which is --panel — out of the
+     same defect --warn had. It is load-bearing, not cosmetic, and removing it is
+     caught by the off-slice axe scan in e2e/a11y.spec.ts (verified by mutation).
+     Any new rule that puts --muted text on a tinted background has to re-derive its
+     own ratio against that composite; the two numbers above certify nothing about it. */
+  --muted: #a3b3c9;
+  --accent: #7c3aed;
+  /* #fbbf24: 10.39:1 on --panel, 11.28:1 on --bg — but the ratio that actually
+     binds is neither of those. `.banner` paints rgba(245,158,11,0.12) over --panel,
+     so `.warn.banner` (the header's orphan-rate warning) reads against the
+     composite #2c2a2a, not against the token's nominal background. The previous
+     #f59e0b scored 8.07:1 on --panel and looked fine in the table above while
+     actually rendering at 6.64:1 — an AAA failure on 13px text. #fbbf24 reads
+     8.55:1 on that composite. A translucent background means the token table has
+     to name the composite, or it certifies a colour nothing is drawn on. */
+  --warn: #fbbf24;
+  /* Focus ring only. #facc15: 11.32:1 on --panel, 12.3:1 on --bg — deliberately far
+     past the 3:1 floor so it is never mistaken for decoration. */
+  --focus: #facc15;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    14px/1.5 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.small {
+  font-size: 12px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* A visible, focused, 3:1-against-everything outline (WCAG 2.4.7 / 2.4.11), on
+   every focusable element, never suppressed. No layout shift: outline, not border. */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Reduced motion (WCAG 2.3.3): cytoscape's own layouts never animate (see
+   GraphCanvas.tsx), so the only motion this stylesheet can introduce is here —
+   and this switches all of it off, including the loading spinner, in one place. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Forced colours (Windows High Contrast): the OS repaints backgrounds, text and
+   borders from a small system palette the user chose for legibility, and by
+   default that overrides every colour this file sets — including the ones that
+   are not decoration but the datum itself (a band, a phi value). Browsers give
+   authors exactly one opt-out, `forced-color-adjust: none`, and it is scoped
+   here to only the three places colour carries information that shape/weight
+   don't already carry in full: the legend's band swatches, the cluster table's
+   phi cells, and `.band-chip` (rendered by GraphCanvas.tsx's accessible table).
+   Everything else — panel backgrounds, borders, plain text — keeps deferring to
+   the user's system colours, which is what forced-colors mode is for.
+
+   `.phi-cell` and `.band-chip` set `color` only -- their background is normally
+   whatever ancestor panel they sit in (`--panel`, confirmed against both call
+   sites: `aside.right` and `.graph-table-wrap`). Opting a *text* element out of
+   forced-colors without also pinning its background is worse than not opting
+   out at all: the OS still repaints every ancestor around it (a real
+   `<html data-force-colors>` test confirmed the ancestor panel goes to system
+   Canvas/white while this element's now-exempt text keeps its original colour),
+   so the pairing that survives is a light band colour on a white page --
+   independently confirmed via `getComputedStyle` (not just axe) at ~1.4:1.
+   Pinning `background-color` here too keeps the exact pair this app already
+   verified safe in normal rendering, rather than half of it. `.swatch-shape`
+   does not need this: its "text" IS its own opaque `background` (a solid swatch,
+   set inline per band), so there is no separate background to lose. */
+@media (forced-colors: active) {
+  .swatch-shape,
+  table.clusters td.phi-cell,
+  .band-chip {
+    forced-color-adjust: none;
+  }
+  table.clusters td.phi-cell,
+  .band-chip {
+    background-color: var(--panel);
+  }
+}
+
+/* `header` moved outside `<main>` so it is exposed as the `banner` landmark (an
+   HTML `header` only gets that role when it is not a descendant of main/article/
+   aside/nav/section) — `.shell` now carries the full-viewport height `.app` used
+   to own by itself. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.app {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+header h1 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+.totals {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 13px;
+}
+.totals b {
+  color: var(--fg);
+}
+.warn {
+  color: var(--warn);
+}
+.banner {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.12);
+  font-size: 13px;
+}
+/* The node-cap banner reuses `.banner`'s visual weight: hidden data is not a
+   footnote, so it gets the same unmissable treatment as the orphan-rate warning. */
+.note.banner {
+  color: var(--fg);
+  font-size: 12px;
+}
+.note {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
+/* Shared visual language for every panel heading (h2 or h3 — level is semantic,
+   this look is not), matching what `.detail h4` already established. */
+.panel-heading,
+.detail h4,
+aside.right h4 {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.panel-heading:first-child {
+  margin-top: 0;
+}
+
+.body {
+  display: grid;
+  grid-template-columns: 280px 1fr 320px;
+  flex: 1;
+  min-height: 0;
+}
+aside {
+  overflow-y: auto;
+  /*
+   * Explicit, because `overflow-y: auto` alone makes the browser compute
+   * `overflow-x: auto` too. A sidebar that scrolls sideways but contains nothing
+   * focusable is a WCAG 2.1.1 failure (axe `scrollable-region-focusable`): a
+   * keyboard user can see there is more content and has no gesture to reach it.
+   * This sidebar genuinely never needs to scroll sideways -- `table.clusters`
+   * truncates its keys and keeps the full text in a `title` -- so the honest fix
+   * is to declare that, not to hand the reader a scroll handle.
+   */
+  overflow-x: hidden;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+}
+aside.right {
+  border-right: 0;
+  border-left: 1px solid var(--line);
+}
+.middle {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  /* Column, so the status strip App moved here out of the scrolling sidebar sits
+     above the canvas and `.graph-panel` still takes every pixel that is left. */
+  flex-direction: column;
+}
+.graph-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  gap: 8px;
+  padding: 8px;
+}
+.graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+/* `.graph-table-wrap` below is a sibling, not a child, so when it opens (or its
+   `max-height: 42%` recomputes against a resized `.graph-panel`) this box shrinks
+   without `.canvas` itself ever moving. Cytoscape's absolutely-positioned <canvas>
+   layers are sized in raw pixels at mount time and only resized by its own
+   debounced (~100ms) internal observer -- GraphCanvas.tsx now also wires an
+   undebounced ResizeObserver to close that window, but `overflow: hidden` is kept
+   here regardless, as the belt to that fix's braces: even a single frame of a
+   stale, oversized canvas layer must clip at this box's edge rather than paint
+   over the accessible table's rows and Select buttons beneath it. */
+.canvas {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* The canvas is `aria-hidden` (GraphCanvas.tsx): it draws pixels, not semantics.
+   This table is the real accessible surface, so it gets full visual treatment,
+   not an afterthought's styling. */
+.graph-table-wrap {
+  max-height: 42%;
+  overflow: auto;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+table.graph-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+table.graph-table caption {
+  text-align: left;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  border-bottom: 1px solid var(--control-line);
+}
+table.graph-table th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--control-line);
+  padding: 6px 8px;
+}
+table.graph-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+table.graph-table tr.is-selected {
+  background: rgba(124, 58, 237, 0.18);
+}
+table.graph-table button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 6px 12px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--control-line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+table.graph-table button[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+
+.table-toggle {
+  min-height: 44px;
+  padding: 8px 14px;
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--control-line);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.table-toggle:hover {
+  border-color: var(--accent);
+}
+
+/* A CSS-only loading indicator; frozen to a single frame under reduced motion by
+   the media query above rather than by a second code path here. */
+.spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  margin-bottom: 10px;
+  border: 3px solid var(--line);
+  border-top-color: var(--fg);
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: lowercase;
+}
+select,
+input[type="search"] {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--control-line);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 13px;
+  min-height: 44px;
+}
+/* The draggable hit region of a range input is its whole box, not just the
+   painted track, in every engine this app targets: padding here grows the real
+   target to 44px (WCAG 2.5.5) without thickening the visible track. */
+input[type="range"] {
+  accent-color: var(--accent);
+  height: 44px;
+  padding-block: 20px;
+}
+fieldset.langs {
+  border: 1px solid var(--control-line);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+fieldset.langs legend {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 4px;
+}
+.chip {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg) !important;
+  min-height: 44px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.chip:hover {
+  background: rgba(148, 163, 184, 0.08);
+}
+.chip input {
+  width: 18px;
+  height: 18px;
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.swatch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg);
+}
+/* Shape is the second channel for a definition's band (WCAG 1.4.1): these mirror
+   the cytoscape node shapes in GraphCanvas.tsx's `BAND_SHAPE` one-for-one. Colour
+   still comes from `style` in Panels.tsx/GraphCanvas.tsx — never from here. */
+.swatch-shape {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  display: inline-block;
+  border: 1px solid var(--bg);
+}
+.shape-ellipse {
+  border-radius: 50%;
+}
+.shape-rectangle {
+  border-radius: 2px;
+}
+.shape-hexagon {
+  clip-path: polygon(
+    25% 3%,
+    75% 3%,
+    100% 50%,
+    75% 97%,
+    25% 97%,
+    0% 50%
+  );
+}
+.shape-diamond {
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+.caveat {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* Table/legend band chip: layout only. `font-weight` on the high band is a third
+   non-colour channel for rank, after shape and lightness — heavier means larger
+   value, not "worse". Nothing here grades; see lib/metrics.ts on BAND. */
+.band-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 11px;
+}
+.band-chip.band-high {
+  font-weight: 700;
+}
+
+.detail {
+  min-height: 44px;
+}
+.detail h3 {
+  margin: 0 0 2px;
+  font-size: 15px;
+}
+.detail dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.detail dt {
+  color: var(--muted);
+}
+.detail ul.jump-list {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.detail ul.jump-list button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  text-align: left;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.detail ul.jump-list button:hover {
+  border-color: var(--control-line);
+  background: rgba(148, 163, 184, 0.08);
+}
+/* Names what the 12-row render cap cut, rather than letting the list end mid-count
+   with no sign anything is missing -- the same "data loss, not a footnote" rule the
+   node-cap banner applies to the canvas, one panel over. Not a button: there is
+   nothing here to jump to, only a count to report. */
+.detail ul.jump-list li.more {
+  padding: 6px 10px;
+  color: var(--muted);
+  font-style: italic;
+}
+.empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+table.clusters {
+  width: 100%;
+  /*
+   * Without this the `max-width` on a cell is only a hint: auto table layout sizes
+   * columns to their content first, so a deep `file::class` cluster key pushes the
+   * table past the sidebar. Fixed layout makes the cell's ellipsis authoritative.
+   */
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+table.clusters caption {
+  text-align: left;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 0 0 6px;
+}
+/* Unlike `td` below, a header cell has no `title` fallback to fall back on, and
+   truncating "internal" to "interna…" answers a question nobody asked. At the 13%
+   column width `names`/`internal`/`cut` get in a 320px sidebar (~30px of text room),
+   "internal" is the one header word wider than its own column, and the browser's
+   default word-preserving wrap does not break it -- it overflows past the cell
+   boundary and paints straight over "cut" next door ("names internaLcut"). Letting
+   the word itself wrap onto a second line -- real, always-visible text, not a
+   hover-only `title` -- keeps every header legible without touching the column
+   widths the comment below justifies for the data they hold. */
+table.clusters th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--line);
+  padding: 3px 4px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  line-height: 1.25;
+  vertical-align: bottom;
+}
+/* `table-layout: fixed` splits the width evenly unless told otherwise, which left
+   the phi column ~64px in a 320px sidebar. Named widths give the two columns with
+   real content — the cluster path and phi — the room, and the three small integer
+   counts what they actually need for their *data* (a one- or two-digit number).
+   But a `th`/`td` pair shares one column width, so the header word has to fit in
+   that same allowance too, and an even three-way split (13%/13%/13%, measured at
+   ~30px of text room each) fit "cut" with room to spare but not "names" (~33px
+   needed) or "internal" (~36px needed) — the latter overflowed its cell outright
+   and painted over "cut" next door. These three are no longer split evenly: each
+   gets what its own header word measures, "cut" giving up the room "names" and
+   "internal" needed, taken from `cluster` at the other end (which still keeps its
+   own comment's justification, just at 30% instead of 34%; `phi` is unchanged at
+   27%). `table.clusters th`'s wrap rule above is the remaining belt-and-braces:
+   this sizing is tuned for today's five words, and any future header that still
+   doesn't fit wraps onto a second line instead of repeating the overlap. */
+table.clusters th:nth-child(1),
+table.clusters td:nth-child(1) {
+  width: 30%;
+}
+table.clusters th:nth-child(2),
+table.clusters td:nth-child(2) {
+  width: 15%;
+}
+table.clusters th:nth-child(3),
+table.clusters td:nth-child(3) {
+  width: 18%;
+}
+table.clusters th:nth-child(4),
+table.clusters td:nth-child(4) {
+  width: 10%;
+}
+table.clusters th:nth-child(5),
+table.clusters td:nth-child(5) {
+  width: 27%;
+}
+table.clusters td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+/* The phi column holds the one value in this table that is a sentence rather than a
+   number — "not measurable" — and truncating it rendered "not me…", which reads as
+   a missing value instead of a stated one. It wraps instead of truncating: two
+   short lines say it, an ellipsis does not. (A `title` is the hover fallback, but
+   hover is not a channel a keyboard user has, so it cannot be the only fix.) */
+table.clusters td.phi-cell {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+table.clusters td.phi-cell.band-high {
+  font-weight: 700;
+}
+
+.fatal,
+.loading {
+  padding: 40px;
+  max-width: 640px;
+}
+.fatal h1 {
+  margin-top: 0;
+}
+code {
+  background: var(--panel);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* Phone-width safety net: the three-pane layout collapses to stacked panes rather
+   than clipping or forcing horizontal scroll on the page body. */
+@media (max-width: 700px) {
+  .body {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(0, auto);
+    overflow-y: auto;
+  }
+  aside,
+  aside.right {
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    max-height: 40vh;
+  }
+  .middle {
+    min-height: 50vh;
+  }
+}
+
+/* ---- Additions from the adversarial design review (findings 3, 6, 7, 8) ---- */
+
+/* The lede: the one line the landing view owes a reader who has not touched a
+   control yet. `--fg` on `--panel` is 13.1:1, well past the 7:1 AAA floor. */
+.lede {
+  margin: 8px 0 0;
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 95ch;
+}
+/* An in-sentence link. Underlined, not merely coloured: `--fg` here is the same
+   colour as the prose around it, so the underline is the only thing distinguishing
+   it — which is exactly the point (WCAG 1.4.1, colour is never the sole channel).
+   2.5.5's 44px target floor does not bind: this is the documented inline exception
+   for a target inside a sentence. */
+.lede button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.lede button.link:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* The status strip above the canvas: what the slice is showing, and the caveat that
+   the bands rank rather than grade. Both used to live at the foot of the scrolling
+   left sidebar. Sits on `--bg`, where `--muted` reads 8.83:1. */
+.graph-status {
+  padding: 8px 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.graph-status .note {
+  margin: 0;
+}
+.graph-status .caveat {
+  margin: 0;
+}
+
+/* WCAG 2.4.1 bypass link for the graph table. Visually hidden until focused, using
+   the same clip technique as `.sr-only` — a keyboard user meets it as the first stop
+   inside the table region; everyone else never sees it. */
+.skip-link {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  position: static;
+  display: inline-block;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  min-height: 44px;
+  border: 1px solid var(--control-line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--fg);
+  font-size: 13px;
+  text-decoration: underline;
+}
+.skip-target {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 0;
+}
+/* The landing pad for the skip link. `tabindex="-1"` makes it focusable
+   programmatically, and without this the browser would draw no ring on arrival —
+   leaving a keyboard user told they had jumped somewhere, with no way to see where. */
+.skip-target:focus,
+.skip-target:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}

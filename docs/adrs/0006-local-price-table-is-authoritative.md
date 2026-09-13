@@ -3,43 +3,59 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: A local prices.toml is authoritative, with an optional upstream seed
+description: an upstream feed fills the table but is never the thing the harness reads
 tags: [pricing]
 status: accepted
 accepted_on: 2026-08-21
 last_changed_on: 2026-08-21
+provenance: Neither CLI's session log carries cost, and Codex reports none anywhere; the LiteLLM feed was fetched and checked against both providers' model names.
+enforced_in:
+  - src/pytest_xharness_eval/derive/prices.toml
+  - src/pytest_xharness_eval/derive/pricing.py
 generated: { by: human:neozenith, at: 2026-08-21T00:00:00Z }
 ---
 
-# 0006: A local prices.toml is authoritative, with an optional upstream seed
+> **Lens**: Keep the price table owned, not generated.
+> An upstream is a convenience for filling it, never the thing the harness reads.
 
-Status: accepted, 2026-08-21; `--seed-prices` not yet built. The table is now
-bundled inside the package and layered with the consumer's optional
-`xharness_prices` file ([0014](0014-register-through-the-pytest11-entry-point.md)).
-The project-level override moved from a rootdir `prices.toml` into `xharness_prices`
-ini lines with [0030](0030-price-rows-live-in-the-pytest-config.md); the bundled
-table is unchanged.
+## Relates to
 
-## Context
+- Extended by [ADR-0014](0014-register-through-the-pytest11-entry-point.md) (the table is now bundled inside the package and layered with the consumer's optional `xharness_prices` file)
+- Superseded by [ADR-0030](0030-price-rows-live-in-the-pytest-config.md) (the project-level override moved from a rootdir `prices.toml` into `xharness_prices` ini lines; the bundled table is unchanged)
 
-Neither CLI's session log carries cost, and Codex reports none anywhere. The
-LiteLLM feed was fetched and carries per-token input, output, cache-read, and
-cache-write rates for Anthropic models. Its coverage of Codex's aliased model
-names (for example `gpt-5.6-sol`) is unconfirmed.
+## Problem
+
+### Symptom
+
+Neither CLI's session log carries cost, and Codex reports none anywhere.
+
+### Pain point
+
+The LiteLLM feed carries per-token input, output, cache-read, and cache-write rates for Anthropic models.
+Its coverage of Codex's aliased model names (for example `gpt-5.6-sol`) is unconfirmed, so a generated table would silently lose rows.
 
 ## Decision
 
-A committed `prices.toml` is the single authority for rates. A `--seed-prices`
-command will populate and refresh rows from upstream, never overwrite a row
-marked as a local override, and report every model it could not match.
+### The lens
+
+- **Given**: An upstream feed's coverage of one provider's aliased names cannot be relied on.
+- **We prefer**: A committed `prices.toml` as the single authority for rates, over reading an upstream feed directly at run time.
+- **Because**: A table the repository owns cannot lose a row to an upstream rename, and the upstream stays useful for filling it.
+- **Unless**: never
+
+### In practice
+
+- A `--seed-prices` command will populate and refresh rows from upstream.
+  It never overwrites a row marked as a local override, and it reports every model it could not match.
 
 ## Consequences
 
-Claude rates can be refreshed from a real upstream; Codex aliases stay
-hand-entered. Until the seed command exists, every row is maintained by hand, and
-absolute USD figures lag provider changes. Relative comparison across cells stays
-robust regardless.
+### Pros
 
-## Lens
+- Claude rates can be refreshed from a real upstream.
+- Relative comparison across cells stays robust regardless of absolute rate drift.
 
-Keep the price table owned, not generated. An upstream is a convenience for
-filling it, never the thing the harness reads.
+### Cons
+
+- Codex aliases stay hand-entered.
+- Until the seed command exists, every row is maintained by hand, and absolute USD figures lag provider changes.

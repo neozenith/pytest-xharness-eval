@@ -3,75 +3,85 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Subagent transcripts are captured evidence, and their tokens are billed
+description: every thread the agent spawned is part of the run, so it is captured and billed
 tags: [evidence, accounting]
 status: accepted
 accepted_on: 2026-08-28
 last_changed_on: 2026-08-28
-relates_to:
-  - { relation: extends, target: ADR-0019 }
-  - { relation: extends, target: ADR-0021 }
-  - { relation: extends, target: ADR-0032 }
+provenance: A discovery session's real bill was ~1.5-2x what the report said, because the tokens the spawned threads spent were invisible to the ledger.
+enforced_in:
+  - src/pytest_xharness_eval/harness/claude.py (`subagents_of`)
+  - src/pytest_xharness_eval/harness/codex.py (`subagents_of`)
+  - src/pytest_xharness_eval/runtime/pipeline.py (`capture_subagents`)
 generated: { by: human:neozenith, at: 2026-08-28T00:00:00Z }
 ---
 
-# 0033: Subagent transcripts are captured evidence, and their tokens are billed
+> **Lens**: Every thread the agent spawned is part of the run.
+> Capture its transcript and bill its tokens, or the verdict rests on a fraction of what actually happened.
 
-Status: accepted, 2026-08-28. Refines
-[0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) (the ledger),
-[0021](0021-metric-names-carry-unit-and-provenance.md) (nothing is truncated) and
-[0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (the session
-directory layout).
+## Relates to
 
-## Context
+- Extends [ADR-0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) (the record's status line says "refines"; the ledger)
+- Extends [ADR-0021](0021-metric-names-carry-unit-and-provenance.md) (the record's status line says "refines"; nothing is truncated)
+- Extends [ADR-0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (the record's status line says "refines"; the session directory layout)
+- See also [ADR-0005](0005-private-codex-home-per-run.md) (the private home already made the forked Codex rollouts the place they can all be found, and `primary_rollout()` already tells them apart)
 
-Skills that instruct the agent to parallelise (the discovery skill spawns
-research subagents) produce more than one transcript per session:
+## Problem
 
-- Claude Code writes each spawned agent to
-  `projects/<slug>/<session-id>/subagents/agent-<id>.jsonl`, with an
-  `agent-<id>.meta.json` sidecar carrying the agent type, the spawn description
-  and the `toolUseId` of the Agent tool call that spawned it. The primary session
-  log holds no sidechain records at all.
-- Codex forks one rollout file per spawned thread under the same `CODEX_HOME`;
-  its `session_meta` carries `source.subagent.thread_spawn` (nickname, agent
-  path, depth) and `forked_from_id` naming the primary
-  ([0005](0005-private-codex-home-per-run.md) already
-  made the private home the place they can all be found;
-  `primary_rollout()` already tells them apart).
+### Symptom
 
-Before this decision those transcripts were dropped: the tokens the spawned
-threads spent were invisible to the ledger, the estimate under-billed the run
-(a discovery session's real bill was ~1.5–2x what the report said), and the
-evidence contract — the verdict is tied to what the agent actually did — had a
-hole the size of every parallel thread.
+Skills that instruct the agent to parallelise (the discovery skill spawns research subagents) produce more than one transcript per session:
+
+- Claude Code writes each spawned agent to `projects/<slug>/<session-id>/subagents/agent-<id>.jsonl`.
+  An `agent-<id>.meta.json` sidecar carries the agent type, the spawn description and the `toolUseId` of the Agent tool call that spawned it.
+  The primary session log holds no sidechain records at all.
+- Codex forks one rollout file per spawned thread under the same `CODEX_HOME`.
+  Its `session_meta` carries `source.subagent.thread_spawn` (nickname, agent path, depth) and `forked_from_id` naming the primary.
+  [0005](0005-private-codex-home-per-run.md) already made the private home the place they can all be found, and `primary_rollout()` already tells them apart.
+
+### Pain point
+
+Before this decision those transcripts were dropped.
+The tokens the spawned threads spent were invisible to the ledger.
+The estimate under-billed the run: a discovery session's real bill was ~1.5-2x what the report said.
+And the evidence contract, that the verdict is tied to what the agent actually did, had a hole the size of every parallel thread.
 
 ## Decision
 
-- **Capture.** Every subagent transcript is copied into
-  `<session dir>/subagents/` beside `log.jsonl` (Claude's `.meta.json` sidecars
-  included). The runner passes Codex's forked rollouts explicitly; a captured
-  session (and therefore replay) discovers them from the directory alone.
-- **Normalise.** Each transcript folds through the same ledger machinery as the
-  primary (`claude_ledger` / the Codex fold): `RunResult.subagents` lists one
-  `Subagent` per thread — agent name, id, captured log path, its own `Call`
-  ledger and `Usage`, and `parent_turn`, the primary turn that spawned it
-  (matched by tool-use id on Claude, by spawn timestamp on Codex).
-- **Bill.** A subagent's usage folds into the run's `usage`: `usage` is the whole
-  bill, priced at the run's own rates, and `accumulative_billed_tokens` covers
-  every thread. `turns` and `calls` stay the primary thread's own.
-- **Render.** The report attributes each thread's bill to its spawning turn: the
-  token waterfall carries a `sub` category (its own design token), the running
-  cost line includes it, and the turn table shows a `SubagentBand` — each
-  spawned thread's own per-call ledger — beneath the turn that spawned it.
+### The lens
+
+- **Given**: Both harnesses already write each spawned thread's transcript where the run's own isolation puts it.
+- **We prefer**: Capturing every subagent transcript and folding its usage into the run's bill, over dropping the spawned threads and reporting the primary alone.
+- **Because**: The verdict is tied to what the agent actually did, and a run's estimate that omits half its threads is not that.
+- **Unless**: a harness ever spawns subagents on a *different* model, at which point the at-the-run's-rates pricing needs revisiting.
+
+### In practice
+
+- **Capture.** Every subagent transcript is copied into `<session dir>/subagents/` beside `log.jsonl` (Claude's `.meta.json` sidecars included).
+  The runner passes Codex's forked rollouts explicitly; a captured session (and therefore replay) discovers them from the directory alone.
+- **Normalise.** Each transcript folds through the same ledger machinery as the primary, `claude_ledger` or the Codex fold.
+  `RunResult.subagents` lists one `Subagent` per thread, carrying the agent name, id and captured log path.
+  Each also carries its own `Call` ledger and `Usage`, and `parent_turn`, the primary turn that spawned it.
+  That turn is matched by tool-use id on Claude, and by spawn timestamp on Codex.
+- **Bill.** A subagent's usage folds into the run's `usage`.
+  `usage` is the whole bill, priced at the run's own rates, and `accumulative_billed_tokens` covers every thread.
+  `turns` and `calls` stay the primary thread's own.
+- **Render.** The report attributes each thread's bill to its spawning turn.
+  The token waterfall carries a `sub` category with its own design token, and the running cost line includes it.
+  The turn table shows a `SubagentBand` beneath the turn that spawned it.
+  That band is each spawned thread's own per-call ledger.
 
 ## Consequences
 
-- A discovery-style session's estimate now matches what the provider will
-  actually charge; sweeps re-price historical runs on replay, so cached totals
-  rise once and stay honest.
-- A subagent is priced at the primary run's rates. If a harness ever spawns
-  subagents on a *different* model, the estimate mis-prices those threads; the
-  rates row a thread was priced with is `rates_applied`, so the drift is
-  explainable. Revisit when a harness reports per-thread models worth splitting.
-- Replay derives identical subagent ledgers from the captured directory, so the
-  session directory remains the complete unit of evidence (0032).
+### Pros
+
+- A discovery-style session's estimate now matches what the provider will actually charge.
+  Sweeps re-price historical runs on replay, so cached totals rise once and stay honest.
+- Replay derives identical subagent ledgers from the captured directory, so the session directory remains the complete unit of evidence (0032).
+
+### Cons
+
+- A subagent is priced at the primary run's rates.
+  If a harness ever spawns subagents on a *different* model, the estimate mis-prices those threads.
+  The rates row a thread was priced with is `rates_applied`, so the drift is explainable.
+  Revisit when a harness reports per-thread models worth splitting.
