@@ -13,6 +13,8 @@ import { existsSync, readFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vitest/config";
 import type { PreviewServer, ViteDevServer } from "vite";
+import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
+import { playwright } from "@vitest/browser-playwright";
 
 /** Serve a graph.json from anywhere on disk at /graph.json, ahead of public/. */
 function graphFile(): Plugin {
@@ -62,11 +64,67 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: { outDir: "dist", emptyOutDir: true },
+  /*
+   * Two projects, not one implicit config: Vitest 4 runs every `test.projects`
+   * entry unless a project is named on the CLI, so the old single-project shape
+   * (`vitest run` == the unit suite) would silently start spinning up a headless
+   * browser for `bun run test` the moment a second project appeared here. `test`
+   * pins to `--project=unit` and `test:a11y` to `--project=storybook` in
+   * package.json so each gate command keeps meaning exactly one thing.
+   *
+   * "storybook" renders every *.stories.tsx through a real headless Chromium and
+   * runs .storybook/preview.ts's a11y `test: "error"` parameters against it —
+   * that is what makes `test:a11y` scan something instead of matching zero
+   * projects (the bug this config exists to fix).
+   */
   test: {
-    environment: "jsdom",
-    globals: true,
-    css: false,
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
-    server: { deps: { inline: [/tamagui/] } },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          environment: "jsdom",
+          globals: true,
+          css: false,
+          include: ["src/**/*.{test,spec}.{ts,tsx}"],
+          server: { deps: { inline: [/tamagui/] } },
+        },
+      },
+      {
+        extends: true,
+        plugins: [
+          storybookTest({
+            configDir: path.resolve(import.meta.dirname, ".storybook"),
+          }),
+        ],
+        test: {
+          name: "storybook",
+          // No custom `setupFiles` here on purpose. `@storybook/addon-vitest` (since
+          // Storybook 10.3) auto-provisions project annotations -- composing every
+          // configured addon's preview module (including `@storybook/addon-a11y`'s
+          // `afterEach`, the hook that actually runs axe and fails the test) with this
+          // project's own `.storybook/preview.ts` -- unless it finds a setup file that
+          // already calls `setProjectAnnotations`. Adding one here would be pure
+          // redundant surface: confirmed by temporarily deleting the custom setup file
+          // this project briefly carried and re-running the mutation proof below --
+          // the auto-injected path caught it identically, so it was never load-bearing.
+          //
+          // The real historical bug was in `.storybook/preview.ts`: it disabled the AA
+          // `color-contrast` rule in favour of AAA-only `color-contrast-enhanced`, whose
+          // `minThreshold` escape hatch silently *passes* any contrast ratio below 4.5
+          // (axe-core assumes a reading that low likely misdetected the background) --
+          // exactly the range a severe failure lands in. `test:a11y` reported "23 passed
+          // (23)" against an injected ~1.97:1-contrast paragraph until `color-contrast`
+          // was re-enabled. See `.storybook/preview.ts` for the full account and the
+          // axe-core source citation.
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright({}),
+            instances: [{ browser: "chromium" }],
+          },
+        },
+      },
+    ],
   },
 }));

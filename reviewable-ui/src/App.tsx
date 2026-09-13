@@ -8,7 +8,15 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { GraphCanvas } from "@/components/GraphCanvas";
-import { ClusterTable, Controls, Detail, Legend } from "@/components/Panels";
+import {
+  BandCaveat,
+  ClusterTable,
+  Controls,
+  Detail,
+  Lede,
+  Legend,
+  type OffSlice,
+} from "@/components/Panels";
 import {
   DEFAULT_FILTERS,
   loadGraph,
@@ -76,8 +84,49 @@ export const App = () => {
     );
   }
 
+  /*
+   * A zero-node graph is not a small graph, it is a failed extraction — and every
+   * total the header would print for one is vacuously flattering. "0% orphans" and
+   * "100% resolved" are what you get from `0/0` handled charitably, and they are the
+   * two numbers this page exists to make a reader distrust. Rendering the normal
+   * chrome over them would be the page telling its most confident lie on its worst
+   * input, so this state gets its own screen instead.
+   */
+  if (graph.nodes.length === 0) {
+    return (
+      <main className="fatal" data-testid="empty-graph">
+        <h1>Empty graph</h1>
+        <p role="alert">
+          <code>graph.json</code> parsed, but it contains no definitions. Nothing
+          below it can be computed, and the totals it reports (
+          <span className="mono">{graph.totals.orphanPct}% orphans</span>,{" "}
+          <span className="mono">{graph.totals.resolvedPct}% resolved</span>) are
+          arithmetic over an empty set, not findings.
+        </p>
+        <p>
+          The extractor ran against{" "}
+          {graph.sources.length === 0
+            ? "no sources at all"
+            : graph.sources
+                .map((s) => `${s.root} (${s.lang}, ${s.files} files)`)
+                .join("  ·  ")}
+          . Check that the roots exist and that the tree-sitter grammar for each
+          language is installed, then re-run <code>make reviewable-data</code>.
+        </p>
+      </main>
+    );
+  }
+
   const t = graph.totals;
   const capped = slice.hiddenByLimit > 0;
+  // Selection outlives the slice: the detail panel's caller/callee buttons and the
+  // lede's own link both jump to definitions a filter or the cap may exclude.
+  const offSlice: OffSlice =
+    selected && !slice.visibleIds.has(selected)
+      ? slice.keptIds.has(selected)
+        ? "capped"
+        : "filtered"
+      : null;
   return (
     <div className="shell">
       <header data-testid="header">
@@ -107,6 +156,16 @@ export const App = () => {
             .map((s) => `${s.root} (${s.lang}, ${s.files} files)`)
             .join("  ·  ")}
         </p>
+        <Lede
+          graph={graph}
+          level={level}
+          clusters={slice.clusters}
+          shown={slice.shown}
+          total={slice.total}
+          visibleIds={slice.visibleIds}
+          keptIds={slice.keptIds}
+          onSelect={setSelected}
+        />
         {t.orphanPct > 40 && (
           <p className="warn banner" role="status">
             {t.orphanPct}% of definitions have no caller in this graph. Read
@@ -134,33 +193,43 @@ export const App = () => {
             />
             <h2 className="panel-heading">Legend</h2>
             <Legend metric={metric} />
-            <p
-              className={capped ? "note banner warn" : "note"}
-              role="status"
-              aria-live="polite"
-              data-testid="shown"
-            >
-              {capped ? (
-                <>
-                  <b>
-                    {slice.hiddenByLimit} of {slice.total}
-                  </b>{" "}
-                  definitions are hidden by the {filters.limit}-node cap.
-                  Raise &ldquo;Max nodes&rdquo; above to see them — this is
-                  data loss, not a footnote.
-                </>
-              ) : (
-                <>
-                  showing {slice.shown} of {slice.total}
-                </>
-              )}
-            </p>
           </aside>
 
           <section className="middle" aria-labelledby="graph-heading">
             <h2 id="graph-heading" className="sr-only">
               Call graph
             </h2>
+            {/*
+              Both of these moved out of `aside.left`. They qualify what the canvas is
+              showing, and the sidebar that used to hold them is a scrolling region —
+              so on a short viewport the page could report "60 of 412 drawn" and
+              "these bands do not grade" to a reader who never saw either. A caveat
+              that scrolls away is a caveat the page has quietly made optional.
+            */}
+            <div className="graph-status">
+              <p
+                className={capped ? "note banner warn" : "note"}
+                role="status"
+                aria-live="polite"
+                data-testid="shown"
+              >
+                {capped ? (
+                  <>
+                    <b>
+                      {slice.hiddenByLimit} of {slice.total}
+                    </b>{" "}
+                    definitions are hidden by the {filters.limit}-node cap.
+                    Raise &ldquo;Max nodes&rdquo; in Controls to see them — this
+                    is data loss, not a footnote.
+                  </>
+                ) : (
+                  <>
+                    showing {slice.shown} of {slice.total}
+                  </>
+                )}
+              </p>
+              <BandCaveat />
+            </div>
             <GraphCanvas
               elements={slice.elements}
               layout={layout}
@@ -173,12 +242,18 @@ export const App = () => {
             <h2 id="inspector-heading" className="sr-only">
               Inspector
             </h2>
-            <Detail node={node} graph={graph} onSelect={setSelected} />
+            <Detail
+              node={node}
+              graph={graph}
+              onSelect={setSelected}
+              offSlice={offSlice}
+            />
             <h3 className="panel-heading">Clusters at this boundary</h3>
             <ClusterTable
               clusters={slice.clusters}
               level={level}
               roots={graph.sources.map((s) => s.root)}
+              phiScale={slice.phiScale}
             />
           </aside>
         </div>

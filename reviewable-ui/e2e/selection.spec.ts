@@ -1,8 +1,9 @@
 /**
- * Selection. The fixture's `TargetFn` node is the only one with leverage >= 3 (band
- * "low"), with exactly 3 distinct callers and 2 callees wired in as real edges. It is
- * also, being the highest-leverage node under the default "leverage" metric, the
- * single largest circle on screen -- locatable purely by scanning canvas pixels for its
+ * Selection. The fixture's `TargetFn` node is the only one with leverage >= 2 (band
+ * "high"), with exactly 3 distinct callers and 2 callees wired in as real edges. Every
+ * other node is leverage 1 ("low") or 0 ("none"), so "high" identifies exactly one node.
+ * It is also, being the highest-leverage node under the default "leverage" metric, the
+ * single largest glyph on screen -- locatable purely by scanning canvas pixels for its
  * unique fill colour, with no dependency on cytoscape's internal layout math.
  *
  * Two selection paths are exercised: a literal canvas tap, and the app's own
@@ -13,13 +14,17 @@ import { expect, test } from "@playwright/test";
 import { bandRgb, findNodeCenterByColor, loadFixtureGraph, routeFixtureGraph, waitForCanvasSettled } from "./helpers";
 
 /**
- * Derived from `BAND.low`, never copied from it. An earlier revision of this file held
+ * Derived from the palette, never copied from it. An earlier revision of this file held
  * the literal `#047857`; when the palette was re-derived for AAA contrast the two
  * drifted, `tsc` stayed clean, and the only symptom was a pixel scan returning null.
  * Importing the source of truth turns an uncheckable cross-file dependency into a
  * checked one -- the same reason a shared vocabulary is an enum, not a string.
+ *
+ * Which band it reads is deliberately NOT derived, though: that TargetFn is the
+ * fixture's only "high"-band node is a fact about the fixture, and stating it here is
+ * what makes this spec fail loudly if the metric's polarity ever flips again.
  */
-const TARGET_GREEN = bandRgb("low");
+const TARGET_FILL = bandRgb("high");
 
 test("selecting a node (via the accessible table) populates the detail panel", async ({ page }) => {
   await routeFixtureGraph(page, loadFixtureGraph());
@@ -72,8 +77,8 @@ test("tapping a node on the canvas populates the detail panel", async ({ page })
   const canvas = page.getByTestId("graph-canvas");
   await waitForCanvasSettled(canvas);
 
-  const point = await findNodeCenterByColor(canvas, TARGET_GREEN);
-  expect(point, "TargetFn's uniquely-green node should be visible on the canvas").not.toBeNull();
+  const point = await findNodeCenterByColor(canvas, TARGET_FILL);
+  expect(point, "TargetFn's uniquely high-band node should be visible on the canvas").not.toBeNull();
   await page.mouse.click(point!.x, point!.y);
   await expect(page.getByTestId("detail")).toContainText("TargetFn");
 });

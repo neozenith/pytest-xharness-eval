@@ -20,12 +20,18 @@ test("switching the metric changes each node's value/band in the accessible tabl
   await page.getByRole("button", { name: "View graph as table" }).click();
   const targetRow = page.locator("[data-testid=graph-table] tbody tr", { hasText: "TargetFn" });
   await expect(targetRow).toBeVisible();
-  // TargetFn: leverage 3 (fixture's only "low"-band node) -> nloc 22.
+  // TargetFn: leverage 3 (fixture's only node above leverage 1) -> nloc 22.
   await expect(targetRow.locator("td").nth(3)).toHaveText("3");
-  await expect(targetRow.locator(".band-chip")).toHaveText("low band");
+  await expect(targetRow.locator(".band-chip")).toHaveText("high band");
 
   await page.getByTestId("metric").selectOption("nloc");
   await expect(targetRow.locator("td").nth(3)).toHaveText("22");
+  // Asserted on BOTH metrics on purpose: leverage 3 is the top of its range and
+  // nloc 22 is the middle of its, so together these pin that every metric bands
+  // monotonically in magnitude. Leverage and callSites used to invert -- a large
+  // leverage banded "low" -- and no test noticed, because each metric was only ever
+  // checked against itself.
+  await expect(targetRow.locator(".band-chip")).toHaveText("mid band");
 });
 
 test("switching the metric changes the canvas render (node colours/sizes)", async ({ page }) => {

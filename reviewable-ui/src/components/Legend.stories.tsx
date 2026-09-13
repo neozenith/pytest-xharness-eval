@@ -2,7 +2,13 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Legend } from "@/components/Panels";
 import { metricById } from "@/lib/metrics";
 
-/** Rendered inside the same `<aside className="left">` (with its heading) `App.tsx` places it in. */
+/**
+ * Rendered inside the same `<aside className="left">` (with its heading) `App.tsx`
+ * places it in. `Legend` no longer renders the bands caveat itself -- that moved out
+ * into its own `BandCaveat` component, next to the graph rather than in this
+ * scrolling sidebar (see the comment on `BandCaveat` in `Panels.tsx`). This story
+ * only demonstrates the swatches now.
+ */
 const meta = {
   title: "Panels/Legend",
   component: Legend,
@@ -22,7 +28,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The band swatches (shape and colour both encode band) and the uncalibrated-bands caveat. */
+/** The band swatches: shape and colour both encode band. The caveat lives in `BandCaveat`, not here. */
 export const Leverage: Story = {
   args: { metric: metricById("leverage") },
 };

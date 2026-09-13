@@ -1,6 +1,6 @@
 /** Loading the graph, and turning a filtered slice of it into cytoscape elements. */
 import type { ElementDefinition } from "cytoscape";
-import { BAND, phiBand, sizeFor, type Metric } from "./metrics";
+import { BAND, phiScale, sizeFor, type Metric, type PhiScale } from "./metrics";
 import {
   clusterOf,
   type Cluster,
@@ -42,6 +42,20 @@ export interface Slice {
   total: number;
   hiddenByLimit: number;
   clusters: [string, Cluster][];
+  /**
+   * Which definitions survived the filters, and which of those actually made the cap.
+   * Both, not just the second: selection outlives the view (the detail panel's
+   * caller/callee buttons jump to nodes that may not be drawn), and "not on screen"
+   * is useless to a reader who cannot tell which control to move to fix it.
+   */
+  keptIds: Set<string>;
+  visibleIds: Set<string>;
+  /**
+   * The conductance banding for this boundary, carried on the slice so the canvas
+   * tint and the cluster table band against the same distribution. Two callers
+   * each deriving their own scale is how they would quietly disagree.
+   */
+  phiScale: PhiScale;
 }
 
 const matches = (n: GraphNode, f: Filters): boolean => {
@@ -77,10 +91,15 @@ export const toElements = (
   const max = visible.reduce((m, n) => Math.max(m, metric.value(n)), 0);
   const used = new Set(visible.map((n) => clusterOf(n, level)));
 
+  // Ranked against EVERY cluster at this boundary, not just the visible ones. A
+  // band that shifted as you dragged the node cap or typed in the search box would
+  // be measuring the filter rather than the graph.
+  const scale = phiScale(Object.values(graph.clusters[level]));
+
   const elements: ElementDefinition[] = [];
   for (const key of used) {
     const c = graph.clusters[level][key];
-    const band = phiBand(c?.phi ?? null, c?.measurable ?? false);
+    const band = scale.band(c?.phi ?? null, c?.measurable ?? false);
     elements.push({
       data: {
         id: `C::${key}`,
@@ -133,6 +152,9 @@ export const toElements = (
     total: kept.length,
     hiddenByLimit: kept.length - visible.length,
     clusters,
+    keptIds: new Set(kept.map((n) => n.id)),
+    visibleIds: ids,
+    phiScale: scale,
   };
 };
 
