@@ -8,7 +8,8 @@ No file here is finished until it has been through it.
 Run the deterministic prose gate before declaring any file in this tree done:
 
 ```bash
-npx -y @jpeakai/prose-gates docs/plans/maintainability/*.md docs/plans/maintainability/tools/*.md
+npx -y @jpeakai/prose-gates docs/plans/maintainability/*.md \
+    docs/plans/maintainability/tools/*.md docs/plans/maintainability/examples/*.md
 ```
 
 It takes file paths and expands no globs of its own, so the shell must expand them.
@@ -52,6 +53,9 @@ When a doc needs both, audit first so the restructure is not built on a stale cl
 | `README.md` | locked-in learnings only, each backed by a measurement or a primary source |
 | `OPEN_QUESTIONS.md` | everything undecided, grouped by what blocks what |
 | `GLOSSARY.md` | one entry per metric, each with a permanent ID and a status of `available`, `used` or `rejected`: formula, meaning, gaming, worked example |
+| `extraction-apis.md` | the capability register for the two instruments a call graph comes from: every LSP method and tree-sitter API by exact name, with the capability field or grammar concept that gates it. It catalogues what can be asked for, never which graph to trust |
+| `ast-data-models.md` | the entity model of every provider that can hand this work a graph, one ERD each, transcribed from that provider's own schema. It records what a provider stores, never what a metric should do with it |
+| `examples/` | the toy fixtures every provider is run over, and `examples/README.md`, which records what each one actually emitted. A number here is measured or it is labelled schema-derived |
 | `tools/` | only the extractors and the live `graphdata.py`. A one-off script is archived once its finding lands in `README.md` |
 
 A finding moves from `OPEN_QUESTIONS.md` to `README.md` only with evidence, and its question is then deleted.

@@ -1,6 +1,8 @@
 # tools
 
-**Status:** the working set for [OPEN_QUESTIONS.md](../OPEN_QUESTIONS.md). **Before you start:** `uv` and `bun`.
+**Status:** the working set for [OPEN_QUESTIONS.md](../OPEN_QUESTIONS.md). 
+
+**Before you start:** `uv` and `bun`.
 
 Six scripts remain here: two call-graph extractors, the diff between them, the graph reviewable-ui renders, and the per-function screen load.
 Every other script that produced a number in [../README.md](../README.md) is archived in git, listed under [Archived scripts](#archived-scripts).
@@ -46,9 +48,13 @@ For TypeScript, pass `--lang typescript --ext .ts,.tsx --root report-ui --exclud
 - **A parameter is a definition on the same line as its function.** Matching a caller by line alone returns the parameter.
 - **A call with a receiver matches only a method.** Without that rule in `treesitter.py`, every `d.get(k)` resolved to a module-level `get`.
 - **Resolution never crosses a language.** A Python `of` and a TypeScript `of` share a name and nothing else.
+- **`fromRanges` is not deduplicated.** pyright returns the same range twice for one method call, so `len(fromRanges)` overcounts. Measured in [../examples/README.md](../examples/README.md).
+- **`CALLABLE_KINDS` misses SymbolKind 14.** `documentSymbol` calls an arrow-function component a Constant while `prepareCallHierarchy` calls it a Function, so every one of them is filtered out.
+- **Construction is not a call.** `Greeter("Howdy")` gives `Greeter.__init__` zero incoming calls, so a constructor edge has to come from somewhere else.
 
 Every graph these produce is a lower bound.
 Read [What we still cannot extract](../README.md#what-we-still-cannot-extract) before trusting a score.
+[extraction-apis.md](../extraction-apis.md) catalogues what each instrument can be asked for in the first place.
 
 ## Archived scripts
 

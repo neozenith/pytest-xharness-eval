@@ -246,3 +246,7 @@ reviewable-ui/public/graph.json
 reviewable-ui/test-results/
 reviewable-ui/playwright-report/
 reviewable-ui/storybook-static/
+
+# hello-react fixture (docs/plans/maintainability/examples): the two TSX files are the
+# fixture, but `bun install` pulls 24M of @types/react so the providers can resolve JSX.
+docs/plans/maintainability/examples/hello-react/node_modules/
