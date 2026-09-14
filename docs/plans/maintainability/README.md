@@ -587,6 +587,7 @@ The difference is what a lint-enforced layering rule buys over organising by con
 ### Where to pick this up
 
 - **To re-run anything:** [tools/](tools/), which is self-contained. `lsp.py` is the amended fork of the skill's indexer and its docstring lists every amendment with the failure it was hiding.
+- **To look up any metric's formula:** [GLOSSARY.md](GLOSSARY.md).
 - **To understand the metric:** [scorecard.md](scorecard.md).
 - **To see it on a second language:** [scorecard-webapp.md](scorecard-webapp.md).
 - **To see forty rearrangements scored:** [experiments.md](experiments.md).
