@@ -89,6 +89,18 @@ None reached even a medium correlation.
 **Takeaway:** the one cheap static number for "hard to read" is line count.
 Cyclomatic complexity is the worst candidate tested.
 
+Length hurts most once a function scrolls, and a few functions carry most of that cost.
+[Screen load](GLOSSARY.md#screen-load) charges each name held, and multiplies the charge per screen past the first.
+
+| Tree | Functions | Past one screen | Share of screen load |
+|---|---|---|---|
+| `src/pytest_xharness_eval` | 312 | 1 | 1.0% |
+| `report-ui/src` | 323 | 19 | **61.6%** |
+
+Line count alone would flag the wrong Python function.
+The longest, `pytest_addoption`, repeats 25 names over 71 lines, and scores half the load of a 50-line function holding 72.
+The screen height and penalty shape are not calibrated, see C8 in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+
 ---
 
 ## A spring is a count, and a damper has to be a ratio

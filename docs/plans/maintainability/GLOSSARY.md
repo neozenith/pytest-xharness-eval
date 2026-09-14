@@ -30,6 +30,7 @@ This file covers only the maintainability research.
   - [`AIC` and `BIC` penalty per name](#aic-and-bic-penalty-per-name)
   - [Halstead vocabulary, length and volume](#halstead-vocabulary-length-and-volume)
   - [Token reuse and operand reuse](#token-reuse-and-operand-reuse)
+  - [Screen load](#screen-load)
   - [Cyclomatic complexity](#cyclomatic-complexity)
   - [Cognitive complexity](#cognitive-complexity)
   - [Nesting depth](#nesting-depth)
@@ -591,6 +592,67 @@ Copy the line three times and the vocabulary stays at 4 while `N` triples.
 ```
 token reuse   = 15 / 4 = 3.75        up, yet the code got worse
 ```
+
+</details>
+
+---
+
+## Screen load
+
+The symbols a reader must hold to understand one function, charged like `BIC`, and multiplied once the function no longer fits on one screen.
+
+```
+screen load = k ln(N) x max(1, s / H)
+
+k   distinct identifier spellings in the function        the names held in your head
+N   tokens in the function, comments excluded             the reading the names are spread over
+s   visual lines: non-blank, non-comment, wrapped at W    what scrolls
+H   screen height in lines, 50 by default
+W   line-length limit, 120 in this repository
+```
+
+The symbol term is the [`BIC` penalty per name](#aic-and-bic-penalty-per-name) applied at function scope.
+There, `n` is the codebase and the name is a definition.
+Here, `N` is the function body and the name is any identifier the reader meets.
+Swap `ln(N)` for 2 to get the `AIC` form, which ignores how long the function is.
+
+The screen factor is a hinge.
+Below one screen it is exactly 1, so length costs nothing beyond the tokens it adds.
+Above one screen the reader can no longer see where a name was bound, and every symbol is charged again per screen.
+
+| Moves | Meaning | Effect on the model |
+|---|---|---|
+| `k` **up** | more names in one unit | load rises by about `ln(N)` per name |
+| `s` **past `H`** | the function scrolls | the whole symbol term is multiplied |
+| `s` **up**, `k` flat | long but repetitive | load barely moves, because `ln(N)` grows slowly |
+
+**Separates long from dense.** Line count alone ranks a flat registration block as the worst function in `src/`.
+Screen load ranks it below a shorter function holding three times the names.
+
+**Measured in `tools/screenload.py`.** Nested functions are also counted inside their parent, since the reader of the parent reads them too.
+
+**Gamed by splitting into stubs.** Five one-screen helpers cut the load of the parent, and each helper has one caller.
+Pair it with the [singleton rate](#leveraged-names-singleton-rate-mean-leverage), which rises when that happens.
+**Gamed by wide lines**, which the wrap at `W` blocks.
+
+<details>
+<summary><b>Worked example</b></summary>
+
+Three functions from this repository, measured on 14 September 2026.
+
+```
+function                          s     N     k    k ln(N)   screens   screen load
+plugin/options.py pytest_addoption  71   343    25     146       1.42        207
+emit/metrics.py of                  50   391    72     430       1.00        430
+views/SessionView.tsx SessionView  238  2298   195    1509       4.76       7184
+```
+
+`pytest_addoption` is the longest Python function and still has half the load of `of`.
+It is 71 lines of `addoption` calls repeating the same 25 names.
+
+`SessionView` scrolls for almost five screens while holding 195 names.
+Across `report-ui/src`, 19 of 323 functions exceed one screen, and those 19 carry 61.6% of the load.
+In `src/`, one of 312 does, carrying 1.0%.
 
 </details>
 

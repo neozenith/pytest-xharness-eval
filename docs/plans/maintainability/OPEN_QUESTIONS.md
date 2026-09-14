@@ -63,6 +63,7 @@ Of 121 metrics tested against understandability, none reached even a medium corr
 | V2 | Is there a held-out quantity that plays the role of a test loss? | Every score here is a training-set quantity. Without one, a sweep cannot show generalisation. |
 | V3 | Does a score against name count show double descent? | An extraction that splits real bodies, pushed across orders of magnitude of name count, scored against the V2 proxy. The measured range, 237 to 817 names, showed none and is too short to rule it out. |
 | V4 | Does nesting depth resist extraction? | Run it over the rearrangement sweep. It needs no partition, and extraction relocates nesting rather than removing it. Untested. |
+| V5 | Does screen load predict comprehension better than line count? | Score the Peitek et al. snippets, where lines of code reached tau -.46. Only snippets longer than one screen test the screen factor, so count those first. |
 
 ---
 
@@ -80,6 +81,7 @@ The SIG bands were calibrated on about 200 systems, and nothing equivalent exist
 | C5 | Can the scoring depth be chosen automatically? | Test the rule "the deepest folder level that is not lopsided" on more codebases. At depth one the webapp's `components/` held 76% of all names. |
 | C6 | Does the file boundary beat the folder boundary beyond two codebases? | Score the boundary levels on more codebases. File out-discriminated folder 24 points to 13, on two samples. |
 | C7 | Does the margin over random transfer across archetypes? | Score a CLI, a REST API and a library alongside the two codebases here. The webapp scored a lower `Q` and a larger margin, which is first evidence only. |
+| C8 | What screen height, and what penalty past it, should screen load use? | `H = 50` was chosen to match D5. Compare linear, quadratic and step penalties past `H`, and whether `BIC`'s `ln(N)` beats `AIC`'s flat 2, against the V5 proxy. |
 
 ---
 
@@ -97,7 +99,7 @@ Four options remain, and the evidence points unevenly.
 
 | ID | Question | Current evidence |
 |---|---|---|
-| **D5** | Do we add a function-length cap now, independent of D1 to D4? | Length is the best-evidenced static predictor of comprehension, and it is one line of `ruff` configuration. The longest functions are 70, 49, 45 and 42 NLOC, so a cap at 50 binds exactly one of 310, `pytest_addoption`, an argparse registration block. |
+| **D5** | Do we cap function length, or gate on screen load instead? | A 50-line cap binds one of 312 Python functions, `pytest_addoption`, whose 25 repeated names give it half the screen load of `of`. The same cap binds 19 of 323 `report-ui` functions, which carry 61.6% of that tree's load. |
 | D6 | Do we remove `C901` from `make check`? | It reported zero violations under all thirteen rearrangements, including the ones built to be bad. |
 | D7 | Is a `phi` delta usable as a review prompt before G1 closes? | It needs no threshold, but it inherits every extraction error in group 1. |
 

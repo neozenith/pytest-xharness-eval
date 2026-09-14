@@ -2,7 +2,7 @@
 
 **Status:** the working set for [OPEN_QUESTIONS.md](../OPEN_QUESTIONS.md). **Before you start:** `uv` and `bun`.
 
-Five scripts remain here: two call-graph extractors, the diff between them, and the graph reviewable-ui renders.
+Six scripts remain here: two call-graph extractors, the diff between them, the graph reviewable-ui renders, and the per-function screen load.
 Every other script that produced a number in [../README.md](../README.md) is archived in git, listed under [Archived scripts](#archived-scripts).
 
 | Script | Purpose |
@@ -12,6 +12,7 @@ Every other script that produced a number in [../README.md](../README.md) is arc
 | `callgraph.py` | extractor that asks a language server for `callHierarchy`, resolving calls by type |
 | `lsp.py` | the amended fork of the lsp skill's indexer that `callgraph.py` imports. Its docstring lists every amendment and the failure each one was hiding |
 | `compare.py` | edge-by-edge diff of an LSP extraction against a tree-sitter extraction of the same code |
+| `screenload.py` | per-function [screen load](../GLOSSARY.md#screen-load): lines, tokens and distinct names, for V5, C8 and D5. `uv run docs/plans/maintainability/tools/screenload.py --out tmp/screenload.json` |
 
 ---
 
