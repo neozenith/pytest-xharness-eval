@@ -8,21 +8,25 @@ No file here is finished until it has been through it.
 Run the deterministic prose gate before declaring any file in this tree done:
 
 ```bash
-bun run .claude/skills/gooddocs/scripts/prose_gates.ts docs/plans/maintainability/**/*.md
+npx -y @jpeakai/prose-gates docs/plans/maintainability/*.md docs/plans/maintainability/tools/*.md
 ```
 
+It takes file paths and expands no globs of its own, so the shell must expand them.
 It exits `1` while findings remain and `2` on a usage error.
 Add `--json` for machine-readable output.
-Add `--fix` to reflow prose to one sentence per line, the only finding the script repairs on its own.
-Every other finding is report-only and is fixed by hand.
+Add `--max-words N` to move the sentence budget, which defaults to 25.
+Add `--fix` to apply every repair it can prove safe, which is all but `PG002`.
+A fixer that is unsure leaves the text alone and the finding stays.
 
 | Rule | Catches |
 |------|---------|
 | `PG001` | a sentence wrapped across lines |
-| `PG002` | a sentence over the length limit |
+| `PG002` | a sentence over the word budget |
 | `PG003` | a semicolon list |
 | `PG004`, `PG005` | banned glyphs |
 | `PG006` to `PG009` | disguised lists |
+
+`RULES.md` in the package has an example of every rule with its fix.
 
 Code blocks are exempt by construction.
 Fences tagged `markdown` or `md` are audited recursively, because they hold templates.
@@ -47,7 +51,7 @@ When a doc needs both, audit first so the restructure is not built on a stale cl
 | `GOAL.md` | the maintainer's mission statement, which every finding and question is checked against. Never edit it without the maintainer |
 | `README.md` | locked-in learnings only, each backed by a measurement or a primary source |
 | `OPEN_QUESTIONS.md` | everything undecided, grouped by what blocks what |
-| `GLOSSARY.md` | one entry per metric: formula, meaning, gaming, worked example |
+| `GLOSSARY.md` | one entry per metric, each with a permanent ID and a status of `available`, `used` or `rejected`: formula, meaning, gaming, worked example |
 | `tools/` | only the extractors and the live `graphdata.py`. A one-off script is archived once its finding lands in `README.md` |
 
 A finding moves from `OPEN_QUESTIONS.md` to `README.md` only with evidence, and its question is then deleted.

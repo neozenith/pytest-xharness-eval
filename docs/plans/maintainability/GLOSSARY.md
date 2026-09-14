@@ -31,6 +31,8 @@ This file covers only the maintainability research.
   - [GR-LEV-06 Leverage](#gr-lev-06-leverage)
   - [GR-LVN-07 Leveraged names, singleton rate, mean leverage](#gr-lvn-07-leveraged-names-singleton-rate-mean-leverage)
   - [GR-ORP-08 Orphan rate](#gr-orp-08-orphan-rate)
+  - [GR-FAN-09 Fan-out](#gr-fan-09-fan-out)
+  - [GR-SIT-10 Call-site weight](#gr-sit-10-call-site-weight)
   - [IT-MDL-01 Two-part code: `L(H)` and `L(D given H)`](#it-mdl-01-two-part-code-lh-and-ld-given-h)
   - [IT-BPB-02 Bits saved per boundary](#it-bpb-02-bits-saved-per-boundary)
   - [IT-PEN-03 `AIC` and `BIC` penalty per name](#it-pen-03-aic-and-bic-penalty-per-name)
@@ -41,7 +43,8 @@ This file covers only the maintainability research.
   - [TS-COG-05 Cognitive complexity](#ts-cog-05-cognitive-complexity)
   - [TS-NES-06 Nesting depth](#ts-nes-06-nesting-depth)
   - [TS-VOC-07 Vocabulary coverage](#ts-voc-07-vocabulary-coverage)
-  - [Emitted, not yet defended](#emitted-not-yet-defended)
+  - [EX-RES-01 Resolution rate](#ex-res-01-resolution-rate)
+  - [EX-REC-02 Extractor agreement](#ex-rec-02-extractor-agreement)
   - [Concepts that are not metrics](#concepts-that-are-not-metrics)
 
 <!--TOC-->
@@ -80,42 +83,49 @@ A retired metric keeps its number, and the number is never given to something el
 
 | ID | Metric | Status |
 |---|---|---|
-| [PR-LOC-01](#pr-loc-01-source-lines) | Source lines | locked |
-| [PR-VIS-02](#pr-vis-02-visual-source-lines) | Visual source lines | input |
-| [GR-CON-01](#gr-con-01-conductance-phi) | Conductance, `phi` | locked |
-| [GR-VOL-02](#gr-vol-02-volume-floor) | Volume floor | input |
-| [GR-MOD-03](#gr-mod-03-modularity-q) | Modularity, `Q` | locked |
-| [GR-MAR-04](#gr-mar-04-margin-over-random) | Margin over random | locked |
-| [GR-INS-05](#gr-ins-05-inside-share) | Inside share | locked |
-| [GR-LEV-06](#gr-lev-06-leverage) | Leverage | locked |
-| [GR-LVN-07](#gr-lvn-07-leveraged-names-singleton-rate-mean-leverage) | Leveraged names, singleton rate, mean leverage | locked |
-| [GR-ORP-08](#gr-orp-08-orphan-rate) | Orphan rate | check |
-| [GR-FAN-09](#gr-fan-09-fan-out) | Fan-out | open |
-| [GR-SIT-10](#gr-sit-10-call-site-weight) | Call-site weight | open |
-| [IT-MDL-01](#it-mdl-01-two-part-code-lh-and-ld-given-h) | Two-part code: `L(H)` and `L(D given H)` | locked |
-| [IT-BPB-02](#it-bpb-02-bits-saved-per-boundary) | Bits saved per boundary | locked |
-| [IT-PEN-03](#it-pen-03-aic-and-bic-penalty-per-name) | `AIC` and `BIC` penalty per name | locked |
-| [TS-HAL-01](#ts-hal-01-halstead-vocabulary-length-and-volume) | Halstead vocabulary, length and volume | locked |
-| [TS-REU-02](#ts-reu-02-token-reuse-and-operand-reuse) | Token reuse and operand reuse | baseline |
-| [TS-SCR-03](#ts-scr-03-screen-load) | Screen load | open |
-| [TS-CYC-04](#ts-cyc-04-cyclomatic-complexity) | Cyclomatic complexity | baseline |
-| [TS-COG-05](#ts-cog-05-cognitive-complexity) | Cognitive complexity | baseline |
-| [TS-NES-06](#ts-nes-06-nesting-depth) | Nesting depth | open |
-| [TS-VOC-07](#ts-voc-07-vocabulary-coverage) | Vocabulary coverage | open |
-| [EX-RES-01](#ex-res-01-resolution-rate) | Resolution rate | check |
-| [EX-REC-02](#ex-rec-02-extractor-agreement) | Extractor agreement | check |
+| [PR-LOC-01](#pr-loc-01-source-lines) | Source lines | used |
+| [PR-VIS-02](#pr-vis-02-visual-source-lines) | Visual source lines | available |
+| [GR-CON-01](#gr-con-01-conductance-phi) | Conductance, `phi` | used |
+| [GR-VOL-02](#gr-vol-02-volume-floor) | Volume floor | used |
+| [GR-MOD-03](#gr-mod-03-modularity-q) | Modularity, `Q` | used |
+| [GR-MAR-04](#gr-mar-04-margin-over-random) | Margin over random | used |
+| [GR-INS-05](#gr-ins-05-inside-share) | Inside share | used |
+| [GR-LEV-06](#gr-lev-06-leverage) | Leverage | used |
+| [GR-LVN-07](#gr-lvn-07-leveraged-names-singleton-rate-mean-leverage) | Leveraged names, singleton rate, mean leverage | used |
+| [GR-ORP-08](#gr-orp-08-orphan-rate) | Orphan rate | used |
+| [GR-FAN-09](#gr-fan-09-fan-out) | Fan-out | available |
+| [GR-SIT-10](#gr-sit-10-call-site-weight) | Call-site weight | available |
+| [IT-MDL-01](#it-mdl-01-two-part-code-lh-and-ld-given-h) | Two-part code: `L(H)` and `L(D given H)` | used |
+| [IT-BPB-02](#it-bpb-02-bits-saved-per-boundary) | Bits saved per boundary | used |
+| [IT-PEN-03](#it-pen-03-aic-and-bic-penalty-per-name) | `AIC` and `BIC` penalty per name | used |
+| [TS-HAL-01](#ts-hal-01-halstead-vocabulary-length-and-volume) | Halstead vocabulary, length and volume | used |
+| [TS-REU-02](#ts-reu-02-token-reuse-and-operand-reuse) | Token reuse and operand reuse | rejected |
+| [TS-SCR-03](#ts-scr-03-screen-load) | Screen load | available |
+| [TS-CYC-04](#ts-cyc-04-cyclomatic-complexity) | Cyclomatic complexity | rejected |
+| [TS-COG-05](#ts-cog-05-cognitive-complexity) | Cognitive complexity | rejected |
+| [TS-NES-06](#ts-nes-06-nesting-depth) | Nesting depth | available |
+| [TS-VOC-07](#ts-voc-07-vocabulary-coverage) | Vocabulary coverage | available |
+| [EX-RES-01](#ex-res-01-resolution-rate) | Resolution rate | used |
+| [EX-REC-02](#ex-rec-02-extractor-agreement) | Extractor agreement | used |
+
+A metric is in exactly one of three states.
 
 | Status | Meaning |
 |---|---|
-| `locked` | a finding in [README.md](README.md) rests on it |
-| `input` | it feeds another metric and carries no finding of its own |
-| `baseline` | kept to demonstrate a blind spot, never proposed as a target |
-| `check` | print it before any score, because it says whether the score means anything |
-| `open` | the tooling computes it and nothing rests on it yet |
+| `available` | the tooling computes it and nothing rests on it yet |
+| `used` | a finding in [README.md](README.md) rests on it, or another number we rely on is checked against it |
+| `rejected` | measured, found wanting, and kept here only so the blind spot stays on the record |
+
+An **available measure** is the default state.
+The tooling emits a great deal for free, and emitting a number is not the same as arguing from one.
+Promotion to `used` needs a finding in [README.md](README.md).
+Demotion to `rejected` needs the measurement that discredited it, recorded in the entry.
 
 ---
 
 ## PR-LOC-01 Source lines
+
+**Status:** `used`.
 
 The line span of one definition, counted without parsing.
 
@@ -136,6 +146,8 @@ The cheapest metric in the file is also the best-correlated one.
 ---
 
 ## PR-VIS-02 Visual source lines
+
+**Status:** `available`.
 
 What actually scrolls: source lines with the blanks, the comments and the line wrapping accounted for.
 
@@ -178,6 +190,8 @@ Dispatch tables, decorators and plugin hooks produce calls no static extractor s
 ---
 
 ## GR-CON-01 Conductance, `phi`
+
+**Status:** `used`.
 
 The share of a cluster's call traffic that crosses its own boundary.
 
@@ -226,6 +240,8 @@ No line or branch count can tell these two apart.
 
 ## GR-VOL-02 Volume floor
 
+**Status:** `used`.
+
 The minimum internal call volume a cluster needs before its `phi` means anything.
 
 ```
@@ -268,6 +284,8 @@ Both sit below the floor, so both report "not measurable".
 ---
 
 ## GR-MOD-03 Modularity, `Q`
+
+**Status:** `used`.
 
 Newman modularity: the share of edges inside clusters, minus the share random wiring would put there.
 
@@ -323,6 +341,8 @@ The two-folder layout beats no layout by 0.357.
 
 ## GR-MAR-04 Margin over random
 
+**Status:** `used`.
+
 How far a partition's `Q` sits above random partitions with the same cluster count.
 
 ```
@@ -354,6 +374,8 @@ Measured this way, its folders beat chance by more.
 ---
 
 ## GR-INS-05 Inside share
+
+**Status:** `used`.
 
 The share of call edges that do not cross a boundary, at one boundary level.
 
@@ -389,6 +411,8 @@ File separates them by 24 points, so file is the boundary with the most signal.
 ---
 
 ## GR-LEV-06 Leverage
+
+**Status:** `used`.
 
 The number of distinct call sites reaching one name: its in-degree in the call graph.
 
@@ -428,6 +452,8 @@ Leverage separates them.
 
 ## GR-LVN-07 Leveraged names, singleton rate, mean leverage
 
+**Status:** `used`.
+
 Three summaries of the leverage distribution over a cluster or a whole graph.
 
 ```
@@ -464,6 +490,8 @@ That is the move that lowers the count.
 
 ## GR-ORP-08 Orphan rate
 
+**Status:** `used`.
+
 The share of names with no caller in the extracted graph.
 
 ```
@@ -496,7 +524,60 @@ Each drop in the rate was a measurement bug found, not code deleted.
 
 ---
 
+## GR-FAN-09 Fan-out
+
+**Status:** `available`.
+
+Out-degree: the number of distinct names one definition calls.
+
+```
+fanout(v) = number of edges starting at v
+```
+
+It is [GR-LEV-06](#gr-lev-06-leverage) read from the other end.
+Leverage asks how many places need a name, and fan-out asks how many names a place needs.
+
+Figures are one `graphdata.py` run over `src/pytest_xharness_eval` and `report-ui/src` on 14 September 2026, which found 635 nodes, 767 edges and 1065 call sites.
+
+```
+max 34      SessionView       report-ui/src/views/SessionView.tsx
+mean 1.21
+350 of 635 definitions call nothing the extractor can resolve
+```
+
+**Available.** Nothing has checked whether a high fan-out predicts anything a reviewer feels.
+Its likely role is as the damper for extraction, which moves calls without removing them.
+
+---
+
+## GR-SIT-10 Call-site weight
+
+**Status:** `available`.
+
+In-degree counted once per call rather than once per caller.
+
+```
+sites(v) = sum over callers of the number of times each one calls v
+```
+
+[GR-LEV-06](#gr-lev-06-leverage) counts a caller once no matter how often it calls.
+This counts every call.
+
+Figures are one `graphdata.py` run over `src/pytest_xharness_eval` and `report-ui/src` on 14 September 2026, which found 635 nodes, 767 edges and 1065 call sites.
+
+```
+77 of 635 definitions differ between the two
+fmt   report-ui/src/lib/format.ts    16 callers, 69 call sites
+```
+
+**Available, and [G6](OPEN_QUESTIONS.md#1-is-the-call-graph-right) asks whether to switch to it.** Weighting moved `phi` by at most 0.059 here and changed no ranking.
+Until a case is found where the choice changes an ordering, the unweighted count is the one in use.
+
+---
+
 ## IT-MDL-01 Two-part code: `L(H)` and `L(D given H)`
+
+**Status:** `used`.
 
 Minimum Description Length applied to a partition.
 A description splits into a model, the rules, and a leftover, the exceptions.
@@ -551,6 +632,8 @@ That is the degeneracy, and it is why the next metric exists.
 
 ## IT-BPB-02 Bits saved per boundary
 
+**Status:** `used`.
+
 How much leftover a partition removes for each cluster it asks you to learn.
 
 ```
@@ -594,6 +677,8 @@ Each hand-drawn folder saves nearly four times what a file boundary saves.
 
 ## IT-PEN-03 `AIC` and `BIC` penalty per name
 
+**Status:** `used`.
+
 The price of adding one parameter to a model, mapped to the price of one new name in code.
 
 ```
@@ -630,6 +715,8 @@ A new abstraction in this repository must save about 8.85 units of fit to break 
 ---
 
 ## TS-HAL-01 Halstead vocabulary, length and volume
+
+**Status:** `used`.
 
 Counts of operators and operands in the token stream.
 
@@ -673,6 +760,8 @@ V = 5 x log2(4) = 5 x 2 = 10 bits
 
 ## TS-REU-02 Token reuse and operand reuse
 
+**Status:** `rejected`.
+
 How hard the vocabulary is worked: leverage measured on tokens instead of call sites.
 
 ```
@@ -710,6 +799,8 @@ token reuse   = 15 / 4 = 3.75        up, yet the code got worse
 ---
 
 ## TS-SCR-03 Screen load
+
+**Status:** `available`.
 
 The symbols a reader must hold to understand one function, charged like `BIC`, and multiplied once the function no longer fits on one screen.
 
@@ -772,6 +863,8 @@ In `src/`, one of 312 does, carrying 1.0%.
 
 ## TS-CYC-04 Cyclomatic complexity
 
+**Status:** `rejected`.
+
 The number of independent paths through one function (McCabe).
 
 ```
@@ -812,6 +905,8 @@ ruff C901:      CC = 1 + 1 = 2        misses `and` and the ternary
 
 ## TS-COG-05 Cognitive complexity
 
+**Status:** `rejected`.
+
 Like cyclomatic complexity, with an extra charge for each level of nesting.
 
 ```
@@ -850,6 +945,8 @@ The same three branches written flat, one after another, score 3 cognitive.
 
 ## TS-NES-06 Nesting depth
 
+**Status:** `available`.
+
 How deep a node sits in the syntax tree.
 
 ```
@@ -883,6 +980,8 @@ The webapp's 66 is JSX: an element inside an element inside a `map` inside a com
 
 ## TS-VOC-07 Vocabulary coverage
 
+**Status:** `available`.
+
 How much of its language's grammar a codebase actually uses.
 
 ```
@@ -909,61 +1008,9 @@ TypeScript 120 used / 202 defined  = 59.4%
 
 ---
 
-## Emitted, not yet defended
+## EX-RES-01 Resolution rate
 
-The tooling computes these on every run and no finding in [README.md](README.md) rests on any of them.
-They are listed so the gap between what is measured and what is argued stays visible.
-
-Figures below are one run of `graphdata.py` over `src/pytest_xharness_eval` and `report-ui/src` on 14 September 2026.
-
-```
-635 nodes,  767 edges,  1065 call sites
-```
-
-### GR-FAN-09 Fan-out
-
-Out-degree: the number of distinct names one definition calls.
-
-```
-fanout(v) = number of edges starting at v
-```
-
-It is [GR-LEV-06](#gr-lev-06-leverage) read from the other end.
-Leverage asks how many places need a name, and fan-out asks how many names a place needs.
-
-```
-max 34      SessionView       report-ui/src/views/SessionView.tsx
-mean 1.21
-350 of 635 definitions call nothing the extractor can resolve
-```
-
-**Untested.** Nothing has checked whether a high fan-out predicts anything a reviewer feels.
-Its likely role is as the damper for extraction, which moves calls without removing them.
-
----
-
-### GR-SIT-10 Call-site weight
-
-In-degree counted once per call rather than once per caller.
-
-```
-sites(v) = sum over callers of the number of times each one calls v
-```
-
-[GR-LEV-06](#gr-lev-06-leverage) counts a caller once no matter how often it calls.
-This counts every call.
-
-```
-77 of 635 definitions differ between the two
-fmt   report-ui/src/lib/format.ts    16 callers, 69 call sites
-```
-
-**Open, as [G6](OPEN_QUESTIONS.md#1-is-the-call-graph-right).** Weighting moved `phi` by at most 0.059 here and changed no ranking.
-Until a case is found where the choice changes an ordering, the unweighted count is the one in use.
-
----
-
-### EX-RES-01 Resolution rate
+**Status:** `used`.
 
 The share of observed call expressions the extractor turned into an edge.
 
@@ -973,17 +1020,21 @@ ambiguous    the name matches more than one definition
 unresolved   the name matches none in the measured trees
 ```
 
+Figures are one `graphdata.py` run over `src/pytest_xharness_eval` and `report-ui/src` on 14 September 2026, which found 635 nodes, 767 edges and 1065 call sites.
+
 ```
 resolved 32%     ambiguous 63     unresolved 2231
 ```
 
-**A check, not a metric.** It bounds every graph score above it.
+**Used as a check.** It bounds every graph score above it.
 Most of the 2231 are standard-library and third-party calls, which are outside the measured trees by design.
 That is why the number is a floor on trust rather than a defect count.
 
 ---
 
-### EX-REC-02 Extractor agreement
+## EX-REC-02 Extractor agreement
+
+**Status:** `used`.
 
 How much of each extraction the other one reproduces, edge by edge.
 
@@ -1000,8 +1051,8 @@ Tree-sitter resolves names and invents edges when two definitions share one.
 the two agree on about half the union of their edges
 ```
 
-**A check, not a metric.** Low agreement says the two disagree, never which one is right.
-Only the ground-truth fixture would say that, and it does not exist.
+**Used as a check.** Low agreement says the two disagree, never which one is right.
+Only a ground-truth fixture would say that, and building one is deferred under [G1](OPEN_QUESTIONS.md#1-is-the-call-graph-right).
 
 ---
 

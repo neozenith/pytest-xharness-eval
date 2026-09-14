@@ -13,7 +13,7 @@ The questions fall into four groups, and each group depends on the one before it
 | [1. Is the call graph right?](#1-is-the-call-graph-right) | every graph metric |
 | [2. Does any score predict review effort?](#2-does-any-score-predict-review-effort) | using a score as a target |
 | [3. How is a score calibrated?](#3-how-is-a-score-calibrated) | using a score as a gate |
-| [4. What gate, if any, do we adopt?](#4-what-gate-if-any-do-we-adopt) | changing `make check` |
+| [4. What gate, if any, do we adopt?](#4-what-gate-if-any-do-we-adopt) | changing `make check`, and deferred |
 
 A separate group, [5. The method itself](#5-the-method-itself), lists the gaps in how the experiments were run.
 
@@ -40,9 +40,13 @@ A separate group, [5. The method itself](#5-the-method-itself), lists the gaps i
 The metric arithmetic is cross-validated and the extraction is not.
 Until these close, every graph score is a lower bound of unknown looseness.
 
+**G1 is deferred, 14 September 2026.** Building a ground-truth fixture is premature, and the exploration that proposed it got ahead of the work.
+The measures are still being found, so there is nothing yet whose accuracy is worth the cost of hand-writing a corpus.
+G2 to G6 stay open and are read against [EX-RES-01](GLOSSARY.md#ex-res-01-resolution-rate) and [EX-REC-02](GLOSSARY.md#ex-rec-02-extractor-agreement) in the meantime.
+
 | ID | Question | What would settle it |
 |---|---|---|
-| **G1** | Does either extractor produce the true call graph? | A **ground-truth fixture**: a small program per language with every call written down by hand, committed with its expected edge list and asserted against. This is the blocking piece of work. |
+| G1 | Does either extractor produce the true call graph? | A **ground-truth fixture**: a small program per language with every call written down by hand, committed with its expected edge list and asserted against. **Deferred**, see above. |
 | G2 | Which extractor do we trust, per language? | G1. Today the LSP looks better on Python and tree-sitter on TypeScript, but the two agree on only about half the union of their edges. |
 | G3 | How are dispatch tables, decorator registries and `pluggy` hooks represented? | A declared-edge format, since no static extractor sees them. The 39 renderers in `report-ui/src/components/records/records.tsx` are the test case. |
 | G4 | How is a cross-language contract declared as an edge? | A declared-edge format covering `emit/index.py` writing `report/index.json` and `report-ui/src/lib/types.ts` reading it. Zero edges cross the language boundary today. |
@@ -87,8 +91,10 @@ The SIG bands were calibrated on about 200 systems, and nothing equivalent exist
 
 ## 4. What gate, if any, do we adopt?
 
-No decision has been made.
-Four options remain, and the evidence points unevenly.
+**The whole group is deferred, 14 September 2026.** Any gate is premature.
+The work is still finding measures worth trusting, and a gate assumes that question is settled.
+The options below are recorded so the deferral is a choice rather than an omission.
+Nothing here is adopted, and `make check` is unchanged.
 
 | ID | Option | What it is | Strongest point against |
 |---|---|---|---|
