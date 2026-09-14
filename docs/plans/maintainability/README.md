@@ -14,6 +14,7 @@ Each section is a finding that was measured against this repository or traced to
 | [extraction-apis.md](extraction-apis.md) | what an LSP and tree-sitter can each be asked for, by exact method name |
 | [ast-data-models.md](ast-data-models.md) | the primitives each graph provider stores, as one ERD per provider |
 | [examples/](examples/) | two toy codebases, and what all five providers emitted for each |
+| [score-aggregation.md](score-aggregation.md) | how to score nodes and edges, then aggregate those scores up a hierarchy or over a subgraph |
 | [tools/](tools/) | the call-graph extractors, with the one-off scripts archived in git |
 
 A learning moves here from OPEN_QUESTIONS.md only when it has evidence behind it.
