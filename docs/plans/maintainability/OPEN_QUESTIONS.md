@@ -1,6 +1,8 @@
 # Maintainability: open questions
 
-**Status:** live list, ordered by what blocks what. **Before you start:** read [README.md](README.md) for the settled learnings.
+**Status:** live list, ordered by what blocks what. 
+
+**Before you start:** read [README.md](README.md) for the settled learnings.
 
 Every question here is undecided, unmeasured or unvalidated.
 When one is answered with evidence, its finding moves into [README.md](README.md) and the question is deleted from this file.
@@ -68,6 +70,7 @@ Of 121 metrics tested against understandability, none reached even a medium corr
 | V3 | Does a score against name count show double descent? | An extraction that splits real bodies, pushed across orders of magnitude of name count, scored against the V2 proxy. The measured range, 237 to 817 names, showed none and is too short to rule it out. |
 | V4 | Does nesting depth resist extraction? | Run it over the rearrangement sweep. It needs no partition, and extraction relocates nesting rather than removing it. Untested. |
 | V5 | Does screen load predict comprehension better than line count? | Score the Peitek et al. snippets, where lines of code reached tau -.46. Only snippets longer than one screen test the screen factor, so count those first. |
+| V6 | Does splitting identifiers into sub-words measure how well naming conventions are reused? | Split each name at case and underscore boundaries, so `CamelCase` and `snake_case_name` yield their parts, then compare sub-word vocabulary with name vocabulary. A codebase that reuses its conventions builds many names from few sub-words. The split would also join `session_id` in Python to `sessionId` in TypeScript, which bears on G4. Unmeasured, and the population is the 1047 Python and 1527 TypeScript names in [TS-OPD-09](GLOSSARY.md#ts-opd-09-distinct-operands-h2). Acronyms such as `HTTPServer` and digits need a rule first. |
 
 ---
 

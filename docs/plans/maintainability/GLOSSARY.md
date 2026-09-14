@@ -43,6 +43,10 @@ This file covers only the maintainability research.
   - [TS-COG-05 Cognitive complexity](#ts-cog-05-cognitive-complexity)
   - [TS-NES-06 Nesting depth](#ts-nes-06-nesting-depth)
   - [TS-VOC-07 Vocabulary coverage](#ts-voc-07-vocabulary-coverage)
+  - [TS-OPR-08 Distinct operators, `h1`](#ts-opr-08-distinct-operators-h1)
+  - [TS-OPD-09 Distinct operands, `h2`](#ts-opd-09-distinct-operands-h2)
+  - [TS-NOR-10 Operator occurrences, `N1`](#ts-nor-10-operator-occurrences-n1)
+  - [TS-NOD-11 Operand occurrences, `N2`](#ts-nod-11-operand-occurrences-n2)
   - [EX-RES-01 Resolution rate](#ex-res-01-resolution-rate)
   - [EX-REC-02 Extractor agreement](#ex-rec-02-extractor-agreement)
   - [Concepts that are not metrics](#concepts-that-are-not-metrics)
@@ -105,6 +109,10 @@ A retired metric keeps its number, and the number is never given to something el
 | [TS-COG-05](#ts-cog-05-cognitive-complexity) | Cognitive complexity | rejected |
 | [TS-NES-06](#ts-nes-06-nesting-depth) | Nesting depth | available |
 | [TS-VOC-07](#ts-voc-07-vocabulary-coverage) | Vocabulary coverage | available |
+| [TS-OPR-08](#ts-opr-08-distinct-operators-h1) | Distinct operators, `h1` | available |
+| [TS-OPD-09](#ts-opd-09-distinct-operands-h2) | Distinct operands, `h2` | available |
+| [TS-NOR-10](#ts-nor-10-operator-occurrences-n1) | Operator occurrences, `N1` | available |
+| [TS-NOD-11](#ts-nod-11-operand-occurrences-n2) | Operand occurrences, `N2` | available |
 | [EX-RES-01](#ex-res-01-resolution-rate) | Resolution rate | used |
 | [EX-REC-02](#ex-rec-02-extractor-agreement) | Extractor agreement | used |
 
@@ -731,6 +739,10 @@ volume      V = N x log2(n)          bits to write the program given its vocabul
 
 It maps onto the two-part code: `n` is the model to learn, `V` is the program spelled out with it.
 
+**Each of the four counts is a metric in its own right**: [`h1`](#ts-opr-08-distinct-operators-h1), [`h2`](#ts-opd-09-distinct-operands-h2), [`N1`](#ts-nor-10-operator-occurrences-n1) and [`N2`](#ts-nod-11-operand-occurrences-n2).
+They are split out because the sums hide which half moved.
+Operands are over 96% of the vocabulary in both codebases here, so `n` is in practice a count of operands.
+
 | Moves | Meaning | Effect on the model |
 |---|---|---|
 | volume **up** | more program to read | reviewing cost rises |
@@ -1002,6 +1014,146 @@ No claim about quality has been tested.
 ```
 Python      89 used / 128 defined  = 69.5%
 TypeScript 120 used / 202 defined  = 59.4%
+```
+
+</details>
+
+---
+
+## TS-OPR-08 Distinct operators, `h1`
+
+**Status:** `available`.
+
+How many different operator tokens the code uses, the first primitive of [TS-HAL-01](#ts-hal-01-halstead-vocabulary-length-and-volume).
+
+```
+h1 = distinct leaf node types that are not operands
+operators: keywords, punctuation, arithmetic and comparison symbols
+```
+
+| Moves | Meaning | Effect on the model |
+|---|---|---|
+| **up** | more distinct constructs in play | more syntax a reader must recognise |
+| **down** | a narrower set of constructs | less syntax to recognise |
+
+**Bounded by the grammar.** It is counted by node type, so no amount of code can push it past what the grammar defines.
+That makes it the language half of the vocabulary, close in spirit to [TS-VOC-07](#ts-voc-07-vocabulary-coverage).
+
+<details>
+<summary><b>Worked example</b></summary>
+
+Measured with `tools/halstead.py`, archived in git at `4e4be2e`, on 15 September 2026.
+
+```
+src/pytest_xharness_eval    45 files     h1 = 60
+report-ui/src               73 files     h1 = 88
+examples/hello-python        2 files     h1 = 18
+examples/hello-react         2 files     h1 = 25
+```
+
+Two files already reach 18 and 25, while 45 files reach only 60.
+
+</details>
+
+---
+
+## TS-OPD-09 Distinct operands, `h2`
+
+**Status:** `available`.
+
+How many different operand spellings the code uses, the second primitive of [TS-HAL-01](#ts-hal-01-halstead-vocabulary-length-and-volume).
+
+```
+h2 = distinct operand texts
+operands: identifiers and literals, keyed by their text
+```
+
+| Moves | Meaning | Effect on the model |
+|---|---|---|
+| **up** | more distinct names and values to learn | the model half of the two-part code grows |
+| **down** | a smaller set of names and values, worked harder | less to learn |
+
+**This is the vocabulary a reader actually learns.** Unlike `h1` it is unbounded, and it is over 96% of `n` in both codebases here.
+
+**It mixes names with literals.** Keyed by text, the identifier `name` and the string `"name"` count as one operand.
+In `src/`, 1047 distinct names and 1213 distinct literals share 245 spellings, which is how they sum to 2015.
+A names-only count is the population [V6](OPEN_QUESTIONS.md#2-does-any-score-predict-review-effort) would split into sub-words.
+
+<details>
+<summary><b>Worked example</b></summary>
+
+Measured with `tools/halstead.py`, archived in git at `4e4be2e`, on 15 September 2026.
+
+```
+                            h2      distinct names   distinct literals   spelled both ways
+src/pytest_xharness_eval    2015    1047             1213                245
+report-ui/src               2435    1527             1186                278
+```
+
+`x = a + a` has `h2 = 2`, because `a` is one operand however often it appears.
+
+</details>
+
+---
+
+## TS-NOR-10 Operator occurrences, `N1`
+
+**Status:** `available`.
+
+How many operator tokens the code contains in total, the third primitive of [TS-HAL-01](#ts-hal-01-halstead-vocabulary-length-and-volume).
+
+```
+N1 = count of every leaf token that is not an operand
+```
+
+| Moves | Meaning | Effect on the model |
+|---|---|---|
+| **up** | more syntax on the page | more to read, whatever it says |
+| **down** | terser code | less to read |
+
+**It is the structural share of length.** Operators are 60% of `N` in `src/` and 68% in `report-ui/src`.
+The TypeScript share is higher, and JSX punctuation is the likely cause, though it has not been isolated.
+
+<details>
+<summary><b>Worked example</b></summary>
+
+Measured with `tools/halstead.py`, archived in git at `4e4be2e`, on 15 September 2026.
+
+```
+src/pytest_xharness_eval    N1 = 20091    of N = 33321
+report-ui/src               N1 = 41361    of N = 60591
+```
+
+</details>
+
+---
+
+## TS-NOD-11 Operand occurrences, `N2`
+
+**Status:** `available`.
+
+How many operand tokens the code contains in total, the fourth primitive of [TS-HAL-01](#ts-hal-01-halstead-vocabulary-length-and-volume).
+
+```
+N2 = count of every identifier and literal token
+```
+
+| Moves | Meaning | Effect on the model |
+|---|---|---|
+| **up** | names and values used more often | more references for a reader to track |
+| **down** | fewer references | less to track |
+
+**It is the denominator of reuse.** `N2 / h2` is operand reuse, which [TS-REU-02](#ts-reu-02-token-reuse-and-operand-reuse) rejects as a quality score because duplication inflates it.
+The primitive itself stays available, because a count of references is not gamed the way a ratio is.
+
+<details>
+<summary><b>Worked example</b></summary>
+
+Measured with `tools/halstead.py`, archived in git at `4e4be2e`, on 15 September 2026.
+
+```
+src/pytest_xharness_eval    N2 = 13230    h2 = 2015    N2 / h2 = 6.57
+report-ui/src               N2 = 19230    h2 = 2435    N2 / h2 = 7.90
 ```
 
 </details>
