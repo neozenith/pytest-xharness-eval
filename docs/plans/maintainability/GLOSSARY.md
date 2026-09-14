@@ -6,6 +6,9 @@ Every metric the other documents in this directory measure, defined once.
 Each entry gives the formula, what it means when the number moves, and how it is gamed.
 Worked examples sit in a collapsed section under each entry.
 
+Every metric carries an ID such as `GR-CON-01`, and [the register](#the-register) lists them all.
+Cite the ID, not the prose name, anywhere a metric is named outside this file.
+
 The repository-wide vocabulary (*case*, *cell*, *harness*) is in [GLOSSARY.md](../../../GLOSSARY.md).
 This file covers only the maintainability research.
 
@@ -16,29 +19,138 @@ This file covers only the maintainability research.
 <!--TOC-->
 
 - [Maintainability glossary](#maintainability-glossary)
+  - [How a metric is identified](#how-a-metric-is-identified)
+  - [PR-LOC-01 Source lines](#pr-loc-01-source-lines)
+  - [PR-VIS-02 Visual source lines](#pr-vis-02-visual-source-lines)
   - [The call graph](#the-call-graph)
-  - [Conductance, `phi`](#conductance-phi)
-  - [Volume floor](#volume-floor)
-  - [Modularity, `Q`](#modularity-q)
-  - [Margin over random](#margin-over-random)
-  - [Inside share](#inside-share)
-  - [Leverage](#leverage)
-  - [Leveraged names, singleton rate, mean leverage](#leveraged-names-singleton-rate-mean-leverage)
-  - [Orphan rate](#orphan-rate)
-  - [Two-part code: `L(H)` and `L(D given H)`](#two-part-code-lh-and-ld-given-h)
-  - [Bits saved per boundary](#bits-saved-per-boundary)
-  - [`AIC` and `BIC` penalty per name](#aic-and-bic-penalty-per-name)
-  - [Halstead vocabulary, length and volume](#halstead-vocabulary-length-and-volume)
-  - [Token reuse and operand reuse](#token-reuse-and-operand-reuse)
-  - [Screen load](#screen-load)
-  - [Cyclomatic complexity](#cyclomatic-complexity)
-  - [Cognitive complexity](#cognitive-complexity)
-  - [Nesting depth](#nesting-depth)
-  - [Vocabulary coverage](#vocabulary-coverage)
+  - [GR-CON-01 Conductance, `phi`](#gr-con-01-conductance-phi)
+  - [GR-VOL-02 Volume floor](#gr-vol-02-volume-floor)
+  - [GR-MOD-03 Modularity, `Q`](#gr-mod-03-modularity-q)
+  - [GR-MAR-04 Margin over random](#gr-mar-04-margin-over-random)
+  - [GR-INS-05 Inside share](#gr-ins-05-inside-share)
+  - [GR-LEV-06 Leverage](#gr-lev-06-leverage)
+  - [GR-LVN-07 Leveraged names, singleton rate, mean leverage](#gr-lvn-07-leveraged-names-singleton-rate-mean-leverage)
+  - [GR-ORP-08 Orphan rate](#gr-orp-08-orphan-rate)
+  - [IT-MDL-01 Two-part code: `L(H)` and `L(D given H)`](#it-mdl-01-two-part-code-lh-and-ld-given-h)
+  - [IT-BPB-02 Bits saved per boundary](#it-bpb-02-bits-saved-per-boundary)
+  - [IT-PEN-03 `AIC` and `BIC` penalty per name](#it-pen-03-aic-and-bic-penalty-per-name)
+  - [TS-HAL-01 Halstead vocabulary, length and volume](#ts-hal-01-halstead-vocabulary-length-and-volume)
+  - [TS-REU-02 Token reuse and operand reuse](#ts-reu-02-token-reuse-and-operand-reuse)
+  - [TS-SCR-03 Screen load](#ts-scr-03-screen-load)
+  - [TS-CYC-04 Cyclomatic complexity](#ts-cyc-04-cyclomatic-complexity)
+  - [TS-COG-05 Cognitive complexity](#ts-cog-05-cognitive-complexity)
+  - [TS-NES-06 Nesting depth](#ts-nes-06-nesting-depth)
+  - [TS-VOC-07 Vocabulary coverage](#ts-voc-07-vocabulary-coverage)
+  - [Emitted, not yet defended](#emitted-not-yet-defended)
   - [Concepts that are not metrics](#concepts-that-are-not-metrics)
 
 <!--TOC-->
 </details>
+
+---
+
+## How a metric is identified
+
+Every metric in this file carries an ID.
+
+```
+FF-MMM-NN
+
+FF    family: what the metric needs before it can be computed at all
+MMM   a mnemonic for the metric itself
+NN    sequential within the family, never reused
+```
+
+| Family | Needs | Cost of porting it to a new language |
+|---|---|---|
+| `PR` | the raw text | nothing |
+| `TS` | a syntax tree | one tree-sitter grammar |
+| `GR` | a resolved call graph, and usually a partition | a grammar and a resolution rule |
+| `IT` | a quantity from another family, priced in bits | whatever that family costs |
+| `EX` | an extractor's own report, or two extractions to compare | whatever those extractions cost |
+
+The families are ordered by what they cost to extract.
+That order is the answer to [GOAL.md](GOAL.md)'s question about scoring any codebase regardless of language.
+A `PR` metric ports for free, and an `EX` one ports last.
+
+An ID is permanent.
+A retired metric keeps its number, and the number is never given to something else.
+
+### The register
+
+| ID | Metric | Status |
+|---|---|---|
+| [PR-LOC-01](#pr-loc-01-source-lines) | Source lines | locked |
+| [PR-VIS-02](#pr-vis-02-visual-source-lines) | Visual source lines | input |
+| [GR-CON-01](#gr-con-01-conductance-phi) | Conductance, `phi` | locked |
+| [GR-VOL-02](#gr-vol-02-volume-floor) | Volume floor | input |
+| [GR-MOD-03](#gr-mod-03-modularity-q) | Modularity, `Q` | locked |
+| [GR-MAR-04](#gr-mar-04-margin-over-random) | Margin over random | locked |
+| [GR-INS-05](#gr-ins-05-inside-share) | Inside share | locked |
+| [GR-LEV-06](#gr-lev-06-leverage) | Leverage | locked |
+| [GR-LVN-07](#gr-lvn-07-leveraged-names-singleton-rate-mean-leverage) | Leveraged names, singleton rate, mean leverage | locked |
+| [GR-ORP-08](#gr-orp-08-orphan-rate) | Orphan rate | check |
+| [GR-FAN-09](#gr-fan-09-fan-out) | Fan-out | open |
+| [GR-SIT-10](#gr-sit-10-call-site-weight) | Call-site weight | open |
+| [IT-MDL-01](#it-mdl-01-two-part-code-lh-and-ld-given-h) | Two-part code: `L(H)` and `L(D given H)` | locked |
+| [IT-BPB-02](#it-bpb-02-bits-saved-per-boundary) | Bits saved per boundary | locked |
+| [IT-PEN-03](#it-pen-03-aic-and-bic-penalty-per-name) | `AIC` and `BIC` penalty per name | locked |
+| [TS-HAL-01](#ts-hal-01-halstead-vocabulary-length-and-volume) | Halstead vocabulary, length and volume | locked |
+| [TS-REU-02](#ts-reu-02-token-reuse-and-operand-reuse) | Token reuse and operand reuse | baseline |
+| [TS-SCR-03](#ts-scr-03-screen-load) | Screen load | open |
+| [TS-CYC-04](#ts-cyc-04-cyclomatic-complexity) | Cyclomatic complexity | baseline |
+| [TS-COG-05](#ts-cog-05-cognitive-complexity) | Cognitive complexity | baseline |
+| [TS-NES-06](#ts-nes-06-nesting-depth) | Nesting depth | open |
+| [TS-VOC-07](#ts-voc-07-vocabulary-coverage) | Vocabulary coverage | open |
+| [EX-RES-01](#ex-res-01-resolution-rate) | Resolution rate | check |
+| [EX-REC-02](#ex-rec-02-extractor-agreement) | Extractor agreement | check |
+
+| Status | Meaning |
+|---|---|
+| `locked` | a finding in [README.md](README.md) rests on it |
+| `input` | it feeds another metric and carries no finding of its own |
+| `baseline` | kept to demonstrate a blind spot, never proposed as a target |
+| `check` | print it before any score, because it says whether the score means anything |
+| `open` | the tooling computes it and nothing rests on it yet |
+
+---
+
+## PR-LOC-01 Source lines
+
+The line span of one definition, counted without parsing.
+
+```
+nloc(v) = last line of v - first line of v + 1
+```
+
+| `nloc` moves | Meaning | Effect on the model |
+|---|---|---|
+| **up** | there is more text to read | the strongest single predictor of comprehension measured so far |
+| **down** | the text moved somewhere else | extraction lowers it for free, so it is a spring |
+
+**Extensive.** Splitting a definition lowers it without changing the program.
+**Why it is kept.** Lines of code reached tau -.46 against measured comprehension, where cyclomatic complexity reached -.09.
+The cheapest metric in the file is also the best-correlated one.
+**Gamed by** extraction, which is why it is never read on its own.
+
+---
+
+## PR-VIS-02 Visual source lines
+
+What actually scrolls: source lines with the blanks, the comments and the line wrapping accounted for.
+
+```
+s(v) = non-blank, non-comment lines of v, each counted ceil(width / W) times
+W      the line-length limit, 120 in this repository
+```
+
+It differs from [PR-LOC-01](#pr-loc-01-source-lines) in both directions.
+A commented function has fewer visual lines than source lines.
+A function of very wide lines has more.
+
+**Input only.** It exists to feed the screen factor in [TS-SCR-03](#ts-scr-03-screen-load).
+**It blocks the obvious game.** Without the wrap at `W`, a function halves its screen count by joining every pair of lines.
+**Not strictly `PR`.** Excluding comments needs the tree in practice, and a regex would do at a pinch.
 
 ---
 
@@ -65,7 +177,7 @@ Dispatch tables, decorators and plugin hooks produce calls no static extractor s
 
 ---
 
-## Conductance, `phi`
+## GR-CON-01 Conductance, `phi`
 
 The share of a cluster's call traffic that crosses its own boundary.
 
@@ -112,7 +224,7 @@ No line or branch count can tell these two apart.
 
 ---
 
-## Volume floor
+## GR-VOL-02 Volume floor
 
 The minimum internal call volume a cluster needs before its `phi` means anything.
 
@@ -155,7 +267,7 @@ Both sit below the floor, so both report "not measurable".
 
 ---
 
-## Modularity, `Q`
+## GR-MOD-03 Modularity, `Q`
 
 Newman modularity: the share of edges inside clusters, minus the share random wiring would put there.
 
@@ -179,7 +291,7 @@ The second is what a random graph with the same node degrees would give.
 One cluster scores exactly 0, so collapsing the architecture never wins.
 **Blind to** extraction, because a new helper's call stays inside its own folder.
 **Gamed by** duplication, which lowers crossings.
-Pair it with [leveraged names](#leveraged-names-singleton-rate-mean-leverage).
+Pair it with [leveraged names](#gr-lvn-07-leveraged-names-singleton-rate-mean-leverage).
 
 <details>
 <summary><b>Worked example</b></summary>
@@ -209,7 +321,7 @@ The two-folder layout beats no layout by 0.357.
 
 ---
 
-## Margin over random
+## GR-MAR-04 Margin over random
 
 How far a partition's `Q` sits above random partitions with the same cluster count.
 
@@ -241,7 +353,7 @@ Measured this way, its folders beat chance by more.
 
 ---
 
-## Inside share
+## GR-INS-05 Inside share
 
 The share of call edges that do not cross a boundary, at one boundary level.
 
@@ -276,7 +388,7 @@ File separates them by 24 points, so file is the boundary with the most signal.
 
 ---
 
-## Leverage
+## GR-LEV-06 Leverage
 
 The number of distinct call sites reaching one name: its in-degree in the call graph.
 
@@ -314,7 +426,7 @@ Leverage separates them.
 
 ---
 
-## Leveraged names, singleton rate, mean leverage
+## GR-LVN-07 Leveraged names, singleton rate, mean leverage
 
 Three summaries of the leverage distribution over a cluster or a whole graph.
 
@@ -350,7 +462,7 @@ That is the move that lowers the count.
 
 ---
 
-## Orphan rate
+## GR-ORP-08 Orphan rate
 
 The share of names with no caller in the extracted graph.
 
@@ -384,7 +496,7 @@ Each drop in the rate was a measurement bug found, not code deleted.
 
 ---
 
-## Two-part code: `L(H)` and `L(D given H)`
+## IT-MDL-01 Two-part code: `L(H)` and `L(D given H)`
 
 Minimum Description Length applied to a partition.
 A description splits into a model, the rules, and a leftover, the exceptions.
@@ -437,7 +549,7 @@ That is the degeneracy, and it is why the next metric exists.
 
 ---
 
-## Bits saved per boundary
+## IT-BPB-02 Bits saved per boundary
 
 How much leftover a partition removes for each cluster it asks you to learn.
 
@@ -451,7 +563,7 @@ per boundary = saved / (k - 1)
 | **up** | each boundary explains many calls | boundaries are earning their price |
 | **down** | boundaries were added that explain little | over-partitioned, like single-caller names |
 
-It is [leverage](#leverage) asked of a boundary instead of a name.
+It is [leverage](#gr-lev-06-leverage) asked of a boundary instead of a name.
 **Degenerate as a target**, because `k = 2` minimises the divisor.
 Use it to compare existing partitions, never to search for one.
 
@@ -480,7 +592,7 @@ Each hand-drawn folder saves nearly four times what a file boundary saves.
 
 ---
 
-## `AIC` and `BIC` penalty per name
+## IT-PEN-03 `AIC` and `BIC` penalty per name
 
 The price of adding one parameter to a model, mapped to the price of one new name in code.
 
@@ -517,7 +629,7 @@ A new abstraction in this repository must save about 8.85 units of fit to break 
 
 ---
 
-## Halstead vocabulary, length and volume
+## TS-HAL-01 Halstead vocabulary, length and volume
 
 Counts of operators and operands in the token stream.
 
@@ -559,7 +671,7 @@ V = 5 x log2(4) = 5 x 2 = 10 bits
 
 ---
 
-## Token reuse and operand reuse
+## TS-REU-02 Token reuse and operand reuse
 
 How hard the vocabulary is worked: leverage measured on tokens instead of call sites.
 
@@ -597,7 +709,7 @@ token reuse   = 15 / 4 = 3.75        up, yet the code got worse
 
 ---
 
-## Screen load
+## TS-SCR-03 Screen load
 
 The symbols a reader must hold to understand one function, charged like `BIC`, and multiplied once the function no longer fits on one screen.
 
@@ -611,7 +723,7 @@ H   screen height in lines, 50 by default
 W   line-length limit, 120 in this repository
 ```
 
-The symbol term is the [`BIC` penalty per name](#aic-and-bic-penalty-per-name) applied at function scope.
+The symbol term is the [`BIC` penalty per name](#it-pen-03-aic-and-bic-penalty-per-name) applied at function scope.
 There, `n` is the codebase and the name is a definition.
 Here, `N` is the function body and the name is any identifier the reader meets.
 Swap `ln(N)` for 2 to get the `AIC` form, which ignores how long the function is.
@@ -632,7 +744,7 @@ Screen load ranks it below a shorter function holding three times the names.
 **Measured in `tools/screenload.py`.** Nested functions are also counted inside their parent, since the reader of the parent reads them too.
 
 **Gamed by splitting into stubs.** Five one-screen helpers cut the load of the parent, and each helper has one caller.
-Pair it with the [singleton rate](#leveraged-names-singleton-rate-mean-leverage), which rises when that happens.
+Pair it with the [singleton rate](#gr-lvn-07-leveraged-names-singleton-rate-mean-leverage), which rises when that happens.
 **Gamed by wide lines**, which the wrap at `W` blocks.
 
 <details>
@@ -658,7 +770,7 @@ In `src/`, one of 312 does, carrying 1.0%.
 
 ---
 
-## Cyclomatic complexity
+## TS-CYC-04 Cyclomatic complexity
 
 The number of independent paths through one function (McCabe).
 
@@ -698,7 +810,7 @@ ruff C901:      CC = 1 + 1 = 2        misses `and` and the ternary
 
 ---
 
-## Cognitive complexity
+## TS-COG-05 Cognitive complexity
 
 Like cyclomatic complexity, with an extra charge for each level of nesting.
 
@@ -736,7 +848,7 @@ The same three branches written flat, one after another, score 3 cognitive.
 
 ---
 
-## Nesting depth
+## TS-NES-06 Nesting depth
 
 How deep a node sits in the syntax tree.
 
@@ -769,7 +881,7 @@ The webapp's 66 is JSX: an element inside an element inside a `map` inside a com
 
 ---
 
-## Vocabulary coverage
+## TS-VOC-07 Vocabulary coverage
 
 How much of its language's grammar a codebase actually uses.
 
@@ -794,6 +906,102 @@ TypeScript 120 used / 202 defined  = 59.4%
 ```
 
 </details>
+
+---
+
+## Emitted, not yet defended
+
+The tooling computes these on every run and no finding in [README.md](README.md) rests on any of them.
+They are listed so the gap between what is measured and what is argued stays visible.
+
+Figures below are one run of `graphdata.py` over `src/pytest_xharness_eval` and `report-ui/src` on 14 September 2026.
+
+```
+635 nodes,  767 edges,  1065 call sites
+```
+
+### GR-FAN-09 Fan-out
+
+Out-degree: the number of distinct names one definition calls.
+
+```
+fanout(v) = number of edges starting at v
+```
+
+It is [GR-LEV-06](#gr-lev-06-leverage) read from the other end.
+Leverage asks how many places need a name, and fan-out asks how many names a place needs.
+
+```
+max 34      SessionView       report-ui/src/views/SessionView.tsx
+mean 1.21
+350 of 635 definitions call nothing the extractor can resolve
+```
+
+**Untested.** Nothing has checked whether a high fan-out predicts anything a reviewer feels.
+Its likely role is as the damper for extraction, which moves calls without removing them.
+
+---
+
+### GR-SIT-10 Call-site weight
+
+In-degree counted once per call rather than once per caller.
+
+```
+sites(v) = sum over callers of the number of times each one calls v
+```
+
+[GR-LEV-06](#gr-lev-06-leverage) counts a caller once no matter how often it calls.
+This counts every call.
+
+```
+77 of 635 definitions differ between the two
+fmt   report-ui/src/lib/format.ts    16 callers, 69 call sites
+```
+
+**Open, as [G6](OPEN_QUESTIONS.md#1-is-the-call-graph-right).** Weighting moved `phi` by at most 0.059 here and changed no ranking.
+Until a case is found where the choice changes an ordering, the unweighted count is the one in use.
+
+---
+
+### EX-RES-01 Resolution rate
+
+The share of observed call expressions the extractor turned into an edge.
+
+```
+resolved%  = call sites resolved / (resolved + ambiguous + unresolved)
+ambiguous    the name matches more than one definition
+unresolved   the name matches none in the measured trees
+```
+
+```
+resolved 32%     ambiguous 63     unresolved 2231
+```
+
+**A check, not a metric.** It bounds every graph score above it.
+Most of the 2231 are standard-library and third-party calls, which are outside the measured trees by design.
+That is why the number is a floor on trust rather than a defect count.
+
+---
+
+### EX-REC-02 Extractor agreement
+
+How much of each extraction the other one reproduces, edge by edge.
+
+```
+agreed   edges present in both
+recall of A by B = agreed / edges(A)
+```
+
+Reported by `compare.py`, which exists because neither extractor is ground truth.
+The LSP resolves types and loses edges when the workspace is half-open.
+Tree-sitter resolves names and invents edges when two definitions share one.
+
+```
+the two agree on about half the union of their edges
+```
+
+**A check, not a metric.** Low agreement says the two disagree, never which one is right.
+Only the ground-truth fixture would say that, and it does not exist.
 
 ---
 

@@ -5,14 +5,14 @@
 Six scripts remain here: two call-graph extractors, the diff between them, the graph reviewable-ui renders, and the per-function screen load.
 Every other script that produced a number in [../README.md](../README.md) is archived in git, listed under [Archived scripts](#archived-scripts).
 
-| Script | Purpose |
-|---|---|
-| `graphdata.py` | emits `reviewable-ui/public/graph.json`, run by `make reviewable-data`. Its shape is mirrored in `reviewable-ui/src/lib/types.ts` |
-| `treesitter.py` | extractor that parses source directly and resolves calls by name, in any language with a grammar |
-| `callgraph.py` | extractor that asks a language server for `callHierarchy`, resolving calls by type |
-| `lsp.py` | the amended fork of the lsp skill's indexer that `callgraph.py` imports. Its docstring lists every amendment and the failure each one was hiding |
-| `compare.py` | edge-by-edge diff of an LSP extraction against a tree-sitter extraction of the same code |
-| `screenload.py` | per-function [screen load](../GLOSSARY.md#screen-load): lines, tokens and distinct names, for V5, C8 and D5. `uv run docs/plans/maintainability/tools/screenload.py --out tmp/screenload.json` |
+| Script | Emits | Purpose |
+|---|---|---|
+| `graphdata.py` | `GR-CON-01`, `GR-VOL-02`, `GR-MOD-03`, `GR-INS-05`, `GR-LEV-06`, `GR-ORP-08`, `GR-FAN-09`, `GR-SIT-10`, `PR-LOC-01`, `TS-NES-06`, `EX-RES-01` | emits `reviewable-ui/public/graph.json`, run by `make reviewable-data`. Its shape is mirrored in `reviewable-ui/src/lib/types.ts` |
+| `treesitter.py` | the graph every `GR` metric needs | extractor that parses source directly and resolves calls by name, in any language with a grammar |
+| `callgraph.py` | the same graph, resolved by type | extractor that asks a language server for `callHierarchy`, resolving calls by type |
+| `lsp.py` | nothing, it is support code | the amended fork of the lsp skill's indexer that `callgraph.py` imports. Its docstring lists every amendment and the failure each one was hiding |
+| `compare.py` | `EX-REC-02` | edge-by-edge diff of an LSP extraction against a tree-sitter extraction of the same code |
+| `screenload.py` | `TS-SCR-03`, `PR-VIS-02` | per-function [screen load](../GLOSSARY.md#ts-scr-03-screen-load): lines, tokens and distinct names, for V5, C8 and D5. `uv run docs/plans/maintainability/tools/screenload.py --out tmp/screenload.json` |
 
 ---
 

@@ -90,7 +90,7 @@ None reached even a medium correlation.
 Cyclomatic complexity is the worst candidate tested.
 
 Length hurts most once a function scrolls, and a few functions carry most of that cost.
-[Screen load](GLOSSARY.md#screen-load) charges each name held, and multiplies the charge per screen past the first.
+[Screen load](GLOSSARY.md#ts-scr-03-screen-load) charges each name held, and multiplies the charge per screen past the first.
 
 | Tree | Functions | Past one screen | Share of screen load |
 |---|---|---|---|
