@@ -1,123 +1,68 @@
 # tools
 
-The scripts that produced every number in [../README.md](../README.md), [../scorecard.md](../scorecard.md) and [../scorecard-webapp.md](../scorecard-webapp.md).
+**Status:** the working set for [OPEN_QUESTIONS.md](../OPEN_QUESTIONS.md). **Before you start:** `uv` and `bun`.
 
-They live here rather than in `.claude/skills/lsp/` so this work can be re-run without editing the skill.
+Five scripts remain here: two call-graph extractors, the diff between them, and the graph reviewable-ui renders.
+Every other script that produced a number in [../README.md](../README.md) is archived in git, listed under [Archived scripts](#archived-scripts).
 
-`lsp.py` is a fork, taken on 2026-09-11; the original is still where it was.
+| Script | Purpose |
+|---|---|
+| `graphdata.py` | emits `reviewable-ui/public/graph.json`, run by `make reviewable-data`. Its shape is mirrored in `reviewable-ui/src/lib/types.ts` |
+| `treesitter.py` | extractor that parses source directly and resolves calls by name, in any language with a grammar |
+| `callgraph.py` | extractor that asks a language server for `callHierarchy`, resolving calls by type |
+| `lsp.py` | the amended fork of the lsp skill's indexer that `callgraph.py` imports. Its docstring lists every amendment and the failure each one was hiding |
+| `compare.py` | edge-by-edge diff of an LSP extraction against a tree-sitter extraction of the same code |
+
+---
 
 ## Prerequisites
 
 ```bash
-uv tool install pyright                       # Python: the language server
-bun add -g typescript-language-server typescript   # TypeScript: the language server
+uv tool install pyright                            # Python language server
+bun add -g typescript-language-server typescript   # TypeScript language server
 ```
 
-`sqlite-muninn` needs a Python built with loadable SQLite extensions.
-The system Python on macOS is not, so pass `--python 3.13` to select a `uv`-managed build.
-
-## The pipeline
+## Extract and compare
 
 ```bash
-# 1. Extract a call graph. The LSP root must be the project root, not the
-#    directory being walked, or the server resolves fewer imports.
-uv run --with "lsprotocol>=2024.0.0" tools/callgraph.py \
+# LSP extraction. The LSP root must be the project root, or the server resolves fewer imports.
+uv run --with "lsprotocol>=2024.0.0" docs/plans/maintainability/tools/callgraph.py \
     src/pytest_xharness_eval tmp/conductance/callgraph.json --lang python --ext .py
 
-uv run --with "lsprotocol>=2024.0.0" tools/callgraph.py \
-    report-ui/src tmp/conductance/callgraph-ts.json \
-    --lang typescript --ext .ts,.tsx --root report-ui --exclude "__tests__,.test."
+# tree-sitter extraction of the same code.
+uv run docs/plans/maintainability/tools/treesitter.py src/pytest_xharness_eval --out tmp/conductance/ts-py.json
 
-# 2. Conductance and leverage, per layer and per file.
-uv run tools/score.py --graph tmp/conductance/callgraph.json
-
-# 3. Leiden communities, PageRank, declared against discovered.
-uv run --python 3.13 tools/communities.py --graph tmp/conductance/callgraph.json
-
-# 4. The two-part code in bits, for five candidate partitions.
-uv run --python 3.13 tools/mdl.py --graph tmp/conductance/callgraph.json
+# Where the two disagree.
+uv run docs/plans/maintainability/tools/compare.py tmp/conductance/callgraph.json tmp/conductance/ts-py.json
 ```
 
-`--prefix ts-` on steps 2 to 4 keeps the TypeScript outputs from overwriting the Python ones.
+For TypeScript, pass `--lang typescript --ext .ts,.tsx --root report-ui --exclude "__tests__,.test."` to `callgraph.py`, and `--exclude "__tests__,.test."` to `treesitter.py`.
 
-## What each file is
+## Traps that cost real time
 
-| Script | Purpose |
-|---|---|
-| `lsp.py` | the amended fork of the skill's indexer. Its docstring lists every amendment and the failure each one was hiding. Read that before changing anything here |
-| `callgraph.py` | the standalone extractor used for the documents. Imports `lsp.py` as a library |
-| `score.py` | conductance per cluster, leverage per name |
-| `communities.py` | `graph_leiden` and `graph_pagerank` through `sqlite-muninn`, and the residual comparison |
-| `mdl.py` | `L(H) + L(D given H)` in bits, and bits saved per boundary |
-| `bench.py` | three conductance implementations timed against each other at increasing graph size |
-| `validate_muninn.py` | cross-checks our Python conductance against `sqlite-muninn` 0.6.0 |
-| `weighted.py` | whether counting call sites rather than distinct callers changes the verdict |
-| `treesitter.py` | the second extractor: parses source directly, resolves by name, carries the full boundary nesting |
-| `levels.py` | conductance at every boundary level, language through class |
-| `compare.py` | edge-by-edge diff of two extractions of the same code |
-
-## Two ways to run the indexer
-
-`lsp.py` keeps the skill's full CLI and adds call edges.
-
-```bash
-# Build an index with real call edges. Note --lsp-root.
-uv run --with "lsprotocol>=2024.0.0" tools/lsp.py index \
-    --root src/pytest_xharness_eval --lsp-root . \
-    --db-path tmp/conductance/fork_index.db --pretty
-
-# Leverage, both readings, straight out of SQL.
-sqlite3 -column tmp/conductance/fork_index.db \
-  "SELECT name, callers, call_sites FROM leverage WHERE callers > 0 ORDER BY callers DESC LIMIT 10;"
-```
-
-On `src/pytest_xharness_eval` that reports **380 call edges and 515 call sites**.
-That matches `callgraph.py` exactly.
-If it reports zero edges it now says so loudly rather than exiting 0.
-
-## Three traps that cost real time
-
-- **`--lsp-root` is not `--root`.** Point the server below the project root and pyright resolves fewer imports: 189 edges instead of 380. `typescript-language-server` refuses to start at all, because it resolves `tsserver` from the workspace root.
+- **`--lsp-root` is not `--root`.** Point pyright below the project root and it finds 189 edges instead of 380. `typescript-language-server` refuses to start at all.
 - **Every document must stay open.** A server asked about a position in a closed file answers with an empty result rather than an error.
-- **A parameter is a definition on the same line as its function.** Matching a caller by line alone returns the parameter, which silently halves the edge count.
+- **A parameter is a definition on the same line as its function.** Matching a caller by line alone returns the parameter.
+- **A call with a receiver matches only a method.** Without that rule in `treesitter.py`, every `d.get(k)` resolved to a module-level `get`.
+- **Resolution never crosses a language.** A Python `of` and a TypeScript `of` share a name and nothing else.
 
-## What this cannot see
+Every graph these produce is a lower bound.
+Read [What we still cannot extract](../README.md#what-we-still-cannot-extract) before trusting a score.
 
-Dynamic dispatch, decorator and plugin registries, and anything reached by reflection.
-Treat every graph these produce as a lower bound rather than a census.
-Read [../README.md](../README.md), "What we still cannot extract", before trusting a score.
+## Archived scripts
 
-## The second extractor: tree-sitter
-
-`treesitter.py` parses source directly, with no language server.
+The rearrangement sweeps, benchmarks and per-metric scorers were one-off instruments for documents now consolidated into [../README.md](../README.md).
 
 ```bash
-uv run tools/treesitter.py src/pytest_xharness_eval --out tmp/conductance/ts-py.json
-uv run tools/treesitter.py report-ui/src --out tmp/conductance/ts-ui.json --exclude "__tests__,.test."
-uv run tools/treesitter.py src/pytest_xharness_eval report-ui/src --out tmp/conductance/ts-all.json --exclude "__tests__,.test."
-
-uv run tools/levels.py tmp/conductance/ts-all.json     # conductance at every boundary
-uv run tools/compare.py tmp/conductance/callgraph.json tmp/conductance/ts-py.json
+git ls-tree --name-only 4e4be2e docs/plans/maintainability/tools/      # the full set
+git checkout 4e4be2e -- docs/plans/maintainability/tools/<script>.py    # restore one
 ```
 
-It resolves calls by **name**, not by type, so it trades precision for reach.
-Two rules keep the guessing honest.
-
-- A call with a receiver (`x.foo()`) may only match a definition inside a class, and a bare call only one outside. Without that rule every `d.get(k)` on a dict resolved to the module-level `get` in `harness/base.py`.
-- Resolution never crosses a language. A Python `of` and a TypeScript `of` share a name and nothing else.
-
-## The two extractors disagree, and that is the finding
-
-Measured on this repository, LSP against tree-sitter:
-
-| | LSP edges | tree-sitter edges | agreed | tree-sitter precision | tree-sitter recall |
-|---|---|---|---|---|---|
-| Python | 380 | 225 | 207 | 92% | 54% |
-| TypeScript | 247 | 542 | 246 | 45% | **100%** |
-
-On Python the LSP wins, because pyright resolves types and tree-sitter cannot.
-On TypeScript tree-sitter finds every edge the LSP found, and 296 more.
-That is the first real explanation for the 57% orphan rate in `scorecard-webapp.md`.
-
-Neither is ground truth and they agree on about half the union.
-Use both and read the disagreement.
+| Script | Produced |
+|---|---|
+| `score.py`, `levels.py` | conductance and leverage per layer, and inside share per boundary level |
+| `communities.py`, `mdl.py` | Leiden communities, and the two-part code in bits per boundary |
+| `bench.py`, `validate_muninn.py`, `weighted.py` | the `sqlite-muninn` cross-check, timing, and call-site weighting |
+| `experiment.py`, `sweep.py`, `capacity.py` | the rearrangement sweeps and modularity margins |
+| `classic.py`, `halstead.py` | the blind-spots table for cyclomatic, cognitive and Halstead metrics |
+| `tsview.py` | the tree-sitter file view, superseded by reviewable-ui |

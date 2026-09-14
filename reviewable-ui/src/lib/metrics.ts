@@ -182,10 +182,9 @@ export interface PhiScale {
  *
  * This used to be `phi < 0.25 ? "low" : phi < 0.5 ? "mid" : "high"`. Those two
  * numbers were invented. docs/plans/maintainability/README.md is unusually
- * explicit that they cannot exist -- "No thresholds exist", "There is no
- * threshold separating a good score from a bad one", "Anyone who tells you a
- * phi of 0.4 is a problem is making that up", "Conductance has no fixed
- * threshold and never will", "gate on the delta and never on the value" -- so a
+ * explicit that they cannot exist -- "no threshold exists", "anyone who says a
+ * `phi` of 0.4 is a problem is making it up", "Conductance has no fixed
+ * threshold", "gate on the delta and never on the value" -- so a
  * tool built on that research grading a cluster against 0.25 contradicted its
  * own premise in the one place a reader would believe it.
  *

@@ -339,7 +339,7 @@ Duplication raises `Q` and lowers it.
                           Q        leveraged names
 baseline               0.589            16
 duplicate shared code  0.624            13      Q up, leverage down: gamed
-Leiden re-filing       0.667            16      Q up, leverage same: honest
+Leiden re-filing       0.667            16      Q up, leverage same: real
 ```
 
 Duplication converts one name with three callers into three names with one caller each.

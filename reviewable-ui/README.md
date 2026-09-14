@@ -35,9 +35,9 @@ it inherits that.
 ## What it is not
 
 The bands are **uncalibrated**. Nothing in this work has derived a threshold that
-separates good from bad, and the experiments in
-[experiments.md](../docs/plans/maintainability/experiments.md) show every candidate
-objective has a degenerate optimum. Colour shows a distribution; it does not grade
+separates good from bad, and the experiments recorded in
+[the maintainability README](../docs/plans/maintainability/README.md) show every
+candidate objective has a degenerate optimum. Colour shows a distribution; it does not grade
 one.
 
 ## Layout
