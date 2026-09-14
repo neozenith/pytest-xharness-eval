@@ -1,0 +1,139 @@
+{
+ "elements": [
+  {
+   "data": {
+    "id": "f:greet.py",
+    "label": "greet.py",
+    "category": "Compute"
+   }
+  },
+  {
+   "data": {
+    "id": "f:main.py",
+    "label": "main.py",
+    "category": "Storage"
+   }
+  },
+  {
+   "data": {
+    "id": "unresolved",
+    "label": "calls with no match",
+    "category": "Security"
+   }
+  },
+  {
+   "data": {
+    "id": "docs/plans/maintainability/examples/hello-python/greet.py:4",
+    "label": "greet()\nline 4",
+    "parent": "f:greet.py"
+   }
+  },
+  {
+   "data": {
+    "id": "docs/plans/maintainability/examples/hello-python/greet.py:12",
+    "label": "Greeter.__init__()\nline 12",
+    "parent": "f:greet.py"
+   }
+  },
+  {
+   "data": {
+    "id": "docs/plans/maintainability/examples/hello-python/greet.py:15",
+    "label": "Greeter.greet()\nline 15",
+    "parent": "f:greet.py"
+   }
+  },
+  {
+   "data": {
+    "id": "docs/plans/maintainability/examples/hello-python/main.py:6",
+    "label": "main()\nline 6",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-python/main.py:6",
+    "target": "docs/plans/maintainability/examples/hello-python/greet.py:15",
+    "label": "1 site"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-python/main.py:6",
+    "target": "docs/plans/maintainability/examples/hello-python/greet.py:4",
+    "label": "2 sites"
+   }
+  },
+  {
+   "data": {
+    "id": "u:main.py:8:print",
+    "label": "print\nline 8",
+    "parent": "unresolved"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-python/main.py:6",
+    "target": "u:main.py:8:print",
+    "label": "no match",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "u:main.py:9:print",
+    "label": "print\nline 9",
+    "parent": "unresolved"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-python/main.py:6",
+    "target": "u:main.py:9:print",
+    "label": "no match",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "u:main.py:10:print",
+    "label": "print\nline 10",
+    "parent": "unresolved"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-python/main.py:6",
+    "target": "u:main.py:10:print",
+    "label": "no match",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "u:main.py:10:Greeter",
+    "label": "Greeter\nline 10",
+    "parent": "unresolved"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-python/main.py:6",
+    "target": "u:main.py:10:Greeter",
+    "label": "no match",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "u:main.py:14:main",
+    "label": "main()\nline 14, no caller",
+    "parent": "unresolved"
+   }
+  }
+ ],
+ "layout": {
+  "name": "dagre",
+  "rankDir": "LR"
+ },
+ "height": 460
+}

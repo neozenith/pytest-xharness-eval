@@ -1,0 +1,487 @@
+{
+ "elements": [
+  {
+   "data": {
+    "id": "f:App.tsx",
+    "label": "App.tsx",
+    "category": "Storage"
+   }
+  },
+  {
+   "data": {
+    "id": "p0",
+    "label": "push\nGreeting\nstack: Greeting\nreference at App.tsx:8:8",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "id": "p1",
+    "label": "push\n%E\nstack: Greeting %E",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p0",
+    "target": "p1"
+   }
+  },
+  {
+   "data": {
+    "id": "p2",
+    "label": "scope x13",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p1",
+    "target": "p2"
+   }
+  },
+  {
+   "data": {
+    "id": "p3",
+    "label": "pop x2\n%E Greeting\nstack: empty",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p2",
+    "target": "p3"
+   }
+  },
+  {
+   "data": {
+    "id": "p4",
+    "label": "push x2\nGreeting %E\nstack: Greeting %E",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p3",
+    "target": "p4"
+   }
+  },
+  {
+   "data": {
+    "id": "p5",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p4",
+    "target": "p5"
+   }
+  },
+  {
+   "data": {
+    "id": "p6",
+    "label": "push x2\nGreeting %RelM\nstack: Greeting %E Greeting %RelM",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p5",
+    "target": "p6"
+   }
+  },
+  {
+   "data": {
+    "id": "p7",
+    "label": "scope x2",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p6",
+    "target": "p7"
+   }
+  },
+  {
+   "data": {
+    "id": "p8",
+    "label": "pop\n%RelM\nstack: Greeting %E Greeting",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p7",
+    "target": "p8"
+   }
+  },
+  {
+   "data": {
+    "id": "p9",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p8",
+    "target": "p9"
+   }
+  },
+  {
+   "data": {
+    "id": "p10",
+    "label": "push\nsrc\nstack: Greeting %E Greeting src",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p9",
+    "target": "p10"
+   }
+  },
+  {
+   "data": {
+    "id": "p11",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p10",
+    "target": "p11"
+   }
+  },
+  {
+   "data": {
+    "id": "p12",
+    "label": "push\nhello-react\nstack: Greeting %E Greeting src hello-react",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p11",
+    "target": "p12"
+   }
+  },
+  {
+   "data": {
+    "id": "p13",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p12",
+    "target": "p13"
+   }
+  },
+  {
+   "data": {
+    "id": "p14",
+    "label": "push\nexamples\nstack: Greeting %E Greeting src hello-react examples",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p13",
+    "target": "p14"
+   }
+  },
+  {
+   "data": {
+    "id": "p15",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p14",
+    "target": "p15"
+   }
+  },
+  {
+   "data": {
+    "id": "p16",
+    "label": "push\nmaintainability\nstack: ... %E Greeting src hello-react examples maintainability",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p15",
+    "target": "p16"
+   }
+  },
+  {
+   "data": {
+    "id": "p17",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p16",
+    "target": "p17"
+   }
+  },
+  {
+   "data": {
+    "id": "p18",
+    "label": "push\nplans\nstack: ... Greeting src hello-react examples maintainability plans",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p17",
+    "target": "p18"
+   }
+  },
+  {
+   "data": {
+    "id": "p19",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p18",
+    "target": "p19"
+   }
+  },
+  {
+   "data": {
+    "id": "p20",
+    "label": "push\ndocs\nstack: ... src hello-react examples maintainability plans docs",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p19",
+    "target": "p20"
+   }
+  },
+  {
+   "data": {
+    "id": "p21",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p20",
+    "target": "p21"
+   }
+  },
+  {
+   "data": {
+    "id": "p22",
+    "label": "push\npytest-xharness-eval\nstack: ... hello-react examples maintainability plans docs pytest-xharness-eval",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p21",
+    "target": "p22"
+   }
+  },
+  {
+   "data": {
+    "id": "p23",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p22",
+    "target": "p23"
+   }
+  },
+  {
+   "data": {
+    "id": "p24",
+    "label": "push\nplay\nstack: ... examples maintainability plans docs pytest-xharness-eval play",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p23",
+    "target": "p24"
+   }
+  },
+  {
+   "data": {
+    "id": "p25",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p24",
+    "target": "p25"
+   }
+  },
+  {
+   "data": {
+    "id": "p26",
+    "label": "push\njpeak\nstack: ... maintainability plans docs pytest-xharness-eval play jpeak",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p25",
+    "target": "p26"
+   }
+  },
+  {
+   "data": {
+    "id": "p27",
+    "label": "scope",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p26",
+    "target": "p27"
+   }
+  },
+  {
+   "data": {
+    "id": "p28",
+    "label": "push x2\nUsers %M\nstack: ... docs pytest-xharness-eval play jpeak Users %M",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p27",
+    "target": "p28"
+   }
+  },
+  {
+   "data": {
+    "id": "root",
+    "label": "shared root",
+    "category": "Networking"
+   }
+  },
+  {
+   "data": {
+    "id": "p29",
+    "label": "root\nstack: ... docs pytest-xharness-eval play jpeak Users %M",
+    "parent": "root"
+   }
+  },
+  {
+   "data": {
+    "source": "p28",
+    "target": "p29"
+   }
+  },
+  {
+   "data": {
+    "id": "f:Greeting.tsx",
+    "label": "Greeting.tsx",
+    "category": "Compute"
+   }
+  },
+  {
+   "data": {
+    "id": "p30",
+    "label": "pop x12\n%M Users jpeak play pytest-xharness-eval docs plans maintain\nstack: Greeting %E",
+    "parent": "f:Greeting.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p29",
+    "target": "p30"
+   }
+  },
+  {
+   "data": {
+    "id": "p31",
+    "label": "scope x3",
+    "parent": "f:Greeting.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "p30",
+    "target": "p31"
+   }
+  },
+  {
+   "data": {
+    "id": "p32",
+    "label": "pop\n%E\nstack: Greeting",
+    "parent": "f:Greeting.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p31",
+    "target": "p32"
+   }
+  },
+  {
+   "data": {
+    "id": "p33",
+    "label": "pop\nGreeting\nstack: empty\ndefinition at Greeting.tsx:3:17",
+    "parent": "f:Greeting.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p32",
+    "target": "p33"
+   }
+  }
+ ],
+ "layout": {
+  "name": "dagre",
+  "rankDir": "TB",
+  "rankSep": 22,
+  "nodeSep": 20
+ },
+ "height": 1972
+}

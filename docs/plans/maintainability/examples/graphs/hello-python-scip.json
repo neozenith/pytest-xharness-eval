@@ -1,0 +1,616 @@
+{
+ "elements": [
+  {
+   "data": {
+    "id": "sym",
+    "label": "symbols defined here",
+    "category": "Integration"
+   }
+  },
+  {
+   "data": {
+    "id": "ext",
+    "label": "symbols from elsewhere",
+    "category": "General"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:0",
+    "label": "greet.py 1:1, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/__init__:",
+    "label": "`hello-python.greet`/__init__:",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:0",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/__init__:"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:1",
+    "label": "greet.py 4:5, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/greet().",
+    "label": "`hello-python.greet`/greet().",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:1",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/greet()."
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:2",
+    "label": "greet.py 4:25, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python python-stdlib 3.11 builtins/str#",
+    "label": "builtins/str#",
+    "parent": "ext",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:2",
+    "target": "s:scip-python python python-stdlib 3.11 builtins/str#",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:3",
+    "label": "greet.py 4:11, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/greet().(name)",
+    "label": "`hello-python.greet`/greet().(name)",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:3",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/greet().(name)"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:4",
+    "label": "greet.py 4:17, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:4",
+    "target": "s:scip-python python python-stdlib 3.11 builtins/str#",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:5",
+    "label": "greet.py 6:22, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:5",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/greet().(name)",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:6",
+    "label": "greet.py 9:7, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#",
+    "label": "`hello-python.greet`/Greeter#",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:6",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:7",
+    "label": "greet.py 12:9, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#__init__().",
+    "label": "`hello-python.greet`/Greeter#__init__().",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:7",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#__init__()."
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:8",
+    "label": "greet.py 12:18, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#__init__().(self)",
+    "label": "...o-python.greet`/Greeter#__init__().(self)",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:8",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#__init__().(self)"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:9",
+    "label": "greet.py 12:24, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#__init__().(prefix)",
+    "label": "...python.greet`/Greeter#__init__().(prefix)",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:9",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#__init__().(prefix)"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:10",
+    "label": "greet.py 12:32, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:10",
+    "target": "s:scip-python python python-stdlib 3.11 builtins/str#",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:11",
+    "label": "greet.py 13:9, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:11",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#__init__().(self)",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:12",
+    "label": "greet.py 13:14, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#prefix.",
+    "label": "`hello-python.greet`/Greeter#prefix.",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:12",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#prefix."
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:13",
+    "label": "greet.py 13:23, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:13",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#__init__().(prefix)",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:14",
+    "label": "greet.py 15:9, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#greet().",
+    "label": "`hello-python.greet`/Greeter#greet().",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:14",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#greet()."
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:15",
+    "label": "greet.py 15:35, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:15",
+    "target": "s:scip-python python python-stdlib 3.11 builtins/str#",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:16",
+    "label": "greet.py 15:15, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#greet().(self)",
+    "label": "`hello-python.greet`/Greeter#greet().(self)",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:16",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#greet().(self)"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:17",
+    "label": "greet.py 15:21, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#greet().(name)",
+    "label": "`hello-python.greet`/Greeter#greet().(name)",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:17",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#greet().(name)"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:18",
+    "label": "greet.py 15:27, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:18",
+    "target": "s:scip-python python python-stdlib 3.11 builtins/str#",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:19",
+    "label": "greet.py 17:19, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:19",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#greet().(self)",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:20",
+    "label": "greet.py 17:24, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:20",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#prefix.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:greet.py:21",
+    "label": "greet.py 17:34, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:greet.py:21",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#greet().(name)",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:0",
+    "label": "main.py 1:1, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.main`/__init__:",
+    "label": "`hello-python.main`/__init__:",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:0",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.main`/__init__:"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:1",
+    "label": "main.py 3:6, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 greet/__init__:",
+    "label": "greet/__init__:",
+    "parent": "ext",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:1",
+    "target": "s:scip-python python hello-python 0.0.0 greet/__init__:",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:2",
+    "label": "main.py 3:19, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:2",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:3",
+    "label": "main.py 3:28, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:3",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/greet().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:4",
+    "label": "main.py 6:5, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.main`/main().",
+    "label": "`hello-python.main`/main().",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:4",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.main`/main()."
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:5",
+    "label": "main.py 8:5, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python python-stdlib 3.11 builtins/print().",
+    "label": "builtins/print().",
+    "parent": "ext",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:5",
+    "target": "s:scip-python python python-stdlib 3.11 builtins/print().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:6",
+    "label": "main.py 8:11, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:6",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/greet().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:7",
+    "label": "main.py 9:5, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:7",
+    "target": "s:scip-python python python-stdlib 3.11 builtins/print().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:8",
+    "label": "main.py 9:11, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:8",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/greet().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:9",
+    "label": "main.py 10:5, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:9",
+    "target": "s:scip-python python python-stdlib 3.11 builtins/print().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:10",
+    "label": "main.py 10:11, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:10",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:11",
+    "label": "main.py 10:28, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:11",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.greet`/Greeter#greet().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:12",
+    "label": "main.py 13:4, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.main`/",
+    "label": "`hello-python.main`/",
+    "parent": "ext",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:12",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.main`/",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:main.py:13",
+    "label": "main.py 14:5, ReadAccess"
+   }
+  },
+  {
+   "data": {
+    "source": "o:main.py:13",
+    "target": "s:scip-python python hello-python 0.0.0 `docs.plans.maintainability.examples.hello-python.main`/main().",
+    "style": "dashed"
+   }
+  }
+ ],
+ "layout": {
+  "name": "dagre",
+  "rankDir": "LR",
+  "rankSep": 260,
+  "nodeSep": 3
+ },
+ "height": 880
+}

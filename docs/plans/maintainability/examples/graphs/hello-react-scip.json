@@ -1,0 +1,505 @@
+{
+ "elements": [
+  {
+   "data": {
+    "id": "sym",
+    "label": "symbols defined here",
+    "category": "Integration"
+   }
+  },
+  {
+   "data": {
+    "id": "ext",
+    "label": "symbols from elsewhere",
+    "category": "General"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:0",
+    "label": "src/Greeting.tsx 1:1, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/",
+    "label": "src/`Greeting.tsx`/",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:0",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:1",
+    "label": "src/Greeting.tsx 3:17, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Greeting().",
+    "label": "src/`Greeting.tsx`/Greeting().",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:1",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Greeting()."
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:2",
+    "label": "src/Greeting.tsx 3:28, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:src/Greeting.tsx#local 1",
+    "label": "local 1 in src/Greeting.tsx",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:2",
+    "target": "s:src/Greeting.tsx#local 1"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:3",
+    "label": "src/Greeting.tsx 3:28, roles 0"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Greeting().(`{ name }`)typeLiteral2:name.",
+    "label": "...Greeting().(`{ name }`)typeLiteral2:name.",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:3",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Greeting().(`{ name }`)typeLiteral2:name.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:4",
+    "label": "src/Greeting.tsx 3:38, Definition"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:4",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Greeting().(`{ name }`)typeLiteral2:name."
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:5",
+    "label": "src/Greeting.tsx 4:11, roles 0"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-typescript npm @types/react 19.3.0 `index.d.ts`/React/JSX/IntrinsicElements#h1.",
+    "label": "`index.d.ts`/React/JSX/IntrinsicElements#h1.",
+    "parent": "ext",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:5",
+    "target": "s:scip-typescript npm @types/react 19.3.0 `index.d.ts`/React/JSX/IntrinsicElements#h1.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:6",
+    "label": "src/Greeting.tsx 4:22, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:6",
+    "target": "s:src/Greeting.tsx#local 1",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:7",
+    "label": "src/Greeting.tsx 4:30, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:7",
+    "target": "s:scip-typescript npm @types/react 19.3.0 `index.d.ts`/React/JSX/IntrinsicElements#h1.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:8",
+    "label": "src/Greeting.tsx 7:14, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Shout.",
+    "label": "src/`Greeting.tsx`/Shout.",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:8",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Shout."
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:9",
+    "label": "src/Greeting.tsx 7:25, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:src/Greeting.tsx#local 6",
+    "label": "local 6 in src/Greeting.tsx",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:9",
+    "target": "s:src/Greeting.tsx#local 6"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:10",
+    "label": "src/Greeting.tsx 7:25, roles 0"
+   }
+  },
+  {
+   "data": {
+    "id": "s:src/Greeting.tsx#local 8",
+    "label": "local 8 in src/Greeting.tsx",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:10",
+    "target": "s:src/Greeting.tsx#local 8",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:11",
+    "label": "src/Greeting.tsx 7:35, Definition"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:11",
+    "target": "s:src/Greeting.tsx#local 8"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:12",
+    "label": "src/Greeting.tsx 8:4, roles 0"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-typescript npm @types/react 19.3.0 `index.d.ts`/React/JSX/IntrinsicElements#strong.",
+    "label": "...d.ts`/React/JSX/IntrinsicElements#strong.",
+    "parent": "ext",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:12",
+    "target": "s:scip-typescript npm @types/react 19.3.0 `index.d.ts`/React/JSX/IntrinsicElements#strong.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:13",
+    "label": "src/Greeting.tsx 8:12, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:13",
+    "target": "s:src/Greeting.tsx#local 6",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:14",
+    "label": "src/Greeting.tsx 8:17, roles 0"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-typescript npm typescript 5.9.3 lib/`lib.es5.d.ts`/String#toUpperCase().",
+    "label": "lib/`lib.es5.d.ts`/String#toUpperCase().",
+    "parent": "ext",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:14",
+    "target": "s:scip-typescript npm typescript 5.9.3 lib/`lib.es5.d.ts`/String#toUpperCase().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/Greeting.tsx:15",
+    "label": "src/Greeting.tsx 8:33, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/Greeting.tsx:15",
+    "target": "s:scip-typescript npm @types/react 19.3.0 `index.d.ts`/React/JSX/IntrinsicElements#strong.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:0",
+    "label": "src/App.tsx 1:1, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-typescript npm hello-react 0.0.0 src/`App.tsx`/",
+    "label": "src/`App.tsx`/",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:0",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`App.tsx`/"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:1",
+    "label": "src/App.tsx 3:10, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:1",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Greeting().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:2",
+    "label": "src/App.tsx 3:20, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:2",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Shout.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:3",
+    "label": "src/App.tsx 3:33, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:3",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:4",
+    "label": "src/App.tsx 5:25, Definition"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-typescript npm hello-react 0.0.0 src/`App.tsx`/App().",
+    "label": "src/`App.tsx`/App().",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:4",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`App.tsx`/App()."
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:5",
+    "label": "src/App.tsx 7:6, roles 0"
+   }
+  },
+  {
+   "data": {
+    "id": "s:scip-typescript npm @types/react 19.3.0 `index.d.ts`/React/JSX/IntrinsicElements#div.",
+    "label": "...ex.d.ts`/React/JSX/IntrinsicElements#div.",
+    "parent": "ext",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:5",
+    "target": "s:scip-typescript npm @types/react 19.3.0 `index.d.ts`/React/JSX/IntrinsicElements#div.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:6",
+    "label": "src/App.tsx 8:8, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:6",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Greeting().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:7",
+    "label": "src/App.tsx 8:17, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:7",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Greeting().(`{ name }`)typeLiteral2:name.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:8",
+    "label": "src/App.tsx 9:8, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:8",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Greeting().",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:9",
+    "label": "src/App.tsx 9:17, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:9",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Greeting().(`{ name }`)typeLiteral2:name.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:10",
+    "label": "src/App.tsx 10:8, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:10",
+    "target": "s:scip-typescript npm hello-react 0.0.0 src/`Greeting.tsx`/Shout.",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:11",
+    "label": "src/App.tsx 10:14, roles 0"
+   }
+  },
+  {
+   "data": {
+    "id": "s:src/App.tsx#local 3",
+    "label": "local 3 in src/App.tsx",
+    "parent": "sym",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:11",
+    "target": "s:src/App.tsx#local 3",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "o:src/App.tsx:12",
+    "label": "src/App.tsx 11:7, roles 0"
+   }
+  },
+  {
+   "data": {
+    "source": "o:src/App.tsx:12",
+    "target": "s:scip-typescript npm @types/react 19.3.0 `index.d.ts`/React/JSX/IntrinsicElements#div.",
+    "style": "dashed"
+   }
+  }
+ ],
+ "layout": {
+  "name": "dagre",
+  "rankDir": "LR",
+  "rankSep": 260,
+  "nodeSep": 3
+ },
+ "height": 720
+}

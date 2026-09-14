@@ -2,6 +2,7 @@
 
 Two toy codebases, run through every provider in [ast-data-models.md](../ast-data-models.md) that has a runnable extractor.
 The point is not the codebases, it is what each provider hands back for the same fifty-three lines.
+[hello-python.md](hello-python.md) and [hello-react.md](hello-react.md) draw every result below as a graph.
 
 Both fixtures are built around one deliberate trap.
 A name is declared twice, and one call site can only be resolved by knowing a type or walking a scope.

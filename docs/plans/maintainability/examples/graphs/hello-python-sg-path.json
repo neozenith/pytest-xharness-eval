@@ -1,0 +1,351 @@
+{
+ "elements": [
+  {
+   "data": {
+    "id": "f:main.py",
+    "label": "main.py",
+    "category": "Storage"
+   }
+  },
+  {
+   "data": {
+    "id": "p0",
+    "label": "push\ngreet\nstack: greet\nreference at main.py:10:28",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "id": "p1",
+    "label": "push\n.\nstack: greet .",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p0",
+    "target": "p1"
+   }
+  },
+  {
+   "data": {
+    "id": "p2",
+    "label": "scope",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "source": "p1",
+    "target": "p2"
+   }
+  },
+  {
+   "data": {
+    "id": "p3",
+    "label": "push scoped\n()\nstack: greet . ()",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p2",
+    "target": "p3"
+   }
+  },
+  {
+   "data": {
+    "id": "p4",
+    "label": "push\nGreeter\nstack: greet . () Greeter",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p3",
+    "target": "p4"
+   }
+  },
+  {
+   "data": {
+    "id": "p5",
+    "label": "scope x11",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "source": "p4",
+    "target": "p5"
+   }
+  },
+  {
+   "data": {
+    "id": "p6",
+    "label": "pop\nGreeter\nstack: greet . ()",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p5",
+    "target": "p6"
+   }
+  },
+  {
+   "data": {
+    "id": "p7",
+    "label": "scope x2",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "source": "p6",
+    "target": "p7"
+   }
+  },
+  {
+   "data": {
+    "id": "p8",
+    "label": "push\nGreeter\nstack: greet . () Greeter",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p7",
+    "target": "p8"
+   }
+  },
+  {
+   "data": {
+    "id": "p9",
+    "label": "scope",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "source": "p8",
+    "target": "p9"
+   }
+  },
+  {
+   "data": {
+    "id": "p10",
+    "label": "push\n.\nstack: greet . () Greeter .",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p9",
+    "target": "p10"
+   }
+  },
+  {
+   "data": {
+    "id": "p11",
+    "label": "scope",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "source": "p10",
+    "target": "p11"
+   }
+  },
+  {
+   "data": {
+    "id": "p12",
+    "label": "push\ngreet\nstack: greet . () Greeter . greet",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p11",
+    "target": "p12"
+   }
+  },
+  {
+   "data": {
+    "id": "p13",
+    "label": "scope",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "source": "p12",
+    "target": "p13"
+   }
+  },
+  {
+   "data": {
+    "id": "root",
+    "label": "shared root",
+    "category": "Networking"
+   }
+  },
+  {
+   "data": {
+    "id": "p14",
+    "label": "root\nstack: greet . () Greeter . greet",
+    "parent": "root"
+   }
+  },
+  {
+   "data": {
+    "source": "p13",
+    "target": "p14"
+   }
+  },
+  {
+   "data": {
+    "id": "f:greet.py",
+    "label": "greet.py",
+    "category": "Compute"
+   }
+  },
+  {
+   "data": {
+    "id": "p15",
+    "label": "pop x2\ngreet .\nstack: greet . () Greeter",
+    "parent": "f:greet.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p14",
+    "target": "p15"
+   }
+  },
+  {
+   "data": {
+    "id": "p16",
+    "label": "scope x3",
+    "parent": "f:greet.py"
+   }
+  },
+  {
+   "data": {
+    "source": "p15",
+    "target": "p16"
+   }
+  },
+  {
+   "data": {
+    "id": "p17",
+    "label": "pop\nGreeter\nstack: greet . ()",
+    "parent": "f:greet.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p16",
+    "target": "p17"
+   }
+  },
+  {
+   "data": {
+    "id": "p18",
+    "label": "pop scoped\n()\nstack: greet .",
+    "parent": "f:greet.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p17",
+    "target": "p18"
+   }
+  },
+  {
+   "data": {
+    "id": "p19",
+    "label": "drop scopes\nstack: greet .",
+    "parent": "f:greet.py"
+   }
+  },
+  {
+   "data": {
+    "source": "p18",
+    "target": "p19"
+   }
+  },
+  {
+   "data": {
+    "id": "p20",
+    "label": "scope",
+    "parent": "f:greet.py"
+   }
+  },
+  {
+   "data": {
+    "source": "p19",
+    "target": "p20"
+   }
+  },
+  {
+   "data": {
+    "id": "p21",
+    "label": "pop\n.\nstack: greet",
+    "parent": "f:greet.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p20",
+    "target": "p21"
+   }
+  },
+  {
+   "data": {
+    "id": "p22",
+    "label": "scope x2",
+    "parent": "f:greet.py"
+   }
+  },
+  {
+   "data": {
+    "source": "p21",
+    "target": "p22"
+   }
+  },
+  {
+   "data": {
+    "id": "p23",
+    "label": "pop\ngreet\nstack: empty\ndefinition at greet.py:15:9",
+    "parent": "f:greet.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "p22",
+    "target": "p23"
+   }
+  }
+ ],
+ "layout": {
+  "name": "dagre",
+  "rankDir": "TB",
+  "rankSep": 22,
+  "nodeSep": 20
+ },
+ "height": 1392
+}

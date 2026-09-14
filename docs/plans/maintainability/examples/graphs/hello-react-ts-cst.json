@@ -1,0 +1,514 @@
+{
+ "elements": [
+  {
+   "data": {
+    "id": "n0",
+    "label": "program"
+   }
+  },
+  {
+   "data": {
+    "id": "n1",
+    "label": "comment\n/** Two uses of one comp",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n0",
+    "target": "n1"
+   }
+  },
+  {
+   "data": {
+    "id": "n3",
+    "label": "import_statement"
+   }
+  },
+  {
+   "data": {
+    "source": "n0",
+    "target": "n3"
+   }
+  },
+  {
+   "data": {
+    "id": "n5",
+    "label": "import_clause"
+   }
+  },
+  {
+   "data": {
+    "source": "n3",
+    "target": "n5"
+   }
+  },
+  {
+   "data": {
+    "id": "n7",
+    "label": "named_imports"
+   }
+  },
+  {
+   "data": {
+    "source": "n5",
+    "target": "n7"
+   }
+  },
+  {
+   "data": {
+    "id": "n9",
+    "label": "import_specifier"
+   }
+  },
+  {
+   "data": {
+    "source": "n7",
+    "target": "n9"
+   }
+  },
+  {
+   "data": {
+    "id": "n11",
+    "label": "identifier\nGreeting",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n9",
+    "target": "n11"
+   }
+  },
+  {
+   "data": {
+    "id": "n13",
+    "label": "import_specifier"
+   }
+  },
+  {
+   "data": {
+    "source": "n7",
+    "target": "n13"
+   }
+  },
+  {
+   "data": {
+    "id": "n15",
+    "label": "identifier\nShout",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n13",
+    "target": "n15"
+   }
+  },
+  {
+   "data": {
+    "id": "n17",
+    "label": "string"
+   }
+  },
+  {
+   "data": {
+    "source": "n3",
+    "target": "n17"
+   }
+  },
+  {
+   "data": {
+    "id": "n19",
+    "label": "string_fragment\n./Greeting",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n17",
+    "target": "n19"
+   }
+  },
+  {
+   "data": {
+    "id": "n21",
+    "label": "export_statement"
+   }
+  },
+  {
+   "data": {
+    "source": "n0",
+    "target": "n21"
+   }
+  },
+  {
+   "data": {
+    "id": "n23",
+    "label": "function_declaration"
+   }
+  },
+  {
+   "data": {
+    "source": "n21",
+    "target": "n23"
+   }
+  },
+  {
+   "data": {
+    "id": "n25",
+    "label": "identifier\nApp",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n23",
+    "target": "n25"
+   }
+  },
+  {
+   "data": {
+    "id": "n27",
+    "label": "formal_parameters\n()",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n23",
+    "target": "n27"
+   }
+  },
+  {
+   "data": {
+    "id": "n29",
+    "label": "statement_block"
+   }
+  },
+  {
+   "data": {
+    "source": "n23",
+    "target": "n29"
+   }
+  },
+  {
+   "data": {
+    "id": "n31",
+    "label": "return_statement"
+   }
+  },
+  {
+   "data": {
+    "source": "n29",
+    "target": "n31"
+   }
+  },
+  {
+   "data": {
+    "id": "n33",
+    "label": "parenthesized_expression"
+   }
+  },
+  {
+   "data": {
+    "source": "n31",
+    "target": "n33"
+   }
+  },
+  {
+   "data": {
+    "id": "n35",
+    "label": "jsx_element"
+   }
+  },
+  {
+   "data": {
+    "source": "n33",
+    "target": "n35"
+   }
+  },
+  {
+   "data": {
+    "id": "n37",
+    "label": "jsx_opening_element"
+   }
+  },
+  {
+   "data": {
+    "source": "n35",
+    "target": "n37"
+   }
+  },
+  {
+   "data": {
+    "id": "n39",
+    "label": "identifier\ndiv",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n37",
+    "target": "n39"
+   }
+  },
+  {
+   "data": {
+    "id": "n41",
+    "label": "jsx_self_closing_element"
+   }
+  },
+  {
+   "data": {
+    "source": "n35",
+    "target": "n41"
+   }
+  },
+  {
+   "data": {
+    "id": "n43",
+    "label": "identifier\nGreeting",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n41",
+    "target": "n43"
+   }
+  },
+  {
+   "data": {
+    "id": "n45",
+    "label": "jsx_attribute"
+   }
+  },
+  {
+   "data": {
+    "source": "n41",
+    "target": "n45"
+   }
+  },
+  {
+   "data": {
+    "id": "n47",
+    "label": "property_identifier\nname",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n45",
+    "target": "n47"
+   }
+  },
+  {
+   "data": {
+    "id": "n49",
+    "label": "string"
+   }
+  },
+  {
+   "data": {
+    "source": "n45",
+    "target": "n49"
+   }
+  },
+  {
+   "data": {
+    "id": "n51",
+    "label": "string_fragment\nworld",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n49",
+    "target": "n51"
+   }
+  },
+  {
+   "data": {
+    "id": "n53",
+    "label": "jsx_self_closing_element"
+   }
+  },
+  {
+   "data": {
+    "source": "n35",
+    "target": "n53"
+   }
+  },
+  {
+   "data": {
+    "id": "n55",
+    "label": "identifier\nGreeting",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n53",
+    "target": "n55"
+   }
+  },
+  {
+   "data": {
+    "id": "n57",
+    "label": "jsx_attribute"
+   }
+  },
+  {
+   "data": {
+    "source": "n53",
+    "target": "n57"
+   }
+  },
+  {
+   "data": {
+    "id": "n59",
+    "label": "property_identifier\nname",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n57",
+    "target": "n59"
+   }
+  },
+  {
+   "data": {
+    "id": "n61",
+    "label": "string"
+   }
+  },
+  {
+   "data": {
+    "source": "n57",
+    "target": "n61"
+   }
+  },
+  {
+   "data": {
+    "id": "n63",
+    "label": "string_fragment\nagain",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n61",
+    "target": "n63"
+   }
+  },
+  {
+   "data": {
+    "id": "n65",
+    "label": "jsx_self_closing_element"
+   }
+  },
+  {
+   "data": {
+    "source": "n35",
+    "target": "n65"
+   }
+  },
+  {
+   "data": {
+    "id": "n67",
+    "label": "identifier\nShout",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n65",
+    "target": "n67"
+   }
+  },
+  {
+   "data": {
+    "id": "n69",
+    "label": "jsx_attribute"
+   }
+  },
+  {
+   "data": {
+    "source": "n65",
+    "target": "n69"
+   }
+  },
+  {
+   "data": {
+    "id": "n71",
+    "label": "property_identifier\nname",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n69",
+    "target": "n71"
+   }
+  },
+  {
+   "data": {
+    "id": "n73",
+    "label": "string"
+   }
+  },
+  {
+   "data": {
+    "source": "n69",
+    "target": "n73"
+   }
+  },
+  {
+   "data": {
+    "id": "n75",
+    "label": "string_fragment\nworld",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n73",
+    "target": "n75"
+   }
+  },
+  {
+   "data": {
+    "id": "n77",
+    "label": "jsx_closing_element"
+   }
+  },
+  {
+   "data": {
+    "source": "n35",
+    "target": "n77"
+   }
+  },
+  {
+   "data": {
+    "id": "n79",
+    "label": "identifier\ndiv",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "n77",
+    "target": "n79"
+   }
+  }
+ ],
+ "layout": {
+  "name": "dagre",
+  "rankDir": "LR",
+  "rankSep": 36,
+  "nodeSep": 6
+ },
+ "height": 520
+}

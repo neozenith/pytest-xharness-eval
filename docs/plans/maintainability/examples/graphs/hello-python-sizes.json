@@ -1,0 +1,129 @@
+{
+ "data": [
+  {
+   "type": "bar",
+   "orientation": "h",
+   "name": "tree-sitter",
+   "y": [
+    "tree-sitter: syntax nodes",
+    "tree-sitter: named syntax nodes"
+   ],
+   "x": [
+    220,
+    159
+   ],
+   "text": [
+    "220",
+    "159"
+   ],
+   "textposition": "outside",
+   "cliponaxis": false
+  },
+  {
+   "type": "bar",
+   "orientation": "h",
+   "name": "treesitter.py",
+   "y": [
+    "treesitter.py: callables",
+    "treesitter.py: call edges"
+   ],
+   "x": [
+    4,
+    2
+   ],
+   "text": [
+    "4",
+    "2"
+   ],
+   "textposition": "outside",
+   "cliponaxis": false
+  },
+  {
+   "type": "bar",
+   "orientation": "h",
+   "name": "stack-graphs",
+   "y": [
+    "stack-graphs: graph nodes",
+    "stack-graphs: graph edges"
+   ],
+   "x": [
+    521,
+    292
+   ],
+   "text": [
+    "521",
+    "292"
+   ],
+   "textposition": "outside",
+   "cliponaxis": false
+  },
+  {
+   "type": "bar",
+   "orientation": "h",
+   "name": "LSP",
+   "y": [
+    "LSP: document symbols",
+    "LSP: call hierarchy items",
+    "LSP: incoming calls",
+    "LSP: fromRanges"
+   ],
+   "x": [
+    9,
+    4,
+    3,
+    5
+   ],
+   "text": [
+    "9",
+    "4",
+    "3",
+    "5"
+   ],
+   "textposition": "outside",
+   "cliponaxis": false
+  },
+  {
+   "type": "bar",
+   "orientation": "h",
+   "name": "SCIP",
+   "y": [
+    "SCIP: occurrences",
+    "SCIP: symbols defined here",
+    "SCIP: symbols from elsewhere"
+   ],
+   "x": [
+    36,
+    13,
+    4
+   ],
+   "text": [
+    "36",
+    "13",
+    "4"
+   ],
+   "textposition": "outside",
+   "cliponaxis": false
+  }
+ ],
+ "height": 502,
+ "layout": {
+  "xaxis": {
+   "type": "log",
+   "title": {
+    "text": "count, log scale"
+   }
+  },
+  "yaxis": {
+   "autorange": "reversed",
+   "automargin": true
+  },
+  "barmode": "overlay",
+  "showlegend": false,
+  "margin": {
+   "l": 10,
+   "r": 60,
+   "t": 10,
+   "b": 50
+  }
+ }
+}

@@ -1,0 +1,125 @@
+{
+ "elements": [
+  {
+   "data": {
+    "id": "f:Greeting.tsx",
+    "label": "Greeting.tsx",
+    "category": "Compute"
+   }
+  },
+  {
+   "data": {
+    "id": "f:App.tsx",
+    "label": "App.tsx",
+    "category": "Storage"
+   }
+  },
+  {
+   "data": {
+    "id": "unresolved",
+    "label": "calls with no match",
+    "category": "Security"
+   }
+  },
+  {
+   "data": {
+    "id": "docs/plans/maintainability/examples/hello-react/src/App.tsx:5",
+    "label": "App()\nline 5",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "id": "docs/plans/maintainability/examples/hello-react/src/Greeting.tsx:3",
+    "label": "Greeting()\nline 3",
+    "parent": "f:Greeting.tsx"
+   }
+  },
+  {
+   "data": {
+    "id": "docs/plans/maintainability/examples/hello-react/src/Greeting.tsx:7",
+    "label": "Shout()\nline 7",
+    "parent": "f:Greeting.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-react/src/App.tsx:5",
+    "target": "docs/plans/maintainability/examples/hello-react/src/Greeting.tsx:3",
+    "label": "2 sites"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-react/src/App.tsx:5",
+    "target": "docs/plans/maintainability/examples/hello-react/src/Greeting.tsx:7",
+    "label": "1 site"
+   }
+  },
+  {
+   "data": {
+    "id": "u:Greeting.tsx:4:h1",
+    "label": "h1\nline 4",
+    "parent": "unresolved"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-react/src/Greeting.tsx:3",
+    "target": "u:Greeting.tsx:4:h1",
+    "label": "no match",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "u:Greeting.tsx:8:strong",
+    "label": "strong\nline 8",
+    "parent": "unresolved"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-react/src/Greeting.tsx:7",
+    "target": "u:Greeting.tsx:8:strong",
+    "label": "no match",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "u:Greeting.tsx:8:toUpperCase",
+    "label": "toUpperCase\nline 8",
+    "parent": "unresolved"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-react/src/Greeting.tsx:7",
+    "target": "u:Greeting.tsx:8:toUpperCase",
+    "label": "no match",
+    "style": "dashed"
+   }
+  },
+  {
+   "data": {
+    "id": "u:App.tsx:7:div",
+    "label": "div\nline 7",
+    "parent": "unresolved"
+   }
+  },
+  {
+   "data": {
+    "source": "docs/plans/maintainability/examples/hello-react/src/App.tsx:5",
+    "target": "u:App.tsx:7:div",
+    "label": "no match",
+    "style": "dashed"
+   }
+  }
+ ],
+ "layout": {
+  "name": "dagre",
+  "rankDir": "LR"
+ },
+ "height": 460
+}
