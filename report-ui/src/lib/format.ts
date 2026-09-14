@@ -18,6 +18,32 @@ export const secs = (ms: number | null | undefined): string => (ms == null ? NON
 export const short = (id: string | null | undefined): string => (id ? id.slice(0, 8) : NONE);
 
 /**
+ * How many characters of these ids it takes to tell them apart — never fewer than `short`
+ * prints, never more than the ids are long.
+ *
+ * A Claude session id is random, so eight characters separate any two. A Codex one is
+ * time-ordered: every thread a run forks is minted in the same second as the run, so all of
+ * them begin with the same eight characters and `short` prints two different threads
+ * identically. Where several ids are shown together and the reader has to tell which is
+ * which, this is the width to print them at.
+ */
+export function distinguishingWidth(ids: string[], min = 8): number {
+  const uniq = [...new Set(ids.filter(Boolean))];
+  if (uniq.length < 2) return min;
+  // Only ever a whole group of the id: `01a05fee-57c7` reads as an id, `01a05fee-5` reads
+  // as a typo, and the two threads diverge one character into the second group.
+  const widths = new Set<number>([min]);
+  for (const id of uniq) {
+    for (let i = 0; i < id.length; i++) if (id[i] === "-") widths.add(i);
+    widths.add(id.length);
+  }
+  const tellsApart = (n: number) => new Set(uniq.map((id) => id.slice(0, n))).size === uniq.length;
+  const candidates = [...widths].sort((a, b) => a - b).filter((n) => n >= min);
+  // Ids that never diverge cannot be told apart: print them whole rather than not at all.
+  return candidates.find(tellsApart) ?? Math.max(min, ...uniq.map((id) => id.length));
+}
+
+/**
  * A fixed number of decimals, always. `fmt` drops a trailing zero, so `86.8` and `32.80` sat one
  * glyph apart and the decimal points walked — which is the whole of what a right-aligned
  * tabular-numeral column buys you. `SessionTable` and `SessionSummaryTable` print the same

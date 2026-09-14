@@ -3,46 +3,56 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Register the plugin from the rootdir conftest.py
+description: the rootdir conftest is the one place pytest honours `pytest_plugins` for an uninstalled package
 tags: [packaging]
 status: superseded
 accepted_on: 2026-08-21
 last_changed_on: 2026-08-21
-relates_to:
-  - { relation: superseded_by, target: ADR-0014 }
+provenance: "Verified on 2026-08-21: `addopts = -p <package>.plugin` works under `python -m pytest`, which puts the cwd on `sys.path`. It fails under the bare `pytest` console script with `ImportError: No module named '<package>'`."
+enforced_in:
+  - nothing while superseded; the concern now lives in pyproject.toml's `pytest11` entry point (ADR 0014)
 generated: { by: human:neozenith, at: 2026-08-21T00:00:00Z }
 ---
 
-# 0009: Register the plugin from the rootdir conftest.py
+> **Lens**: Test a registration mechanism under both `python -m pytest` and the console script before adopting it; the two differ in what is importable.
 
-Status: superseded by
-[0014](0014-register-through-the-pytest11-entry-point.md) on 2026-08-21, the day it
-was accepted. Replaced an earlier draft that chose `addopts = -p <package>.plugin`.
-Kept because its Lens still applies to any uninstalled plugin.
+## Relates to
 
-## Context
+- Superseded by [ADR-0014](0014-register-through-the-pytest11-entry-point.md) (superseded on 2026-08-21, the day it was accepted; kept because its Lens still applies to any uninstalled plugin)
 
-A `conftest.py` inside the plugin's own package directory cannot hook collection
-under `skills/*/evals/`: conftest hooks apply only to their own subtree.
-`addopts = -p <package>.plugin` was tried next. Verified 2026-08-21, it is
-invocation-dependent for an uninstalled package: `python -m pytest` puts the cwd
-on `sys.path` and it works; the bare `pytest` console script does not, and it
-fails with `ImportError: No module named '<package>'`.
+## Problem
+
+### Symptom
+
+A `conftest.py` inside the plugin's own package directory cannot hook collection under `skills/*/evals/`: conftest hooks apply only to their own subtree.
+
+### Pain point
+
+`addopts = -p <package>.plugin` was tried next.
+Verified 2026-08-21, it is invocation-dependent for an uninstalled package.
+`python -m pytest` puts the cwd on `sys.path`, so it works.
+The bare `pytest` console script does not, and it fails with `ImportError: No module named '<package>'`.
 
 ## Decision
 
-A one-line repository-root `conftest.py` declares
-`pytest_plugins = ["<package>.plugin"]`. Importing that file is what puts the root
-on `sys.path`, so it works under every invocation, and since pytest 7 the rootdir
-conftest is the one place `pytest_plugins` is honoured. The eventual target is a
-PyPI package registering the same module through a `pytest11` entry point.
+### The lens
+
+- **Given**: Since pytest 7 the rootdir conftest is the one place `pytest_plugins` is honoured.
+- **We prefer**: A one-line repository-root `conftest.py` declaring `pytest_plugins = ["<package>.plugin"]`, over `addopts = -p <package>.plugin` or a conftest inside the package directory.
+- **Because**: Importing that file is what puts the root on `sys.path`, so it works under every invocation.
+- **Unless**: the plugin ships as an installed distribution, in which case a `pytest11` entry point registers the same module.
+
+### In practice
+
+- The eventual target is a PyPI package registering the same module through a `pytest11` entry point.
 
 ## Consequences
 
-One file lives outside the plugin package. The package keeps an importable,
-package-shaped layout so extraction later is a packaging change. `pytest.ini` carries only a comment
-explaining why it does not register the plugin.
+### Pros
 
-## Lens
+- The package keeps an importable, package-shaped layout so extraction later is a packaging change.
 
-Test a registration mechanism under both `python -m pytest` and the console
-script before adopting it; the two differ in what is importable.
+### Cons
+
+- One file lives outside the plugin package.
+- `pytest.ini` carries only a comment explaining why it does not register the plugin.

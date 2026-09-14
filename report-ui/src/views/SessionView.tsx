@@ -16,12 +16,13 @@ import {
   type SkillCoverage,
   type TurnView,
 } from "@/components/panels";
-import { RecordViewToggle, TurnRawRecords, turnId, type RecordView } from "@/components/records";
+import { RecordViewToggle, SubagentRawRecords, TurnRawRecords, subagentLineId, turnId, type RecordView } from "@/components/records";
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { useLog } from "@/hooks/useLog";
 import { useResult } from "@/hooks/useResult";
+import { useSubagentLogs } from "@/hooks/useSubagentLogs";
 import { fmt, pct, secs, usd, when, windowLabel } from "@/lib/format";
-import { navigateOnClick, replaceRoute, type SessionRoute } from "@/lib/route";
+import { navigateOnClick, replaceRoute, type SessionRoute, type ThreadRef } from "@/lib/route";
 import type { AxisMode } from "@/lib/series";
 import type { Cell } from "@/lib/types";
 
@@ -35,9 +36,11 @@ export function SessionView({ cell, route }: Props) {
   const { sessionId } = route;
   const { result, error } = useResult(cell);
   const { lines } = useLog(cell);
+  const subLogs = useSubagentLogs(cell, result);
   const [axis, setAxis] = useState<AxisMode>(route.axis ?? "turn");
   const [view, setView] = useState<TurnView>(route.turnView ?? "summary");
   const [openTurn, setOpenTurn] = useState<number | null>(route.turn);
+  const [openSubTurn, setOpenSubTurn] = useState<ThreadRef | null>(route.subTurn);
   const [recordView, setRecordView] = useState<RecordView>(route.rec ?? "nice");
 
   // The hash is the source of truth for every control here: when the route changes, the
@@ -46,26 +49,12 @@ export function SessionView({ cell, route }: Props) {
   if (seen !== route) {
     setSeen(route);
     setOpenTurn(route.turn);
+    setOpenSubTurn(route.subTurn);
     // an absent param means its default: the hash alone reproduces the whole state
     setView(route.turnView ?? "summary");
     setAxis(route.axis ?? "turn");
     setRecordView(route.rec ?? "nice");
   }
-
-  // Every control writes the whole route back, so a copied URL reproduces exactly this state.
-  const write = (next: Partial<SessionRoute>) => {
-    replaceRoute({
-      view: "session",
-      sessionId,
-      turn: openTurn,
-      turnView: view,
-      axis: axis === "turn" ? null : axis,
-      rec: recordView === "nice" ? null : recordView,
-      line: null,
-      theme: route.theme,
-      ...next,
-    });
-  };
 
   // Scroll to the opened turn once its details row (and the log it renders) exist.
   useEffect(() => {
@@ -75,21 +64,55 @@ export function SessionView({ cell, route }: Props) {
   }, [openTurn, route.line, cell, lines, result]);
 
   // `line=` targets one record: its owning turn opens (derived, not stored), and once the
-  // card exists it is scrolled to and flashed.
+  // card exists it is scrolled to and flashed. `subline=` does the same for one spawned
+  // thread's transcript, against that thread's own ledger and its own line numbering.
   const lineOwner = useMemo(
     () => (route.line != null && result ? (result.calls.find((k) => (k.records ?? []).includes(route.line!))?.n ?? null) : null),
     [route.line, result],
   );
+  const subLineOwner = useMemo((): ThreadRef | null => {
+    const ref = route.subLine;
+    if (!ref || !result) return null;
+    const sub = (result.subagents ?? []).find((s) => s.id === ref.id);
+    const call = sub?.calls.find((k) => (k.records ?? []).includes(ref.n));
+    return call ? { id: ref.id, n: call.n } : null;
+  }, [route.subLine, result]);
   const shownTurn = openTurn ?? lineOwner;
+  const shownSubTurn = openSubTurn ?? subLineOwner;
+
+  /*
+   * Every control writes the whole route back, so a copied URL reproduces exactly this state.
+   * What it writes is the *shown* turn, not the stored one: arriving on `?line=17` opens turn 4
+   * without ever setting `openTurn`, and writing the stored null there would have collapsed the
+   * turn the reader is looking at the moment they touched any other control. `line`/`subline`
+   * themselves are dropped — the flash is a one-shot, and the turn they opened is now carried
+   * by `turn`/`subturn` instead. Declared below the two derivations it reads.
+   */
+  const write = (next: Partial<SessionRoute>) => {
+    replaceRoute({
+      view: "session",
+      sessionId,
+      turn: shownTurn,
+      turnView: view,
+      axis: axis === "turn" ? null : axis,
+      rec: recordView === "nice" ? null : recordView,
+      line: null,
+      subTurn: shownSubTurn,
+      subLine: null,
+      theme: route.theme,
+      ...next,
+    });
+  };
+  const target = route.subLine ? subagentLineId(route.subLine.id, route.subLine.n) : route.line != null ? `L${route.line}` : null;
   useEffect(() => {
-    if (route.line == null || !result || !lines) return;
-    const el = document.getElementById(`L${route.line}`);
+    if (target == null || !result || !lines) return;
+    const el = document.getElementById(target);
     if (!el) return;
     if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center" });
     el.classList.add("xh-target");
     const timer = setTimeout(() => el.classList.remove("xh-target"), 2400);
     return () => clearTimeout(timer);
-  }, [route.line, result, lines, shownTurn]);
+  }, [target, result, lines, subLogs, shownTurn, shownSubTurn]);
 
   if (!cell) {
     return (
@@ -152,6 +175,10 @@ export function SessionView({ cell, route }: Props) {
     setOpenTurn(n);
     write({ turn: n });
   };
+  const changeOpenSubTurn = (ref: ThreadRef | null) => {
+    setOpenSubTurn(ref);
+    write({ subTurn: ref });
+  };
   const changeAxis = (a: AxisMode) => {
     setAxis(a);
     write({ axis: a === "turn" ? null : a });
@@ -197,6 +224,9 @@ export function SessionView({ cell, route }: Props) {
 
       {result ? (
         <>
+          {/* The spawned threads\u2019 transcripts load once the result names them; an e2e settle()
+              must wait for that second pass the way it waits for the result itself. */}
+          {result.subagents?.length && !subLogs ? <span hidden data-xh-loading="subagents" /> : null}
           <ChartAxisToggle mode={axis} onChange={changeAxis} />
           <View style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(560px, 100%), 1fr))", gap: 16 }}>
             <View style={{ gridColumn: "1 / -1" }}>
@@ -238,10 +268,25 @@ export function SessionView({ cell, route }: Props) {
             onViewChange={changeView}
             openTurn={shownTurn}
             onOpenTurn={changeOpenTurn}
+            openSubTurn={shownSubTurn}
+            onOpenSubTurn={changeOpenSubTurn}
             recordView={recordView}
             onRecordViewChange={changeRecordView}
             toolbarExtra={<RecordViewToggle view={recordView} onChange={changeRecordView} />}
             renderTurnRecords={(call) => <TurnRawRecords result={result} call={call} lines={lines} view={recordView} />}
+            renderSubagentRecords={(sub, call) => {
+              const log = subLogs?.get(sub.id);
+              /*
+               * Three states, kept apart: still loading, loaded, and loaded-but-there-is-nothing.
+               * A transcript that was captured and is genuinely empty keeps its `[]` and reports
+               * "no records attributed to this turn"; only a thread with no transcript at all
+               * falls through to `lines={null}` and says why.
+               */
+              const missing = !subLogs ? "loading this thread\u2019s transcript\u2026" : (log?.error ?? "no transcript captured for this thread");
+              return (
+                <SubagentRawRecords result={result} sub={sub} call={call} lines={log && !log.error ? log.lines : null} error={missing} view={recordView} />
+              );
+            }}
           />
           <FinalMessagePanel text={result.final_text} />
         </>

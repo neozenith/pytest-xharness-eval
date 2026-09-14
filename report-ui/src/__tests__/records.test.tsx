@@ -1,10 +1,10 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { renderT as render } from "./render";
 import { RecordCard } from "@/components/records/RecordCard";
-import { TurnRawRecords, ctxFor, ranges, turnId } from "@/components/records/TurnRawRecords";
+import { SubagentRawRecords, TurnRawRecords, ctxFor, ranges, subagentLineId, turnId } from "@/components/records/TurnRawRecords";
 import { RecordViewToggle } from "@/components/records/RecordViewToggle";
 import { CATEGORIES, KINDS, NICE, categoryOf, classify, isCallRecord } from "@/lib/records";
-import type { Call, RunResult } from "@/lib/types";
+import type { Call, RunResult, Subagent } from "@/lib/types";
 
 // ---- record shapes, as the two harnesses write them ----------------------------------
 
@@ -219,6 +219,91 @@ test("TurnRawRecords says so when there is no log or no records", () => {
   expect(container.textContent).toContain("no captured log beside this result");
   const { container: c2 } = render(<TurnRawRecords result={result} call={call(3, [], 1, 0.1)} lines={["{}"]} view="nice" />);
   expect(c2.textContent).toContain("no records attributed to this turn");
+});
+
+test("SubagentRawRecords renders a spawned thread's own transcript, anchored so it cannot collide with the primary's", () => {
+  const sub = {
+    agent: "Explore",
+    id: "agent-7f3",
+    log: "subagents/agent-7f3.jsonl",
+    parent_turn: 2,
+    turns: 1,
+    description: "",
+    usage: {},
+    calls: [call(1, [1, 2], 21_357, 2.14)],
+  } as unknown as Subagent;
+  const lines = [JSON.stringify(claudeUser("go")), JSON.stringify(toolUse)];
+  const { container } = render(<SubagentRawRecords result={result} sub={sub} call={sub.calls[0]!} lines={lines} view="nice" />);
+  const root = container.querySelector('[data-el="SubagentRawRecords"]') as HTMLElement;
+  // the block is the thread's own turn, not the session's: `<agent>/t1`, never `<session>/t1`
+  expect(root.id).toBe("agent-7f3/t1");
+  // the window is the run's — both threads were measured against the same one
+  expect(root.querySelector("h4")?.textContent).toContain("lines 1-2 · context 2.1% of 1M");
+  expect([...root.querySelectorAll('.rec[data-el="RecordCard"]')].map((c) => c.id)).toEqual(["agent-7f3/L1", "agent-7f3/L2"]);
+  expect(subagentLineId("agent-7f3", 2)).toBe("agent-7f3/L2");
+});
+
+test("a spawned thread's line 1 and the session's line 1 are two cards on the same page", () => {
+  const sub = {
+    agent: "Explore",
+    id: "agent-7f3",
+    log: "subagents/agent-7f3.jsonl",
+    parent_turn: 1,
+    turns: 1,
+    description: "",
+    usage: {},
+    calls: [call(1, [1], 21_357, 2.14)],
+  } as unknown as Subagent;
+  const lines = [JSON.stringify(claudeUser("go"))];
+  // both threads rendered into one container, which is the only place the ids can collide
+  const { container } = render(
+    <>
+      <TurnRawRecords result={result} call={call(1, [1], 35_599, 3.56)} lines={lines} view="nice" />
+      <SubagentRawRecords result={result} sub={sub} call={sub.calls[0]!} lines={lines} view="nice" />
+    </>,
+  );
+  expect(container.querySelectorAll(".rec[data-el='RecordCard']")).toHaveLength(2);
+  // two cards, two distinct ids: without the anchor both would be `L1` and the deeplink to
+  // either would land on whichever the DOM happened to reach first
+  expect(container.querySelectorAll("#L1")).toHaveLength(1);
+  expect(container.querySelectorAll("[id='agent-7f3/L1']")).toHaveLength(1);
+});
+
+test("SubagentRawRecords says why there is no transcript rather than showing empty cards", () => {
+  const sub = { agent: "Explore", id: "agent-7f3", calls: [call(1, [1], 10, 1)] } as unknown as Subagent;
+  const { container } = render(
+    <SubagentRawRecords result={result} sub={sub} call={sub.calls[0]!} lines={null} error="no transcript captured for this thread" view="nice" />,
+  );
+  expect(container.textContent).toContain("no transcript captured for this thread");
+  expect(container.querySelectorAll('.rec[data-el="RecordCard"]')).toHaveLength(0);
+});
+
+test("a forked rollout's session_meta reads out the spawn that made it, not [object Object]", () => {
+  const forked = {
+    type: "session_meta",
+    payload: {
+      id: "01a05fee-57c7",
+      cwd: "/w",
+      cli_version: "0.151.0",
+      // an object here, where a primary rollout carries the bare word `exec`
+      source: { subagent: { thread_spawn: { parent_thread_id: "01a05fee-0073", depth: 1, agent_path: "/root/internal_research", agent_nickname: "Turing" } } },
+    },
+  };
+  const { container } = render(<RecordCard harness="codex" lineNo={1} raw={JSON.stringify(forked)} view="nice" />);
+  const text = container.textContent ?? "";
+  expect(text).not.toContain("[object Object]");
+  // the three things the spawn actually says: what it is, as what, and off whom
+  expect(text).toContain("subagent thread_spawn (depth 1)");
+  expect(text).toContain("Turing");
+  expect(text).toContain("/root/internal_research");
+  expect(text).toContain("01a05fee-0073");
+
+  // a primary rollout is unchanged: the bare word, and none of the spawn rows
+  const primary = { type: "session_meta", payload: { id: "01a05fee-0073", cwd: "/w", source: "exec" } };
+  const { container: c2 } = render(<RecordCard harness="codex" lineNo={1} raw={JSON.stringify(primary)} view="nice" />);
+  expect(c2.textContent).toContain("exec");
+  expect(c2.textContent).not.toContain("thread_spawn");
+  expect(c2.textContent).not.toContain("agent path");
 });
 
 test("RecordViewToggle reports the chosen view", () => {

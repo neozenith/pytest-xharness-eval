@@ -3,58 +3,67 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Results travel on the test report, and cells group by harness
+description: user_properties is the one channel xdist serialises, so per-cell records ride on it
 tags: [collection, storage]
 status: accepted
 accepted_on: 2026-08-21
 last_changed_on: 2026-08-21
-relates_to:
-  - { relation: extends, target: ADR-0008 }
+provenance: Under `pytest-xdist` the workers run the cells and the controller renders the output. Records kept on the per-process `config.stash` therefore never arrived. Verbose status words fell back to plain `PASSED`, and `report.json` was empty.
+enforced_in:
+  - src/pytest_xharness_eval/plugin/results.py
+  - src/pytest_xharness_eval/plugin/summary.py
+  - src/pytest_xharness_eval/plugin/collect.py
 generated: { by: human:neozenith, at: 2026-08-21T00:00:00Z }
 ---
 
-# 0016: Results travel on the test report, and cells group by harness
+> **Lens**: State that must reach the controller rides on the report; state that stays in a process belongs to that process only.
 
-Status: accepted, 2026-08-21. Refines
-[0008](0008-evals-are-eval-prefixed-modules.md).
+## Relates to
 
-## Context
+- Extends [ADR-0008](0008-evals-are-eval-prefixed-modules.md) (the record's status line says "refines")
 
-Per-cell records (verdict, USD, tokens, duration) were kept on `config.stash`,
-which is per process. Under `pytest-xdist` the workers run the cells and the
-controller renders the output, so the verbose status words fell back to plain
-`PASSED` and `report.json` was empty. The cells themselves were already isolated:
-each has its own workspace, its own private `CODEX_HOME`, and its own minted
-Claude session id.
+## Problem
 
-A second rule was missing: pytest's collection convention applies the `test_`
-prefix to files and functions alike, and this plugin pivoted that prefix to
-`eval_` for files only. Any function name was accepted.
+### Symptom
+
+Per-cell records (verdict, USD, tokens, duration) were kept on `config.stash`, which is per process.
+Under `pytest-xdist` the workers run the cells and the controller renders the output.
+The verbose status words therefore fell back to plain `PASSED`, and `report.json` was empty.
+
+### Pain point
+
+The cells themselves were already isolated: each has its own workspace, its own private `CODEX_HOME`, and its own minted Claude session id.
+A second rule was also missing.
+pytest's collection convention applies the `test_` prefix to files and functions alike, and this plugin pivoted that prefix to `eval_` for files only.
+Any function name was accepted.
 
 ## Decision
 
-The worker copies a cell's record onto its call `TestReport.user_properties`, the
-one channel xdist serialises to the controller. The controller reads it there for
-the status word and accumulates it in `pytest_runtest_logreport` for the summary and
-`report.json`. The single-process path is the same code.
+### The lens
 
-Every cell carries `xdist_group=<harness>`, so `-n 2 --dist loadgroup` runs the
-harnesses in parallel and each harness's cells serially. That respects per-provider
-rate limits and avoids concurrent copies of Codex credentials refreshing against
-each other, a risk not yet measured.
+- **Given**: `TestReport.user_properties` is the one channel xdist serialises to the controller.
+- **We prefer**: Copying a cell's record onto its call `TestReport.user_properties`, over keeping it on the per-process `config.stash`.
+- **Because**: The controller can then read it for the status word, and accumulate it for the summary.
+  The single-process path runs the same code.
+- **Unless**: never
 
-`@evalcase` functions must be named `eval_*`; any other name is a `UsageError` at
-collection. The `eval_` prefix is the collection rule for files and functions, as
-`test_` is for pytest.
+### In practice
+
+- The worker copies a cell's record onto its call `TestReport.user_properties`, the one channel xdist serialises to the controller.
+  The controller reads it there for the status word and accumulates it in `pytest_runtest_logreport` for the summary and `report.json`.
+  The single-process path is the same code.
+- Every cell carries `xdist_group=<harness>`, so `-n 2 --dist loadgroup` runs the harnesses in parallel and each harness's cells serially.
+  That respects per-provider rate limits and avoids concurrent copies of Codex credentials refreshing against each other, a risk not yet measured.
+- `@evalcase` functions must be named `eval_*`; any other name is a `UsageError` at collection.
+  The `eval_` prefix is the collection rule for files and functions, as `test_` is for pytest.
 
 ## Consequences
 
-`-v -n N` output is as itemised as a serial run. The pre-run permutation summary is
-not printed under xdist because its controller does not call
-`pytest_report_collectionfinish`; `--collect-only -q` shows the plan instead. Full
-fan-out (`-n 6` without `--dist loadgroup`) is possible but is a deliberate choice,
-not the documented default.
+### Pros
 
-## Lens
+- `-v -n N` output is as itemised as a serial run.
 
-State that must reach the controller rides on the report; state that stays in a
-process belongs to that process only.
+### Cons
+
+- The pre-run permutation summary is not printed under xdist because its controller does not call `pytest_report_collectionfinish`; `--collect-only -q` shows the plan instead.
+- Full fan-out (`-n 6` without `--dist loadgroup`) is possible but is a deliberate choice, not the documented default.

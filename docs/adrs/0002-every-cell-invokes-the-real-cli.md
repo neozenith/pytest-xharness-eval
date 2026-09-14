@@ -3,40 +3,60 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Every eval cell always invokes the real CLI
+description: no replay tier and no --live flag; a cell that did not spawn an agent has measured nothing
 tags: [evidence, harness]
 status: accepted
 accepted_on: 2026-08-20
 last_changed_on: 2026-08-20
+provenance: "Two project rules appeared to conflict: tests never mock, and paid agent runs are never a dependency of the free `ci` target."
+enforced_in:
+  - "src/pytest_xharness_eval/plugin/cell.py (the `pragma: no cover` sits on the paid call only)"
+  - src/pytest_xharness_eval/harness/base.py
+  - CLAUDE.md (the hard boundary forbidding a mocked CLI, subprocess or session log)
 generated: { by: human:neozenith, at: 2026-08-20T00:00:00Z }
 ---
 
-# 0002: Every eval cell always invokes the real CLI
+> **Lens**: Never let a cell report a verdict without a real session log behind it.
+> If a run cannot be real, fail the cell; do not fake it.
 
-Status: accepted, 2026-08-20. Inside this package the boundary is the
-`pragma: no cover` on every function that spawns a CLI
-([0014](0014-register-through-the-pytest11-entry-point.md)).
+## Relates to
 
-## Context
+- See also [ADR-0014](0014-register-through-the-pytest11-entry-point.md) (inside this package the boundary is the `pragma: no cover` on every function that spawns a CLI)
 
-Two project rules appeared to conflict: tests never mock, and paid agent runs are
-never a dependency of the free `ci` target. A record-and-replay tier was the first
-idea for reconciling them.
+## Problem
+
+### Symptom
+
+Two project rules appeared to conflict: tests never mock, and paid agent runs are never a dependency of the free `ci` target.
+
+### Pain point
+
+A record-and-replay tier was the first idea for reconciling them, which would have let a cell report a verdict with no real agent behind it.
 
 ## Decision
 
-There is no replay layer, no recorded-fixture tier, and no `--live` flag. A cell
-always runs the real `claude` or `codex` process and always costs money. The eval
-suite is a declared exception to the `ci` rule, recorded as a carve-out in the
-consuming project's rules. The free `ci` target covers only `test_*.py` unit tests.
+### The lens
+
+- **Given**: A cell's only worthwhile signal is what a real agent CLI actually did.
+- **We prefer**: Always spawning the real `claude` or `codex` process and always paying for it.
+  That is preferred over a replay layer, a recorded-fixture tier, or a `--live` flag.
+- **Because**: The rules reconcile by scoping rather than by recording: unit tests are free and mock-free, evals are paid and mock-free.
+- **Unless**: never
+
+### In practice
+
+- There is no replay layer, no recorded-fixture tier, and no `--live` flag.
+  A cell always runs the real `claude` or `codex` process and always costs money.
+- The eval suite is a declared exception to the `ci` rule, recorded as a carve-out in the consuming project's rules.
+  The free `ci` target covers only `test_*.py` unit tests.
 
 ## Consequences
 
-The only signal the harness produces is real agent behaviour; a cell that did not
-invoke an agent has measured nothing. The rules are reconciled by scoping, not by
-recording: unit tests are free and mock-free, evals are paid and mock-free. Every
-sweep spends money, so the matrix became an explicit spend dial (ADR 0010).
+### Pros
 
-## Lens
+- The only signal the harness produces is real agent behaviour; a cell that did not invoke an agent has measured nothing.
+- The rules are reconciled by scoping, not by recording: unit tests are free and mock-free, evals are paid and mock-free.
 
-Never let a cell report a verdict without a real session log behind it. If a run
-cannot be real, fail the cell; do not fake it.
+### Cons
+
+- Every sweep spends money, so the matrix became an explicit spend dial (ADR 0010).

@@ -195,7 +195,27 @@ def load_table(path: Path = PRICES_PATH, rows: list[str] | None = None) -> dict[
 
 
 def resolve(model: str, table: dict[str, Rates]) -> Rates:
-    """Exact key first, then prefix-tolerant match (``claude-opus-5[1m]`` and the like)."""
+    """Exact key first, then prefix-tolerant match (``claude-opus-5[1m]`` and the like).
+
+    A blank model has no price. ``key.startswith("")`` is true for every row, so an unset
+    model field would otherwise match whichever row happens to be declared first in
+    ``prices.toml`` -- today that is ``claude-opus-5``, the most expensive row, reported as
+    a confident figure with no indication a guess was made. A census over a real corpus of
+    session logs found nineteen that fold to ``model=""`` -- sixteen Claude, three Codex,
+    every one a session that ended or was interrupted before the harness ever named a
+    model -- so this is a shape that occurs, not a hypothetical. It is the definition of
+    the unknown model ADR 0007 and ADR 0030 refuse to price, and it is refused here for
+    that reason.
+
+    There is no upstream filter to lean on: ``price`` below passes whatever ``to_result``
+    folded, blank included, which is why the guard has to live here.
+    """
+    if not model.strip():
+        raise PricingError(
+            "no price row for a blank model: the session log named no model at all "
+            "(a run that ended before its first assistant turn folds this way). Refusing "
+            "to price it as zero, and refusing to guess a row (ADR 0007, ADR 0030)."
+        )
     if model in table:
         return table[model]
     for key, rates in table.items():

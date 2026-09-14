@@ -3,36 +3,52 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Custom verifiers are Python modules beside the case
+description: import is the extension mechanism, so there is no registry, DSL or new file format
 tags: [grading]
 status: accepted
 accepted_on: 2026-08-21
 last_changed_on: 2026-08-21
+provenance: Two alternatives were weighed and rejected. A shell command per verifier is portable, but loses structured detail on failure. Declarative assertions in a manifest only cover checks anticipated when the schema was written.
+enforced_in:
+  - src/pytest_xharness_eval/model/suite.py
+  - src/pytest_xharness_eval/plugin/collect.py
 generated: { by: human:neozenith, at: 2026-08-21T00:00:00Z }
 ---
 
-# 0013: Custom verifiers are Python modules beside the case
+> **Lens**: When extensibility is the goal, prefer the host language's own import mechanism over a plug-in registry.
 
-Status: accepted, 2026-08-21; dynamic import helper not yet built.
+## Problem
 
-## Context
+### Symptom
 
-Skills need checks the plugin did not anticipate. A shell command per verifier is
-portable but loses structured detail on failure. Declarative assertions in a
-manifest only cover checks anticipated when the schema was written.
+Skills need checks the plugin did not anticipate.
+
+### Pain point
+
+A shell command per verifier is portable but loses structured detail on failure.
+Declarative assertions in a manifest only cover checks anticipated when the schema was written.
 
 ## Decision
 
-A verifier is a plain Python callable. It lives in `skills/<skill>/evals/`, is
-versioned with the cases that use it, and is imported by the case module like any
-other code. A verifier that fails to import fails the case loudly.
+### The lens
+
+- **Given**: A case is already an executable Python module (ADR 0008), so it can import.
+- **We prefer**: A plain Python callable imported by the case module, over a shell command per verifier or declarative assertions in a manifest.
+- **Because**: Extensibility then uses a mechanism every Python developer already knows.
+- **Unless**: never
+
+### In practice
+
+- A verifier lives in `skills/<skill>/evals/`, is versioned with the cases that use it, and is imported by the case module like any other code.
+- A verifier that fails to import fails the case loudly.
 
 ## Consequences
 
-Extensibility uses a mechanism every Python developer already knows. No registry,
-no DSL, no new file format. Until a dedicated import helper exists, a case imports
-its verifiers directly.
+### Pros
 
-## Lens
+- Extensibility uses a mechanism every Python developer already knows.
+- No registry, no DSL, no new file format.
 
-When extensibility is the goal, prefer the host language's own import mechanism
-over a plug-in registry.
+### Cons
+
+- Until a dedicated import helper exists, a case imports its verifiers directly.

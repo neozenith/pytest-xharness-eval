@@ -3,36 +3,54 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: RunResult is a stdlib dataclass serialised to JSON
+description: a committed JSON Schema is the parity contract, so the plugin needs no validation library
 tags: [architecture]
 status: accepted
 accepted_on: 2026-08-20
 last_changed_on: 2026-08-20
+provenance: Two adapters produce one record, and without a shared contract their shapes drift and parity becomes an assertion nobody can check.
+enforced_in:
+  - src/pytest_xharness_eval/model/runresult.py
+  - src/pytest_xharness_eval/harness/claude.py
+  - src/pytest_xharness_eval/harness/codex.py
+  - pyproject.toml (the runtime dependency list, held to pytest and the standard library)
 generated: { by: human:neozenith, at: 2026-08-20T00:00:00Z }
 ---
 
-# 0003: RunResult is a stdlib dataclass serialised to JSON
+> **Lens**: Prefer a committed schema over a validation library; a schema is diffable and language-neutral, and it costs nothing at runtime.
 
-Status: accepted, 2026-08-20; JSON Schema file not yet written.
+## Problem
 
-## Context
+### Symptom
 
-Two adapters produce one record. Without a shared contract their shapes drift and
-parity becomes an assertion nobody can check. Pydantic would validate but adds a
-dependency to a harness whose brief is minimal.
+Two adapters produce one record.
+Without a shared contract their shapes drift and parity becomes an assertion nobody can check.
+
+### Pain point
+
+Pydantic would validate but adds a dependency to a harness whose brief is minimal.
 
 ## Decision
 
-`RunResult` is a `dataclasses.dataclass` serialised to flat JSON, with a committed
-`runresult.schema.json` that both adapters validate against.
+### The lens
+
+- **Given**: The harness's brief is minimal, so every runtime dependency has to earn its place.
+- **We prefer**: A `dataclasses.dataclass` serialised to flat JSON with a committed `runresult.schema.json`, over a validation library such as Pydantic.
+- **Because**: A committed schema is diffable and language-neutral, and it costs nothing at runtime.
+- **Unless**: never
+
+### In practice
+
+- `RunResult` is a `dataclasses.dataclass` serialised to flat JSON, with a committed `runresult.schema.json` that both adapters validate against.
 
 ## Consequences
 
-The plugin has no runtime dependency beyond pytest. The schema is the single
-source of truth for parity. Until the schema file ships, parity rests on both
-adapters returning the same dataclass, which the type checker enforces but a
-mismatched JSON artefact would not reveal.
+### Pros
 
-## Lens
+- The plugin has no runtime dependency beyond pytest.
+- The schema is the single source of truth for parity.
 
-Prefer a committed schema over a validation library; a schema is diffable and
-language-neutral, and it costs nothing at runtime.
+### Cons
+
+- Until the schema file ships, parity rests on both adapters returning the same dataclass.
+  The type checker enforces that, but a mismatched JSON artefact would not reveal it.

@@ -72,6 +72,34 @@ test("inline page boots over file:// and binds the captured data", async ({ page
   await settle(page);
   expect(await page.locator("[data-el='RecordCard']").count()).toBeGreaterThan(0);
 
+  /*
+   * A session that spawned parallel threads renders their transcripts too — which is the whole
+   * point of inlining them (emit/page.py): over `file://` there is nothing to fetch, so a band
+   * whose records are missing here is a band with no evidence in it at all. Skipped when the
+   * sweep spawned nothing, since then there is no such session to open.
+   */
+  await page.goto(url, { waitUntil: "load" });
+  await settle(page);
+  /*
+   * Chosen by what the payload actually carries, not by `cell.subagents`: that count is every
+   * thread the run spawned, while `_subagent_logs` deliberately skips one whose `log` is still
+   * the harness's own absolute path (a capture predating ADR 0033's rewrite). Selecting on the
+   * count would fail this spec on a legitimate cache, and name the wrong cause when it did.
+   */
+  const spawner = await page.evaluate(() => {
+    const data = window.__XH_DATA__;
+    const keyed = Object.keys(data?.logs ?? {}).find((k) => k.includes("/"));
+    return keyed ? keyed.slice(0, keyed.lastIndexOf("/")) : null;
+  });
+  if (spawner) {
+    await page.goto(`${url}?session=${spawner}&view=detailed`, { waitUntil: "load" });
+    await settle(page);
+    const cards = page.locator("[data-el='SubagentRawRecords'] [data-el='RecordCard']");
+    expect(await cards.count(), "a spawned thread's transcript records").toBeGreaterThan(0);
+    // ids are agent-qualified, so a thread's line 1 and the session's line 1 are two cards
+    expect(await cards.first().getAttribute("id")).toMatch(/^.+\/L\d+$/);
+  }
+
   // Back on the overview the accumulation chart mounts again, with the filter control and the
   // summary the glossary says sit beside it. (The `GLOSSARY_IDS` parity list is checked with a
   // session open, so the overview's own ids are asserted here instead.)

@@ -13,7 +13,7 @@ import {
   turnId,
   type SkillCoverage,
 } from "@/components/panels";
-import type { Call, RunResult, Usage } from "@/lib/types";
+import type { Call, RunResult, Subagent, Usage } from "@/lib/types";
 
 const usage = (over: Partial<Usage> = {}): Usage => ({
   input_tokens: 2,
@@ -259,6 +259,84 @@ test("ReconciliationPanel: ledger vs harness with = and Δ, the billed sum besid
   expect(row("turns (model calls)")).toHaveTextContent("Δ 21");
   expect(row("accumulative_billed_tokens")).toHaveTextContent("1,504,090");
   expect(row("estimated / harness reported cost")).toHaveTextContent("Δ $0.0011");
+});
+
+test("SessionTurnTable: a spawned thread's rows open their own turn, reported as an agent-qualified reference", () => {
+  const spawned: Subagent = {
+    agent: "Explore",
+    id: "agent-7f3",
+    log: "subagents/agent-7f3.jsonl",
+    parent_turn: 2,
+    turns: 2,
+    description: "external research",
+    usage: usage({ accumulative_billed_tokens: 150 }),
+    calls: [call(1, { records: [1, 2] }), call(2, { records: [3, 4] })],
+  };
+  const withSub: RunResult = { ...result, subagents: [spawned] };
+  const onOpenSubTurn = vi.fn();
+  const subRecords = vi.fn((sub: Subagent, k: Call) => <div id={`${sub.id}/t${k.n}`}>transcript of {`${sub.id}/t${k.n}`}</div>);
+  const props = {
+    result: withSub,
+    view: "summary" as const,
+    onViewChange: () => {},
+    openTurn: null,
+    onOpenTurn: () => {},
+    recordView: "nice" as const,
+    onOpenSubTurn,
+    renderSubagentRecords: subRecords,
+  };
+  const { rerender } = mount(<SessionTurnTable {...props} openSubTurn={null} />);
+  const rows = document.querySelectorAll('tr.SubagentTurnRow[data-sub="agent-7f3"]');
+  expect(rows).toHaveLength(2);
+  // summary view keeps every transcript closed, exactly as it keeps the primary details closed
+  expect(screen.queryByText("transcript of agent-7f3/t2")).not.toBeInTheDocument();
+  fireEvent.click(rows[1]!);
+  // the agent travels with the turn number: a bare 2 would be indistinguishable from the primary's
+  expect(onOpenSubTurn).toHaveBeenCalledWith({ id: "agent-7f3", n: 2 });
+
+  rerender(
+    <TooltipProvider>
+      <SessionTurnTable {...props} openSubTurn={{ id: "agent-7f3", n: 2 }} />
+    </TooltipProvider>,
+  );
+  expect(screen.getByText("transcript of agent-7f3/t2")).toBeInTheDocument();
+  expect(screen.queryByText("transcript of agent-7f3/t1")).not.toBeInTheDocument();
+  // clicking the open row closes it rather than re-opening it
+  fireEvent.click(document.querySelector('tr.SubagentTurnRow[data-sub="agent-7f3"][data-n="2"]')!);
+  expect(onOpenSubTurn).toHaveBeenLastCalledWith(null);
+
+  rerender(
+    <TooltipProvider>
+      <SessionTurnTable {...props} view="detailed" openSubTurn={null} />
+    </TooltipProvider>,
+  );
+  expect(screen.getByText("transcript of agent-7f3/t1")).toBeInTheDocument();
+  expect(screen.getByText("transcript of agent-7f3/t2")).toBeInTheDocument();
+});
+
+test("SessionTurnTable: with no subagent renderer wired, a band is still the read-only ledger it always was", () => {
+  const spawned: Subagent = {
+    agent: "Explore",
+    id: "agent-7f3",
+    log: "subagents/agent-7f3.jsonl",
+    parent_turn: 2,
+    turns: 1,
+    description: "",
+    usage: usage({ accumulative_billed_tokens: 150 }),
+    calls: [call(1, { records: [1] })],
+  };
+  mount(
+    <SessionTurnTable
+      result={{ ...result, subagents: [spawned] }}
+      view="detailed"
+      onViewChange={() => {}}
+      openTurn={null}
+      onOpenTurn={() => {}}
+      recordView="nice"
+    />,
+  );
+  expect(document.querySelectorAll('tr.SubagentTurnRow[data-sub="agent-7f3"]')).toHaveLength(1);
+  expect(document.querySelectorAll('tr[data-el="SubagentTurnDetails"]')).toHaveLength(0);
 });
 
 test("ReconciliationPanel splits a spawning run: tier rows show the primary share, the subagents' bill is its own row", () => {

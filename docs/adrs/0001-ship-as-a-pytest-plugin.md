@@ -3,44 +3,57 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Ship as a pytest plugin with per-skill opt-in evals
+description: pytest already owns discovery, selection and reporting, so the harness is a plugin
 tags: [packaging]
 status: accepted
 accepted_on: 2026-08-20
 last_changed_on: 2026-08-20
-relates_to:
-  - { relation: superseded_by, target: ADR-0014 }
+provenance: The brief asked for a lightweight, portable harness that runs both agent CLIs headlessly, across a model matrix, with fixtures, goldens, and custom verifiers.
+enforced_in:
+  - pyproject.toml (the `pytest11` entry point)
+  - src/pytest_xharness_eval/plugin/
 generated: { by: human:neozenith, at: 2026-08-20T00:00:00Z }
 ---
 
-# 0001: Ship as a pytest plugin with per-skill opt-in evals
+> **Lens**: When a capability already lives in pytest, reuse it; add a plugin option only when pytest has no equivalent.
 
-Status: accepted, 2026-08-20. The in-repository package location named in the
-Decision is superseded by [0014](0014-register-through-the-pytest11-entry-point.md);
-the choice of a pytest plugin over a standalone CLI stands.
+## Relates to
 
-## Context
+- Superseded by [ADR-0014](0014-register-through-the-pytest11-entry-point.md) (the in-repository package location named in the Decision is superseded; the choice of a pytest plugin over a standalone CLI stands)
 
-The brief asked for a lightweight, portable harness that runs both agent CLIs
-headlessly, across a model matrix, with fixtures, goldens, and custom verifiers.
-A standalone CLI would re-implement discovery, selection, and reporting that pytest
-already provides. The surrounding toolchain and test conventions were Python-first,
-with `uv` already the package manager in use.
+## Problem
+
+### Symptom
+
+The brief asked for a lightweight, portable harness that runs both agent CLIs headlessly, across a model matrix, with fixtures, goldens, and custom verifiers.
+
+### Pain point
+
+A standalone CLI would re-implement discovery, selection, and reporting that pytest already provides.
 
 ## Decision
 
-The harness is a custom pytest plugin, first housed as a package inside the
-repository whose skills it evaluated. It supplies shared fixtures and extends
-collection to find eval structures under `skills/<skill>/evals/`. A skill opts in by adopting that layout and nothing else.
+### The lens
+
+- **Given**: The surrounding toolchain and test conventions were Python-first, with `uv` already the package manager in use.
+- **We prefer**: A custom pytest plugin, over a standalone argparse CLI, TypeScript with bun, or Go.
+  The CLI would have been a second surface to keep in step.
+  Neither TypeScript nor Go had test conventions to lean on for a pytest-shaped matrix.
+- **Because**: pytest already provides the discovery, selection and reporting a standalone CLI would have had to re-implement.
+- **Unless**: pytest has no equivalent for the capability, in which case a plugin option is added for it.
+
+### In practice
+
+- The harness is a custom pytest plugin, first housed as a package inside the repository whose skills it evaluated.
+- It supplies shared fixtures and extends collection to find eval structures under `skills/<skill>/evals/`.
+  A skill opts in by adopting that layout and nothing else.
 
 ## Consequences
 
-Bare pytest mechanics work unmodified: path arguments target one skill, `-k` and
-node ids select cells, the terminal report is pytest's. The cost is that the
-harness inherits pytest's collection rules, which forced ADR 0008 and ADR 0009.
-Rejected: a standalone argparse CLI (second surface to keep in step), TypeScript
-with bun and Go (neither had test conventions to lean on for a pytest-shaped matrix).
+### Pros
 
-## Lens
+- Bare pytest mechanics work unmodified: path arguments target one skill, `-k` and node ids select cells, the terminal report is pytest's.
 
-When a capability already lives in pytest, reuse it; add a plugin option only when
-pytest has no equivalent.
+### Cons
+
+- The harness inherits pytest's collection rules, which forced ADR 0008 and ADR 0009.

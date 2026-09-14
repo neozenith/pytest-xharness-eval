@@ -3,59 +3,75 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Fixtures live under evals/fixtures/, and every live cell appends to a metrics history
+description: seed trees become a shared pool, and each paid cell appends one committed metrics line
 tags: [collection, storage]
 status: accepted
 accepted_on: 2026-08-21
 last_changed_on: 2026-08-21
-relates_to:
-  - { relation: extends, target: ADR-0004 }
-  - { relation: extends, target: ADR-0016 }
+provenance: Several scenarios can start from one seed tree, yet a fixture was addressable only beside the single case it was named for. The record was revised the same day it was accepted, when `history.jsonl` moved under `captured/` and stopped being version-controlled.
+enforced_in:
+  - src/pytest_xharness_eval/model/layout.py
+  - src/pytest_xharness_eval/emit/metrics.py
+  - src/pytest_xharness_eval/model/workspace.py
 generated: { by: human:neozenith, at: 2026-08-21T00:00:00Z }
 ---
 
-# 0018: Fixtures live under evals/fixtures/, and every live cell appends to a metrics history
+> **Lens**: Seed data is a pool, and evidence is keyed by what produced it.
+> The metrics worth keeping are the ones small enough to commit.
 
-Status: accepted, 2026-08-21; revised the same day: `history.jsonl` lives under `captured/` and is not version-controlled. Refines [0004](0004-workspace-is-a-plain-copy.md)
-and [0016](0016-results-travel-on-the-test-report.md).
+## Relates to
 
-## Context
+- Extends [ADR-0004](0004-workspace-is-a-plain-copy.md) (the record's status line says "refines")
+- Extends [ADR-0016](0016-results-travel-on-the-test-report.md) (the record's status line says "refines")
 
-A fixture was addressed by a path relative to `evals/` and conventionally placed
-beside a `captured/` directory named for the case, which tied seed trees to single
-cases although several scenarios can start from one seed. Per-run metrics existed
-only inside each git-ignored `.result.json`, so there was no history of a skill's
-evals over time. The pre-run permutation summary added in 0015 was not needed and
-xdist's controller never printed it anyway.
+## Problem
+
+### Symptom
+
+A fixture was addressed by a path relative to `evals/`, and conventionally placed beside a `captured/` directory named for the case.
+That tied seed trees to single cases, although several scenarios can start from one seed.
+
+### Pain point
+
+Per-run metrics existed only inside each git-ignored `.result.json`, so there was no history of a skill's evals over time.
+The pre-run permutation summary added in 0015 was not needed and xdist's controller never printed it anyway.
 
 ## Decision
 
-The layout under `<skill>/evals/` is:
+### The lens
 
-```text
-eval_<suite>.py            # eval_* functions
-fixtures/<name>/           # seed workspaces; @evalcase(fixture="<name>")
-captured/<case>/           # each run's session log and .result.json; git-ignored
-history.jsonl              # one metrics line per live cell; committed
-```
+- **Given**: Seed trees are reusable across scenarios, while evidence is only meaningful keyed by the cell that produced it.
+- **We prefer**: A shared `fixtures/<name>/` pool addressed by name, over a seed tree named for and tied to one case.
+  A committed flat `history.jsonl`, over metrics that exist only inside a git-ignored result file.
+- **Because**: The metrics worth keeping over time are the ones small enough to commit.
+  Anything richer is derivable from them, or from the captured results.
+- **Unless**: never
 
-Each live cell appends one flat JSON record to `history.jsonl`: timestamp, node,
-harness, model, session id, verdict, turns, tool calls (total and by name), the
-agent-reported duration, the harness wall clock, USD, tokens by tier, and files
-written. The same record rides on `TestReport.user_properties`, with its scalars
-as individual `xharness_*` properties so `--junitxml` carries them, and feeds the
-verbose status word (`PASSED  $0.1261  573,213 tok  71.0s  12 turns  9 tools`).
+### In practice
 
-The pre-run permutation summary is removed. `--dist loadgroup` is an option, not
-a requirement: plain `-n N` is supported; `loadgroup` keeps one harness per
-worker.
+- The layout under `<skill>/evals/` is:
+
+  ```text
+  eval_<suite>.py            # eval_* functions
+  fixtures/<name>/           # seed workspaces; @evalcase(fixture="<name>")
+  captured/<case>/           # each run's session log and .result.json; git-ignored
+  history.jsonl              # one metrics line per live cell; committed
+  ```
+- Each live cell appends one flat JSON record to `history.jsonl`.
+  It carries the timestamp, node, harness, model, session id and verdict.
+  It also carries turns, tool calls (total and by name), the agent-reported duration, the harness wall clock, USD, tokens by tier, and files written.
+  The same record rides on `TestReport.user_properties`, with its scalars as individual `xharness_*` properties so `--junitxml` carries them.
+  It also feeds the verbose status word (`PASSED  $0.1261  573,213 tok  71.0s  12 turns  9 tools`).
+- The pre-run permutation summary is removed.
+  `--dist loadgroup` is an option, not a requirement: plain `-n N` is supported; `loadgroup` keeps one harness per worker.
 
 ## Consequences
 
-A dry run touches neither `captured/` nor `history.jsonl`. `history.jsonl` grows
-by one line per paid cell and is the committed record of a skill's eval history;
-anything richer is derived from it or from the captured results.
+### Pros
 
-## Lens
+- A dry run touches neither `captured/` nor `history.jsonl`.
+- `history.jsonl` is the committed record of a skill's eval history; anything richer is derived from it or from the captured results.
 
-Seed data is a pool, evidence is keyed by what produced it, and the metrics worth
-keeping are the ones small enough to commit.
+### Cons
+
+- `history.jsonl` grows by one line per paid cell.

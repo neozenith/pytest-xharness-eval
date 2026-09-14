@@ -3,31 +3,36 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: A golden is compared facet by facet, and every facet declares its tolerance
+description: name the parts of the answer, and say for each how much variation is still correct
 tags: [grading, collection]
 status: accepted
 accepted_on: 2026-08-31
 last_changed_on: 2026-08-31
-relates_to:
-  - { relation: extends, target: ADR-0012 }
-  - { relation: extends, target: ADR-0018 }
-  - { relation: extends, target: ADR-0045 }
+provenance: The palette-mandate case graded by five substring searches, and `classDef x fill:#000,color:#000` passes all of them. So does a document that styled one node of nine and left the rest on Mermaid's defaults.
+enforced_in:
+  - src/pytest_xharness_eval/verify/golden.py
+  - src/pytest_xharness_eval/verify/tolerance.py
+  - src/pytest_xharness_eval/verify/facets.py
+  - docs/rollout.md
 generated: { by: human:neozenith, at: 2026-08-31T00:00:00Z }
 ---
 
-# 0046: A golden is compared facet by facet, and every facet declares its tolerance
+> **Lens**: Between "contains the word" and "equals the file" there is one honest position.
+> Name the parts of the answer, and say for each how much variation is still correct.
+> The tolerance is the interesting content of the eval, because it is the author's actual claim about the skill.
+> It must be written down where a reviewer reads it, not hidden inside a similarity threshold on the whole file.
 
-Status: accepted, 2026-08-31. Refines
-[0012](0012-grading-is-composable-not-prescribed.md) (grading is composable, not
-prescribed),
-[0018](0018-fixtures-directory-and-metrics-history.md) (fixtures live under
-`evals/fixtures/`) and
-[0045](0045-the-verifiers-ship-with-the-plugin.md) (the verifiers ship with the
-plugin).
+## Relates to
 
-## Context
+- Extends [ADR-0012](0012-grading-is-composable-not-prescribed.md) (the record's status line says "refines")
+- Extends [ADR-0018](0018-fixtures-directory-and-metrics-history.md) (the record's status line says "refines")
+- Extends [ADR-0045](0045-the-verifiers-ship-with-the-plugin.md) (the record's status line says "refines")
 
-The palette-mandate case is the harness's reference eval, and its grading is five
-substring searches:
+## Problem
+
+### Symptom
+
+The palette-mandate case is the harness's reference eval, and its grading is five substring searches:
 
 ```python
 assert "```mermaid" in doc
@@ -36,79 +41,75 @@ assert "fill:#" in doc
 assert "color:" in doc
 ```
 
-Given the fixture — one unstyled flowchart — a correct answer is very nearly
-determined. The skill mandates an explicit `classDef` per node group, with fill
-and text colour drawn from its own palette, and the diagram's node set is fixed
-by the fixture. We can write down what right looks like. The substring searches
-do not: `classDef x fill:#000,color:#000` passes all four, and so does a
-document that styled one node of nine and left the rest on Mermaid's defaults.
+Given the fixture, one unstyled flowchart, a correct answer is very nearly determined.
+The skill mandates an explicit `classDef` per node group, with fill and text colour drawn from its own palette.
+The diagram's node set is fixed by the fixture.
+We can write down what right looks like.
+The substring searches do not: `classDef x fill:#000,color:#000` passes all four.
+So does a document that styled one node of nine and left the rest on Mermaid's defaults.
 
-The obvious repair — check the output against a stored correct file — fails in
-the other direction. Two valid answers differ in whitespace, in the order the
-`classDef` lines appear, in whether a node group is called `service` or `svc`, in
-one hex value being a legitimate neighbour on the same palette ramp. An exact
-comparison would be red on every run and would teach its reader to ignore it.
+### Pain point
 
-So a golden needs to be neither a substring nor a file, and the missing piece is
-not a smarter diff. It is *saying which parts of the answer are determined and
-which are free*, per part, and being able to read the failure.
+The obvious repair, checking the output against a stored correct file, fails in the other direction.
+Two valid answers differ in whitespace, and in the order the `classDef` lines appear.
+They differ in whether a node group is called `service` or `svc`.
+They differ in one hex value being a legitimate neighbour on the same palette ramp.
+An exact comparison would be red on every run and would teach its reader to ignore it.
+
+So a golden needs to be neither a substring nor a file, and the missing piece is not a smarter diff.
+It is *saying which parts of the answer are determined and which are free*, per part, and being able to read the failure.
 
 ## Decision
 
-**A golden is a real, complete, correct artifact**, stored at
-`evals/goldens/<name>/<path>` — mirroring `evals/fixtures/<name>/<path>`, so the
-pairing between a seed and its known-good output is the directory layout and not
-a convention anyone has to remember. It is committed, readable, and rendered by
-the same tools as the real thing: a golden nobody can open is a hash.
+### The lens
 
-**A `GoldenCase` is that artifact plus a facet list.** A facet is a named
-extraction from the text — node ids, fence count, `classDef` selectors, fill
-colours, headings, a numeric measure — paired with the tolerance under which the
-candidate's value must match the golden's. Facets are ordinary functions
-`str -> object`, so a project extracts whatever its artifact has; `verify/facets.py`
-ships the markdown and mermaid extractors the shipped cases need.
+- **Given**: Which parts of an answer are determined and which are free is knowable per part.
+  It is the eval author's actual claim about the skill.
+- **We prefer**: A real stored artifact compared facet by facet under a declared tolerance, over a substring search or an exact file comparison.
+- **Because**: The tolerance is the interesting content of the eval.
+  It must be written where a reviewer reads it, rather than hidden in a similarity threshold on the whole file.
+- **Unless**: a facet is given no tolerance, which is a type error rather than a default to `Exact`.
 
-**Tolerance is declared, never inferred.** Six kinds, and each answers one
-question about how much freedom this facet has:
+### In practice
 
-| Tolerance | Holds when | Protects |
-| --- | --- | --- |
-| `Exact()` | candidate == golden | the part with one right answer |
-| `Superset()` | candidate ⊇ golden | a required floor, additions allowed |
-| `Jaccard(at_least=)` | set overlap ≥ threshold | naming freedom within a fixed concept set |
-| `Ratio(at_least=)` | `difflib` similarity ≥ threshold | prose that must stay recognisable |
-| `Count(delta=)` / `Count(lo, hi)` | a count near the golden's, or in a range | structure with legitimate slack |
-| `Within(lo, hi)` | a number in a closed range | a measure with a defensible band |
+- **A golden is a real, complete, correct artifact**, stored at `evals/goldens/<name>/<path>`.
+  That mirrors `evals/fixtures/<name>/<path>`.
+  The pairing between a seed and its known-good output is therefore the directory layout, not a convention anyone has to remember.
+  It is committed, readable, and rendered by the same tools as the real thing: a golden nobody can open is a hash.
+- **A `GoldenCase` is that artifact plus a facet list.** A facet is a named extraction from the text.
+  That is node ids, fence count, `classDef` selectors, fill colours, headings, or a numeric measure.
+  Each is paired with the tolerance under which the candidate's value must match the golden's.
+  Facets are ordinary functions `str -> object`, so a project extracts whatever its artifact has.
+  `verify/facets.py` ships the markdown and mermaid extractors the shipped cases need.
+- **Tolerance is declared, never inferred.** Six kinds, and each answers one question about how much freedom this facet has:
 
-A facet with no tolerance is a type error, not a default to `Exact` — the whole
-point is that the author states how free each part is.
+  | Tolerance | Holds when | Protects |
+  | --- | --- | --- |
+  | `Exact()` | candidate == golden | the part with one right answer |
+  | `Superset()` | candidate ⊇ golden | a required floor, additions allowed |
+  | `Jaccard(at_least=)` | set overlap ≥ threshold | naming freedom within a fixed concept set |
+  | `Ratio(at_least=)` | `difflib` similarity ≥ threshold | prose that must stay recognisable |
+  | `Count(delta=)` / `Count(lo, hi)` | a count near the golden's, or in a range | structure with legitimate slack |
+  | `Within(lo, hi)` | a number in a closed range | a measure with a defensible band |
 
-**A mismatch reports the delta, not the diff.** `GoldenMismatch` is an
-`AssertionError` whose message is one row per facet: its name, its tolerance, the
-golden's value, the candidate's value, and — for the set tolerances — what was
-missing and what was extra, truncated to a readable width. Passing facets are
-listed too, because a report that shows only failures cannot distinguish "one
-facet failed" from "one facet ran".
+  A facet with no tolerance is a type error, not a default to `Exact`.
+  The whole point is that the author states how free each part is.
+- **A mismatch reports the delta, not the diff.** `GoldenMismatch` is an `AssertionError` whose message is one row per facet.
+  The row carries its name, its tolerance, the golden's value and the candidate's value.
+  For the set tolerances it also carries what was missing and what was extra, truncated to a readable width.
+  Passing facets are listed too, because a report that shows only failures cannot distinguish "one facet failed" from "one facet ran".
 
 ## Consequences
 
-A golden must be regenerated when the skill's own contract changes, and that is a
-visible commit against a readable file. `GoldenCase.record()` writes a candidate
-into the golden path for exactly that purpose; it is never called during grading,
-so a run can never launder its own output into the reference.
+### Pros
 
-A tolerance is a claim about the skill under test and belongs in review. A
-`Jaccard(at_least=0.5)` says half the concepts may be renamed and the case still
-passes, which is usually a sign the facet is the wrong extraction rather than a
-sign the threshold is right.
+- Facet extraction is pure and free, so a golden comparison is exercised in `tests/test_units.py` against committed text, with no rollout and no spend.
+- `GoldenCase.record()` writes a candidate into the golden path for regeneration.
+  It is never called during grading, so a run can never launder its own output into the reference.
 
-Facet extraction is pure and free, so a golden comparison is exercised in
-`tests/test_units.py` against committed text, with no rollout and no spend.
+### Cons
 
-## Lens
-
-Between "contains the word" and "equals the file" there is one honest position:
-name the parts of the answer, and say for each how much variation is still
-correct. The tolerance is the interesting content of the eval — it is the
-author's actual claim about the skill — so it must be written down where a
-reviewer reads it, not hidden inside a similarity threshold on the whole file.
+- A golden must be regenerated when the skill's own contract changes, and that is a visible commit against a readable file.
+- A tolerance is a claim about the skill under test and belongs in review.
+  A `Jaccard(at_least=0.5)` says half the concepts may be renamed and the case still passes.
+  That is usually a sign the facet is the wrong extraction, rather than a sign the threshold is right.

@@ -80,6 +80,34 @@ test("a ledger with record lines yields one record-level deeplink", () => {
   expect(line?.search).toBe("?session=abcd1234-5678&line=3");
 });
 
+test("a session that spawned a thread enumerates its subturn and subline states; one that did not enumerates neither", () => {
+  const result = {
+    calls: [{ records: [1, 2] }, { records: [3, 4] }],
+    subagents: [
+      {
+        agent: "Explore",
+        id: "agent-7f3abc99",
+        calls: [
+          { n: 1, records: [1, 2] },
+          { n: 2, records: [7, 8, 9] },
+        ],
+      },
+    ],
+  } as unknown as RunResult;
+  const perms = enumeratePermutations(index([cell({})]), { "abcd1234-5678": result }, "large");
+  assertUniqueSlugs(perms);
+  const search = (match: string) => perms.find((p) => p.slug.includes(match))?.search;
+  // the middle of the thread's two turns, and the first record of that turn
+  expect(search("--subturn-")).toBe("?session=abcd1234-5678&subturn=agent-7f3abc99/1");
+  expect(search("--subline-")).toBe("?session=abcd1234-5678&subline=agent-7f3abc99/1");
+  // small sweeps neither, so the inner loop stays the inner loop
+  const small = enumeratePermutations(index([cell({})]), { "abcd1234-5678": result }, "small");
+  expect(small.filter((p) => /--sub(turn|line)-/.test(p.slug))).toHaveLength(0);
+  // a session with no spawned thread has no such state to sweep
+  const none = enumeratePermutations(index([cell({})]), { "abcd1234-5678": { calls: [{ records: [1] }] } as unknown as RunResult }, "large");
+  expect(none.filter((p) => /--sub(turn|line)-/.test(p.slug))).toHaveLength(0);
+});
+
 test("two captures of the same cell stay distinct via the session-id prefix", () => {
   const perms = enumeratePermutations(index([cell({}), cell({ session_id: "efgh5678-1234" })]), {});
   expect(() => assertUniqueSlugs(perms)).not.toThrow();

@@ -11,6 +11,8 @@
  *   &axis=turn|line                            x-axis of the per-turn charts (ADR 0025)
  *   &rec=nice|raw                              how records render
  *   &line=<log line>                           scroll to that record, its turn opened
+ *   &subturn=<subagent id>/<n>                 which turn of a spawned thread has its records open
+ *   &subline=<subagent id>/<n>                 scroll to that record of a spawned thread's transcript
  *   report.html?skill=<a>[,<b>]                overview, only those skills (absent = every skill)
  *   &harness=<a>[,<b>]                         overview, only those harnesses
  *   &model=<a>[,<b>]                           overview, only those models
@@ -55,6 +57,21 @@ export interface SortState {
   dir: SortDir;
 }
 
+/**
+ * One turn, or one transcript line, of a thread the session spawned (ADR 0033). A subagent
+ * numbers its own turns and its own log lines from 1, so neither number means anything
+ * without the thread it belongs to — which is why these are a pair and not a bare integer
+ * the way the primary thread's `turn` and `line` are.
+ *
+ * `id` is the subagent's id, not its agent *name*: a session can spawn the same agent twice
+ * and the two threads must stay apart. An empty id is not a reference — `threadRefParam`
+ * refuses one rather than emitting `/2`, which `threadRef` would read back as nothing.
+ */
+export interface ThreadRef {
+  id: string;
+  n: number;
+}
+
 export interface OverviewRoute {
   view: "overview";
   /** `SessionTable`'s column order; null is its own default (`at`, descending). */
@@ -81,6 +98,10 @@ export interface SessionRoute {
   rec: RecordView | null;
   /** A session-log line to scroll to and highlight; its owning turn opens automatically. */
   line: number | null;
+  /** Which turn of a spawned thread has its records open, or null. */
+  subTurn: ThreadRef | null;
+  /** A line of a spawned thread's transcript to scroll to and highlight; its turn opens automatically. */
+  subLine: ThreadRef | null;
   theme: ThemeParam | null;
 }
 
@@ -105,6 +126,18 @@ const list = (raw: string | null): string[] | null => {
 
 const oneOf = <T extends string>(value: string | null, allowed: readonly T[]): T | null =>
   (allowed as readonly string[]).includes(value ?? "") ? (value as T) : null;
+
+/**
+ * `<subagent id>/<n>` as a `ThreadRef`. The id is everything before the *last* slash, so an id
+ * that contains one still round-trips; a missing or non-numeric `n`, or an empty id, is nothing
+ * at all rather than a half-parsed reference.
+ */
+const threadRef = (raw: string | null): ThreadRef | null => {
+  const cut = (raw ?? "").lastIndexOf("/");
+  if (cut <= 0) return null;
+  const n = raw!.slice(cut + 1);
+  return /^\d+$/.test(n) ? { id: raw!.slice(0, cut), n: Number(n) } : null;
+};
 
 /** A `<param>`/`<param>dir` pair as a sort: the key is what makes it a sort, so a lone `dir` is nothing. */
 const sortState = (key: string | null, dir: string | null): SortState | null => (key ? { key, dir: oneOf(dir, ["asc", "desc"]) ?? "asc" } : null);
@@ -134,6 +167,8 @@ export function parseSearch(search: string): Route {
     axis: oneOf(params.get("axis"), ["turn", "line"]),
     rec: oneOf(params.get("rec"), ["nice", "raw"]),
     line: line && /^\d+$/.test(line) ? Number(line) : null,
+    subTurn: threadRef(params.get("subturn")),
+    subLine: threadRef(params.get("subline")),
     theme,
   };
 }
@@ -149,8 +184,19 @@ export interface SessionSearchExtras {
   axis?: AxisMode | null;
   rec?: RecordView | null;
   line?: number | null;
+  subTurn?: ThreadRef | null;
+  subLine?: ThreadRef | null;
   theme?: ThemeParam | null;
 }
+
+/**
+ * A `ThreadRef` as its param value: the inverse of `threadRef`, and total against it. A
+ * thread whose id the harness never supplied (a Codex fork with neither a session id nor a
+ * meta id) is not addressable, so it serialises to nothing rather than to `/2` — a value
+ * `threadRef` reads back as null, which would have made the row silently un-openable and
+ * every permalink in its band a dead link.
+ */
+export const threadRefParam = (ref: ThreadRef): string | null => (ref.id ? `${ref.id}/${ref.n}` : null);
 
 /** Param order is fixed so a state always serialises to the same URL (and the same slug). */
 export function sessionSearch(sessionId: string, turn?: number | null, turnView?: TurnView | null, extras: SessionSearchExtras = {}): string {
@@ -160,8 +206,15 @@ export function sessionSearch(sessionId: string, turn?: number | null, turnView?
   if (extras.axis) params.set("axis", extras.axis);
   if (extras.rec) params.set("rec", extras.rec);
   if (extras.line != null) params.set("line", String(extras.line));
+  const subTurn = extras.subTurn && threadRefParam(extras.subTurn);
+  const subLine = extras.subLine && threadRefParam(extras.subLine);
+  if (subTurn) params.set("subturn", subTurn);
+  if (subLine) params.set("subline", subLine);
   if (extras.theme) params.set("theme", extras.theme);
-  return `?${params}`;
+  // `URLSearchParams.toString()` percent-encodes the `/` separating an agent from its turn.
+  // It is a legal sub-delim these URLs are read and pasted by humans, and both forms decode
+  // identically on the way in, so the literal is written back (as `overviewSearch` does for `,`).
+  return `?${params.toString().replace(/%2F/g, "/")}`;
 }
 
 /**

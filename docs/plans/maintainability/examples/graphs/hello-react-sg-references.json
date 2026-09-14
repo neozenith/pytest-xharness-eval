@@ -1,0 +1,173 @@
+{
+ "elements": [
+  {
+   "data": {
+    "id": "f:Greeting.tsx",
+    "label": "Greeting.tsx",
+    "category": "Compute"
+   }
+  },
+  {
+   "data": {
+    "id": "f:App.tsx",
+    "label": "App.tsx",
+    "category": "Storage"
+   }
+  },
+  {
+   "data": {
+    "id": "r:App.tsx:10:8",
+    "label": "push Shout\n10:8",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "id": "d:App.tsx:3:20",
+    "label": "pop Shout\n3:20, no syntax_type",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:App.tsx:10:8",
+    "target": "d:App.tsx:3:20"
+   }
+  },
+  {
+   "data": {
+    "id": "d:Greeting.tsx:7:14",
+    "label": "pop Shout\n7:14, no syntax_type",
+    "parent": "f:Greeting.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:App.tsx:10:8",
+    "target": "d:Greeting.tsx:7:14"
+   }
+  },
+  {
+   "data": {
+    "id": "r:App.tsx:3:10",
+    "label": "push Greeting\n3:10",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "id": "d:Greeting.tsx:3:17",
+    "label": "pop Greeting\n3:17, function",
+    "parent": "f:Greeting.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:App.tsx:3:10",
+    "target": "d:Greeting.tsx:3:17"
+   }
+  },
+  {
+   "data": {
+    "id": "r:App.tsx:3:20",
+    "label": "push Shout\n3:20",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "r:App.tsx:3:20",
+    "target": "d:Greeting.tsx:7:14"
+   }
+  },
+  {
+   "data": {
+    "id": "r:App.tsx:3:33",
+    "label": "push Greeting\n3:33",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "id": "d:Greeting.tsx:1:1",
+    "label": "pop Greeting\n1:1, no syntax_type",
+    "parent": "f:Greeting.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:App.tsx:3:33",
+    "target": "d:Greeting.tsx:1:1"
+   }
+  },
+  {
+   "data": {
+    "id": "r:App.tsx:8:8",
+    "label": "push Greeting\n8:8",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "id": "d:App.tsx:3:10",
+    "label": "pop Greeting\n3:10, no syntax_type",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:App.tsx:8:8",
+    "target": "d:App.tsx:3:10"
+   }
+  },
+  {
+   "data": {
+    "source": "r:App.tsx:8:8",
+    "target": "d:Greeting.tsx:3:17"
+   }
+  },
+  {
+   "data": {
+    "id": "r:App.tsx:9:8",
+    "label": "push Greeting\n9:8",
+    "parent": "f:App.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "r:App.tsx:9:8",
+    "target": "d:App.tsx:3:10"
+   }
+  },
+  {
+   "data": {
+    "source": "r:App.tsx:9:8",
+    "target": "d:Greeting.tsx:3:17"
+   }
+  },
+  {
+   "data": {
+    "id": "r:Greeting.tsx:7:14",
+    "label": "push Shout\n7:14",
+    "parent": "f:Greeting.tsx"
+   }
+  },
+  {
+   "data": {
+    "source": "r:Greeting.tsx:7:14",
+    "target": "d:Greeting.tsx:7:14"
+   }
+  }
+ ],
+ "layout": {
+  "name": "dagre",
+  "rankDir": "LR",
+  "rankSep": 90
+ },
+ "height": 760
+}

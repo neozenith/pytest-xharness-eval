@@ -1,7 +1,9 @@
 /**
  * One row per model API call (a SessionTurn), with the ledger's per-call columns; clicking a
  * row toggles its details row (the turn's TurnRawRecords) and records `turn=<n>` in the URL.
- * In the detailed view every details row is open.
+ * In the detailed view every details row is open. A turn that spawned parallel threads
+ * (ADR 0033) is followed by a `SubagentBand`, whose rows open the same way against the
+ * spawned thread's own transcript and record `subturn=<agent id>/<n>`.
  *
  * The two harnesses keep different session-log schemas, so each gets its own table:
  * `SessionTurnTableClaude` carries Claude's explicit cache-write billing tiers
@@ -16,7 +18,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CopyId } from "@/components/CopyId";
 import { El } from "@/components/El";
-import { fmt, pct, short } from "@/lib/format";
+import { distinguishingWidth, fmt, pct, short } from "@/lib/format";
+import type { ThreadRef } from "@/lib/route";
 import type { Call, RunResult, Subagent } from "@/lib/types";
 import { clock, ms, ranges, turnId } from "./helpers";
 
@@ -121,8 +124,13 @@ interface Props {
   onOpenTurn: (n: number | null) => void;
   recordView: RecordView;
   onRecordViewChange?: (v: RecordView) => void;
+  /** The spawned-thread turn whose details row is open from the `subturn=` URL param, or null. */
+  openSubTurn?: ThreadRef | null;
+  onOpenSubTurn?: (ref: ThreadRef | null) => void;
   /** Renders a turn's TurnRawRecords; wired by the integrator so this file needs no records import. */
   renderTurnRecords?: (call: Call) => ReactNode;
+  /** Renders one spawned turn's SubagentRawRecords; wired by the integrator, as `renderTurnRecords` is. */
+  renderSubagentRecords?: (sub: Subagent, call: Call) => ReactNode;
   /** Extra toolbar content, where the integrator places RecordViewToggle. */
   toolbarExtra?: ReactNode;
 }
@@ -158,11 +166,54 @@ const billedOf = (s: Subagent): number =>
   s.usage.accumulative_billed_tokens ?? s.usage.input_tokens + s.usage.output_tokens + s.usage.cache_read_tokens + s.usage.cache_write_tokens;
 
 /**
+ * The `SubagentTurnRow` columns, declared once so the header row and the colSpan of the
+ * details row beneath it cannot drift — the primary table spans its own with
+ * `columns.length` for the same reason.
+ */
+const SUB_HEADS: { head: string; num?: boolean; title?: string }[] = [
+  { head: "turn" },
+  { head: "time" },
+  { head: "tools issued" },
+  { head: "cache_read", num: true },
+  { head: "input", num: true },
+  { head: "context", num: true, title: "context_tokens: the prompt this call processed" },
+  { head: "output", num: true },
+  { head: "thinking", num: true },
+  { head: "latency", num: true },
+  { head: "stop" },
+];
+
+interface BandProps {
+  result: RunResult;
+  subs: Subagent[];
+  view: TurnView;
+  /** The spawned-thread turn open from `subturn=`, or null. */
+  openSubTurn: ThreadRef | null;
+  onOpenSubTurn?: (ref: ThreadRef | null) => void;
+  /** Renders one spawned turn's SubagentRawRecords; wired by the integrator, as `renderTurnRecords` is. */
+  renderSubagentRecords?: (sub: Subagent, call: Call) => ReactNode;
+}
+
+/**
  * The parallel threads a turn spawned, rendered beneath it: each subagent's own per-call
  * ledger, indented and bordered in the waterfall's `sub` colour so the band reads as a
- * fork off the primary thread (glossary: `SubagentBand`).
+ * fork off the primary thread (glossary: `SubagentBand`). A row opens its own turn's
+ * records from the thread's captured transcript, exactly as a primary row does.
  */
-function SubagentBand({ result, subs }: { result: RunResult; subs: Subagent[] }) {
+function SubagentBand({ result, subs, view, openSubTurn, onOpenSubTurn, renderSubagentRecords }: BandProps) {
+  /*
+   * Printed wide enough to tell this session's threads apart, and measured over *every*
+   * thread it spawned rather than the ones in this band: two threads spawned by different
+   * turns sit in different bands, and the reader still has to know which is which.
+   */
+  const width = useMemo(() => distinguishingWidth((result.subagents ?? []).map((s) => s.id)), [result]);
+  const label = (id: string) => id.slice(0, width);
+  // A thread the harness gave no id is not addressable (`threadRefParam`), so its rows do
+  // not pretend to open: there is no URL that could bring the reader back to one.
+  const toggleSub = (id: string, n: number) => {
+    if (!onOpenSubTurn || !id) return;
+    onOpenSubTurn(openSubTurn?.id === id && openSubTurn.n === n ? null : { id, n });
+  };
   return (
     <div data-el="SubagentBand" style={{ display: "grid", gap: 12, padding: "4px 0 4px 24px", borderLeft: "3px solid var(--xh-waterfall-sub)" }}>
       {subs.map((s) => (
@@ -171,7 +222,7 @@ function SubagentBand({ result, subs }: { result: RunResult; subs: Subagent[] })
             <span className="pill" style={{ background: "var(--xh-waterfall-sub)", color: "#fff" }}>
               ⑂ {s.agent}
             </span>
-            <CopyId id={s.id} label={short(s.id)} />
+            <CopyId id={s.id} label={label(s.id)} />
             {s.description ? (
               <Text color="$muted" fontSize={13} fontFamily="$body">
                 {s.description}
@@ -185,51 +236,64 @@ function SubagentBand({ result, subs }: { result: RunResult; subs: Subagent[] })
             <Table className="subagent-turns">
               <TableHeader>
                 <TableRow>
-                  <TableHead>turn</TableHead>
-                  <TableHead>time</TableHead>
-                  <TableHead>tools issued</TableHead>
-                  <TableHead className="num">cache_read</TableHead>
-                  <TableHead className="num">input</TableHead>
-                  <TableHead className="num" title="context_tokens: the prompt this call processed">
-                    context
-                  </TableHead>
-                  <TableHead className="num">output</TableHead>
-                  <TableHead className="num">thinking</TableHead>
-                  <TableHead className="num">latency</TableHead>
-                  <TableHead>stop</TableHead>
+                  {SUB_HEADS.map((h) => (
+                    <TableHead key={h.head} className={h.num ? "num" : undefined} title={h.title}>
+                      {h.head}
+                    </TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {s.calls.map((k) => (
-                  <TableRow key={k.n} data-el="SubagentTurnRow" data-agent={s.agent} data-n={k.n}>
-                    <TableCell>
-                      <code>{`${short(s.id)}/t${k.n}`}</code>
-                    </TableCell>
-                    <TableCell>
-                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{clock(k.at)}</span>
-                    </TableCell>
-                    <TableCell>
-                      {k.tools?.length ? (
-                        k.tools.map((t, i) => (
-                          <code key={i} className="code-chip">
-                            {t.name}
-                          </code>
-                        ))
-                      ) : (
-                        <span className="muted">(final reply)</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="num">{fmt(k.usage.cache_read_tokens)}</TableCell>
-                    <TableCell className="num">{fmt(k.usage.input_tokens)}</TableCell>
-                    <TableCell className="num">
-                      <span className="strong">{fmt(k.context_tokens)}</span>
-                    </TableCell>
-                    <TableCell className="num">{fmt(k.usage.output_tokens)}</TableCell>
-                    <TableCell className="num">{fmt(k.usage.reasoning_tokens)}</TableCell>
-                    <TableCell className="num">{ms(k.latency_ms)}</TableCell>
-                    <TableCell>{k.stop_reason ?? "–"}</TableCell>
-                  </TableRow>
-                ))}
+                {s.calls.map((k) => {
+                  const open = view === "detailed" || (!!s.id && openSubTurn?.id === s.id && openSubTurn.n === k.n);
+                  return (
+                    <Fragment key={k.n}>
+                      <TableRow
+                        className={`SubagentTurnRow ${open ? "row-open" : ""}`}
+                        style={renderSubagentRecords && s.id ? { cursor: "pointer" } : undefined}
+                        data-el="SubagentTurnRow"
+                        data-agent={s.agent}
+                        data-sub={s.id}
+                        data-n={k.n}
+                        onClick={() => toggleSub(s.id, k.n)}
+                      >
+                        <TableCell>
+                          <code>{`${label(s.id)}/t${k.n}`}</code>
+                        </TableCell>
+                        <TableCell>
+                          <span style={{ fontVariantNumeric: "tabular-nums" }}>{clock(k.at)}</span>
+                        </TableCell>
+                        <TableCell>
+                          {k.tools?.length ? (
+                            k.tools.map((t, i) => (
+                              <code key={i} className="code-chip">
+                                {t.name}
+                              </code>
+                            ))
+                          ) : (
+                            <span className="muted">(final reply)</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="num">{fmt(k.usage.cache_read_tokens)}</TableCell>
+                        <TableCell className="num">{fmt(k.usage.input_tokens)}</TableCell>
+                        <TableCell className="num">
+                          <span className="strong">{fmt(k.context_tokens)}</span>
+                        </TableCell>
+                        <TableCell className="num">{fmt(k.usage.output_tokens)}</TableCell>
+                        <TableCell className="num">{fmt(k.usage.reasoning_tokens)}</TableCell>
+                        <TableCell className="num">{ms(k.latency_ms)}</TableCell>
+                        <TableCell>{k.stop_reason ?? "–"}</TableCell>
+                      </TableRow>
+                      {open && renderSubagentRecords ? (
+                        <TableRow className="detail-row" data-el="SubagentTurnDetails" data-sub={s.id} data-n={k.n}>
+                          <TableCell colSpan={SUB_HEADS.length} style={{ whiteSpace: "normal" }}>
+                            {renderSubagentRecords(s, k)}
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (
@@ -244,7 +308,20 @@ function SubagentBand({ result, subs }: { result: RunResult; subs: Subagent[] })
   );
 }
 
-function SessionTurnTableBase({ result, harness, columns, view, onViewChange, openTurn, onOpenTurn, renderTurnRecords, toolbarExtra }: BaseProps) {
+function SessionTurnTableBase({
+  result,
+  harness,
+  columns,
+  view,
+  onViewChange,
+  openTurn,
+  onOpenTurn,
+  openSubTurn = null,
+  onOpenSubTurn,
+  renderTurnRecords,
+  renderSubagentRecords,
+  toolbarExtra,
+}: BaseProps) {
   const calls = result.calls ?? [];
   const subsByTurn = useMemo(() => {
     const map = new Map<number, Subagent[]>();
@@ -330,7 +407,14 @@ function SessionTurnTableBase({ result, harness, columns, view, onViewChange, op
                     {spawned.length ? (
                       <TableRow className="subagent-band-row" data-n={k.n}>
                         <TableCell colSpan={columns.length} style={{ whiteSpace: "normal" }}>
-                          <SubagentBand result={result} subs={spawned} />
+                          <SubagentBand
+                            result={result}
+                            subs={spawned}
+                            view={view}
+                            openSubTurn={openSubTurn}
+                            onOpenSubTurn={onOpenSubTurn}
+                            renderSubagentRecords={renderSubagentRecords}
+                          />
                         </TableCell>
                       </TableRow>
                     ) : null}

@@ -3,61 +3,68 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Register through the pytest11 entry point of an extracted package
+description: installing the package is the whole registration, and every location becomes an ini key
 tags: [packaging]
 status: accepted
 accepted_on: 2026-08-21
 last_changed_on: 2026-08-21
-relates_to:
-  - { relation: supersedes, target: ADR-0009 }
-  - { relation: extended_by, target: ADR-0017 }
-  - { relation: extended_by, target: ADR-0026 }
+provenance: The brief always named extraction as the end state; the trigger was wanting to review plugin changes apart from eval changes.
+enforced_in:
+  - pyproject.toml (`[project.entry-points.pytest11]`)
+  - src/pytest_xharness_eval/plugin/options.py
+  - src/pytest_xharness_eval/runtime/settings.py
 generated: { by: human:neozenith, at: 2026-08-21T00:00:00Z }
 ---
 
-# 0014: Register through the pytest11 entry point of an extracted package
+> **Lens**: When a plugin leaves its birthplace, every path it derived from `__file__` becomes a rootdir-relative option, and the registration becomes the entry point.
 
-Status: accepted, 2026-08-21. Supersedes
-[0009](0009-register-via-rootdir-conftest.md). Refined by
-[0017](0017-distributed-through-pypi-with-trusted-publishing.md): distribution moved
-from an editable path dependency to PyPI; and by
-[0026](0026-skill-ignore-lives-in-the-pytest-config.md): the per-skill `.skillignore`,
-the one location read outside the ini keys, is gone.
+## Relates to
 
-## Context
+- Supersedes [ADR-0009](0009-register-via-rootdir-conftest.md) (the record's status line says "supersedes")
+- Extended by [ADR-0017](0017-distributed-through-pypi-with-trusted-publishing.md) (distribution moved from an editable path dependency to PyPI)
+- Extended by [ADR-0026](0026-skill-ignore-lives-in-the-pytest-config.md) (the per-skill `.skillignore`, the one location read outside the ini keys, is gone)
 
-The harness began as an uninstalled package inside the repository whose skills it
-evaluated, registered by a rootdir `conftest.py` (ADR 0009). That made the plugin and
-the evals it runs one undifferentiated change set, and tied three paths to
-`__file__`: the skills root found by walking up the tree, the `tmp/evals` work
-directory, and the `report.json` path inside the package. The brief
-always named extraction as the end state; the trigger was wanting to review plugin
-changes apart from eval changes.
+## Problem
+
+### Symptom
+
+The harness began as an uninstalled package inside the repository whose skills it evaluated, registered by a rootdir `conftest.py` (ADR 0009).
+
+### Pain point
+
+That made the plugin and the evals it runs one undifferentiated change set.
+It also tied three paths to `__file__`.
+Those were the skills root found by walking up the tree, the `tmp/evals` work directory, and the `report.json` path inside the package.
 
 ## Decision
 
-The plugin is its own distribution, `pytest-xharness-eval`, with the module
-`pytest_xharness_eval`. Its `pyproject.toml` declares
-`[project.entry-points.pytest11] xharness_eval = "pytest_xharness_eval.plugin"`, and
-installing the package is the whole registration. During development the consuming
-repository installs it as an editable path dependency.
+### The lens
 
-Every location the plugin needs is an ini key resolved against pytest's `rootpath`:
-`xharness_skills_dir` (default `skills`), `xharness_workdir` (default `tmp/evals`),
-and `xharness_prices` (default `prices.toml`, optional, layered over the bundled
-table). The single `__file__`-relative path that remains is the bundled
-`prices.toml`.
+- **Given**: Installing a distribution is enough for pytest to discover a `pytest11` entry point, under every invocation.
+- **We prefer**: Its own distribution registered through a `pytest11` entry point, over a rootdir `conftest.py` in the consuming repository.
+- **Because**: Installing the package is then the whole registration, and the plugin can be reviewed and released apart from the evals it runs.
+- **Unless**: never
+
+### In practice
+
+- The plugin is its own distribution, `pytest-xharness-eval`, with the module `pytest_xharness_eval`.
+  Its `pyproject.toml` declares `[project.entry-points.pytest11] xharness_eval = "pytest_xharness_eval.plugin"`, and installing the package is the whole registration.
+  During development the consuming repository installs it as an editable path dependency.
+- Every location the plugin needs is an ini key resolved against pytest's `rootpath`.
+  They are `xharness_skills_dir` (default `skills`), `xharness_workdir` (default `tmp/evals`), and `xharness_prices` (default `prices.toml`, optional, layered over the bundled table).
+  The single `__file__`-relative path that remains is the bundled `prices.toml`.
 
 ## Consequences
 
-Consumers carry no `conftest.py` or `pytest.ini` for the plugin. They do need a
-config file at the repository root (an empty `[tool.pytest.ini_options]` suffices) so
-the rootdir is the repository and not the common ancestor of the arguments; the
-report header names the resolved skills root and marks it missing when it is not
-there. The plugin's own test suite runs through `pytester` as real nested sessions,
-and the functions that spawn a CLI are excluded from coverage with a stated reason
-rather than faked, which keeps ADR 0002 intact inside the package.
+### Pros
 
-## Lens
+- Consumers carry no `conftest.py` or `pytest.ini` for the plugin.
+- The plugin's own test suite runs through `pytester` as real nested sessions.
+  The functions that spawn a CLI are excluded from coverage with a stated reason rather than faked.
+  That keeps ADR 0002 intact inside the package.
 
-When a plugin leaves its birthplace, every path it derived from `__file__` becomes a
-rootdir-relative option, and the registration becomes the entry point.
+### Cons
+
+- Consumers do need a config file at the repository root, and an empty `[tool.pytest.ini_options]` suffices.
+  That makes the rootdir the repository rather than the common ancestor of the arguments.
+  The report header names the resolved skills root, and marks it missing when it is not there.

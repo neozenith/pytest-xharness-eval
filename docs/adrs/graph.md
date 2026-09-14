@@ -4,9 +4,8 @@
 
 Browse it interactively in [graph.html](graph.html): click a node to read its record.
 
-47 decision records, 110 typed edges, grouped into
-11 groups. Every edge comes from a record's `relates_to`
-block, so this view cannot drift from the records.
+48 decision records, 123 typed edges, grouped into 11 groups.
+Every edge comes from a record's `relates_to` block, so this view cannot drift from the records.
 
 ```cytoscape
 { "data": "graph.json", "height": 620 }
@@ -25,10 +24,14 @@ block, so this view cannot drift from the records.
 
 ## Asymmetries
 
-An edge whose inverse is missing on the far record. These are gaps in the
-record set, not rendering artifacts.
+An edge whose inverse is missing on the far record.
+These are gaps in the record set, not rendering artifacts.
 
 * `ADR-0001` declares `superseded_by ADR-0014`, but `ADR-0014` has no `supersedes ADR-0001`
+* `ADR-0002` declares `see_also ADR-0014`, but `ADR-0014` has no `see_also ADR-0002`
+* `ADR-0004` declares `superseded_by ADR-0014`, but `ADR-0014` has no `supersedes ADR-0004`
+* `ADR-0006` declares `extended_by ADR-0014`, but `ADR-0014` has no `extends ADR-0006`
+* `ADR-0006` declares `superseded_by ADR-0030`, but `ADR-0030` has no `supersedes ADR-0006`
 * `ADR-0008` declares `extended_by ADR-0014`, but `ADR-0014` has no `extends ADR-0008`
 * `ADR-0018` declares `extends ADR-0004`, but `ADR-0004` has no `extended_by ADR-0018`
 * `ADR-0018` declares `extends ADR-0016`, but `ADR-0016` has no `extended_by ADR-0018`
@@ -55,16 +58,22 @@ record set, not rendering artifacts.
 * `ADR-0030` declares `extends ADR-0006`, but `ADR-0006` has no `extended_by ADR-0030`
 * `ADR-0030` declares `extends ADR-0014`, but `ADR-0014` has no `extended_by ADR-0030`
 * `ADR-0030` declares `extends ADR-0026`, but `ADR-0026` has no `extended_by ADR-0030`
+* `ADR-0030` declares `see_also ADR-0007`, but `ADR-0007` has no `see_also ADR-0030`
 * `ADR-0031` declares `extends ADR-0020`, but `ADR-0020` has no `extended_by ADR-0031`
 * `ADR-0031` declares `extends ADR-0024`, but `ADR-0024` has no `extended_by ADR-0031`
+* `ADR-0031` declares `supersedes ADR-0024`, but `ADR-0024` has no `superseded_by ADR-0031`
 * `ADR-0031` declares `extends ADR-0025`, but `ADR-0025` has no `extended_by ADR-0031`
 * `ADR-0031` declares `extends ADR-0028`, but `ADR-0028` has no `extended_by ADR-0031`
+* `ADR-0031` declares `supersedes ADR-0028`, but `ADR-0028` has no `superseded_by ADR-0031`
 * `ADR-0032` declares `extends ADR-0014`, but `ADR-0014` has no `extended_by ADR-0032`
 * `ADR-0032` declares `extends ADR-0018`, but `ADR-0018` has no `extended_by ADR-0032`
+* `ADR-0032` declares `supersedes ADR-0018`, but `ADR-0018` has no `superseded_by ADR-0032`
 * `ADR-0032` declares `extends ADR-0020`, but `ADR-0020` has no `extended_by ADR-0032`
+* `ADR-0032` declares `supersedes ADR-0020`, but `ADR-0020` has no `superseded_by ADR-0032`
 * `ADR-0033` declares `extends ADR-0019`, but `ADR-0019` has no `extended_by ADR-0033`
 * `ADR-0033` declares `extends ADR-0021`, but `ADR-0021` has no `extended_by ADR-0033`
 * `ADR-0033` declares `extends ADR-0032`, but `ADR-0032` has no `extended_by ADR-0033`
+* `ADR-0033` declares `see_also ADR-0005`, but `ADR-0005` has no `see_also ADR-0033`
 * `ADR-0034` declares `extends ADR-0002`, but `ADR-0002` has no `extended_by ADR-0034`
 * `ADR-0034` declares `extends ADR-0014`, but `ADR-0014` has no `extended_by ADR-0034`
 * `ADR-0034` declares `extends ADR-0015`, but `ADR-0015` has no `extended_by ADR-0034`
@@ -75,8 +84,6 @@ record set, not rendering artifacts.
 * `ADR-0035` declares `extends ADR-0022`, but `ADR-0022` has no `extended_by ADR-0035`
 * `ADR-0035` declares `extends ADR-0025`, but `ADR-0025` has no `extended_by ADR-0035`
 * `ADR-0035` declares `extends ADR-0033`, but `ADR-0033` has no `extended_by ADR-0035`
-* `ADR-0035` declares `extends ADR-0036`, but `ADR-0036` has no `extended_by ADR-0035`
-* `ADR-0036` declares `extends ADR-0035`, but `ADR-0035` has no `extended_by ADR-0036`
 * `ADR-0036` declares `extends ADR-0003`, but `ADR-0003` has no `extended_by ADR-0036`
 * `ADR-0037` declares `extends ADR-0016`, but `ADR-0016` has no `extended_by ADR-0037`
 * `ADR-0037` declares `extends ADR-0018`, but `ADR-0018` has no `extended_by ADR-0037`
@@ -95,7 +102,6 @@ record set, not rendering artifacts.
 * `ADR-0040` declares `extends ADR-0032`, but `ADR-0032` has no `extended_by ADR-0040`
 * `ADR-0040` declares `extends ADR-0037`, but `ADR-0037` has no `extended_by ADR-0040`
 * `ADR-0040` declares `extends ADR-0039`, but `ADR-0039` has no `extended_by ADR-0040`
-* `ADR-0040` declares `superseded_by ADR-0041`, but `ADR-0041` has no `supersedes ADR-0040`
 * `ADR-0041` declares `extends ADR-0016`, but `ADR-0016` has no `extended_by ADR-0041`
 * `ADR-0041` declares `extends ADR-0037`, but `ADR-0037` has no `extended_by ADR-0041`
 * `ADR-0041` declares `extends ADR-0038`, but `ADR-0038` has no `extended_by ADR-0041`

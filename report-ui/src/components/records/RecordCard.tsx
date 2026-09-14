@@ -4,9 +4,9 @@
  * annotation and a `raw`/`nice` flip; a body that is either the rendered view or the raw JSON.
  *
  * The two harnesses keep different session-log schemas (`claude/*` vs `codex/*` record
- * kinds, different envelopes), so each gets its own base: `RecordCardClaude` and
- * `RecordCardCodex` fix the harness and classify/render through that harness's catalogue;
- * `RecordCard` dispatches on the `harness` prop.
+ * kinds, different envelopes), so the card carries the `harness` its thread was recorded
+ * under and classifies and renders through that harness's catalogue. It is the one prop the
+ * two dialects differ by, so there is one card rather than a pair of fixed ones.
  */
 import { Component, useState, type ReactNode } from "react";
 import { Link as LinkIcon } from "lucide-react";
@@ -72,15 +72,21 @@ export interface RecordCardProps {
   ctx?: CtxTag | null;
   /** The view every card follows (`RecordViewToggle`); a card's own flip overrides it until the next change. */
   view: RecordView;
-  /** The `line=` deeplink to this record; renders the permalink button when given. */
+  /** The `line=`/`subline=` deeplink to this record; renders the permalink button when given. */
   permalink?: string;
+  /**
+   * The card's element id, which the deeplink scrolls to. Defaults to `L<line>` — the
+   * primary thread's numbering. A subagent's transcript numbers its own lines from 1, so a
+   * band passes a thread-qualified anchor and the two `L7`s cannot collide on one page.
+   */
+  anchor?: string;
 }
 
 interface BaseProps extends RecordCardProps {
   harness: string;
 }
 
-function RecordCardBase({ harness, lineNo, raw, ctx, view, permalink }: BaseProps) {
+function RecordCardBase({ harness, lineNo, raw, ctx, view, permalink, anchor }: BaseProps) {
   // A card's own flip lasts until the page-wide view next changes (state derived from a prop).
   const [own, setOwn] = useState<RecordView>(view);
   const [seen, setSeen] = useState<RecordView>(view);
@@ -94,7 +100,7 @@ function RecordCardBase({ harness, lineNo, raw, ctx, view, permalink }: BaseProp
   const ts = rec?.timestamp ?? null;
 
   return (
-    <div className="rec" data-kind={kind} data-harness={harness} data-el="RecordCard" id={`L${lineNo}`}>
+    <div className="rec" data-kind={kind} data-harness={harness} data-el="RecordCard" id={anchor ?? `L${lineNo}`}>
       <div className="rec-head">
         <Pill kind={kind} />
         {/* The meta run is named part by part so a narrow card can drop the least load-bearing of them. */}
@@ -171,11 +177,5 @@ class SafeBody extends Component<{ harness: string; rec: Rec; kind: string; raw:
   }
 }
 
-/** A Claude session-log line: classified and rendered through the `claude/*` record catalogue. */
-export const RecordCardClaude = (props: RecordCardProps) => <RecordCardBase {...props} harness="claude" />;
-
-/** A Codex session-log line: classified and rendered through the `codex/*` record catalogue. */
-export const RecordCardCodex = (props: RecordCardProps) => <RecordCardBase {...props} harness="codex" />;
-
-/** Dispatch by harness; an unknown harness still classifies through its own prefix. */
+/** One session-log line, classified and rendered through its harness's record catalogue. */
 export const RecordCard = ({ harness, ...props }: BaseProps) => <RecordCardBase {...props} harness={harness} />;

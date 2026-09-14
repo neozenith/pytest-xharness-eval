@@ -3,101 +3,105 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: A tolerant reader still honours its declaration
+description: forgiving an unknown key but forwarding a null into a typed field only moves the failure
 tags: [architecture]
 status: accepted
 accepted_on: 2026-08-28
 last_changed_on: 2026-08-28
-relates_to:
-  - { relation: extends, target: ADR-0032 }
-  - { relation: extends, target: ADR-0037 }
+provenance: "A stored record carrying `{\"at\": null}` used to sort last, and afterwards aborted the whole combine step. The readers had started trusting a declaration the boundary constructor did not honour."
+enforced_in:
+  - src/pytest_xharness_eval/model/documents.py
+  - src/pytest_xharness_eval/model/layout.py (`SessionDir`, `LocatedSession`)
+  - src/pytest_xharness_eval/emit/metrics.py (`from_dict`)
 generated: { by: human:neozenith, at: 2026-08-28T00:00:00Z }
 ---
 
-# 0038: A tolerant reader still honours its declaration
+> **Lens**: Tolerance at a boundary is a promise to the callers *inside* it.
+> Whatever the document says, what comes out is what the type declares.
+> A reader that forgives an unknown key but forwards a `None` into a field typed `str` has not been tolerant.
+> It has moved the failure somewhere the document is no longer in hand.
+> The same rule shapes the types themselves.
+> A field that is optional only because one constructor cannot fill it is two types wearing one name.
+> The empty default is the bug waiting for a caller.
 
-Status: accepted, 2026-08-28. Refines
-[0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (all run output
-consolidates under a cache dir) and
-[0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md)
-(the emitted records are types, and the cache tree has one owner). Structural
-only: no serialised key and no metric's value changes, and the characterization
-goldens are byte-identical.
+## Relates to
 
-## Context
+- Extends [ADR-0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (the record's status line says "refines")
+- Extends [ADR-0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md) (the record's status line says "refines")
 
-0037 turned the two emitted documents into types and gave the cache tree one
-owner. Both of its boundary constructors were tolerant in a way that produced a
-value its own declaration did not describe.
+## Problem
 
-**`CellMetrics.from_dict` dropped unknown keys but kept mistyped ones.** It
-existed so that a capture written by an older version reads as a partial record
-rather than as a failed rebuild, and absent keys correctly fell back to the
-field defaults. A key that was *present and null* did not: `at: str = ""` could
-hold `None`. Before 0037 every reader spelled its own `str(r.get("at") or "")`
-and tolerated that; afterwards the readers trusted the declaration, so the same
-stored record that used to sort last now aborted the whole combine step:
+### Symptom
+
+0037 turned the two emitted documents into types and gave the cache tree one owner.
+Both of its boundary constructors were tolerant in a way that produced a value its own declaration did not describe.
+
+**`CellMetrics.from_dict` dropped unknown keys but kept mistyped ones**.
+It existed so that a capture written by an older version reads as a partial record rather than as a failed rebuild.
+Absent keys correctly fell back to the field defaults.
+A key that was *present and null* did not: `at: str = ""` could hold `None`.
+Before 0037 every reader spelled its own `str(r.get("at") or "")` and tolerated that.
+Afterwards the readers trusted the declaration, so the same stored record that used to sort last now aborted the whole combine step:
 
 | Reader | Before 0037 | After 0037, on `{"at": null}` |
 | --- | --- | --- |
 | `report.aggregate_history` | `sorted(key=str(r.get("at") or ""))` | `TypeError: '<' not supported between 'str' and 'NoneType'` |
 | `replay.migrate_legacy` | `_run_ts_of(str(hist.get("at") or ""))` → `00000000T000000Z` | `AttributeError` on `None` |
 
-A type that promises to survive a foreign document, and a test named for that
-promise, must not turn a tolerated document into a crash one layer up.
+### Pain point
 
-**`SessionDir` made an illegal state representable.** One type carried both a
-path and the five coordinates of `results/{skill}/{harness}/{model}/{run}/{session}`,
-with the coordinates defaulting to `""` for the callers handed a directory
-rather than finding one (a replay, a harness adapter re-reading its own log).
-Those callers could still ask for the published key and the published link, and
-got `"////sid"` and `"../results/////sid/log.jsonl"` back — no error, a garbage
-URL on the report page. Both constructors were documented as ordinary usage and
-the type is public, so "no caller does that today" was not an invariant.
+A type that promises to survive a foreign document, and a test named for that promise, must not turn a tolerated document into a crash.
+The crash simply lands one layer up.
+
+**`SessionDir` made an illegal state representable.** One type carried both a path and the five coordinates of `results/{skill}/{harness}/{model}/{run}/{session}`.
+The coordinates defaulted to `""` for the callers handed a directory rather than finding one.
+Those are a replay, and a harness adapter re-reading its own log.
+Those callers could still ask for the published key and the published link.
+They got `"////sid"` and `"../results/////sid/log.jsonl"` back: no error, and a garbage URL on the report page.
+Both constructors were documented as ordinary usage and the type is public, so "no caller does that today" was not an invariant.
 
 ## Decision
 
-**A value that does not match its field's declared type is dropped, exactly as
-an unknown key is.** `CellMetrics.from_dict` resolves what each field admits
-once, from the field annotations themselves (`int | None` → `(int, NoneType)`),
-and keeps a stored value only when it is one of them; anything else leaves the
-field at its default. JSON's single number type is the one widening: an `int`
-where a `float` is declared is read as a float. The defaults story now covers
-*present-but-null* as well as absent, which is what makes the declaration true
-for every reader downstream — including the two above, which stay written as if
-the type were honest, because it is.
+### The lens
 
-**The two ways to hold a session directory are two types.** `layout.SessionDir`
-is a directory addressed by path: `log.jsonl`, `result.json`, `history.json`,
-`subagents/` and `mkdir()`, and no report link, because a bare path does not
-know where it sits in a cache. `layout.LocatedSession` extends it with the five
-coordinates and *therefore* with `rel` and `report_link()`. Only `CacheLayout`
-builds one — `session(...)` is handed the coordinates, `sessions()` reads them
-off the walk — so a located session always has all five, and the empty-string
-coordinate is gone rather than merely undocumented. `report.IndexRow.of` takes
-a `LocatedSession`, which is now checked rather than hoped for; `pipeline`, the
-harness adapters and `replay.rebuild_result` take the narrow type.
+- **Given**: A field that is optional only because one constructor cannot fill it is two types wearing one name.
+- **We prefer**: Dropping a value that does not match its field's declared type.
+  Splitting the two ways of holding a session directory into two types.
+  Those are preferred over forwarding a null into a typed field and defaulting five coordinates to `""`.
+- **Because**: Tolerance at a boundary is a promise to the callers inside it.
+  Whatever the document says, what comes out is what the type declares.
+- **Unless**: JSON's single number type is at stake: an `int` where a `float` is declared is read as a float, the one widening.
 
-Both rules are pinned: a `"at": null` record in the metrics-record test, in the
-report's tolerance test and in the legacy-migration test, and the absence of the
-link surface on the narrow type in the layout test.
+### In practice
+
+- **A value that does not match its field's declared type is dropped, exactly as an unknown key is**.
+  `CellMetrics.from_dict` resolves what each field admits once, from the field annotations themselves (`int | None` → `(int, NoneType)`).
+  It keeps a stored value only when it is one of them, and anything else leaves the field at its default.
+  JSON's single number type is the one widening: an `int` where a `float` is declared is read as a float.
+  The defaults story now covers *present-but-null* as well as absent.
+  That is what makes the declaration true for every reader downstream, including the two above.
+  Those stay written as if the type were honest, because it is.
+- **The two ways to hold a session directory are two types.** `layout.SessionDir` is a directory addressed by path.
+  It offers `log.jsonl`, `result.json`, `history.json`, `subagents/` and `mkdir()`, and no report link.
+  A bare path does not know where it sits in a cache.
+  `layout.LocatedSession` extends it with the five coordinates and *therefore* with `rel` and `report_link()`.
+  Only `CacheLayout` builds one.
+  `session(...)` is handed the coordinates, and `sessions()` reads them off the walk.
+  A located session therefore always has all five, and the empty-string coordinate is gone rather than merely undocumented.
+  `report.IndexRow.of` takes a `LocatedSession`, which is now checked rather than hoped for; `pipeline`, the harness adapters and `replay.rebuild_result` take the narrow type.
+- Both rules are pinned.
+  An `"at": null` record appears in the metrics-record test, the report's tolerance test and the legacy-migration test.
+  The absence of the link surface on the narrow type is pinned in the layout test.
 
 ## Consequences
 
-`SessionDir.at(path)` is gone; the type has one field, so `SessionDir(path)` is
-the constructor. 0037 named `at` as the entry point for a caller handed a
-directory — that caller now names the type itself, and cannot reach the link
-surface at all.
+### Pros
 
-Reading a `history.json` whose value is null yields the same `""` and `0` that a
-missing key yields (0037's consequence, now extended to nulls). A record with no
-`at` at all still sorts first and still stamps `00000000T000000Z`.
+- Reading a `history.json` whose value is null yields the same `""` and `0` that a missing key yields (0037's consequence, now extended to nulls).
+  A record with no `at` at all still sorts first and still stamps `00000000T000000Z`.
 
-## Lens
+### Cons
 
-Tolerance at a boundary is a promise to the callers *inside* it: whatever the
-document says, what comes out is what the type declares. A reader that forgives
-an unknown key but forwards a `None` into a field typed `str` has not been
-tolerant, it has moved the failure somewhere the document is no longer in hand.
-The same rule shapes the types themselves — a field that is optional only because
-one constructor cannot fill it is two types wearing one name, and the empty
-default is the bug waiting for a caller.
+- `SessionDir.at(path)` is gone; the type has one field, so `SessionDir(path)` is the constructor.
+  0037 named `at` as the entry point for a caller handed a directory.
+  That caller now names the type itself, and cannot reach the link surface at all.

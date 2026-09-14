@@ -3,54 +3,68 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: A result names the case that produced it, and the per-turn charts have a session-log-line axis
+description: say which question produced the evidence, and draw a measurement where it was taken
 tags: [report, evidence]
 status: accepted
 accepted_on: 2026-08-23
 last_changed_on: 2026-08-23
-relates_to:
-  - { relation: extends, target: ADR-0018 }
-  - { relation: extends, target: ADR-0024 }
+provenance: With one case per skill the suite and case were implicit, and a second suite made them ambiguous. A reader scrolling a turn's records was asking about a log line rather than about a turn.
+enforced_in:
+  - src/pytest_xharness_eval/model/case.py
+  - src/pytest_xharness_eval/emit/index.py
+  - report-ui/src/components/
 generated: { by: human:neozenith, at: 2026-08-23T00:00:00Z }
 ---
 
-# 0025: A result names the case that produced it, and the per-turn charts have a session-log-line axis
+> **Lens**: Say which question produced the evidence, and draw a measurement where it was taken rather than where it would look smoother.
 
-Status: accepted, 2026-08-23. Refines [0018](0018-fixtures-directory-and-metrics-history.md)
-and [0024](0024-context-window-metrics-injected-messages-and-design-tokens.md).
+## Relates to
 
-## Context
+- Extends [ADR-0018](0018-fixtures-directory-and-metrics-history.md) (the record's status line says "refines")
+- Extends [ADR-0024](0024-context-window-metrics-injected-messages-and-design-tokens.md) (the record's status line says "refines")
 
-A `SessionView` showed the harness, the model and the node id, but not which suite
-file and case produced the run, which fixture it started from, or the prompt that
-was sent; with one case per skill that was implicit, with a second suite it is not.
-The four per-turn charts answered "what happened on turn 3" but not "what was the
-state at line 27 of the log", which is the question a reader has while scrolling
-the turn's records.
+## Problem
+
+### Symptom
+
+A `SessionView` showed the harness, the model and the node id.
+It did not show which suite file and case produced the run, which fixture it started from, or the prompt that was sent.
+With one case per skill that was implicit; with a second suite it is not.
+
+### Pain point
+
+The four per-turn charts answered "what happened on turn 3", but not "what was the state at line 27 of the log".
+The second is the question a reader has while scrolling the turn's records.
 
 ## Decision
 
-`RunResult.case` records `suite` (the `eval_*.py` path relative to the rootdir),
-`name`, `skill`, `fixture` and `prompt`; the plugin fills it after a run and the
-replay command carries it forward from the previous result, since the log does not
-know it. The history line carries `suite`, `case`, `skill` and `fixture` (not the
-prompt); the index and `SessionMetaTable` carry all five, and `SessionTable` gains
-a `suite` column.
+### The lens
 
-Every per-turn chart can be drawn against the session-log line instead of the turn
-(`ChartAxisToggle`). A value holds from the line that measured it (the turn's first
-assistant record on Claude, its `token_count` on Codex) until the next measurement,
-drawn as a step; turn starts are marked. The waterfall becomes a stacked step area
-of cumulative tokens by category; the output and tier bars sit at their measuring
-line. Nothing is interpolated between measurements.
+- **Given**: The session log does not know which case produced it, but the plugin does at the moment it runs the cell.
+- **We prefer**: Recording the case on the result and offering a session-log-line axis, over leaving the suite implicit and drawing only a per-turn axis.
+- **Because**: A measurement should be drawn where it was taken, rather than where it would look smoother.
+  Evidence should say which question produced it.
+- **Unless**: never
+
+### In practice
+
+- `RunResult.case` records `suite` (the `eval_*.py` path relative to the rootdir), `name`, `skill`, `fixture` and `prompt`.
+  The plugin fills it after a run, and the replay command carries it forward from the previous result, since the log does not know it.
+  The history line carries `suite`, `case`, `skill` and `fixture`, but not the prompt.
+  The index and `SessionMetaTable` carry all five, and `SessionTable` gains a `suite` column.
+- Every per-turn chart can be drawn against the session-log line instead of the turn (`ChartAxisToggle`).
+  A value holds from the line that measured it until the next measurement, drawn as a step.
+  That measuring line is the turn's first assistant record on Claude, and its `token_count` on Codex.
+  Turn starts are marked.
+  The waterfall becomes a stacked step area of cumulative tokens by category; the output and tier bars sit at their measuring line.
+  Nothing is interpolated between measurements.
 
 ## Consequences
 
-Results written before this decision show "not recorded" for the suite until
-replayed, and replay can only carry what an earlier result stored. The per-line
-charts are honest about granularity: a flat segment means "no new measurement",
-not "nothing happened".
+### Pros
 
-## Lens
+- The per-line charts are honest about granularity: a flat segment means "no new measurement", not "nothing happened".
 
-Say which question produced the evidence, and draw a measurement where it was
-taken rather than where it would look smoother.
+### Cons
+
+- Results written before this decision show "not recorded" for the suite until replayed, and replay can only carry what an earlier result stored.

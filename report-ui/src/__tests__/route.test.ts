@@ -1,4 +1,4 @@
-import { overviewSearch, overviewWith, parseSearch, routeSearch, sessionSearch } from "@/lib/route";
+import { overviewSearch, overviewWith, parseSearch, routeSearch, sessionSearch, threadRefParam } from "@/lib/route";
 
 test("query routes parse and round-trip; legacy fragments parse identically", () => {
   const noFacets = { skill: null, harness: null, model: null };
@@ -13,6 +13,8 @@ test("query routes parse and round-trip; legacy fragments parse identically", ()
     axis: null,
     rec: null,
     line: null,
+    subTurn: null,
+    subLine: null,
     theme: null,
   });
   expect(parseSearch("?session=abc&turn=3&view=detailed")).toMatchObject({ view: "session", sessionId: "abc", turn: 3, turnView: "detailed" });
@@ -30,6 +32,29 @@ test("the newer params parse, serialise in a fixed order, and reject junk", () =
   expect(sessionSearch("abc", 2, "detailed", { axis: "line", rec: "raw", line: 9, theme: "dark" })).toBe(
     "?session=abc&turn=2&view=detailed&axis=line&rec=raw&line=9&theme=dark",
   );
+});
+
+test("a spawned thread's turn and transcript line are addressable, and the pair is what makes them meaningful", () => {
+  // both numbers belong to the thread, never to the session: the agent id travels with them
+  expect(parseSearch("?session=abc&subturn=agent-7f3/2")).toMatchObject({ subTurn: { id: "agent-7f3", n: 2 }, subLine: null });
+  expect(parseSearch("?session=abc&subline=agent-7f3/15")).toMatchObject({ subLine: { id: "agent-7f3", n: 15 } });
+  // an id that itself contains a slash still round-trips: the turn is what follows the *last* one
+  expect(parseSearch("?session=abc&subturn=a/b/3")).toMatchObject({ subTurn: { id: "a/b", n: 3 } });
+  // half a reference is no reference: a bare number, a bare agent, a non-numeric turn, an empty agent
+  for (const junk of ["subturn=4", "subturn=agent-7f3", "subturn=agent-7f3/x", "subturn=/2", "subturn="]) {
+    expect(parseSearch(`?session=abc&${junk}`)).toMatchObject({ subTurn: null });
+  }
+  // the separator is written back literally, not percent-encoded, so the URL stays readable
+  const search = sessionSearch("abc", null, null, { subTurn: { id: "agent-7f3", n: 2 }, subLine: { id: "agent-7f3", n: 15 } });
+  expect(search).toBe("?session=abc&subturn=agent-7f3/2&subline=agent-7f3/15");
+  expect(routeSearch(parseSearch(search))).toBe(search);
+  /*
+   * The writer is total against the reader. A Codex fork can arrive with neither a session id
+   * nor a meta id, and `{ id: "", n: 2 }` would serialise to `/2` — which the reader above
+   * rejects, leaving a row that cannot be reopened and a band of dead permalinks.
+   */
+  expect(threadRefParam({ id: "", n: 2 })).toBeNull();
+  expect(sessionSearch("abc", null, null, { subTurn: { id: "", n: 2 }, subLine: { id: "", n: 9 } })).toBe("?session=abc");
 });
 
 test("overview sort and theme round-trip", () => {

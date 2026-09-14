@@ -3,44 +3,58 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Evals are `eval_*.py` modules collected by a directory-scoped hook
+description: a scoped collect hook keeps paid cells away from an ordinary unit-test run
 tags: [collection]
 status: accepted
 accepted_on: 2026-08-20
 last_changed_on: 2026-08-20
-relates_to:
-  - { relation: extended_by, target: ADR-0016 }
-  - { relation: extended_by, target: ADR-0014 }
+provenance: pytest's `python_files` option is a single rootdir-level setting, so changing it to `eval_*.py` would stop `test_*.py` collecting across the whole repository.
+enforced_in:
+  - src/pytest_xharness_eval/plugin/collect.py
+  - CLAUDE.md ("Never `pytest skills` from the root")
 generated: { by: human:neozenith, at: 2026-08-20T00:00:00Z }
 ---
 
-# 0008: Evals are `eval_*.py` modules collected by a directory-scoped hook
+> **Lens**: Separate paid work from free work by collection scope and name, never by a skip marker that exits green.
 
-Status: accepted, 2026-08-20. Refined by
-[0016](0016-results-travel-on-the-test-report.md): the `eval_` prefix also applies
-to case functions. The `skills/` root is now the `xharness_skills_dir` ini key
-([0014](0014-register-through-the-pytest11-entry-point.md)).
+## Relates to
 
-## Context
+- Extended by [ADR-0016](0016-results-travel-on-the-test-report.md) (the record's status line says "refined by"; the `eval_` prefix also applies to case functions)
+- Extended by [ADR-0014](0014-register-through-the-pytest11-entry-point.md) (the `skills/` root is now the `xharness_skills_dir` ini key)
 
-Paid eval cells must never be triggered by an ordinary unit-test run. pytest's
-`python_files` option is a single rootdir-level setting, so changing it to
-`eval_*.py` would stop `test_*.py` collecting across the whole repository.
+## Problem
+
+### Symptom
+
+Paid eval cells must never be triggered by an ordinary unit-test run.
+
+### Pain point
+
+pytest's `python_files` option is a single rootdir-level setting, so changing it to `eval_*.py` would stop `test_*.py` collecting across the whole repository.
 
 ## Decision
 
-An eval case is a Python module named `eval_*.py` under `skills/<skill>/evals/`,
-beside its `fixture/` and `captured/` directories. The plugin collects it through
-its own `pytest_collect_file` hook scoped to that path shape. `python_files` is
-left at its default.
+### The lens
+
+- **Given**: A plugin may add its own `pytest_collect_file` hook and scope it to a path shape.
+- **We prefer**: A directory-scoped `pytest_collect_file` hook over an `eval_*.py` value for `python_files`, and over a skip marker that exits green.
+- **Because**: It separates paid cells from unit tests by name and by scope, leaving `python_files` at its default for the rest of the repository.
+- **Unless**: never
+
+### In practice
+
+- An eval case is a Python module named `eval_*.py` under `skills/<skill>/evals/`, beside its `fixture/` and `captured/` directories.
+- The plugin collects it through its own `pytest_collect_file` hook scoped to that path shape.
+  `python_files` is left at its default.
 
 ## Consequences
 
-The `eval_*` prefix separates paid cells from unit tests by name. Because a case
-is an executable module, custom verifiers are ordinary functions and need no
-second mechanism (ADR 0013). A directory that matches the layout but defines no
-case fails collection loudly rather than contributing zero cells.
+### Pros
 
-## Lens
+- The `eval_*` prefix separates paid cells from unit tests by name.
+- Because a case is an executable module, custom verifiers are ordinary functions and need no second mechanism (ADR 0013).
+- A directory that matches the layout but defines no case fails collection loudly rather than contributing zero cells.
 
-Separate paid work from free work by collection scope and name, never by a skip
-marker that exits green.
+### Cons
+
+- The harness owns a collection rule of its own, which must keep step with pytest's (the inheritance ADR 0001 accepted).

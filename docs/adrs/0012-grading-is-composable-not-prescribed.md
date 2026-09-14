@@ -3,38 +3,55 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Grading semantics are not prescribed; the plugin supplies primitives
+description: case authors get composable primitives, and the only house rule is that no check passes silently
 tags: [grading]
 status: accepted
 accepted_on: 2026-08-21
 last_changed_on: 2026-08-21
+provenance: Agent prose is non-deterministic, so byte-exact comparison always fails. Loosening comparison too far produces a grader that cannot fail. What counts as a correct run differs per skill, and is not knowable up front.
+enforced_in:
+  - src/pytest_xharness_eval/verify/checks.py
+  - src/pytest_xharness_eval/model/output.py
+  - docs/rollout.md (the published grader surface)
 generated: { by: human:neozenith, at: 2026-08-21T00:00:00Z }
 ---
 
-# 0012: Grading semantics are not prescribed; the plugin supplies primitives
+> **Lens**: Give case authors tools, not a policy; enforce only that no check can silently pass.
 
-Status: accepted, 2026-08-21; golden-tree and projection
-primitives not yet shipped.
+## Problem
 
-## Context
+### Symptom
 
-Agent prose is non-deterministic, so byte-exact comparison of transcripts always
-fails, while loosening comparison too far produces a grader that cannot fail. What
-counts as a correct run differs per skill and is not knowable up front.
+Agent prose is non-deterministic, so byte-exact comparison of transcripts always fails, while loosening comparison too far produces a grader that cannot fail.
+
+### Pain point
+
+What counts as a correct run differs per skill and is not knowable up front, so any mandated semantic would be wrong for some skill.
 
 ## Decision
 
-No single comparison semantic is mandated. A case is an ordinary function that
-composes checks with plain `assert` over the `RunResult` and the workspace. The
-plugin's set of grading primitives is curated over time; an LLM judge may join it
-later as one optional primitive, never as the house rule.
+### The lens
+
+- **Given**: A case is an ordinary Python function, so it can compose whatever checks it needs.
+- **We prefer**: A curated set of grading primitives composed with plain `assert`, over a single mandated comparison semantic or a house LLM judge.
+- **Because**: New primitives can then be added without touching existing cases.
+  No case is forced into a semantic that does not suit its skill.
+- **Unless**: a check cannot evaluate, in which case it raises; it never passes.
+
+### In practice
+
+- A case is an ordinary function that composes checks with plain `assert` over the `RunResult` and the workspace.
+- The plugin's set of grading primitives is curated over time.
+  An LLM judge may join it later as one optional primitive, never as the house rule.
 
 ## Consequences
 
-New primitives are added without touching existing cases. The one invariant that
-survives: a check that cannot evaluate raises; it never passes. Today only plain
-assertions are shipped; the reference case shows the intended layering.
+### Pros
 
-## Lens
+- New primitives are added without touching existing cases.
+- The one invariant that survives: a check that cannot evaluate raises; it never passes.
 
-Give case authors tools, not a policy; enforce only that no check can silently
-pass.
+### Cons
+
+- Today only plain assertions are shipped; the reference case shows the intended layering.
+  Golden-tree and projection primitives are not yet built.

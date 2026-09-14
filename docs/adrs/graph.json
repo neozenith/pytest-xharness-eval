@@ -85,7 +85,7 @@
         "colour": "#7c3aed",
         "file": "0001-ship-as-a-pytest-plugin.md",
         "title": "Ship as a pytest plugin with per-skill opt-in evals",
-        "description": "Ship as a pytest plugin with per-skill opt-in evals",
+        "description": "pytest already owns discovery, selection and reporting, so the harness is a plugin",
         "status": "accepted",
         "group": "packaging",
         "tags": "packaging"
@@ -99,7 +99,7 @@
         "colour": "#0d9488",
         "file": "0002-every-cell-invokes-the-real-cli.md",
         "title": "Every eval cell always invokes the real CLI",
-        "description": "Every eval cell always invokes the real CLI",
+        "description": "no replay tier and no --live flag; a cell that did not spawn an agent has measured nothing",
         "status": "accepted",
         "group": "evidence",
         "tags": "evidence, harness"
@@ -113,7 +113,7 @@
         "colour": "#a16207",
         "file": "0003-runresult-is-a-stdlib-dataclass.md",
         "title": "RunResult is a stdlib dataclass serialised to JSON",
-        "description": "RunResult is a stdlib dataclass serialised to JSON",
+        "description": "a committed JSON Schema is the parity contract, so the plugin needs no validation library",
         "status": "accepted",
         "group": "architecture",
         "tags": "architecture"
@@ -127,7 +127,7 @@
         "colour": "#4d7c0f",
         "file": "0004-workspace-is-a-plain-copy.md",
         "title": "A workspace is a plain copy of the fixture tree, with no git context",
-        "description": "A workspace is a plain copy of the fixture tree, with no git context",
+        "description": "no git init and no worktree, so diff-reading skills stay out of scope until the seam is used",
         "status": "accepted",
         "group": "collection",
         "tags": "collection"
@@ -141,7 +141,7 @@
         "colour": "#4f46e5",
         "file": "0005-private-codex-home-per-run.md",
         "title": "A private per-run CODEX_HOME, seeded with the credential files",
-        "description": "A private per-run CODEX_HOME, seeded with the credential files",
+        "description": "isolating the whole state store makes log correlation structural instead of a race",
         "status": "accepted",
         "group": "harness",
         "tags": "harness"
@@ -155,7 +155,7 @@
         "colour": "#a21caf",
         "file": "0006-local-price-table-is-authoritative.md",
         "title": "A local prices.toml is authoritative, with an optional upstream seed",
-        "description": "A local prices.toml is authoritative, with an optional upstream seed",
+        "description": "an upstream feed fills the table but is never the thing the harness reads",
         "status": "accepted",
         "group": "pricing",
         "tags": "pricing"
@@ -169,7 +169,7 @@
         "colour": "#a21caf",
         "file": "0007-unpriced-model-aborts-before-spend.md",
         "title": "An unpriced model aborts at matrix expansion and never prices as zero",
-        "description": "An unpriced model aborts at matrix expansion and never prices as zero",
+        "description": "price coverage is checked before the first paid call, and the failure names the fix",
         "status": "accepted",
         "group": "pricing",
         "tags": "pricing, collection"
@@ -183,7 +183,7 @@
         "colour": "#4d7c0f",
         "file": "0008-evals-are-eval-prefixed-modules.md",
         "title": "Evals are `eval_*.py` modules collected by a directory-scoped hook",
-        "description": "Evals are `eval_*.py` modules collected by a directory-scoped hook",
+        "description": "a scoped collect hook keeps paid cells away from an ordinary unit-test run",
         "status": "accepted",
         "group": "collection",
         "tags": "collection"
@@ -197,7 +197,7 @@
         "colour": "#7c3aed",
         "file": "0009-register-via-rootdir-conftest.md",
         "title": "Register the plugin from the rootdir conftest.py",
-        "description": "Register the plugin from the rootdir conftest.py",
+        "description": "the rootdir conftest is the one place pytest honours `pytest_plugins` for an uninstalled package",
         "status": "superseded",
         "group": "packaging",
         "tags": "packaging"
@@ -211,7 +211,7 @@
         "colour": "#4d7c0f",
         "file": "0010-matrix-options-and-dry-run.md",
         "title": "Global default matrix, per-case override, and --model / --cli / --dry-run",
-        "description": "Global default matrix, per-case override, and --model / --cli / --dry-run",
+        "description": "the matrix is the spend dial, so it is exposed as options rather than hidden behind -k",
         "status": "accepted",
         "group": "collection",
         "tags": "collection"
@@ -225,7 +225,7 @@
         "colour": "#4f46e5",
         "file": "0011-inject-skill-through-each-cli-path.md",
         "title": "The skill under test loads through each CLI's own skill path",
-        "description": "The skill under test loads through each CLI's own skill path",
+        "description": "the eval exercises skill loading, not skill text pasted into a prompt",
         "status": "accepted",
         "group": "harness",
         "tags": "harness"
@@ -239,7 +239,7 @@
         "colour": "#0284c7",
         "file": "0012-grading-is-composable-not-prescribed.md",
         "title": "Grading semantics are not prescribed; the plugin supplies primitives",
-        "description": "Grading semantics are not prescribed; the plugin supplies primitives",
+        "description": "case authors get composable primitives, and the only house rule is that no check passes silently",
         "status": "accepted",
         "group": "grading",
         "tags": "grading"
@@ -253,7 +253,7 @@
         "colour": "#0284c7",
         "file": "0013-verifiers-are-python-beside-the-case.md",
         "title": "Custom verifiers are Python modules beside the case",
-        "description": "Custom verifiers are Python modules beside the case",
+        "description": "import is the extension mechanism, so there is no registry, DSL or new file format",
         "status": "accepted",
         "group": "grading",
         "tags": "grading"
@@ -267,7 +267,7 @@
         "colour": "#7c3aed",
         "file": "0014-register-through-the-pytest11-entry-point.md",
         "title": "Register through the pytest11 entry point of an extracted package",
-        "description": "Register through the pytest11 entry point of an extracted package",
+        "description": "installing the package is the whole registration, and every location becomes an ini key",
         "status": "accepted",
         "group": "packaging",
         "tags": "packaging"
@@ -281,7 +281,7 @@
         "colour": "#4d7c0f",
         "file": "0015-harness-is-the-axis-and-the-project-owns-the-matrix.md",
         "title": "Harness is the axis name, and the project owns the default matrix",
-        "description": "Harness is the axis name, and the project owns the default matrix",
+        "description": "one word for the first axis, and a project scope between the case and the plugin default",
         "status": "accepted",
         "group": "collection",
         "tags": "collection, harness"
@@ -295,7 +295,7 @@
         "colour": "#4d7c0f",
         "file": "0016-results-travel-on-the-test-report.md",
         "title": "Results travel on the test report, and cells group by harness",
-        "description": "Results travel on the test report, and cells group by harness",
+        "description": "user_properties is the one channel xdist serialises, so per-cell records ride on it",
         "status": "accepted",
         "group": "collection",
         "tags": "collection, storage"
@@ -309,7 +309,7 @@
         "colour": "#7c3aed",
         "file": "0017-distributed-through-pypi-with-trusted-publishing.md",
         "title": "Distribute through PyPI with trusted publishing, released from a GitHub Release",
-        "description": "Distribute through PyPI with trusted publishing, released from a GitHub Release",
+        "description": "one trigger and one OIDC identity, so no long-lived publishing token is stored or rotated",
         "status": "accepted",
         "group": "packaging",
         "tags": "packaging"
@@ -323,7 +323,7 @@
         "colour": "#4d7c0f",
         "file": "0018-fixtures-directory-and-metrics-history.md",
         "title": "Fixtures live under evals/fixtures/, and every live cell appends to a metrics history",
-        "description": "Fixtures live under evals/fixtures/, and every live cell appends to a metrics history",
+        "description": "seed trees become a shared pool, and each paid cell appends one committed metrics line",
         "status": "accepted",
         "group": "collection",
         "tags": "collection, storage"
@@ -337,7 +337,7 @@
         "colour": "#ea580c",
         "file": "0019-per-call-ledger-and-ttl-priced-cache-writes.md",
         "title": "Every run carries a per-call ledger; tokens are reported as context and billed; cache writes price by TTL",
-        "description": "Every run carries a per-call ledger; tokens are reported as context and billed; cache writes price by TTL",
+        "description": "the per-call detail that explains every headline figure is kept rather than normalised away",
         "status": "accepted",
         "group": "accounting",
         "tags": "accounting, pricing"
@@ -351,7 +351,7 @@
         "colour": "#db2777",
         "file": "0020-captured-report-is-a-static-microsite.md",
         "title": "`captured/report.html` is a static microsite over the captured JSON",
-        "description": "`captured/report.html` is a static microsite over the captured JSON",
+        "description": "a static page over relative-path JSON is the cheapest reader that survives the next run",
         "status": "accepted",
         "group": "report",
         "tags": "report"
@@ -365,7 +365,7 @@
         "colour": "#ea580c",
         "file": "0021-metric-names-carry-unit-and-provenance.md",
         "title": "Metric names carry their unit and their source; the report has a named vocabulary and addressable ids",
-        "description": "Metric names carry their unit and their source; the report has a named vocabulary and addressable ids",
+        "description": "a metric name is read without its definition beside it, so it must carry unit and source",
         "status": "accepted",
         "group": "accounting",
         "tags": "accounting, report"
@@ -379,7 +379,7 @@
         "colour": "#ea580c",
         "file": "0022-record-kind-catalogue-and-skill-coverage.md",
         "title": "A catalogued record kind per log line, and skill file coverage per run",
-        "description": "A catalogued record kind per log line, and skill file coverage per run",
+        "description": "colour the kind of information, and measure which skill files a run actually touched",
         "status": "accepted",
         "group": "accounting",
         "tags": "accounting, grading"
@@ -393,7 +393,7 @@
         "colour": "#0d9488",
         "file": "0023-turn-boundaries-skill-ignore-and-replay.md",
         "title": "A turn owns its tools' results; skills declare what is not decision surface; captures replay without spend",
-        "description": "A turn owns its tools' results; skills declare what is not decision surface; captures replay without spend",
+        "description": "attribute evidence by cause, and never pay to recompute what is already on disk",
         "status": "accepted",
         "group": "evidence",
         "tags": "evidence"
@@ -407,7 +407,7 @@
         "colour": "#ea580c",
         "file": "0024-context-window-metrics-injected-messages-and-design-tokens.md",
         "title": "Context window consumption and timing are first-class metrics; injected messages are not prompts; the report is themed by design tokens and can be written standalone",
-        "description": "Context window consumption and timing are first-class metrics; injected messages are not prompts; the report is themed by design tokens and can be written standalone",
+        "description": "report what the provider measured, and qualify every percentage by its denominator",
         "status": "accepted",
         "group": "accounting",
         "tags": "accounting, report"
@@ -421,7 +421,7 @@
         "colour": "#db2777",
         "file": "0025-results-name-their-case-and-charts-have-a-log-line-axis.md",
         "title": "A result names the case that produced it, and the per-turn charts have a session-log-line axis",
-        "description": "A result names the case that produced it, and the per-turn charts have a session-log-line axis",
+        "description": "say which question produced the evidence, and draw a measurement where it was taken",
         "status": "accepted",
         "group": "report",
         "tags": "report, evidence"
@@ -435,7 +435,7 @@
         "colour": "#64748b",
         "file": "0026-skill-ignore-lives-in-the-pytest-config.md",
         "title": "What is not decision surface is declared in the project's pytest config, not in a dotfile beside the skill",
-        "description": "What is not decision surface is declared in the project's pytest config, not in a dotfile beside the skill",
+        "description": "a plugin's configuration lives where its host keeps configuration, not in a new dotfile",
         "status": "accepted",
         "group": "storage",
         "tags": "storage"
@@ -449,7 +449,7 @@
         "colour": "#ea580c",
         "file": "0027-coverage-follows-the-shells-working-directory.md",
         "title": "Skill coverage follows the shell's working directory",
-        "description": "Skill coverage follows the shell's working directory",
+        "description": "state a tool keeps between calls is part of every call's meaning, so the detector tracks cwd",
         "status": "accepted",
         "group": "accounting",
         "tags": "accounting, grading"
@@ -463,7 +463,7 @@
         "colour": "#db2777",
         "file": "0028-report-is-built-from-a-component-workspace.md",
         "title": "The report page is built from a component workspace and shipped as one file",
-        "description": "The report page is built from a component workspace and shipped as one file",
+        "description": "the build carries the dependencies so the wheel stays free of them",
         "status": "accepted",
         "group": "report",
         "tags": "report"
@@ -477,7 +477,7 @@
         "colour": "#ea580c",
         "file": "0029-the-billed-sum-is-named-accumulative-billed-tokens.md",
         "title": "The billed sum is named `accumulative_billed_tokens`",
-        "description": "The billed sum is named `accumulative_billed_tokens`",
+        "description": "name the aggregation as well as the unit, or the name will be read two ways",
         "status": "accepted",
         "group": "accounting",
         "tags": "accounting"
@@ -491,7 +491,7 @@
         "colour": "#a21caf",
         "file": "0030-price-rows-live-in-the-pytest-config.md",
         "title": "Project price rows live in the pytest config, not in a prices.toml beside it",
-        "description": "Project price rows live in the pytest config, not in a prices.toml beside it",
+        "description": "the second config file has to argue harder than the first, and prices state the published unit",
         "status": "accepted",
         "group": "pricing",
         "tags": "pricing, storage"
@@ -505,7 +505,7 @@
         "colour": "#db2777",
         "file": "0031-plotly-tamagui-and-a-deeplink-permutation-matrix.md",
         "title": "The report draws with Plotly on a Tamagui base, every state deeplinks, and a Playwright matrix sweeps them all",
-        "description": "The report draws with Plotly on a Tamagui base, every state deeplinks, and a Playwright matrix sweeps them all",
+        "description": "a quality bar over every permutation is only checkable if every state has a URL",
         "status": "accepted",
         "group": "report",
         "tags": "report"
@@ -519,7 +519,7 @@
         "colour": "#64748b",
         "file": "0032-all-run-output-consolidates-under-a-cache-dir.md",
         "title": "All run output consolidates under `.xharness_eval_cache/`, and the report is one combine step",
-        "description": "All run output consolidates under `.xharness_eval_cache/`, and the report is one combine step",
+        "description": "every writer owns a unique path and one combine step aggregates, as pytest-cov does",
         "status": "accepted",
         "group": "storage",
         "tags": "storage"
@@ -533,7 +533,7 @@
         "colour": "#0d9488",
         "file": "0033-subagent-transcripts-are-captured-and-billed.md",
         "title": "Subagent transcripts are captured evidence, and their tokens are billed",
-        "description": "Subagent transcripts are captured evidence, and their tokens are billed",
+        "description": "every thread the agent spawned is part of the run, so it is captured and billed",
         "status": "accepted",
         "group": "evidence",
         "tags": "evidence, accounting"
@@ -547,7 +547,7 @@
         "colour": "#4f46e5",
         "file": "0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md",
         "title": "A harness is a class, the registry is the only dispatch, and the layers are named",
-        "description": "A harness is a class, the registry is the only dispatch, and the layers are named",
+        "description": "give the axis a type, make the registry the only dispatch, and let a linter hold the boundary",
         "status": "accepted",
         "group": "harness",
         "tags": "harness, architecture"
@@ -561,7 +561,7 @@
         "colour": "#a16207",
         "file": "0035-the-nouns-carry-their-own-invariants.md",
         "title": "The nouns carry their own invariants",
-        "description": "The nouns carry their own invariants",
+        "description": "put the sum on the type that owns it, so the illegal state stops being a reviewer's job",
         "status": "accepted",
         "group": "architecture",
         "tags": "architecture"
@@ -575,7 +575,7 @@
         "colour": "#a16207",
         "file": "0036-a-folding-constructor-declares-its-keyword-fields.md",
         "title": "A folding constructor declares its keyword fields",
-        "description": "A folding constructor declares its keyword fields",
+        "description": "a TypedDict unpacked into the call checks the keywords `**kwargs Any` had erased",
         "status": "accepted",
         "group": "architecture",
         "tags": "architecture"
@@ -589,7 +589,7 @@
         "colour": "#64748b",
         "file": "0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md",
         "title": "The emitted records are types, and the cache tree has one owner",
-        "description": "The emitted records are types, and the cache tree has one owner",
+        "description": "a document a program emits is part of its interface, so it gets a type and a pinned key set",
         "status": "accepted",
         "group": "storage",
         "tags": "storage, architecture"
@@ -603,7 +603,7 @@
         "colour": "#a16207",
         "file": "0038-a-tolerant-reader-still-honours-its-declaration.md",
         "title": "A tolerant reader still honours its declaration",
-        "description": "A tolerant reader still honours its declaration",
+        "description": "forgiving an unknown key but forwarding a null into a typed field only moves the failure",
         "status": "accepted",
         "group": "architecture",
         "tags": "architecture"
@@ -617,7 +617,7 @@
         "colour": "#a16207",
         "file": "0039-the-package-listing-is-the-architecture.md",
         "title": "The package listing is the architecture",
-        "description": "The package listing is the architecture",
+        "description": "when the folders are the layers, \"may this import that\" has an answer a linter can check",
         "status": "accepted",
         "group": "architecture",
         "tags": "architecture"
@@ -631,7 +631,7 @@
         "colour": "#a16207",
         "file": "0040-the-plugin-is-a-hook-manifest.md",
         "title": "The plugin is a hook manifest, and each job behind it is a module",
-        "description": "The plugin is a hook manifest, and each job behind it is a module",
+        "description": "push the expensive line down until the pragma fits it exactly, and test what is left",
         "status": "accepted",
         "group": "architecture",
         "tags": "architecture, packaging"
@@ -645,7 +645,7 @@
         "colour": "#a16207",
         "file": "0041-the-vocabulary-is-a-domain-noun-and-the-manifest-is-a-manifest.md",
         "title": "A shared vocabulary is a domain noun, and a manifest exports nothing of its own",
-        "description": "A shared vocabulary is a domain noun, and a manifest exports nothing of its own",
+        "description": "a vocabulary belongs in the layer everyone may import, and it must type a field",
         "status": "accepted",
         "group": "architecture",
         "tags": "architecture"
@@ -659,7 +659,7 @@
         "colour": "#db2777",
         "file": "0042-the-overview-is-filtered-by-the-url.md",
         "title": "The overview is filtered by the URL, and the summary aggregates the chart's own groups",
-        "description": "The overview is filtered by the URL, and the summary aggregates the chart's own groups",
+        "description": "two views of the same data on one page group it the same way, or they are not a pair",
         "status": "accepted",
         "group": "report",
         "tags": "report"
@@ -673,7 +673,7 @@
         "colour": "#db2777",
         "file": "0043-the-overview-tables-are-budgeted-to-one-screen.md",
         "title": "The overview's tables are budgeted to one screen, and the aggregate has a decomposition as well as an accumulation",
-        "description": "The overview's tables are budgeted to one screen, and the aggregate has a decomposition as well as an accumulation",
+        "description": "a metric a reader cannot see is a metric that does not exist, so width is a contract",
         "status": "accepted",
         "group": "report",
         "tags": "report"
@@ -687,7 +687,7 @@
         "colour": "#4f46e5",
         "file": "0044-a-skill-is-invoked-the-way-its-user-invokes-it.md",
         "title": "A skill is invoked the way its user invokes it, in each harness's own syntax",
-        "description": "A skill is invoked the way its user invokes it, in each harness's own syntax",
+        "description": "an eval that has to explain the harness to the agent is measuring the harness",
         "status": "accepted",
         "group": "harness",
         "tags": "harness, collection"
@@ -701,7 +701,7 @@
         "colour": "#0284c7",
         "file": "0045-the-verifiers-ship-with-the-plugin.md",
         "title": "The verifiers ship with the plugin, and a rollout has one documented surface",
-        "description": "The verifiers ship with the plugin, and a rollout has one documented surface",
+        "description": "composable is a decision about the shape of grading, not a reason to ship no vocabulary",
         "status": "accepted",
         "group": "grading",
         "tags": "grading, architecture"
@@ -715,7 +715,7 @@
         "colour": "#0284c7",
         "file": "0046-a-golden-is-compared-facet-by-facet-within-a-declared-tolerance.md",
         "title": "A golden is compared facet by facet, and every facet declares its tolerance",
-        "description": "A golden is compared facet by facet, and every facet declares its tolerance",
+        "description": "name the parts of the answer, and say for each how much variation is still correct",
         "status": "accepted",
         "group": "grading",
         "tags": "grading, collection"
@@ -729,7 +729,21 @@
         "colour": "#059669",
         "file": "0047-adrs-are-authored-as-data-and-their-markdown-is-generated.md",
         "title": "ADRs are authored as data, and the argument travels verbatim",
-        "description": "ADRs are authored as data, and the argument travels verbatim",
+        "description": "the records become data, and the argument is carried as verbatim markdown block scalars",
+        "status": "superseded",
+        "group": "docs",
+        "tags": "docs"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0048",
+        "label": "0048",
+        "parent": "group-docs",
+        "colour": "#059669",
+        "file": "0048-the-record-schema-is-the-shipped-one-adopted-strictly.md",
+        "title": "The record schema is the librarian's shipped one, adopted strictly",
+        "description": "the corpus is re-authored into the strict shape rather than the schema loosened to fit it",
         "status": "accepted",
         "group": "docs",
         "tags": "docs"
@@ -742,7 +756,47 @@
         "target": "ADR-0014",
         "label": "superseded by",
         "relation": "superseded_by",
-        "note": "the record's status line says \"superseded by\""
+        "note": "the in-repository package location named in the Decision is superseded; the choice of a pytest plugin over a standalone CLI stands"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0002-see_also-ADR-0014",
+        "source": "ADR-0002",
+        "target": "ADR-0014",
+        "label": "see also",
+        "relation": "see_also",
+        "note": "inside this package the boundary is the `pragma: no cover` on every function that spawns a CLI"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0004-superseded_by-ADR-0014",
+        "source": "ADR-0004",
+        "target": "ADR-0014",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the project `tmp/` location is now the `xharness_workdir` ini key, default `tmp/evals`"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0006-extended_by-ADR-0014",
+        "source": "ADR-0006",
+        "target": "ADR-0014",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the table is now bundled inside the package and layered with the consumer's optional `xharness_prices` file"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0006-superseded_by-ADR-0030",
+        "source": "ADR-0006",
+        "target": "ADR-0030",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the project-level override moved from a rootdir `prices.toml` into `xharness_prices` ini lines; the bundled table is unchanged"
       }
     },
     {
@@ -752,7 +806,7 @@
         "target": "ADR-0016",
         "label": "extended by",
         "relation": "extended_by",
-        "note": "the record's status line says \"refined by\""
+        "note": "the record's status line says \"refined by\"; the `eval_` prefix also applies to case functions"
       }
     },
     {
@@ -762,7 +816,7 @@
         "target": "ADR-0014",
         "label": "extended by",
         "relation": "extended_by",
-        "note": "the record's status line says \"refined by\""
+        "note": "the `skills/` root is now the `xharness_skills_dir` ini key"
       }
     },
     {
@@ -772,7 +826,7 @@
         "target": "ADR-0014",
         "label": "superseded by",
         "relation": "superseded_by",
-        "note": "the record's status line says \"superseded by\""
+        "note": "superseded on 2026-08-21, the day it was accepted; kept because its Lens still applies to any uninstalled plugin"
       }
     },
     {
@@ -782,7 +836,7 @@
         "target": "ADR-0015",
         "label": "extended by",
         "relation": "extended_by",
-        "note": "the record's status line says \"refined by\""
+        "note": "`--cli` is `--harness`, and a project-scope `xharness_matrix` sits between the case and the plugin default"
       }
     },
     {
@@ -802,7 +856,7 @@
         "target": "ADR-0017",
         "label": "extended by",
         "relation": "extended_by",
-        "note": "the record's status line says \"refined by\""
+        "note": "distribution moved from an editable path dependency to PyPI"
       }
     },
     {
@@ -812,7 +866,7 @@
         "target": "ADR-0026",
         "label": "extended by",
         "relation": "extended_by",
-        "note": "the record's status line says \"refined by\""
+        "note": "the per-skill `.skillignore`, the one location read outside the ini keys, is gone"
       }
     },
     {
@@ -932,7 +986,7 @@
         "target": "ADR-0029",
         "label": "superseded by",
         "relation": "superseded_by",
-        "note": "the record's status line says \"superseded by\""
+        "note": "the `total_tokens` row is superseded; the billed sum is `accumulative_billed_tokens`"
       }
     },
     {
@@ -962,7 +1016,7 @@
         "target": "ADR-0027",
         "label": "extended by",
         "relation": "extended_by",
-        "note": "the record's status line says \"refined by\""
+        "note": "the detection rule is refined: shell commands are read at the working directory the shell actually had"
       }
     },
     {
@@ -992,7 +1046,7 @@
         "target": "ADR-0026",
         "label": "extended by",
         "relation": "extended_by",
-        "note": "the record's status line says \"refined by\""
+        "note": "the skill-ignore decision is refined; `.skillignore` is no longer read"
       }
     },
     {
@@ -1002,7 +1056,7 @@
         "target": "ADR-0027",
         "label": "extended by",
         "relation": "extended_by",
-        "note": "the record's status line says \"refined by\""
+        "note": "replay re-annotates coverage following the shell's working directory"
       }
     },
     {
@@ -1062,7 +1116,7 @@
         "target": "ADR-0023",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; its skill-ignore decision"
       }
     },
     {
@@ -1082,7 +1136,7 @@
         "target": "ADR-0022",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; its detection rule"
       }
     },
     {
@@ -1092,7 +1146,7 @@
         "target": "ADR-0023",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; replay re-annotates under the new rule"
       }
     },
     {
@@ -1132,7 +1186,7 @@
         "target": "ADR-0003",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says it \"keeps\" 0003's zero-runtime-dependency rule"
       }
     },
     {
@@ -1142,7 +1196,7 @@
         "target": "ADR-0021",
         "label": "supersedes",
         "relation": "supersedes",
-        "note": "the record's status line says \"supersedes\""
+        "note": "supersedes one row (`billed_tokens` \u2192 `total_tokens`)"
       }
     },
     {
@@ -1187,6 +1241,16 @@
     },
     {
       "data": {
+        "id": "ADR-0030-see_also-ADR-0007",
+        "source": "ADR-0030",
+        "target": "ADR-0007",
+        "label": "see also",
+        "relation": "see_also",
+        "note": "ADR 0007's stop-before-spend rule is unchanged"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0031-extends-ADR-0020",
         "source": "ADR-0031",
         "target": "ADR-0020",
@@ -1203,6 +1267,16 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0031-supersedes-ADR-0024",
+        "source": "ADR-0031",
+        "target": "ADR-0024",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "supersedes the fold-onto-the-last-colour series rule only"
       }
     },
     {
@@ -1227,12 +1301,22 @@
     },
     {
       "data": {
+        "id": "ADR-0031-supersedes-ADR-0028",
+        "source": "ADR-0031",
+        "target": "ADR-0028",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "supersedes the shadcn/recharts component stack only"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0032-extends-ADR-0014",
         "source": "ADR-0032",
         "target": "ADR-0014",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; path resolution"
       }
     },
     {
@@ -1242,7 +1326,17 @@
         "target": "ADR-0018",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; history"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0032-supersedes-ADR-0018",
+        "source": "ADR-0032",
+        "target": "ADR-0018",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "supersedes the `captured/` location and the `xharness_workdir` ini key"
       }
     },
     {
@@ -1252,7 +1346,17 @@
         "target": "ADR-0020",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; the microsite"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0032-supersedes-ADR-0020",
+        "source": "ADR-0032",
+        "target": "ADR-0020",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "supersedes the one-report-per-captured-directory rule"
       }
     },
     {
@@ -1262,7 +1366,7 @@
         "target": "ADR-0019",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; the ledger"
       }
     },
     {
@@ -1272,7 +1376,7 @@
         "target": "ADR-0021",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; nothing is truncated"
       }
     },
     {
@@ -1282,7 +1386,17 @@
         "target": "ADR-0032",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; the session directory layout"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0033-see_also-ADR-0005",
+        "source": "ADR-0033",
+        "target": "ADR-0005",
+        "label": "see also",
+        "relation": "see_also",
+        "note": "the private home already made the forked Codex rollouts the place they can all be found, and `primary_rollout()` already tells them apart"
       }
     },
     {
@@ -1292,7 +1406,7 @@
         "target": "ADR-0002",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; the real CLI"
       }
     },
     {
@@ -1302,7 +1416,7 @@
         "target": "ADR-0014",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; locations are ini keys"
       }
     },
     {
@@ -1312,7 +1426,7 @@
         "target": "ADR-0015",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; harness is the axis"
       }
     },
     {
@@ -1322,7 +1436,7 @@
         "target": "ADR-0023",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; replay"
       }
     },
     {
@@ -1342,7 +1456,7 @@
         "target": "ADR-0019",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; the per-call ledger"
       }
     },
     {
@@ -1352,7 +1466,7 @@
         "target": "ADR-0021",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; rates travel with the estimate"
       }
     },
     {
@@ -1362,7 +1476,7 @@
         "target": "ADR-0022",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; skill coverage"
       }
     },
     {
@@ -1372,7 +1486,7 @@
         "target": "ADR-0025",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; a result names its case"
       }
     },
     {
@@ -1382,17 +1496,17 @@
         "target": "ADR-0033",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; subagents are billed"
       }
     },
     {
       "data": {
-        "id": "ADR-0035-extends-ADR-0036",
+        "id": "ADR-0035-extended_by-ADR-0036",
         "source": "ADR-0035",
         "target": "ADR-0036",
-        "label": "extends",
-        "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the folding constructors' keyword fields are declared and type-checked there"
       }
     },
     {
@@ -1592,7 +1706,7 @@
         "target": "ADR-0041",
         "label": "superseded by",
         "relation": "superseded_by",
-        "note": "the record's status line says \"superseded by\""
+        "note": "its placement of `Verdict` in `plugin/verdict.py`, and the exports its manifest widened to, are superseded"
       }
     },
     {
@@ -1643,6 +1757,16 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0041-supersedes-ADR-0040",
+        "source": "ADR-0041",
+        "target": "ADR-0040",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "supersedes 0040's placement of `Verdict` in `plugin/verdict.py`, and the justification given there for it"
       }
     },
     {
@@ -1762,7 +1886,7 @@
         "target": "ADR-0008",
         "label": "supersedes",
         "relation": "supersedes",
-        "note": "the record's status line says \"supersedes\""
+        "note": "supersedes the `prompt=` field of `@evalcase` established there"
       }
     },
     {
@@ -1772,7 +1896,7 @@
         "target": "ADR-0012",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"delivers\""
+        "note": "the record's status line says \"delivers\"; the \"primitives pending\""
       }
     },
     {
@@ -1782,7 +1906,7 @@
         "target": "ADR-0013",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"delivers\""
+        "note": "the record's status line says \"delivers\"; the \"helper pending\""
       }
     },
     {
@@ -1792,7 +1916,7 @@
         "target": "ADR-0039",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; with a sixth layer"
       }
     },
     {
@@ -1832,7 +1956,27 @@
         "target": "ADR-0032",
         "label": "extends",
         "relation": "extends",
-        "note": "the record's status line says \"refines\""
+        "note": "the record's status line says \"refines\"; generated output has one owner"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0047-superseded_by-ADR-0048",
+        "source": "ADR-0047",
+        "target": "ADR-0048",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the verbatim `body` and the loosened optional fields are replaced by the strict record; the authored-YAML arrangement stands"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0048-supersedes-ADR-0047",
+        "source": "ADR-0048",
+        "target": "ADR-0047",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "replaces the verbatim `body` and the four loosened optional fields; the authored-YAML arrangement and the relation vocabulary stand"
       }
     }
   ],

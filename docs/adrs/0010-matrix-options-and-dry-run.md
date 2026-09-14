@@ -3,42 +3,57 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: Global default matrix, per-case override, and --model / --cli / --dry-run
+description: the matrix is the spend dial, so it is exposed as options rather than hidden behind -k
 tags: [collection]
 status: accepted
 accepted_on: 2026-08-20
 last_changed_on: 2026-08-20
-relates_to:
-  - { relation: extended_by, target: ADR-0015 }
+provenance: Every cell is paid (ADR 0002), so the matrix is the spend dial. `-k` string matching can narrow a run but cannot price one in advance.
+enforced_in:
+  - src/pytest_xharness_eval/model/matrix.py
+  - src/pytest_xharness_eval/plugin/options.py
+  - README.md (the option tables)
 generated: { by: human:neozenith, at: 2026-08-20T00:00:00Z }
 ---
 
-# 0010: Global default matrix, per-case override, and --model / --cli / --dry-run
+> **Lens**: Expose spend controls as explicit, discoverable options; never make the cost of a run depend on remembering a substring.
 
-Status: accepted, 2026-08-20. Refined by
-[0015](0015-harness-is-the-axis-and-the-project-owns-the-matrix.md): `--cli` is
-`--harness`, and a project-scope `xharness_matrix` sits between the case and the
-plugin default.
+## Relates to
 
-## Context
+- Extended by [ADR-0015](0015-harness-is-the-axis-and-the-project-owns-the-matrix.md) (`--cli` is `--harness`, and a project-scope `xharness_matrix` sits between the case and the plugin default)
 
-Every cell is paid (ADR 0002), so the matrix is the spend dial. `-k` string
-matching against node ids can narrow a run but cannot price one in advance, and
-hides the cost control behind a substring.
+## Problem
+
+### Symptom
+
+Every cell is paid (ADR 0002), so the matrix is the spend dial.
+
+### Pain point
+
+`-k` string matching against node ids can narrow a run but cannot price one in advance, and hides the cost control behind a substring.
 
 ## Decision
 
-A default matrix lives in `matrix.py`; a case may override it. The plugin adds
-three options: `--model` and `--cli` narrow the sweep, and `--dry-run` enumerates
-the cells that would run, with estimated USD, without invoking anything.
+### The lens
+
+- **Given**: pytest has no equivalent for pricing a sweep before it runs.
+- **We prefer**: Three explicit plugin options, over narrowing a run with `-k` alone.
+- **Because**: A sweep can then be priced before it is paid for.
+  The control is discoverable in `--help`, rather than remembered as a substring.
+- **Unless**: never
+
+### In practice
+
+- A default matrix lives in `matrix.py`; a case may override it.
+- The plugin adds three options: `--model` and `--cli` narrow the sweep, and `--dry-run` enumerates the cells that would run, with estimated USD, without invoking anything.
 
 ## Consequences
 
-Widening the repository-wide sweep is a single edit. A sweep can be priced before
-it is paid for, which stock pytest cannot do. The plugin owns three options
-beyond stock pytest, against the spirit of ADR 0001; each exists because pytest
-has no equivalent.
+### Pros
 
-## Lens
+- Widening the repository-wide sweep is a single edit.
+- A sweep can be priced before it is paid for, which stock pytest cannot do.
 
-Expose spend controls as explicit, discoverable options; never make the cost of
-a run depend on remembering a substring.
+### Cons
+
+- The plugin owns three options beyond stock pytest, against the spirit of ADR 0001; each exists because pytest has no equivalent.

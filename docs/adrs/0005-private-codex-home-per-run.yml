@@ -1,33 +1,49 @@
-# Authored record (ADR 0047). The .md beside this file is GENERATED:
+# Authored record (ADR 0048). The .md beside this file is GENERATED:
 #   make adrs
 # Edit this file, never the markdown.
 id: ADR-0005
 slug: private-codex-home-per-run
+plan_id: null
 title: A private per-run CODEX_HOME, seeded with the credential files
+description: isolating the whole state store makes log correlation structural instead of a race
 status: accepted
-status_note: accepted, 2026-08-20; verified live 2026-08-21.
 accepted_on: '2026-08-20'
 last_changed_on: '2026-08-20'
 group: harness
 tags:
 - harness
 lens: |-
-  When a tool offers no identity lever, isolate its whole state store so only one
-  artefact can exist; never search for the newest one.
+  When a tool offers no identity lever, isolate its whole state store so only one artefact can exist.
+  Never search for the newest one.
+provenance: |-
+  `codex exec` has no caller-chosen session id, and the first live run on 2026-08-21 verified that seeding the private home with the credential files works.
+enforced_in:
+- src/pytest_xharness_eval/harness/codex.py
+- ARCHITECTURE.md (the isolation-levers table)
 relates_to: []
-body:
-  context: |-
-    `codex exec` has no caller-chosen session id. Rollouts land under
-    `$CODEX_HOME/sessions/YYYY/MM/DD/`. Picking the newest file by modification time
-    races any concurrent Codex session, which is exactly the grading-the-wrong-
-    transcript failure this harness exists to prevent.
-  decision: |-
-    Each Codex cell runs with `CODEX_HOME` pointed at a private directory into which
-    the harness first copies `auth.json` and `.credentials.json` from the real home.
-    Exactly one rollout can then exist under that directory, so correlation is
-    structural. The `session_meta` id in the rollout is the cell's session id.
-  consequences: |-
-    One mechanism serves three needs: log correlation, ambient-config isolation, and
-    the skill-injection path (`$CODEX_HOME/skills`). The accepted risk is that
-    `CODEX_HOME` is also the credential store; the first live run proved seeding
-    works. Rejected: newest-by-mtime (races), stdout id alone (depends on flush order).
+problem:
+  symptom: |-
+    `codex exec` has no caller-chosen session id.
+    Rollouts land under `$CODEX_HOME/sessions/YYYY/MM/DD/`.
+  pain_point: |-
+    Picking the newest file by modification time races any concurrent Codex session, which is exactly the grading-the-wrong-transcript failure this harness exists to prevent.
+decision:
+  given: |-
+    `CODEX_HOME` is the one lever that relocates the whole Codex state store.
+  we_prefer: |-
+    A private per-run `CODEX_HOME` seeded with the credential files, over newest-by-mtime (races) or the stdout id alone (depends on flush order).
+  because: |-
+    Exactly one rollout can then exist under that directory, so correlation is structural rather than inferred.
+  unless: never
+  in_practice:
+  - |-
+    Each Codex cell runs with `CODEX_HOME` pointed at a private directory into which the harness first copies `auth.json` and `.credentials.json` from the real home.
+  - |-
+    The `session_meta` id in the rollout is the cell's session id.
+consequences:
+  pros:
+  - |-
+    One mechanism serves three needs: log correlation, ambient-config isolation, and the skill-injection path (`$CODEX_HOME/skills`).
+  cons:
+  - |-
+    The accepted risk is that `CODEX_HOME` is also the credential store; the first live run proved seeding works.

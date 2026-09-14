@@ -3,7 +3,7 @@
  * `report.py --inline` embedded one, otherwise fetched from beside the page. Every
  * accessor goes through here so a component never knows which mode it is in.
  */
-import type { Cell, DesignTokens, Index, RunResult } from "./types";
+import type { Cell, DesignTokens, Index, RunResult, Subagent } from "./types";
 
 const inline = () => (typeof window === "undefined" ? undefined : window.__XH_DATA__);
 
@@ -69,6 +69,29 @@ export const loadLog = (cell: Cell): Promise<string> => {
   const d = inline();
   if (d) return Promise.resolve(d.logs[cell.session_id] ?? "");
   return cell.log ? getText(cell.log) : Promise.resolve("");
+};
+
+/**
+ * `<session id>/<subagent id>`: how a spawned thread's transcript is keyed in the inline
+ * `logs` map. Built identically by `emit/page.py`'s `subagent_log_key`; change one and
+ * change the other.
+ */
+export const subagentLogKey = (sessionId: string, subagentId: string): string => `${sessionId}/${subagentId}`;
+
+/**
+ * A spawned thread's own transcript (ADR 0033), whose line numbers its ledger's `records`
+ * point at. `Subagent.log` is the path the capture step rewrote to `subagents/<name>.jsonl`,
+ * relative to the session directory — which is where `cell.result` sits, so the fetch is
+ * resolved against that rather than against the page. A result captured before that rewrite
+ * still carries the harness's own absolute path: it is not evidence in this cache, so it
+ * resolves to no transcript rather than to a 404.
+ */
+export const loadSubagentLog = (cell: Cell, sub: Subagent): Promise<string> => {
+  const d = inline();
+  if (d) return Promise.resolve(d.logs[subagentLogKey(cell.session_id, sub.id)] ?? "");
+  const rel = sub.log ?? "";
+  if (!rel || rel.startsWith("/") || rel.includes("..")) return Promise.resolve("");
+  return getText(cell.result.replace(/[^/]*$/, "") + rel);
 };
 
 export const isInline = () => Boolean(inline());

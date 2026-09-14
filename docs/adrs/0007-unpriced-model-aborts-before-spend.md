@@ -3,35 +3,52 @@
 # Edit the .yml; anything written here is lost on the next build.
 type: Architecture Decision
 title: An unpriced model aborts at matrix expansion and never prices as zero
+description: price coverage is checked before the first paid call, and the failure names the fix
 tags: [pricing, collection]
 status: accepted
 accepted_on: 2026-08-20
 last_changed_on: 2026-08-20
+provenance: Three candidate treatments for a model missing from the price table were weighed. Price it at zero with a warning, record it as `null`, or treat it as an error.
+enforced_in:
+  - src/pytest_xharness_eval/derive/pricing.py
+  - src/pytest_xharness_eval/model/matrix.py
+  - src/pytest_xharness_eval/plugin/options.py (validated at configure time)
 generated: { by: human:neozenith, at: 2026-08-20T00:00:00Z }
 ---
 
-# 0007: An unpriced model aborts at matrix expansion and never prices as zero
+> **Lens**: Validate anything that gates spend before the first paid call, and make the failure name the fix.
 
-Status: accepted, 2026-08-20.
+## Problem
 
-## Context
+### Symptom
 
-A model missing from the price table could be priced at zero with a warning,
-recorded as `null`, or treated as an error. Zero makes an expensive sweep look
-free; `null` pushes the obligation onto every consumer of the report.
+A model missing from the price table could be priced at zero with a warning, recorded as `null`, or treated as an error.
+
+### Pain point
+
+Zero makes an expensive sweep look free; `null` pushes the obligation onto every consumer of the report.
 
 ## Decision
 
-Price coverage is validated when the matrix expands, before any cell runs. An
-unpriced model stops the sweep with the model named. `--dry-run` surfaces the
-same gap without spending.
+### The lens
+
+- **Given**: The check that gates spend can run at matrix expansion, before any cell runs.
+- **We prefer**: Stopping the sweep with the model named, over pricing it at zero with a warning or recording it as `null`.
+- **Because**: The failure lands before money is spent, so failing loud costs nothing here.
+- **Unless**: never
+
+### In practice
+
+- Price coverage is validated when the matrix expands, before any cell runs.
+  An unpriced model stops the sweep with the model named.
+- `--dry-run` surfaces the same gap without spending.
 
 ## Consequences
 
-A new model blocks a sweep until a row is added, which is the intended friction.
-The failure lands before money is spent, so fail-loud costs nothing here.
+### Pros
 
-## Lens
+- The failure lands before money is spent, so fail-loud costs nothing here.
 
-Validate anything that gates spend before the first paid call, and make the
-failure name the fix.
+### Cons
+
+- A new model blocks a sweep until a row is added, which is the intended friction.

@@ -1,0 +1,76 @@
+{
+ "elements": [
+  {
+   "data": {
+    "id": "f:Greeting.tsx",
+    "label": "Greeting.tsx",
+    "category": "Compute"
+   }
+  },
+  {
+   "data": {
+    "id": "s:Greeting.tsx:Greeting:2:12",
+    "label": "Greeting\nFunction 12, line 3\nprepared as Function 12",
+    "parent": "f:Greeting.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "id": "s:Greeting.tsx:Shout:6:14",
+    "label": "Shout\nConstant 14, line 7\nprepared as Function 12",
+    "parent": "f:Greeting.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "id": "s:Greeting.tsx:Shout.name:6:7",
+    "label": "Shout.name\nProperty 7, line 7",
+    "parent": "f:Greeting.tsx"
+   }
+  },
+  {
+   "data": {
+    "id": "s:Greeting.tsx:Shout.name:6:13",
+    "label": "Shout.name\nVariable 13, line 7",
+    "parent": "f:Greeting.tsx"
+   }
+  },
+  {
+   "data": {
+    "id": "f:App.tsx",
+    "label": "App.tsx",
+    "category": "Storage"
+   }
+  },
+  {
+   "data": {
+    "id": "s:App.tsx:App:4:12",
+    "label": "App\nFunction 12, line 5\nprepared as Function 12",
+    "parent": "f:App.tsx",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "s:App.tsx:App:4:12",
+    "target": "s:Greeting.tsx:Greeting:2:12",
+    "label": "fromRanges 2: 8:8, 9:8"
+   }
+  },
+  {
+   "data": {
+    "source": "s:App.tsx:App:4:12",
+    "target": "s:Greeting.tsx:Shout:6:14",
+    "label": "fromRanges 1: 10:8"
+   }
+  }
+ ],
+ "layout": {
+  "name": "dagre",
+  "rankDir": "LR",
+  "rankSep": 120
+ },
+ "height": 560
+}

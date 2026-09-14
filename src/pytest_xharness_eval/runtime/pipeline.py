@@ -55,6 +55,15 @@ def capture_subagents(result: RunResult, session: SessionDir) -> None:
     ``<session dir>/subagents/`` and point ``Subagent.log`` at the captured copy, so the
     evidence survives the private ``CODEX_HOME`` teardown and a replay re-derives the
     same ledgers from the session directory alone.
+
+    Naming is the half a replay needs on its own: re-folding a captured session finds its
+    forks by walking ``<session dir>/subagents/``, so ``Subagent.log`` comes back as
+    whatever path shape the replay was invoked with -- an absolute one, or one relative to
+    the caller's cwd -- and not as the ``subagents/<name>`` the field is declared to hold
+    and the report resolves against the session directory. So this is idempotent: a
+    transcript that is already the captured copy is *named*, never rewritten. Copying a
+    file onto itself would put every replay one interruption away from truncating the
+    evidence it exists to preserve.
     """
     if not result.subagents:
         return
@@ -64,10 +73,12 @@ def capture_subagents(result: RunResult, session: SessionDir) -> None:
         source = Path(sub.log)
         if not source.is_file():
             continue
-        (directory / source.name).write_bytes(source.read_bytes())
-        sidecar = source.with_name(f"{source.stem}.meta.json")
-        if sidecar.is_file():
-            (directory / sidecar.name).write_bytes(sidecar.read_bytes())
+        target = directory / source.name
+        if not (target.is_file() and source.samefile(target)):
+            target.write_bytes(source.read_bytes())
+            sidecar = source.with_name(f"{source.stem}.meta.json")
+            if sidecar.is_file():
+                (directory / sidecar.name).write_bytes(sidecar.read_bytes())
         sub.log = f"{SUBAGENTS_DIR}/{source.name}"
 
 

@@ -96,17 +96,21 @@ ui-promote: ui-check ui-test ui-build
 	$(MAKE) test
 
 ######################################################################
-# DECISION RECORDS (ADR 0047)
-# Records are authored as docs/adrs/NNNN-slug.yml; every .md, index.md,
-# graph.md and graph.json beside them is generated. Edit the YAML.
+# DECISION RECORDS (ADR 0048)
+# Records are authored as docs/adrs/NNNN-slug.yml against the librarian's shipped
+# okf-yaml schema, adopted strictly; every .md, index.md, graph.md, graph.json and
+# graph.html beside them is generated. Edit the YAML.
 ######################################################################
 adrs:
 	uv run --no-project --with PyYAML --with Jinja2 --with jsonschema \
 		docs/adrs/okf_render.py docs/adrs --author "human:neozenith"
 
-# CI gate: a hand-edited generated file, or a record that was changed without a
-# rebuild, shows up as a dirty tree here rather than as drift nobody noticed.
+# CI gate, three questions. The render refuses a record that fails the schema or
+# names a target that does not exist; okf_verify checks the OKF conformance of what
+# it produced; and a hand-edited generated file, or a record changed without a
+# rebuild, shows up as a dirty tree rather than as drift nobody noticed.
 adrs-check: adrs
+	@uv run --no-project --with PyYAML docs/adrs/okf_verify.py docs/adrs
 	@git diff --quiet -- docs/adrs || { \
 		echo "docs/adrs is stale or hand-edited; run 'make adrs' and commit the result"; \
 		git --no-pager diff --stat -- docs/adrs; exit 1; }
@@ -139,4 +143,43 @@ clean:
 	rm -rf .mmdc_cache/
 	rm -rf node_modules/
 
-.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-e2e ui-promote adrs adrs-check
+.PHONY: reviewable-storybook reviewable-storybook-build reviewable-e2e reviewable-all reviewable-install reviewable-data reviewable-dev reviewable-check reviewable-test reviewable-build format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-e2e ui-promote adrs adrs-check
+
+# --- reviewable-ui: the tree-sitter graph explorer -------------------------
+RU_SOURCES ?= --source src/pytest_xharness_eval:python --source report-ui/src:typescript
+
+reviewable-ui/node_modules:
+	bun install --cwd reviewable-ui
+
+reviewable-install: reviewable-ui/node_modules
+
+reviewable-data:
+	uv run docs/plans/maintainability/tools/graphdata.py $(RU_SOURCES) \
+		--skip "__tests__,.test." --out reviewable-ui/public/graph.json
+
+reviewable-dev: reviewable-ui/node_modules reviewable-ui/public/graph.json
+	bun run --cwd reviewable-ui dev
+
+reviewable-ui/public/graph.json:
+	$(MAKE) reviewable-data
+
+reviewable-check: reviewable-ui/node_modules
+	bun run --cwd reviewable-ui check
+
+reviewable-test: reviewable-ui/node_modules
+	bun run --cwd reviewable-ui test
+
+reviewable-build: reviewable-ui/node_modules
+	bun run --cwd reviewable-ui build
+
+reviewable-storybook: reviewable-ui/node_modules
+	bun run --cwd reviewable-ui storybook
+
+reviewable-storybook-build: reviewable-ui/node_modules
+	bun run --cwd reviewable-ui build-storybook
+
+reviewable-e2e: reviewable-ui/node_modules reviewable-ui/public/graph.json
+	bun run --cwd reviewable-ui e2e
+
+# Everything the webapp has to pass: types, lint, format, units, component tier, e2e.
+reviewable-all: reviewable-check reviewable-test reviewable-storybook-build reviewable-e2e

@@ -5,7 +5,7 @@
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml/badge.svg" alt="CICD Checks"></a>
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml/badge.svg" alt="Build Status"></a>
     <!-- coverage-badge -->
-    <img src="https://img.shields.io/badge/coverage-96%25-brightgreen.svg" alt="Coverage">
+    <img src="https://img.shields.io/badge/coverage-97%25-brightgreen.svg" alt="Coverage">
     <!-- coverage-badge -->
 </p>
 <p align="center">
@@ -277,4 +277,4 @@ Build, test and release instructions live in [CONTRIBUTING.md](CONTRIBUTING.md).
 - [ARCHITECTURE.md](ARCHITECTURE.md): why the two CLIs need different capture
   contracts, how pricing works, and the vocabulary the code uses.
 - [AGENTS.md](AGENTS.md): operating instructions and hard boundaries for agents.
-- [docs/adrs/index.md](docs/adrs/index.md): the decision index, generated from the records (ADR 0047).
+- [docs/adrs/index.md](docs/adrs/index.md): the decision index, generated from the records (ADR 0048).

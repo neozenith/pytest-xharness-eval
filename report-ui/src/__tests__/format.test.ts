@@ -1,4 +1,4 @@
-import { caseShort, compact, modelShort, modelShortNames, NONE } from "@/lib/format";
+import { caseShort, compact, distinguishingWidth, modelShort, modelShortNames, NONE } from "@/lib/format";
 
 test("a token count abbreviates to three significant figures, and small numbers stay whole", () => {
   expect(compact(1_504_090)).toBe("1.5M");
@@ -41,4 +41,22 @@ test("shortening is abandoned for the whole sweep the moment two models would co
 
   // a model the map never saw still shortens, so a late arrival is never printed as blank
   expect(distinct("claude-haiku-5")).toBe("haiku-5");
+});
+
+test("distinguishingWidth prints ids only as wide as it takes to tell them apart", () => {
+  // Claude's random ids separate at the eight characters `short` already prints
+  expect(distinguishingWidth(["b1b1f564-6268-4160", "470bf2a3-9a1b-45f4"])).toBe(8);
+  /*
+   * Codex mints a time-ordered id, so every thread one run forks shares the run's own first
+   * eight characters — `short` printed `01a05fee` for both of these, side by side, in the
+   * band that exists to tell them apart.
+   */
+  // snapped out to the group boundary: `01a05fee-57c7` reads as an id, `01a05fee-5` does not
+  expect(distinguishingWidth(["01a05fee-57c7-7ce3", "01a05fee-666f-7473"])).toBe(13);
+  // one id needs no disambiguating, and none at all is still a legal width
+  expect(distinguishingWidth(["01a05fee-57c7-7ce3"])).toBe(8);
+  expect(distinguishingWidth([])).toBe(8);
+  // ids that never diverge cannot be told apart: print them whole rather than loop forever
+  expect(distinguishingWidth(["abc", "abc"])).toBe(8);
+  expect(distinguishingWidth(["same-prefix-x", "same-prefix-y"])).toBe(13);
 });

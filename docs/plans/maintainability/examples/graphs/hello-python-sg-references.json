@@ -1,0 +1,202 @@
+{
+ "elements": [
+  {
+   "data": {
+    "id": "f:greet.py",
+    "label": "greet.py",
+    "category": "Compute"
+   }
+  },
+  {
+   "data": {
+    "id": "f:main.py",
+    "label": "main.py",
+    "category": "Storage"
+   }
+  },
+  {
+   "data": {
+    "id": "r:main.py:10:11",
+    "label": "push Greeter\n10:11",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "id": "d:main.py:3:19",
+    "label": "pop Greeter\n3:19, no syntax_type",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:10:11",
+    "target": "d:main.py:3:19"
+   }
+  },
+  {
+   "data": {
+    "id": "d:greet.py:9:7",
+    "label": "pop Greeter\n9:7, class",
+    "parent": "f:greet.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:10:11",
+    "target": "d:greet.py:9:7"
+   }
+  },
+  {
+   "data": {
+    "id": "r:main.py:10:28",
+    "label": "push greet\n10:28",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "id": "d:greet.py:15:9",
+    "label": "pop greet\n15:9, method",
+    "parent": "f:greet.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:10:28",
+    "target": "d:greet.py:15:9"
+   }
+  },
+  {
+   "data": {
+    "id": "r:main.py:14:5",
+    "label": "push main\n14:5",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "id": "d:main.py:6:5",
+    "label": "pop main\n6:5, function",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:14:5",
+    "target": "d:main.py:6:5"
+   }
+  },
+  {
+   "data": {
+    "id": "r:main.py:3:19",
+    "label": "push Greeter\n3:19",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:3:19",
+    "target": "d:greet.py:9:7"
+   }
+  },
+  {
+   "data": {
+    "id": "r:main.py:3:28",
+    "label": "push greet\n3:28",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "id": "d:greet.py:4:5",
+    "label": "pop greet\n4:5, function",
+    "parent": "f:greet.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:3:28",
+    "target": "d:greet.py:4:5"
+   }
+  },
+  {
+   "data": {
+    "id": "r:main.py:3:6",
+    "label": "push greet\n3:6",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "id": "d:greet.py:1:1",
+    "label": "pop greet\n1:1, no syntax_type",
+    "parent": "f:greet.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:3:6",
+    "target": "d:greet.py:1:1"
+   }
+  },
+  {
+   "data": {
+    "id": "r:main.py:8:11",
+    "label": "push greet\n8:11",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "id": "d:main.py:3:28",
+    "label": "pop greet\n3:28, no syntax_type",
+    "parent": "f:main.py",
+    "variant": "alt"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:8:11",
+    "target": "d:main.py:3:28"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:8:11",
+    "target": "d:greet.py:4:5"
+   }
+  },
+  {
+   "data": {
+    "id": "r:main.py:9:11",
+    "label": "push greet\n9:11",
+    "parent": "f:main.py"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:9:11",
+    "target": "d:main.py:3:28"
+   }
+  },
+  {
+   "data": {
+    "source": "r:main.py:9:11",
+    "target": "d:greet.py:4:5"
+   }
+  }
+ ],
+ "layout": {
+  "name": "dagre",
+  "rankDir": "LR",
+  "rankSep": 90
+ },
+ "height": 760
+}

@@ -1,0 +1,52 @@
+{
+ "data": [
+  {
+   "type": "bar",
+   "x": [
+    "scope",
+    "push_symbol",
+    "pop_symbol",
+    "push_scoped_symbol",
+    "pop_scoped_symbol",
+    "drop_scopes",
+    "jump_to_scope",
+    "root"
+   ],
+   "y": [
+    386,
+    64,
+    51,
+    8,
+    5,
+    5,
+    1,
+    1
+   ],
+   "text": [
+    "386",
+    "64",
+    "51",
+    "8",
+    "5",
+    "5",
+    "1",
+    "1"
+   ],
+   "textposition": "outside",
+   "cliponaxis": false
+  }
+ ],
+ "height": 360,
+ "layout": {
+  "yaxis": {
+   "type": "log",
+   "title": {
+    "text": "nodes, log scale"
+   }
+  },
+  "margin": {
+   "t": 20,
+   "b": 90
+  }
+ }
+}

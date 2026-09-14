@@ -15,6 +15,14 @@ vendors' own `total_tokens` fields keep their names and are quoted as such below
 - Claude Code, *Status line* (`context_window` fields): <https://code.claude.com/docs/en/statusline>
 - OpenAI, *Prompt caching*: <https://developers.openai.com/api/docs/guides/prompt-caching>
 
+This document derives the arithmetic; it assumes the input records are already
+correct. For what those records actually look like on disk, which record kinds
+carry usage, and the dialect-specific traps that produce a wrong number before
+this arithmetic ever runs (Claude's per-block `usage` duplication, Codex's
+cumulative `token_count`), see
+[`claude-session-log.md`](claude-session-log.md) and
+[`codex-session-log.md`](codex-session-log.md).
+
 ## The one-paragraph answer
 
 `peak_context_tokens` is the **largest single prompt** any one model call processed:
