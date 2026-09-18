@@ -64,6 +64,7 @@ Each record is authored as `NNNN-slug.yml` and its markdown is generated
 | [0045](0045-the-verifiers-ship-with-the-plugin.md) | The verifiers ship with the plugin, and a rollout has one documented surface | accepted, 2026-08-31. Delivers the "primitives pending" of [0012](0012-grading-is-composable-not-prescribed.md) (grading is composable, not prescribed) and the "helper pending" of [0013](0013-verifiers-are-python-beside-the-case.md) (custom verifiers are Python beside the case). Refines [0039](0039-the-package-listing-is-the-architecture.md) (the package listing is the architecture) with a sixth layer. Breaking: a grader takes one `CaseOutput` in place of `(RunResult, Path)`. |
 | [0046](0046-a-golden-is-compared-facet-by-facet-within-a-declared-tolerance.md) | A golden is compared facet by facet, and every facet declares its tolerance | accepted, 2026-08-31. Refines [0012](0012-grading-is-composable-not-prescribed.md) (grading is composable, not prescribed), [0018](0018-fixtures-directory-and-metrics-history.md) (fixtures live under `evals/fixtures/`) and [0045](0045-the-verifiers-ship-with-the-plugin.md) (the verifiers ship with the plugin). |
 | [0047](0047-adrs-are-authored-as-data-and-their-markdown-is-generated.md) | ADRs are authored as data, and the argument travels verbatim | accepted, 2026-08-31. Refines [0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (generated output has one owner). Structural only: no record's argument changes, every id, slug, anchor and inbound citation still resolves, and each generated `.md` is byte-identical to the file it replaced from its `# NNNN:` heading down. |
+| [0048](0048-coverage-reads-the-command-the-shell-ran.md) | Coverage reads the command the shell ran, and expands what only the shell knew | accepted, 2026-09-18. Refines [0027](0027-coverage-follows-the-shells-working-directory.md) (coverage follows the shell's working directory) with the second half of the same problem, and [0022](0022-record-kind-catalogue-and-skill-coverage.md) (its detection rule). Extends the per-call ledger of [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) with one field, `call.executed`: a new key of `result.json`. |
 ## The typed relation graph
 
 Open [graph.html](graph.html) to browse it: records cluster by domain, selecting one
@@ -184,3 +185,6 @@ same edge set is [graph.md](graph.md) and, as raw data, [graph.json](graph.json)
 - ADR-0046 --extends--> ADR-0018
 - ADR-0046 --extends--> ADR-0045
 - ADR-0047 --extends--> ADR-0032
+- ADR-0048 --extends--> ADR-0027
+- ADR-0048 --extends--> ADR-0022
+- ADR-0048 --extends--> ADR-0019

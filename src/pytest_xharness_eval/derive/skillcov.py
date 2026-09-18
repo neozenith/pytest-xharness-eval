@@ -20,6 +20,12 @@ harnesses see, whether the skill is mounted through ``--add-dir`` (Claude) or
 copied under ``$CODEX_HOME/skills`` (Codex). A ``Skill`` tool invocation of the
 skill counts as loading ``SKILL.md``.
 
+What a tool call says, though, is what the *model* asked for, and an agent is free to
+assemble the path from a shell variable or a template literal in some wrapper language.
+So two more texts are read the same way: the command the harness itself reports its shell
+as having run, where it reports one (``Call.executed``), and -- where it does not -- the
+tool's own command with the variables it assigned substituted into it (ADR 0048).
+
 The vocabulary of the answer is typed here — :class:`SkillFile` is one catalogued file,
 :class:`FileCoverage` is that file plus the turns that touched it, and
 :class:`SkillCoverage` derives the missed sets and the summary from those rows in one
@@ -44,7 +50,7 @@ from pytest_xharness_eval.model.registry import Shells
 
 if TYPE_CHECKING:
     # Our Libraries
-    from pytest_xharness_eval.model.runresult import RunResult
+    from pytest_xharness_eval.model.runresult import RunResult, ToolCall
 
 # Directories that are never part of a skill's own surface, whatever the ignore rules say.
 EXCLUDED_DIRS = {"evals", "captured", "node_modules", "__pycache__", ".git", ".mmdc_cache", "tmp", ".venv"}
@@ -270,10 +276,18 @@ def _call_text(name: str, arguments: Any) -> str:
 # modelled per result: relative, file-looking tokens of a command are rewritten to
 # ``<skill>/<sub>/<token>`` whenever the segment they sit in runs under the skill
 # directory, and the rewritten text is matched by the same rule as before.
+#
+# The same agent also holds the skill directory in a shell variable -- ``S=<skill dir>``
+# then ``bun run $S/scripts/gate.ts`` -- which no amount of working-directory modelling
+# reaches, because the needle is never written down. So assignments are substituted
+# before the rewrite, and the variable table is per command: Claude Code's ``Bash`` keeps
+# its working directory between calls but not its environment (ADR 0048).
 
 _SEGMENTS = re.compile(r"\s*(?:&&|\|\||;|\||\n)\s*")
 _CD = re.compile(r"^\s*cd(?:\s+(\S+))?\s*$")
 _CWD_RESET = re.compile(r"Shell cwd was reset to (\S+)")
+_ASSIGN = re.compile(r"^(?:export\s+)?([A-Za-z_]\w*)=(\S*)$")
+_VARS = re.compile(r"\$(?:\{(\w+)\}|(\w+))")
 
 
 def _chdir(cwd: str | None, target: str | None) -> str | None:
@@ -314,17 +328,58 @@ def _prefix_token(token: str, prefix: str, skill: str) -> str:
         body = body[2:]
     if not body or body[0] in "/-$<>" or f"{skill}/" in body or not re.search(r"[./]", body):
         return token
+    if _ASSIGN.match(body):  # ``NAME=value`` scopes a variable; it is not a path to qualify
+        return token
     return f"{quote}{prefix}{body}"
+
+
+def expand(text: str, variables: dict[str, str]) -> str:
+    """``$S`` and ``${S}`` replaced by their recorded values; an unknown name is left alone.
+
+    Leaving the unknown ones (``$HOME``, an unset name) written as they were is what keeps
+    every path that does not depend on an assignment resolving exactly as before.
+    """
+    return _VARS.sub(lambda m: variables.get(m.group(1) or m.group(2), m.group(0)), text)
+
+
+def _assignments(segment: str, variables: dict[str, str]) -> tuple[str, dict[str, str]]:
+    """Peel the leading ``NAME=value`` tokens off ``segment``; returns (rest, names set here).
+
+    ``S=<dir>`` alone in a segment records ``S`` for the segments after it. The same
+    tokens in front of a command (``S=<dir> bun run $S/x.ts``) scope to that command in a
+    real shell, so the caller applies them to this segment and then drops them.
+    """
+    set_here: dict[str, str] = {}
+    tokens = segment.split(" ")
+    if len(tokens) > 1 and tokens[0] == "export" and _ASSIGN.match(tokens[1]):
+        tokens.pop(0)
+    while tokens:
+        m = _ASSIGN.match(expand(tokens[0], {**variables, **set_here}))
+        if not m:
+            break
+        set_here[m.group(1)] = m.group(2).strip("'\"")
+        tokens.pop(0)
+    return " ".join(tokens), set_here
 
 
 def resolve_command(command: str, skill: str, cwd: str | None) -> tuple[str, str | None]:
     """Rewrite a shell command's skill-relative paths as ``<skill>/...``; returns (text, cwd after).
 
     The command is split at ``&&``, ``||``, ``;``, ``|`` and newlines; a segment
-    that is a ``cd`` moves the working directory for the segments after it.
+    that is a ``cd`` moves the working directory for the segments after it, and a segment
+    that is a ``NAME=value`` assignment records a variable the later segments -- and the
+    target of a later ``cd`` -- are expanded against (ADR 0048). The table lives and dies
+    with this one command.
     """
     out: list[str] = []
-    for segment in _SEGMENTS.split(command):
+    variables: dict[str, str] = {}
+    for raw in _SEGMENTS.split(command):
+        rest, set_here = _assignments(raw, variables)
+        segment = expand(rest, {**variables, **set_here})
+        if not rest:  # the segment was assignments and nothing else: they outlive it
+            variables.update(set_here)
+            out.append(raw)
+            continue
         m = _CD.match(segment)
         if m:
             cwd = _chdir(cwd, m.group(1))
@@ -348,6 +403,24 @@ def _command_of(arguments: Any) -> tuple[str, str | None]:
         workdir = arguments.get("workdir") or arguments.get("cwd")
         return str(command), str(workdir) if workdir else None
     return str(arguments or ""), None
+
+
+def _tool_text(
+    tool: ToolCall, skill: str, vocab: Shells, cwd: str | None, workspace: str | None
+) -> tuple[str, str | None]:
+    """The text one tool call is matched against, and the shell's working directory after it.
+
+    A shell tool's arguments are read twice: as they were written, and with the segments
+    that ran under the skill directory rewritten to name it. A tool that is not a shell is
+    its arguments and nothing more, and leaves the working directory where it was.
+    """
+    text = _call_text(tool.name, tool.input)
+    if tool.name not in vocab.tools:
+        return text, cwd
+    command, workdir = _command_of(tool.input)
+    persistent = tool.name in vocab.persistent
+    resolved, after = resolve_command(command, skill, cwd if persistent else (workdir or workspace))
+    return f"{text}\n{resolved}", after if persistent else cwd
 
 
 def _access(tool: str, text: str, skill: str, entry: FileCoverage, shells: Shells) -> Access | None:
@@ -381,23 +454,27 @@ def annotate(skill: str, files: list[SkillFile], result: RunResult, shells: Shel
     """
     vocab = shells if shells is not None else Shells.of(result.harness)
     rows = [FileCoverage.of(f) for f in files]
+    workspace = str(result.workspace) or None if result.workspace else None
     # The persistent shell's working directory, per result: it starts in the workspace
     # and follows every ``cd`` of a persistent shell tool until the harness resets it.
-    cwd: str | None = str(result.workspace) if result.workspace else None
+    cwd: str | None = workspace
+
+    def touch(tool: str, text: str, turn: int) -> None:
+        for row in rows:
+            access = _access(tool, text, skill, row, vocab)
+            if access is not None:
+                row.touch(access, turn)
+
     for call in result.calls:
         for tool in call.tools:
-            text = _call_text(tool.name, tool.input)
-            if tool.name in vocab.tools:
-                command, workdir = _command_of(tool.input)
-                start = cwd if tool.name in vocab.persistent else (workdir or (str(result.workspace) or None))
-                resolved, after = resolve_command(command, skill, start)
-                if tool.name in vocab.persistent:
-                    cwd = after
-                text = f"{text}\n{resolved}"
-            for row in rows:
-                access = _access(tool.name, text, skill, row, vocab)
-                if access is not None:
-                    row.touch(access, call.n)
+            text, cwd = _tool_text(tool, skill, vocab, cwd, workspace)
+            touch(tool.name, text, call.n)
+        for ran in call.executed:
+            # What the harness reports its shell as having actually run, already expanded:
+            # no variable, template literal or wrapper language stands between it and the
+            # path (ADR 0048). Its own ``cwd`` resolves what is still relative in it.
+            resolved, _after = resolve_command(ran.command, skill, ran.cwd or workspace)
+            touch(ran.tool, f"{ran.command}\n{resolved}", call.n)
         for res in call.results_in:
             m = _CWD_RESET.search(res.content or "")
             if m:

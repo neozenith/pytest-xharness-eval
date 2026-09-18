@@ -25,6 +25,7 @@ from pytest_xharness_eval import (
     Cell,
     CostStatus,
     EvalCase,
+    ExecutedCommand,
     RunResult,
     ToolCall,
     ToolResult,
@@ -1406,6 +1407,99 @@ def test_resolve_command_qualifies_relative_paths_after_a_cd_and_leaves_the_rest
     assert "demo/scripts/check.ts" in text
     assert "demo//abs" not in text
     assert "demo/demo/" not in text
+
+
+@pytest.mark.parametrize(
+    ("label", "command", "found"),
+    [
+        ("literal path", "bun run /x/skills/demo/scripts/check.ts doc.md", True),
+        ("shell variable", "S=/x/skills/demo; bun run $S/scripts/check.ts doc.md", True),
+        ("braced variable", "S=/x/skills/demo\nbun run ${S}/scripts/check.ts doc.md", True),
+        ("exported variable", "export S=/x/skills/demo; bun run $S/scripts/check.ts doc.md", True),
+        ("quoted value", 'S="/x/skills/demo"; bun run $S/scripts/check.ts doc.md', True),
+        ("relative value", "S=../skills/demo/scripts; bun run $S/check.ts doc.md", True),
+        ("a variable built from a variable", "B=/x/skills; S=$B/demo; bun run $S/scripts/check.ts", True),
+        ("cd through a variable", "S=/x/skills/demo; cd $S && bun run scripts/check.ts", True),
+        ("a prefix assignment scoped to its command", "S=/x/skills/demo bun run $S/scripts/check.ts", True),
+        ("an unknown name stays unexpanded", "bun run $NOPE/scripts/check.ts", False),
+    ],
+)
+def test_resolve_command_substitutes_the_variables_the_command_itself_assigned(
+    label: str, command: str, found: bool
+) -> None:
+    """An agent that holds the skill directory in ``$S`` never writes the needle down (ADR 0048)."""
+    resolved, _after = skillcov.resolve_command(command, "demo", "/x/ws")
+    assert ("demo/scripts/check.ts" in f"{command}\n{resolved}") is found, label
+
+
+def test_resolve_commands_variable_table_lives_and_dies_with_one_command() -> None:
+    """Claude Code's Bash keeps its working directory between calls, but not its environment."""
+    _first, after = skillcov.resolve_command("S=/x/skills/demo; echo $S", "demo", "/x/ws")
+    later, _ = skillcov.resolve_command("bun run $S/scripts/check.ts", "demo", after)
+    assert "demo/scripts/check.ts" not in later
+
+
+def test_annotate_reads_the_command_the_harness_reports_as_executed(tmp_path: Path) -> None:
+    """Codex's code-mode ``exec`` holds the skill path in a JS constant; the shell logs it expanded.
+
+    The tool input is JavaScript, so the needle is nowhere in it. ``CommandExecution``
+    carries the string the shell actually ran, which needs no parsing of the wrapper
+    language it came from (ADR 0048).
+    """
+    files = skillcov.catalog(_skill(tmp_path))
+    r = _result("m", Usage(), harness="codex")
+    r.workspace = "/x/ws"
+    r.calls = [
+        Call(
+            n=1,
+            at="t",
+            tools=[
+                ToolCall(
+                    "exec_command",
+                    "",
+                    {
+                        "cmd": 'const base = "/x/skills/demo";\n'
+                        "await tools.exec({cmd: `bun run ${base}/scripts/check.ts`})"
+                    },
+                )
+            ],
+            executed=[
+                ExecutedCommand(tool="CommandExecution", command="bun run /x/skills/demo/scripts/check.ts", cwd="/x/ws")
+            ],
+        ),
+        # A reported command is resolved at its own cwd, so a relative one still lands.
+        Call(
+            n=2,
+            at="t",
+            executed=[ExecutedCommand(tool="CommandExecution", command="cat resources/guide.md", cwd="/x/skills/demo")],
+        ),
+    ]
+    cov = skillcov.annotate("demo", files, r)
+    by = {f.path: f for f in cov.files}
+    assert (by["scripts/check.ts"].loaded, by["scripts/check.ts"].run) == ([], [1])
+    assert by["resources/guide.md"].loaded == [2]
+    assert cov.run == ["scripts/check.ts"]
+
+
+def test_annotate_counts_a_script_run_through_a_shell_variable(tmp_path: Path) -> None:
+    """Claude's Bash input is the only record of what ran, so the variable is expanded here."""
+    files = skillcov.catalog(_skill(tmp_path))
+    r = _result("m", Usage(), harness="claude")
+    r.workspace = "/x/ws"
+    r.calls = [
+        Call(
+            n=1,
+            at="t",
+            tools=[
+                ToolCall("Bash", "", {"command": "S=/x/skills/demo; cat $S/resources/guide.md"}),
+                ToolCall("Bash", "", {"command": "S=/x/skills/demo/scripts; bun run $S/check.ts /x/ws/doc.md"}),
+            ],
+        )
+    ]
+    cov = skillcov.annotate("demo", files, r)
+    by = {f.path: f for f in cov.files}
+    assert by["resources/guide.md"].loaded == [1]
+    assert by["scripts/check.ts"].run == [1]
 
 
 def test_annotate_follows_the_claude_shells_cwd_and_the_harness_reset(tmp_path: Path) -> None:

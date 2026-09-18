@@ -44,7 +44,15 @@ from pytest_xharness_eval.harness.normalise import (
 )
 from pytest_xharness_eval.model import workspace as ws
 from pytest_xharness_eval.model.clock import ms_between
-from pytest_xharness_eval.model.runresult import Call, RunResult, Subagent, ToolCall, ToolResult, Usage
+from pytest_xharness_eval.model.runresult import (
+    Call,
+    ExecutedCommand,
+    RunResult,
+    Subagent,
+    ToolCall,
+    ToolResult,
+    Usage,
+)
 
 if TYPE_CHECKING:
     # Our Libraries
@@ -206,6 +214,7 @@ class _Ledger:
         self.tools: dict[str, int] = {}
         self.last_total: dict[str, Any] = {}
         self._tool_calls: list[ToolCall] = []
+        self._executed: list[ExecutedCommand] = []
         self._outputs: list[ToolResult] = []
         self._carried: list[ToolResult] = []
         self._text: str = ""
@@ -269,6 +278,7 @@ class _Ledger:
                 text=self._text,
                 thinking=self._thinking,
                 tools=self._tool_calls,
+                executed=self._executed,
                 results_in=self._carried,
                 records=self._lines,
                 latency_ms=ms_between(self._boundary_ts, at),
@@ -277,11 +287,27 @@ class _Ledger:
         self._boundary_ts = at or self._boundary_ts
         self._carried, self._outputs = self._outputs, []
         self._tool_calls, self._text, self._thinking, self._lines = [], "", "", []
+        self._executed = []
 
     def item_completed(self, item: dict[str, Any]) -> None:
-        kind = item.get("item_type") or item.get("type") or ""
+        kind = str(item.get("item_type") or item.get("type") or "")
         if kind in _TOOL_ITEMS:
             self.tools[kind] = self.tools.get(kind, 0) + 1
+        if kind == "CommandExecution":
+            # The shell's own record of what it ran, after Codex expanded whatever the model
+            # wrote -- a template literal inside a code-mode ``exec``, a variable, a wrapper
+            # script. It is the ground truth attribution reads (ADR 0048).
+            command = item.get("command")
+            if isinstance(command, list):
+                command = " ".join(str(c) for c in command)
+            if command:
+                self._executed.append(
+                    ExecutedCommand(
+                        tool=kind,
+                        command=str(command),
+                        cwd=str(item.get("cwd") or item.get("workdir") or ""),
+                    )
+                )
 
     def event(self, rec: dict[str, Any], payload: dict[str, Any]) -> None:
         """Route one ``event_msg`` record to the handler for its payload type."""
@@ -302,9 +328,15 @@ class _Ledger:
             self.item_completed(payload.get("item") or {})
 
     def finish(self) -> None:
-        if self.calls and self._lines:
+        if not self.calls:
+            return
+        if self._lines:
             self.calls[-1].records.extend(self._lines)
             self._lines = []
+        if self._executed:
+            # A command completed after the last ``token_count`` still ran in that turn.
+            self.calls[-1].executed.extend(self._executed)
+            self._executed = []
 
 
 def fold(records: Numbered) -> tuple[str, str, _Ledger]:
