@@ -6,6 +6,13 @@
       "at": "2026-08-22T00:00:05Z",
       "context_pct": 0.55,
       "context_tokens": 2200,
+      "executed": [
+        {
+          "command": "cat demo/SKILL.md",
+          "cwd": "/w",
+          "tool": "CommandExecution"
+        }
+      ],
       "latency_ms": 5000,
       "n": 1,
       "output_tokens_per_sec": 9.0,
@@ -53,6 +60,7 @@
       "at": "2026-08-22T00:00:09Z",
       "context_pct": 0.65,
       "context_tokens": 2600,
+      "executed": [],
       "latency_ms": 4000,
       "n": 2,
       "output_tokens_per_sec": 7.5,
@@ -240,6 +248,7 @@
           "at": "2026-08-22T00:00:04Z",
           "context_pct": 0.15,
           "context_tokens": 600,
+          "executed": [],
           "latency_ms": null,
           "n": 1,
           "output_tokens_per_sec": null,

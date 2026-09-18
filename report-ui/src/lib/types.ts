@@ -82,6 +82,16 @@ export interface ToolCall {
   id?: string;
 }
 
+/**
+ * One shell command the harness itself reported as executed, after its own expansion
+ * (Codex's `CommandExecution`). Empty for a harness that logs no such record (ADR 0048).
+ */
+export interface ExecutedCommand {
+  tool: string;
+  command: string;
+  cwd: string;
+}
+
 /** A tool result that entered a call's context: the previous turn's output of that tool. */
 export interface ResultIn {
   tool: string;
@@ -95,6 +105,8 @@ export interface Call {
   at: string;
   usage: Usage;
   tools: ToolCall[];
+  /** Absent in a `result.json` captured before ADR 0048. */
+  executed?: ExecutedCommand[];
   text: string;
   thinking: string;
   stop_reason: string | null;

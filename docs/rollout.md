@@ -103,6 +103,7 @@ that only checks `exists` passes for a run that did nothing at all.
 | `call.usage` | That call's own `Usage`. |
 | `call.text`, `call.thinking` | What it said and thought. |
 | `call.tools` | `list[ToolCall]`: `.name`, `.summary`, `.input` (the full payload), `.id`. |
+| `call.executed` | `list[ExecutedCommand]`: `.tool`, `.command`, `.cwd` — the shell commands the harness itself reported as run this turn, after its own expansion. Empty for a harness that logs no such record (ADR 0048). |
 | `call.results_in` | `list[ToolResult]`: what entered the context before this call. `.content` is complete, never truncated. |
 | `call.records` | The 1-based session-log lines this turn owns. |
 | `call.latency_ms`, `call.context_tokens` | Per-turn timing and prompt size. |

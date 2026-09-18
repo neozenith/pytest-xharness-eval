@@ -106,6 +106,27 @@ class ToolCall:
 
 
 @dataclass(frozen=True, slots=True)
+class ExecutedCommand:
+    """One shell command the harness itself reports as executed, after its own expansion.
+
+    A tool call records what the *model* asked for, which may name a script through a
+    shell variable or a template literal in some wrapper language. Where the harness also
+    logs the command its shell actually ran -- Codex's ``CommandExecution`` item -- that
+    string is the ground truth for what was run, and it needs no parsing of the
+    indirection that produced it (ADR 0048). ``tool`` is the harness's own name for the
+    record, so the shell vocabulary of :class:`~pytest_xharness_eval.model.registry.Shells`
+    recognises it; ``cwd`` is the directory it ran in, empty when the log does not say.
+
+    A harness that reports no such record leaves the list empty, which is the whole of
+    what it knows, not a gap.
+    """
+
+    tool: str
+    command: str
+    cwd: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class ToolResult:
     """One tool result that entered the context before a turn; ``content`` is complete, never truncated."""
 
@@ -130,6 +151,8 @@ class Call:
     text: str = ""
     thinking: str = ""
     tools: list[ToolCall] = field(default_factory=list)
+    #: The commands the harness reported its shell as having run this turn, fully expanded.
+    executed: list[ExecutedCommand] = field(default_factory=list)
     results_in: list[ToolResult] = field(default_factory=list)
     records: list[int] = field(default_factory=list)
     # Wall time from the previous log record to this call's first record: request + generation (ADR 0024).

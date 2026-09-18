@@ -210,7 +210,16 @@ def codex_capture(session_dir: Path) -> Path:
             {
                 "type": "event_msg",
                 "timestamp": "2026-08-22T00:00:04Z",
-                "payload": {"type": "item_completed", "item": {"item_type": "CommandExecution"}},
+                "payload": {
+                    "type": "item_completed",
+                    # The shell's own record of what ran, expanded: the string coverage reads.
+                    "item": {
+                        "item_type": "CommandExecution",
+                        "command": "cat demo/SKILL.md",
+                        "cwd": "/w",
+                        "exit_code": 0,
+                    },
+                },
             },
             {
                 "type": "event_msg",

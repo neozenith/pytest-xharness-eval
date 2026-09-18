@@ -737,6 +737,20 @@
     },
     {
       "data": {
+        "id": "ADR-0048",
+        "label": "0048",
+        "parent": "group-accounting",
+        "colour": "#ea580c",
+        "file": "0048-coverage-reads-the-command-the-shell-ran.md",
+        "title": "Coverage reads the command the shell ran, and expands what only the shell knew",
+        "description": "Coverage reads the command the shell ran, and expands what only the shell knew",
+        "status": "accepted",
+        "group": "accounting",
+        "tags": "accounting, harness"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -1833,6 +1847,36 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0048-extends-ADR-0027",
+        "source": "ADR-0048",
+        "target": "ADR-0027",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0048-extends-ADR-0022",
+        "source": "ADR-0048",
+        "target": "ADR-0022",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0048-extends-ADR-0019",
+        "source": "ADR-0048",
+        "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
       }
     }
   ],

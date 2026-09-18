@@ -1,0 +1,117 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0048
+slug: coverage-reads-the-command-the-shell-ran
+title: Coverage reads the command the shell ran, and expands what only the shell knew
+status: accepted
+status_note: |-
+  accepted, 2026-09-18. Refines
+  [0027](0027-coverage-follows-the-shells-working-directory.md) (coverage follows the
+  shell's working directory) with the second half of the same problem, and
+  [0022](0022-record-kind-catalogue-and-skill-coverage.md) (its detection rule).
+  Extends the per-call ledger of
+  [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) with one field,
+  `call.executed`: a new key of `result.json`.
+accepted_on: '2026-09-18'
+last_changed_on: '2026-09-18'
+group: accounting
+tags:
+- accounting
+- harness
+lens: |-
+  Attribution belongs at the last point the name is still written down. A tool call
+  records an intention, and an agent is free to express it through a variable, a
+  template literal or a wrapper language; the shell's own record of what it ran is
+  the one string that has survived every indirection. Read that where the harness
+  offers it, and reconstruct only what it does not.
+relates_to:
+- relation: extends
+  target: ADR-0027
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0022
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0019
+  note: the record's status line says "extends"
+body:
+  context: |-
+    0027 taught coverage to follow a persistent shell's working directory, because an
+    agent that `cd`s into the skill and then runs `bun run scripts/gate.ts` never
+    writes the needle `<skill>/scripts/gate.ts` down. The same run had a second way of
+    not writing it down, and it cost a paid cell.
+
+    A live `claude/claude-opus-5` cell reported `skill 0/84 loaded 0/6 run` and failed
+    its gate:
+
+    ```
+    AssertionError: the run never executed ['scripts/mermaid_contrast.ts'], which the
+    skill declares mandatory. It ran: nothing
+    ```
+
+    Its session log shows the script ran twice. The agent held the skill directory in
+    a shell variable:
+
+    ```sh
+    S=<workspace>/.claude/plugin/skills/mermaidjs-diagrams
+    ls $S/resources; cat $S/resources/color_host_themed_renderers.md
+    bun run $S/scripts/mermaid_contrast.ts DATA_MODEL.md
+    ```
+
+    A second run of the same case failed the `codex` cell too, through a different
+    indirection: its code-mode `exec` tool holds the directory in a JavaScript
+    constant and interpolates it, so the tool input coverage parses is JavaScript
+    source and the needle is nowhere in it.
+
+    Both are the same shape. The path is assembled by something that runs *after* the
+    text coverage reads. Modelling one wrapper language at a time is a losing game:
+    the next one will be a `Makefile` variable, or a wrapper script, or a shell
+    function.
+  decision: |-
+    **Where the harness logs the command its shell ran, that is what coverage reads.**
+    `Call.executed` is a list of `ExecutedCommand` (`tool`, `command`, `cwd`) — the
+    harness's own record of an executed command, after its own expansion. Codex emits
+    exactly this as the `CommandExecution` item of an `item_completed` event, whose
+    `command` field is the fully resolved string and whose `cwd` is where it ran, so
+    `harness/codex.py` folds it into the turn it completed in. Claude Code logs no
+    such record, so its list is empty: the whole of what that harness knows, not a
+    gap. Attribution walks `call.executed` beside `call.tools`, resolving each at its
+    own `cwd` through the same rewrite 0027 introduced.
+
+    This is the general fix. A command that reached the shell has already been through
+    every wrapper the agent wrote, whatever language it was in, so no future wrapper
+    needs a parser of its own.
+
+    **Where it does not, the variable is substituted before the rewrite.** Claude
+    Code's `Bash` input is the only record of what it ran, so `resolve_command` now
+    keeps a variable table beside the working directory: a segment that is
+    `NAME=value` (with `export` and quotes allowed, and `$OTHER` inside the value
+    already substituted) records a name, and `$NAME` and `${NAME}` are expanded in
+    every later segment — including the target of a `cd`, so `cd $S && bun run
+    scripts/gate.ts` resolves too. A `NAME=value cmd ...` prefix scopes to its own
+    command, as a shell scopes it.
+
+    **The table is per command.** Claude Code's `Bash` keeps its working directory
+    between calls but not its environment, so the variables die with the command that
+    set them while the `cwd` of 0027 lives on. A harness whose shell does keep its
+    environment would say so the way it says `persistent_shells` today.
+
+    **An unknown name stays unexpanded.** `$HOME`, an unset name, anything assigned
+    somewhere this command cannot see: the text is left exactly as written, so every
+    path that never depended on an assignment attributes exactly as it did before.
+  consequences: |-
+    `result.json` gains `call.executed`, mirrored in `report-ui/src/lib/types.ts` and
+    documented in `docs/rollout.md` as part of the grader surface. The
+    characterization goldens move by that key alone; no coverage figure in them
+    changes, which is the evidence that the new path adds attribution rather than
+    redistributing it.
+
+    Coverage can now rise on a replay of a capture taken before this change: the
+    evidence was always in the log, and `uv run -m pytest_xharness_eval.replay` reads
+    it. A cell that failed `check_skill_scripts_ran` for this reason was a false
+    negative, and re-grading it is free.
+
+    The two fixes are not alternatives. The expansion is a best effort over text the
+    shell already resolved perfectly; where a harness reports the resolved command,
+    that record wins, because it needed no guess at all.
