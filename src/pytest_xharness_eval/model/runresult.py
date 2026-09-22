@@ -300,8 +300,8 @@ class RunResultFields(TypedDict):
     their own owners and are absent here on purpose, so a dialect cannot reach them
     through the constructor: :meth:`RunResult.folded` derives ``turns``, ``usage``,
     ``calls`` and ``subagents`` from the ledgers, :meth:`RunResult.apply_cost` writes the
-    four cost fields together, and the derivation pipeline attaches ``case`` and
-    ``skill_coverage`` once the run is graded.
+    four cost fields together, and the derivation pipeline attaches ``case``, ``effort``
+    and ``skill_coverage`` once the run is graded.
 
     Every key is a :class:`RunResult` field with the same type; the required ones are the
     fields that have no default. ``tests/test_units.py`` asserts that the four groups
@@ -381,6 +381,11 @@ class RunResult:
     api_duration_ms: int | None = None
     # The case that produced this run (ADR 0025).
     case: CaseRef | None = None
+    # The reasoning-effort rung the CLI was asked for, or None when it was left on its own
+    # default (ADR 0049). Attached by the derivation pipeline rather than folded out of the
+    # log, because no dialect records what it was *told* -- only what it then did -- so a
+    # harness that folded it would be reporting its own argv back to itself.
+    effort: str | None = None
     # Parallel threads the session spawned, each with its own ledger. Their usage is folded
     # into ``usage`` (the run's billed total); ``turns`` and ``calls`` stay the primary's.
     subagents: list[Subagent] = field(default_factory=list)

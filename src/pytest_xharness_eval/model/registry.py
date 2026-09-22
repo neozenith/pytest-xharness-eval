@@ -12,6 +12,13 @@ Three questions now: the third is how a harness names a skill, so a case that de
 is a lookup on the same registered object as the other two, and it belongs here for the
 same reason -- the alternative is ``model/case.py`` importing the adapter layer.
 
+Four: the fourth is which reasoning-effort rungs a harness has, so a matrix entry naming
+one it does not have is refused at expansion instead of accepted by a CLI that then runs
+at its default anyway (ADR 0049). Same shape as the rest -- a lookup by registered name,
+returning data rather than behaviour -- and the alternative would be ``model/matrix.py``
+holding a table of each provider's ladder, which is the second list ADR 0034 exists to
+prevent.
+
 The first two lookups used to be two separate upward imports -- ``matrix`` named the harness
 package, and ``skillcov.annotate`` called ``harness.get(result.harness)`` in the middle of
 its ledger walk, which is why annotating coverage needed a registered harness at all
@@ -55,6 +62,26 @@ class Shells:
         """The registered harness ``name``'s own vocabulary; an unknown name raises (ADR 0034)."""
         agent = harness.get(name)
         return cls(tools=agent.shell_tools, persistent=agent.persistent_shells)
+
+
+def efforts(harness_name: str) -> tuple[str, ...]:
+    """The registered harness ``harness_name``'s effort ladder, lowest rung first (ADR 0049).
+
+    Empty when that CLI exposes no effort control, which a caller must treat as "naming a
+    rung for this harness is an error", never as "run it at the default".
+    """
+    return harness.get(harness_name).efforts
+
+
+def resolve_effort(harness_name: str, effort: str) -> str:
+    """The rung of ``harness_name``'s own ladder that ``effort`` names (ADR 0049).
+
+    Resolved rather than merely validated, because the portable aliases ``min``/``mid``/
+    ``max`` name a position on whichever ladder the harness has. The result is a native
+    rung, and it is what every later reader sees -- the cell id, the evidence directory
+    name and the report row -- so nothing downstream has to resolve it a second time.
+    """
+    return harness.get(harness_name).resolve_effort(effort)
 
 
 def invocation(harness_name: str, *, skill: str, task: str) -> str:

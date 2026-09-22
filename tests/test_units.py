@@ -43,11 +43,12 @@ from pytest_xharness_eval.harness import claude as claude_harness
 from pytest_xharness_eval.harness import codex as codex_harness
 from pytest_xharness_eval.harness import records
 from pytest_xharness_eval.model import clock
+from pytest_xharness_eval.model import effort as effort_words
 from pytest_xharness_eval.model import matrix as mx
 from pytest_xharness_eval.model import runresult
 from pytest_xharness_eval.model import suite as suites
 from pytest_xharness_eval.model import workspace as ws
-from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
+from pytest_xharness_eval.model.layout import CacheLayout, SessionDir, model_level, split_model_level
 from pytest_xharness_eval.model.registry import Shells
 from pytest_xharness_eval.model.runresult import Subagent
 from pytest_xharness_eval.model.suite import EvalSuite
@@ -164,6 +165,172 @@ def test_narrow_by_harness_and_model() -> None:
     assert mx.narrow(cells, ["codex/gpt-5.6-sol"], None) == [Cell("codex", "gpt-5.6-sol")]
     assert mx.narrow(cells, ["opus"], ["codex"]) == []
     assert mx.narrow(cells, None, None) == cells
+
+
+# -- effort (ADR 0049) ----------------------------------------------------------------
+
+CLAUDE_LADDER = claude_harness.CLAUDE_EFFORTS
+CODEX_LADDER = codex_harness.CODEX_EFFORTS
+
+
+@pytest.mark.parametrize(
+    ("alias", "on_claude", "on_codex"),
+    [("min", "low", "minimal"), ("mid", "high", "medium"), ("max", "max", "xhigh")],
+)
+def test_a_portable_alias_names_a_position_on_each_harnesss_own_ladder(
+    alias: str, on_claude: str, on_codex: str
+) -> None:
+    """``min``/``mid``/``max`` are the point of the vocabulary: one matrix line, both arms.
+
+    The two ladders do not share a top rung -- claude's is ``max``, codex's is ``xhigh`` --
+    so an author who had to name a native rung could not write a line that swept both at
+    comparable intensity. ``max`` doubles as claude's own top rung, and resolves to itself
+    there, which is why this resolves rather than merely validating.
+    """
+    assert effort_words.resolve(alias, CLAUDE_LADDER, harness="claude") == on_claude
+    assert effort_words.resolve(alias, CODEX_LADDER, harness="codex") == on_codex
+
+
+def test_a_native_rung_resolves_to_itself_and_a_foreign_one_is_refused() -> None:
+    """Exact, never nearest: codex has ``minimal`` and claude does not, and that is an error.
+
+    Rounding it to claude's ``low`` would silently run a different experiment than the
+    matrix line asked for, and the run would still be billed in full.
+    """
+    assert effort_words.resolve("high", CLAUDE_LADDER, harness="claude") == "high"
+    with pytest.raises(effort_words.UnknownEffort, match="no effort rung 'minimal'"):
+        effort_words.resolve("minimal", CLAUDE_LADDER, harness="claude")
+
+
+def test_a_word_outside_the_vocabulary_names_the_whole_vocabulary() -> None:
+    """A typo must not reach a CLI: both of them accept one, warn at most, and bill a run."""
+    with pytest.raises(effort_words.UnknownEffort, match="unknown effort 'hgih'"):
+        effort_words.resolve("hgih", CLAUDE_LADDER, harness="claude")
+
+
+def test_a_harness_with_no_ladder_cannot_be_asked_for_an_effort() -> None:
+    """An empty ladder means "no effort control", never "run it at the default"."""
+    with pytest.raises(effort_words.UnknownEffort, match="declares no effort ladder"):
+        effort_words.resolve("high", (), harness="probe")
+
+
+def test_each_harness_renders_the_rung_in_its_own_dialect() -> None:
+    """claude has a first-class flag; codex has only the config mechanism (ADR 0049)."""
+    assert claude_harness.effort_argv("high") == ["--effort", "high"]
+    assert codex_harness.effort_argv("high") == ["-c", "model_reasoning_effort=high"]
+    # No rung asked for means no argument at all, which is what leaves the CLI on its own
+    # default -- distinct from naming a rung that happens to be the default.
+    assert claude_harness.effort_argv(None) == [] and codex_harness.effort_argv(None) == []
+
+
+def test_a_matrix_entry_may_name_an_effort_and_resolves_it_once() -> None:
+    """The third component is resolved at expansion, so nothing downstream holds an alias."""
+    cells = mx.expand(["claude/claude-opus-5/mid", "codex/gpt-5.6-sol/max", "claude/claude-opus-5"])
+    assert cells == [
+        Cell("claude", "claude-opus-5", "high"),
+        Cell("codex", "gpt-5.6-sol", "xhigh"),
+        Cell("claude", "claude-opus-5"),
+    ]
+    # The node id shows the rung that was sent, and omits the component entirely when the
+    # entry named none -- so a pre-0049 matrix keys its history exactly as it always did.
+    assert [c.id for c in cells] == [
+        "claude/claude-opus-5/high",
+        "codex/gpt-5.6-sol/xhigh",
+        "claude/claude-opus-5",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("entry", "match"),
+    [
+        ("claude/claude-opus-5/hgih", "unknown effort"),
+        ("claude/claude-opus-5/minimal", "no effort rung"),
+        ("claude/claude-opus-5/high/extra", "matrix entry must be"),
+    ],
+)
+def test_a_bad_effort_stops_the_sweep_at_expansion_before_any_spend(entry: str, match: str) -> None:
+    """ADR 0007's rule for an unpriced model, applied to the rung (ADR 0049).
+
+    The offending line is named in front of the harness's own message, because the line is
+    what the reader has to go and edit.
+    """
+    with pytest.raises(ValueError, match=match):
+        mx.expand([entry])
+
+
+def test_narrow_by_effort_matches_the_resolved_rung() -> None:
+    cells = mx.expand(["claude/claude-opus-5/high", "claude/claude-opus-5/low", "claude/claude-opus-5"])
+    assert mx.narrow(cells, None, None, ["high"]) == [Cell("claude", "claude-opus-5", "high")]
+    # An alias filters by what it resolves to on that harness, so --effort mid finds the
+    # cell that ``.../mid`` expanded into.
+    assert mx.narrow(cells, None, None, ["mid"]) == [Cell("claude", "claude-opus-5", "high")]
+    # A cell that named no rung has none to compare a CLI default against, so it is only
+    # selectable explicitly and is never swept up by a rung filter.
+    assert mx.narrow(cells, None, None, ["low", ""]) == [
+        Cell("claude", "claude-opus-5", "low"),
+        Cell("claude", "claude-opus-5"),
+    ]
+    assert mx.narrow(cells, None, None, None) == cells
+
+
+@pytest.mark.parametrize(
+    ("model", "rung", "level"),
+    [("claude-opus-5", "high", "claude-opus-5--high"), ("claude-opus-5", None, "claude-opus-5")],
+)
+def test_the_effort_rides_the_model_level_and_splits_back_off_it(model: str, rung: str | None, level: str) -> None:
+    """The evidence tree stays five levels deep, so the page's fetch contract is unchanged."""
+    assert model_level(model, rung) == level
+    assert split_model_level(level) == (model, rung)
+
+
+def test_a_session_directory_carries_the_rung_without_gaining_a_level(tmp_path: Path) -> None:
+    cache = CacheLayout(tmp_path)
+    located = cache.session(
+        skill="demo", harness="claude", model="opus", effort="high", run="20260101T000000Z", session="sid"
+    )
+    assert located.rel == "demo/claude/opus--high/20260101T000000Z/sid"
+    assert located.report_link("log.jsonl") == "../results/demo/claude/opus--high/20260101T000000Z/sid/log.jsonl"
+    located.mkdir()
+    # The walk reads the coordinates back off the tree, rung included, and a level written
+    # before ADR 0049 still reads as "named no effort" rather than failing to parse.
+    plain = cache.session(skill="demo", harness="codex", model="sol", run="20260101T000000Z", session="sid2")
+    plain.mkdir()
+    walked = {(s.model, s.effort) for s in cache.sessions()}
+    assert walked == {("opus", "high"), ("sol", None)}
+
+
+def test_a_dry_run_record_names_the_rung_it_would_have_run_at() -> None:
+    dry = CellMetrics.dry_run(node="n", cell=Cell(harness="claude", model="claude-opus-5", effort="high"))
+    assert dry.effort == "high" and dry.verdict == Verdict.DRY_RUN.value
+    assert CellMetrics.dry_run(node="n", cell=Cell(harness="claude", model="claude-opus-5")).effort == ""
+
+
+def test_two_cells_of_one_case_differing_only_in_effort_get_their_own_workspaces(tmp_path: Path) -> None:
+    """A shared build directory would have the pair overwrite each other's workspace."""
+    fixture = tmp_path / "fixture"
+    fixture.mkdir()
+    (fixture / "seed.md").write_text("seed", encoding="utf-8")
+    names = set()
+    for rung in ("high", "low", None):
+        run = cellrun.CellRun(
+            case=_case_for_cell_id(),
+            cell=Cell(harness="claude", model="opus", effort=rung),
+            settings=settings.Settings(rootpath=tmp_path, skills_root=tmp_path, cache=CacheLayout(tmp_path / "cache")),
+            skill_dir=tmp_path,
+            fixture_dir=fixture,
+            node="n",
+            suite="s",
+        )
+        names.add(run.cell_id)
+    assert names == {"eval_thing-claude-opus-high", "eval_thing-claude-opus-low", "eval_thing-claude-opus"}
+
+
+def _case_for_cell_id() -> Any:
+    @evalcase(task="t", skill="s", fixture="f")
+    def eval_thing(output: CaseOutput) -> None:
+        pass
+
+    return eval_thing
 
 
 # -- case ----------------------------------------------------------------------------
@@ -381,7 +548,7 @@ def test_each_runresult_field_has_exactly_one_owner() -> None:
     """
     derived = {"turns", "usage", "calls", "subagents"}
     priced = {"estimated_cost_usd", "cost_status", "cost_by_tier", "rates_applied"}
-    attached = {"case", "skill_coverage"}
+    attached = {"case", "effort", "skill_coverage"}
     supplied = _typed_dict_keys(runresult.RunResultFields)
     assert not supplied & (derived | priced | attached)
     assert supplied | derived | priced | attached == {f.name for f in dataclasses.fields(RunResult)}
@@ -2616,6 +2783,7 @@ HISTORY_KEYS = [
     "context_window",
     "context_window_pct",
     "duration_ms",
+    "effort",
     "estimated_cost_usd",
     "files_written",
     "final_context_pct",
@@ -2658,6 +2826,7 @@ INDEX_ROW_KEYS = [
     "context_window",
     "context_window_pct",
     "duration_ms",
+    "effort",
     "estimated_cost_usd",
     "files_written",
     "final_context_pct",

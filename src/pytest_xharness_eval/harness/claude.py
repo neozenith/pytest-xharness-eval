@@ -92,10 +92,25 @@ def skill_plugin(skill_dir: Path, run_dir: Path) -> Path:
     return root
 
 
+#: claude's reasoning-effort ladder, lowest rung first (``claude --help``, 2.1.278).
+CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+
+
+def effort_argv(effort: str | None) -> list[str]:
+    """``--effort <rung>``, or nothing at all when no rung was asked for (ADR 0049).
+
+    An unknown value is *not* checked here: claude accepts one, warns, and runs at its
+    default, so the check has to happen before spend and does -- at matrix expansion,
+    against :data:`CLAUDE_EFFORTS`.
+    """
+    return ["--effort", effort] if effort else []
+
+
 def run_claude(
     prompt: str,
     model: str,
     workspace: Path,
+    effort: str | None = None,
     skill_dir: Path | None = None,
     timeout_s: int = DEFAULT_TIMEOUT_S,
 ) -> RunResult:  # pragma: no cover - spawns a real CLI (ADR 0002)
@@ -115,6 +130,7 @@ def run_claude(
         session_id,
         "--permission-mode",
         "bypassPermissions",
+        *effort_argv(effort),
         *_ISOLATION,
     ]
     if skill_dir is not None:
@@ -429,6 +445,7 @@ class ClaudeHarness(Harness):
     name = "claude"
     shell_tools = frozenset({"Bash"})
     persistent_shells = frozenset({"Bash"})  # one shell process spans the session, so ``cd`` sticks
+    efforts = CLAUDE_EFFORTS
 
     def invoke(self, *, skill: str, task: str) -> str:
         """``/<skill> <task>``: the slash command a Claude Code user types (ADR 0044).
@@ -439,16 +456,21 @@ class ClaudeHarness(Harness):
         """
         return f"/{skill} {task}"
 
+    def effort_args(self, effort: str | None) -> list[str]:
+        """``--effort <rung>``: a first-class flag on this CLI, so no config file is touched."""
+        return effort_argv(effort)
+
     def run(
         self,
         *,
         prompt: str,
         model: str,
         workspace: Path,
+        effort: str | None = None,
         skill_dir: Path | None = None,
         timeout_s: int = DEFAULT_TIMEOUT_S,
     ) -> RunResult:  # pragma: no cover - spawns a real CLI (ADR 0002)
-        return run_claude(prompt, model, workspace, skill_dir=skill_dir, timeout_s=timeout_s)
+        return run_claude(prompt, model, workspace, effort=effort, skill_dir=skill_dir, timeout_s=timeout_s)
 
     def session_from_capture(self, session: SessionDir, stored: dict[str, Any]) -> ClaudeSessionLog:
         """Rebuild the envelope from the stored result, then fold as the live run did.

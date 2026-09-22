@@ -125,10 +125,36 @@ def primary_rollout(rollouts: list[Path]) -> Path:
     return primaries[0]
 
 
+#: codex's reasoning-effort ladder, lowest rung first.
+#:
+#: Verified against codex-cli 0.155.1, whose ``model_reasoning_effort`` enum also carries
+#: ``none``, ``max``, ``ultra`` and ``persistent``. Those are deliberately left off: the
+#: CLI accepts any of them silently, so a rung this plugin cannot vouch for would buy a
+#: full-priced run of an experiment nobody can name. Adding one is one tuple entry, and
+#: moves what ``mid`` resolves to -- which is why the order here is the ladder, not a set.
+CODEX_EFFORTS = ("minimal", "low", "medium", "high", "xhigh")
+
+#: The config key codex reads its reasoning budget from. ``run_codex`` passes
+#: ``--ignore-user-config``, so this ``-c`` override is the only thing that sets it and a
+#: developer's own ``~/.codex/config.toml`` cannot leak into a cell.
+EFFORT_CONFIG_KEY = "model_reasoning_effort"
+
+
+def effort_argv(effort: str | None) -> list[str]:
+    """``-c model_reasoning_effort=<rung>``, or nothing when no rung was asked for (ADR 0049).
+
+    codex has no first-class flag for this, so the rung rides the same ``-c`` mechanism a
+    config file would use. The value is not checked here: an unrecognised override is
+    accepted and ignored by the CLI, so the check happens at matrix expansion, before spend.
+    """
+    return ["-c", f"{EFFORT_CONFIG_KEY}={effort}"] if effort else []
+
+
 def run_codex(
     prompt: str,
     model: str,
     workspace: Path,
+    effort: str | None = None,
     skill_dir: Path | None = None,
     timeout_s: int = DEFAULT_TIMEOUT_S,
 ) -> RunResult:  # pragma: no cover - spawns a real CLI (ADR 0002)
@@ -155,6 +181,7 @@ def run_codex(
         str(workspace),
         "--sandbox",
         "workspace-write",
+        *effort_argv(effort),
         *_ISOLATION,
     ]
 
@@ -477,6 +504,7 @@ class CodexHarness(Harness):
     name = "codex"
     shell_tools = frozenset({"exec", "shell", "CommandExecution", "bash", "exec_command"})
     persistent_shells = frozenset()  # every exec runs in its own process at ``workdir``
+    efforts = CODEX_EFFORTS
 
     def invoke(self, *, skill: str, task: str) -> str:
         """``$<skill> <task>``: the mention Codex's own instructions name as the trigger.
@@ -488,16 +516,21 @@ class CodexHarness(Harness):
         """
         return f"${skill} {task}"
 
+    def effort_args(self, effort: str | None) -> list[str]:
+        """``-c model_reasoning_effort=<rung>``: codex exposes the budget as config, not a flag."""
+        return effort_argv(effort)
+
     def run(
         self,
         *,
         prompt: str,
         model: str,
         workspace: Path,
+        effort: str | None = None,
         skill_dir: Path | None = None,
         timeout_s: int = DEFAULT_TIMEOUT_S,
     ) -> RunResult:  # pragma: no cover - spawns a real CLI (ADR 0002)
-        return run_codex(prompt, model, workspace, skill_dir=skill_dir, timeout_s=timeout_s)
+        return run_codex(prompt, model, workspace, effort=effort, skill_dir=skill_dir, timeout_s=timeout_s)
 
     def session_from_capture(self, session: SessionDir, stored: dict[str, Any]) -> CodexSessionLog:
         """The rollout is self-contained; only the exit code has to come from the stored result."""

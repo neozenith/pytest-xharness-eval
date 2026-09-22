@@ -1,6 +1,6 @@
 """One cell's live run: the sequence around the one call that spends money (ADR 0002, ADR 0040).
 
-A cell is a (case, harness, model) triple, and running it is always the same seven steps:
+A cell is a (case, harness, model, effort) point, and running it is always the same seven steps:
 stamp the run, copy the fixture into a fresh workspace, invoke the CLI, derive everything
 derivable from what came back, write the evidence, grade it, record the metrics. Exactly
 one of those steps spawns a paid process, and it used to be inside a forty-line
@@ -100,8 +100,14 @@ class CellRun:
 
     @property
     def cell_id(self) -> str:
-        """The workspace name for this cell: case, harness and model, path-safe."""
-        return f"{self.case.name}-{self.cell.harness}-{self.cell.model}"
+        """The workspace name for this cell: case, harness, model and effort, path-safe.
+
+        The effort rung is part of the name because two cells of one sweep may differ in
+        nothing else, and a shared workspace name would have them overwrite each other's
+        build directory (ADR 0049).
+        """
+        rung = f"-{self.cell.effort}" if self.cell.effort else ""
+        return f"{self.case.name}-{self.cell.harness}-{self.cell.model}{rung}"
 
     def materialise(self) -> Path:
         """A fresh copy of the fixture tree under ``<cache>/build/``, for this cell alone (ADR 0004)."""
@@ -126,7 +132,11 @@ class CellRun:
         started_at = now_iso()
         t0 = time.monotonic()
         result = harness.get(self.cell.harness).run(
-            prompt=self.prompt, model=self.cell.model, workspace=workspace, skill_dir=self.skill_dir
+            prompt=self.prompt,
+            model=self.cell.model,
+            workspace=workspace,
+            effort=self.cell.effort,
+            skill_dir=self.skill_dir,
         )
         return Attempt(result=result, started_at=started_at, wall_ms=int((time.monotonic() - t0) * 1000))
 
@@ -136,6 +146,7 @@ class CellRun:
             skill=self.case.skill,
             harness=self.cell.harness,
             model=self.cell.model,
+            effort=self.cell.effort,
             run=run_stamp(),
             session=session_id,
         )
@@ -153,6 +164,7 @@ class CellRun:
             skill=self.case.skill,
             skill_files=self.skill_files,
             case=CaseRef.of(self.case, self.suite, self.prompt),
+            effort=self.cell.effort,
         )
         session = self.session_dir(result.session_id)
         pipeline.capture(result, session)

@@ -1,8 +1,10 @@
 """Every path under a project's eval cache, named in one place (ADR 0032, ADR 0037).
 
 The cache tree is a published contract, not an implementation detail: the report page
-fetches ``../results/{skill}/{harness}/{model}/{run}/{session}/log.jsonl`` by that exact
-shape, and a replay finds a capture by walking it. It used to be spelled out in five
+fetches ``../results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/log.jsonl`` by
+that exact shape, and a replay finds a capture by walking it. It is five levels deep and
+stays five levels deep: the effort axis added by ADR 0049 shares the model's level rather
+than becoming a sixth, so a capture written before it still walks and still links. It used to be spelled out in five
 modules at once -- ``HISTORY_NAME`` meant ``history.json`` in ``pipeline`` and
 ``history.jsonl`` in ``report``, the five-level glob was written three times, both harness
 adapters hardcoded ``log.jsonl``, and ``Settings.results_root`` was a third spelling of
@@ -24,6 +26,15 @@ if TYPE_CHECKING:
     # Standard Library
     from collections.abc import Iterator
     from pathlib import Path
+
+#: What joins a model to its effort rung in the one directory level they share (ADR 0049).
+#:
+#: The evidence tree is five levels deep and the report page fetches by that exact shape,
+#: so effort rides the model level rather than becoming a sixth: ``claude-opus-5--high``.
+#: A level with no separator named no effort, which is why an entry written before ADR 0049
+#: still walks and still links. ``--`` rather than ``@`` because the level also appears in
+#: a URL the page builds, and no shipped model id contains it.
+MODEL_EFFORT_SEP = "--"
 
 # Directories directly under the cache root.
 BUILD_DIR = "build"
@@ -112,11 +123,19 @@ class LocatedSession(SessionDir):
     harness: str
     model: str
     run: str
+    #: The effort rung this cell ran at, or None when it named none (ADR 0049). Not a
+    #: level of its own: it shares the model's, and :attr:`model_level` is that level.
+    effort: str | None = None
+
+    @property
+    def model_level(self) -> str:
+        """The one directory level the model and its effort rung share."""
+        return model_level(self.model, self.effort)
 
     @property
     def rel(self) -> str:
-        """``{skill}/{harness}/{model}/{run}/{session}``: the coordinates as one posix key."""
-        return "/".join((self.skill, self.harness, self.model, self.run, self.session))
+        """``{skill}/{harness}/{model}[--{effort}]/{run}/{session}``: the coordinates as one posix key."""
+        return "/".join((self.skill, self.harness, self.model_level, self.run, self.session))
 
     @property
     def report_link_prefix(self) -> str:
@@ -126,6 +145,22 @@ class LocatedSession(SessionDir):
     def report_link(self, name: str) -> str:
         """The path from ``report/`` to one of this session's files."""
         return f"{self.report_link_prefix}/{name}"
+
+
+def model_level(model: str, effort: str | None) -> str:
+    """The directory level for a model at an effort rung: ``model`` or ``model--effort``."""
+    return f"{model}{MODEL_EFFORT_SEP}{effort}" if effort else model
+
+
+def split_model_level(level: str) -> tuple[str, str | None]:
+    """The inverse of :func:`model_level`: a level back into its model and its effort.
+
+    Split from the right, so a model id that itself contained the separator would keep all
+    but its last segment rather than losing everything after the first one. A level with no
+    separator named no effort, which is what every capture written before ADR 0049 holds.
+    """
+    model, sep, effort = level.rpartition(MODEL_EFFORT_SEP)
+    return (model, effort) if sep else (level, None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,14 +193,22 @@ class CacheLayout:
 
     # -- the evidence tree -------------------------------------------------------------
 
-    def session(self, *, skill: str, harness: str, model: str, run: str, session: str) -> LocatedSession:
-        """The evidence directory for one cell of one run, named by its five coordinates."""
+    def session(
+        self, *, skill: str, harness: str, model: str, run: str, session: str, effort: str | None = None
+    ) -> LocatedSession:
+        """The evidence directory for one cell of one run, named by its five coordinates.
+
+        ``effort`` is a sixth *coordinate* but not a sixth level: it joins the model in the
+        level they share, so the published five-level shape the report fetches by is
+        unchanged (ADR 0049).
+        """
         return LocatedSession(
-            self.results / skill / harness / model / run / session,
+            self.results / skill / harness / model_level(model, effort) / run / session,
             skill=skill,
             harness=harness,
             model=model,
             run=run,
+            effort=effort,
         )
 
     def sessions(self) -> Iterator[LocatedSession]:
@@ -180,8 +223,9 @@ class CacheLayout:
         for path in sorted(results.glob("*/*/*/*/*")):
             if not path.is_dir():
                 continue
-            skill, harness, model, run, _session = path.relative_to(results).parts
-            yield LocatedSession(path, skill=skill, harness=harness, model=model, run=run)
+            skill, harness, level, run, _session = path.relative_to(results).parts
+            model, effort = split_model_level(level)
+            yield LocatedSession(path, skill=skill, harness=harness, model=model, run=run, effort=effort)
 
     # -- the microsite -----------------------------------------------------------------
 

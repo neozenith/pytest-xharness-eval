@@ -45,7 +45,7 @@ def cell_ids(result: pytest.RunResult) -> list[str]:
 
 def test_help_lists_options_and_ini_keys(pytester: pytest.Pytester) -> None:
     result = pytester.runpytest("--help")
-    result.stdout.fnmatch_lines(["*--harness=*", "*--model=SUBSTRING*", "*--dry-run*"])
+    result.stdout.fnmatch_lines(["*--harness=*", "*--model=SUBSTRING*", "*--effort=*", "*--dry-run*"])
     result.stdout.fnmatch_lines(
         ["*xharness_skills_dir*", "*xharness_cache_dir*", "*xharness_prices*", "*xharness_matrix*"]
     )
@@ -153,6 +153,64 @@ def test_unknown_harness_is_rejected_by_argparse(pytester: pytest.Pytester) -> N
     result = pytester.runpytest("--harness", "gemini")
     assert result.ret != 0
     result.stderr.fnmatch_lines(["*--harness: invalid choice: 'gemini'*"])
+
+
+def test_an_effort_outside_the_vocabulary_is_rejected_by_argparse(pytester: pytest.Pytester) -> None:
+    """The narrowing flag is a closed choice, so a typo cannot silently select nothing."""
+    make_tree(pytester)
+    result = pytester.runpytest("--effort", "hgih")
+    assert result.ret != 0
+    result.stderr.fnmatch_lines(["*--effort: invalid choice: 'hgih'*"])
+
+
+# -- effort: the third matrix axis (ADR 0049) -----------------------------------
+
+EFFORT_INI = (
+    "xharness_matrix =\n    claude/claude-opus-5/high\n    claude/claude-opus-5/low\n    codex/gpt-5.6-sol/max\n"
+)
+
+
+def test_a_matrix_entry_sweeps_one_model_at_several_efforts(pytester: pytest.Pytester) -> None:
+    """The axis earns its keep here: one model, two rungs, two separately graded cells.
+
+    codex's ``max`` shows as ``xhigh`` because the alias resolved to that harness's own top
+    rung at expansion -- the node id names what was sent, not what was typed.
+    """
+    make_tree(pytester, ini=EFFORT_INI)
+    result = pytester.runpytest("--collect-only", "-q")
+    assert cell_ids(result) == [
+        "claude/claude-opus-5/high",
+        "claude/claude-opus-5/low",
+        "codex/gpt-5.6-sol/xhigh",
+    ]
+
+
+def test_effort_narrows_the_matrix_by_the_rung_each_alias_resolved_to(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, ini=EFFORT_INI)
+    assert cell_ids(pytester.runpytest("--collect-only", "-q", "--effort", "low")) == ["claude/claude-opus-5/low"]
+    # One flag, both arms: ``max`` is claude's top rung and codex's ``xhigh``.
+    assert cell_ids(pytester.runpytest("--collect-only", "-q", "--effort", "max")) == ["codex/gpt-5.6-sol/xhigh"]
+
+
+def test_an_effort_rung_the_harness_lacks_aborts_at_collection_before_any_spend(pytester: pytest.Pytester) -> None:
+    """ADR 0049 borrows ADR 0007's rule: both CLIs accept a bad rung and bill the run anyway."""
+    make_tree(pytester, ini="xharness_matrix =\n    claude/claude-opus-5/minimal\n")
+    result = pytester.runpytest("--collect-only")
+    assert result.ret != 0
+    result.stdout.fnmatch_lines(["*no effort rung 'minimal'*"])
+
+
+def test_a_cell_with_an_effort_keeps_its_rung_through_the_dry_run_record(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, ini=EFFORT_INI)
+    result = pytester.runpytest("--dry-run", "-v")
+    result.assert_outcomes(skipped=3)
+    result.stdout.fnmatch_lines(["*eval_demo?claude/claude-opus-5/high? DRY-RUN*"])
+    report = json.loads((pytester.path / ".xharness_eval_cache" / "report" / "report.json").read_text("utf-8"))
+    assert sorted((c["model"], c["effort"]) for c in report["cells"]) == [
+        ("claude-opus-5", "high"),
+        ("claude-opus-5", "low"),
+        ("gpt-5.6-sol", "xhigh"),
+    ]
 
 
 # -- visibility: verbose status words and the report -----------------------------

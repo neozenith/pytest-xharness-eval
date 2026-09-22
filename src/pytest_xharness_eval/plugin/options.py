@@ -22,6 +22,7 @@ import pytest
 from pytest_xharness_eval.derive import pricing
 from pytest_xharness_eval.derive.ignorerules import IgnoreRules
 from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model.effort import Effort
 from pytest_xharness_eval.plugin.cell import run_stamp
 from pytest_xharness_eval.plugin.results import RESULTS_KEY, ResultCollector
 from pytest_xharness_eval.runtime.settings import (
@@ -57,6 +58,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help="narrow the matrix to models containing this string, or to one exact harness/model cell (repeatable)",
     )
     g.addoption(
+        "--effort",
+        action="append",
+        default=None,
+        choices=[e.value for e in Effort],
+        help=(
+            "narrow the matrix to cells at this reasoning-effort rung (repeatable); "
+            "the portable aliases min/mid/max match whatever rung they resolved to per harness"
+        ),
+    )
+    g.addoption(
         "--dry-run",
         action="store_true",
         dest="eval_dry_run",
@@ -81,7 +92,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         INI_MATRIX,
         type="linelist",
         default=[],
-        help="project matrix: harness/model entries, one per line; a case's models= overrides it",
+        help=(
+            "project matrix: 'harness/model' or 'harness/model/effort' entries, one per line; "
+            "a case's models= overrides it"
+        ),
     )
     g.addoption(
         "--xharness-report-design-tokens",
