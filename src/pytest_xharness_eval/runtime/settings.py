@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 # Our Libraries
 from pytest_xharness_eval.derive import pricing
+from pytest_xharness_eval.harness.base import DEFAULT_TIMEOUT_S
 from pytest_xharness_eval.model import matrix as mx
 from pytest_xharness_eval.model.layout import CacheLayout
 
@@ -41,6 +42,7 @@ INI_MATRIX = "xharness_matrix"
 INI_SKILL_IGNORE = "xharness_skill_ignore"
 INI_REPORT_TOKENS = "xharness_report_design_tokens"
 INI_REPORT_INLINE = "xharness_report_inline"
+INI_TIMEOUT = "xharness_timeout_s"
 
 DEFAULT_SKILLS_DIR = "skills"
 DEFAULT_CACHE_DIR = ".xharness_eval_cache"
@@ -116,6 +118,11 @@ class Settings:
     skill_ignore: list[str] = field(default_factory=list)
     report_tokens: Path | None = None
     report_inline: bool = False
+    # How long one cell's CLI may run before the spawn is killed. A sweep across the effort
+    # axis needs this to be a knob: the top rungs of a ladder think for longer by design, and
+    # a timeout raises RunError, so the default cutting them off would read on the report as
+    # the skill failing rather than the budget being too small (ADR 0049).
+    timeout_s: int = DEFAULT_TIMEOUT_S
 
     # -- constructors ------------------------------------------------------------------
 
@@ -132,6 +139,9 @@ class Settings:
             skill_ignore=[str(p) for p in config.getini(INI_SKILL_IGNORE)],
             report_tokens=(config.rootpath / tokens) if tokens else None,
             report_inline=bool(config.getoption("xharness_report_inline", False) or config.getini(INI_REPORT_INLINE)),
+            timeout_s=int(
+                config.getoption("xharness_timeout", None) or config.getini(INI_TIMEOUT) or DEFAULT_TIMEOUT_S
+            ),
         )
 
     @classmethod

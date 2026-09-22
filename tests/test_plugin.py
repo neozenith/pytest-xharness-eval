@@ -13,6 +13,9 @@ from pathlib import Path
 # Third Party
 import pytest
 
+# Our Libraries
+from pytest_xharness_eval.runtime.settings import Settings
+
 CASE = textwrap.dedent(
     """
     from pytest_xharness_eval import evalcase
@@ -45,7 +48,9 @@ def cell_ids(result: pytest.RunResult) -> list[str]:
 
 def test_help_lists_options_and_ini_keys(pytester: pytest.Pytester) -> None:
     result = pytester.runpytest("--help")
-    result.stdout.fnmatch_lines(["*--harness=*", "*--model=SUBSTRING*", "*--effort=*", "*--dry-run*"])
+    result.stdout.fnmatch_lines(
+        ["*--harness=*", "*--model=SUBSTRING*", "*--effort=*", "*--xharness-timeout=SECONDS*", "*--dry-run*"]
+    )
     result.stdout.fnmatch_lines(
         ["*xharness_skills_dir*", "*xharness_cache_dir*", "*xharness_prices*", "*xharness_matrix*"]
     )
@@ -153,6 +158,21 @@ def test_unknown_harness_is_rejected_by_argparse(pytester: pytest.Pytester) -> N
     result = pytester.runpytest("--harness", "gemini")
     assert result.ret != 0
     result.stderr.fnmatch_lines(["*--harness: invalid choice: 'gemini'*"])
+
+
+def test_the_cell_timeout_is_an_option_over_an_ini_key_over_the_default(pytester: pytest.Pytester) -> None:
+    """A sweep across the top effort rungs needs a longer budget than 600s (ADR 0049).
+
+    The rungs that think longest are exactly the ones a default cutoff kills, and a timeout
+    raises RunError — so without this knob the report would show the skill failing where the
+    budget was simply too small.
+    """
+    make_tree(pytester)
+    assert Settings.from_config(pytester.parseconfig()).timeout_s == 600
+    assert Settings.from_config(pytester.parseconfig("-o", "xharness_timeout_s=1800")).timeout_s == 1800
+    # the flag wins over the ini key
+    config = pytester.parseconfig("-o", "xharness_timeout_s=1800", "--xharness-timeout", "2400")
+    assert Settings.from_config(config).timeout_s == 2400
 
 
 def test_an_effort_outside_the_vocabulary_is_rejected_by_argparse(pytester: pytest.Pytester) -> None:

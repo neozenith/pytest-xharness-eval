@@ -33,6 +33,7 @@ from pytest_xharness_eval.runtime.settings import (
     INI_REPORT_TOKENS,
     INI_SKILL_IGNORE,
     INI_SKILLS_DIR,
+    INI_TIMEOUT,
     Settings,
 )
 
@@ -66,6 +67,14 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "narrow the matrix to cells at this reasoning-effort rung (repeatable); "
             "the portable aliases min/mid/max match whatever rung they resolved to per harness"
         ),
+    )
+    g.addoption(
+        "--xharness-timeout",
+        dest="xharness_timeout",
+        type=int,
+        default=None,
+        metavar="SECONDS",
+        help="how long one cell's CLI may run before it is killed (overrides the ini key; default 600)",
     )
     g.addoption(
         "--dry-run",
@@ -115,6 +124,14 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         INI_REPORT_TOKENS, default="", help="design tokens JSON for captured/report.html, relative to rootdir"
     )
     parser.addini(INI_REPORT_INLINE, type="bool", default=False, help="embed all data into captured/report.html")
+    parser.addini(
+        INI_TIMEOUT,
+        default="",
+        help=(
+            "seconds one cell's CLI may run before it is killed (default 600); raise it for a sweep "
+            "across the top effort rungs, which think for longer by design (ADR 0049)"
+        ),
+    )
     parser.addini(
         INI_SKILL_IGNORE,
         type="linelist",

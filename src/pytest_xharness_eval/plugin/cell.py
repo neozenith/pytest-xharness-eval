@@ -137,6 +137,7 @@ class CellRun:
             workspace=workspace,
             effort=self.cell.effort,
             skill_dir=self.skill_dir,
+            timeout_s=self.settings.timeout_s,
         )
         return Attempt(result=result, started_at=started_at, wall_ms=int((time.monotonic() - t0) * 1000))
 

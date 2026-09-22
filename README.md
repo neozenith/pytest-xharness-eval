@@ -168,6 +168,7 @@ stock pytest (`-k`, `-x`, `-m eval`, node ids).
 | `--model <substring>` | Only cells whose model id contains the string, or one exact `harness/model`, repeatable | `pytest skills/x/evals --model opus` |
 | `--effort <rung>` | Only cells at that reasoning rung, repeatable. Matches the *resolved* rung, so `--effort max` selects claude's `max` and codex's `xhigh` alike | `pytest skills/x/evals --effort max` |
 | `-k <expr>` | Boolean slices over cell ids and case names (stock pytest) | `-k "opus or sol"`, `-k "codex and not sol"` |
+| `--xharness-timeout <s>` | Seconds one cell's CLI may run before it is killed (default 600). Raise it for the top effort rungs, which think for longer by design | `pytest skills/x/evals --xharness-timeout 1800` |
 | `--dry-run` | Enumerate cells and validate pricing, invoke nothing | `pytest skills/x/evals --dry-run` |
 | `--collect-only -q` | List cell node ids (stock pytest) | `pytest --collect-only -q skills/x/evals` |
 
@@ -228,6 +229,7 @@ Four ini keys, paths relative to pytest's rootdir:
 | `xharness_skill_ignore` | (none) | gitignore-style patterns for skill files that are not decision surface; a bare pattern applies to every skill, `<skill>: <pattern>` to the skills matching the selector (ADR 0026) |
 | `xharness_report_design_tokens` | bundled | design tokens JSON that themes `report/report.html` (flag: `--xharness-report-design-tokens FILE`) |
 | `xharness_report_inline` | `false` | embed every result, log and the tokens into `report/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
+| `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`) |
 | `xharness_prices` | (none) | Price rows that add to or override the bundled table: `<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..]` (ADR 0030) |
 
 ```toml
