@@ -147,7 +147,14 @@ def test_a_verdict_no_version_of_this_package_wrote_reads_as_no_verdict(stored: 
 
 def test_expand_default_matrix() -> None:
     cells = mx.expand(DEFAULT_MATRIX)
-    assert cells == [Cell("claude", "claude-opus-5"), Cell("codex", "gpt-5.6-sol")]
+    assert [c.id for c in cells] == [
+        "claude/claude-opus-5",
+        "claude/claude-sonnet-5",
+        "claude/claude-haiku-4-5-20251001",
+        "codex/gpt-5.6-sol",
+        "codex/gpt-5.6-luna",
+        "codex/gpt-5.6-terra",
+    ]
     assert cells[0].id == "claude/claude-opus-5"
     assert cells[0].harness == "claude"
 
@@ -160,7 +167,11 @@ def test_expand_rejects_malformed_entries(entry: str) -> None:
 
 def test_narrow_by_harness_and_model() -> None:
     cells = mx.expand(DEFAULT_MATRIX)
-    assert mx.narrow(cells, None, ["codex"]) == [Cell("codex", "gpt-5.6-sol")]
+    assert [c.id for c in mx.narrow(cells, None, ["codex"])] == [
+        "codex/gpt-5.6-sol",
+        "codex/gpt-5.6-luna",
+        "codex/gpt-5.6-terra",
+    ]
     assert mx.narrow(cells, ["opus"], None) == [Cell("claude", "claude-opus-5")]
     assert mx.narrow(cells, ["codex/gpt-5.6-sol"], None) == [Cell("codex", "gpt-5.6-sol")]
     assert mx.narrow(cells, ["opus"], ["codex"]) == []

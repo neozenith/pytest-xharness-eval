@@ -116,8 +116,12 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    ============================ agent eval report ============================
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-opus-5]
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-sonnet-5]
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-haiku-4-5-20251001]
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-sol]
-     total spend: $0.0000 across 2 cell(s)
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-luna]
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-terra]
+     total spend: $0.0000 across 6 cell(s)
      report: /repo/.xharness_eval_cache/report/report.json
    ```
 
@@ -220,9 +224,15 @@ and the run exits having produced nothing (ADR 0049).
 ## Configuration
 
 The matrix has three scopes, highest precedence first: a case's `models=`, the
-project's `xharness_matrix` ini key, and the plugin's bundled default
-(`claude/claude-opus-5`, `codex/gpt-5.6-sol`). The report header names which one
-applied.
+project's `xharness_matrix` ini key, and the plugin's bundled default. The report
+header names which one applied.
+
+The bundled default is every model the bundled price table carries: three per harness,
+`claude/{claude-opus-5, claude-sonnet-5, claude-haiku-4-5-20251001}` and
+`codex/{gpt-5.6-sol, gpt-5.6-luna, gpt-5.6-terra}`. An axis nobody narrowed means the
+whole axis, so this is deliberately the widest default that cannot abort at collection —
+a model with no price row would stop the sweep before it spent anything (ADR 0007).
+Preview it with `--dry-run` and narrow it with `xharness_matrix` before a first paid run.
 
 Four ini keys, paths relative to pytest's rootdir:
 

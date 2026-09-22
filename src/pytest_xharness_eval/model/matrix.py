@@ -38,9 +38,22 @@ def known_harnesses() -> tuple[str, ...]:
 
 
 # The plugin-scope fallback sweep, used when neither the project nor the case sets one.
+#
+# Every model the bundled price table carries, which is the widest default that cannot
+# abort at collection: an entry here with no ``derive/prices.toml`` row would stop the
+# sweep before it spent anything (ADR 0007), so this list and that table move together.
+#
+# Naming every priced model rather than one per harness follows the axis convention: an
+# axis nobody narrowed means the whole axis. It is also the expensive reading, so a
+# project that wants less says so with ``xharness_matrix``, and a first run is previewed
+# with ``--dry-run`` before it spends (ADR 0010).
 DEFAULT_MATRIX: list[str] = [
     "claude/claude-opus-5",
+    "claude/claude-sonnet-5",
+    "claude/claude-haiku-4-5-20251001",
     "codex/gpt-5.6-sol",
+    "codex/gpt-5.6-luna",
+    "codex/gpt-5.6-terra",
 ]
 
 

@@ -31,6 +31,16 @@ cache_read     = 1.25e-7
 cache_write    = 1.25e-6
 cache_write_1h = 1.25e-6
 
+["gpt-5.6-terra"]
+# Codex alias; no public row upstream (ADR 0006 assumption). GPT-5-class rates, the same
+# assumption sol and luna carry. Bundled because the plugin's default matrix names it, and
+# an entry there with no row would abort every default sweep at collection (ADR 0007).
+input          = 1.25e-6
+output         = 1.0e-5
+cache_read     = 1.25e-7
+cache_write    = 1.25e-6
+cache_write_1h = 1.25e-6
+
 ["gpt-5.6-luna"]
 input          = 1.25e-6
 output         = 1.0e-5

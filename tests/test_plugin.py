@@ -27,8 +27,24 @@ CASE = textwrap.dedent(
 )
 
 
-def make_tree(pytester: pytest.Pytester, *, models: str = "", skills_dir: str = "skills", ini: str = "") -> Path:
+#: The two-cell project matrix nearly every test here wants: one arm per harness, enough to
+#: exercise grouping and narrowing, and *pinned* so that widening the plugin default does not
+#: renumber forty unrelated assertions. A test that is about the default itself passes
+#: ``matrix=None`` and gets the bundled one.
+PINNED_MATRIX = "xharness_matrix =\n    claude/claude-opus-5\n    codex/gpt-5.6-sol\n"
+
+
+def make_tree(
+    pytester: pytest.Pytester,
+    *,
+    models: str = "",
+    skills_dir: str = "skills",
+    ini: str = "",
+    matrix: str | None = PINNED_MATRIX,
+) -> Path:
     """Lay out ``<skills_dir>/demo/evals/eval_demo.py`` with ``fixtures/seed/`` and return the evals dir."""
+    if matrix and "xharness_matrix" not in ini:
+        ini = f"{ini}\n{matrix}" if ini else matrix
     pytester.makeini(f"[pytest]\n{ini}\n")
     skill = pytester.path / skills_dir / "demo"
     (skill / "evals" / "fixtures" / "seed").mkdir(parents=True)
@@ -90,12 +106,12 @@ def test_skill_ignore_lines_scope_by_skill_name(pytester: pytest.Pytester) -> No
 
 
 def test_header_names_the_skills_root_and_matrix_source(pytester: pytest.Pytester) -> None:
-    make_tree(pytester)
+    make_tree(pytester, matrix=None)
     result = pytester.runpytest("--collect-only")
     result.stdout.fnmatch_lines(
         [
             "xharness-eval: skills root = *skills, cache = *.xharness_eval_cache",
-            "xharness-eval: matrix = plugin default (2 entries)*",
+            "xharness-eval: matrix = plugin default (6 entries)*",
         ]
     )
 
@@ -112,9 +128,16 @@ def test_missing_skills_root_is_named_in_the_header_without_warning(pytester: py
 
 
 def test_plugin_default_matrix_when_nothing_else_is_set(pytester: pytest.Pytester) -> None:
-    make_tree(pytester)
+    make_tree(pytester, matrix=None)
     result = pytester.runpytest("--collect-only", "-q")
-    assert cell_ids(result) == ["claude/claude-opus-5", "codex/gpt-5.6-sol"]
+    assert cell_ids(result) == [
+        "claude/claude-opus-5",
+        "claude/claude-sonnet-5",
+        "claude/claude-haiku-4-5-20251001",
+        "codex/gpt-5.6-sol",
+        "codex/gpt-5.6-luna",
+        "codex/gpt-5.6-terra",
+    ]
 
 
 def test_project_matrix_ini_replaces_the_plugin_default(pytester: pytest.Pytester) -> None:
