@@ -194,21 +194,26 @@ Each line is a separately graded cell, so one model at two rungs is the cost-ver
 comparison the axis exists for. An entry with no third component is unchanged: it leaves
 the CLI on whatever default its own configuration gives it.
 
-The two CLIs do not share a ladder — `claude` has `low, medium, high, xhigh, max`, `codex`
-has `minimal, low, medium, high, xhigh` — so three portable aliases name a *position*
-instead of a level and resolve per harness:
+Each harness declares its own ladder, and three portable aliases name a *position* on it
+rather than a level:
 
-| You write | On `claude` | On `codex` |
-|-----------|-------------|------------|
-| `min` | `low` | `minimal` |
-| `mid` | `high` | `medium` |
-| `max` | `max` | `xhigh` |
+| You write | Position | On `claude` | On `codex` |
+|-----------|----------|-------------|------------|
+| `min` | first rung | `low` | `low` |
+| `mid` | middle rung | `high` | `high` |
+| `max` | last rung | `max` | `max` |
+
+Both shipped CLIs happen to declare the same five rungs (`low, medium, high, xhigh, max`),
+so the aliases resolve identically on each today. That is a fact about these two CLIs and
+not a rule: the ladder lives on the harness class, so a third CLI may declare any rungs it
+likes and the aliases keep working by position.
 
 Resolution happens once, at collection, so a node id, an evidence directory and a report
-row all carry the rung that was actually sent. A rung the named harness does not have
-(`claude/claude-opus-5/minimal`) stops the sweep at collection, before anything is spent —
-both CLIs otherwise accept an unknown rung, warn at most, and bill a full run at their
-default (ADR 0049).
+row all carry the rung that was actually sent. A rung no harness has
+(`claude/claude-opus-5/minimal`) stops the sweep at collection, before anything is spent.
+That check is not theoretical: `minimal` appears in codex-cli's own local enum, and a paid
+sweep found that no gpt-5.6 model accepts it — the CLI forwards it, the API answers 400,
+and the run exits having produced nothing (ADR 0049).
 
 ----
 

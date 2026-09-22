@@ -11,9 +11,10 @@ spend.
 
 Two kinds of word are accepted, and both are members of one :class:`Effort`:
 
-*Native rungs* (``minimal`` ... ``xhigh``, and claude's ``max``) name a level of one
-CLI's own ladder. They are exact: a rung a harness does not have is an error, never the
-nearest thing to it.
+*Native rungs* (``low`` ... ``max``) name a level of one CLI's own ladder. They are
+exact: a rung a harness does not have is an error, never the nearest thing to it. Both
+shipped harnesses happen to declare the same five, but that is a fact about them rather
+than a rule -- the ladder lives on the harness class, and a third CLI may declare any.
 
 *Portable aliases* (:data:`PORTABLE` -- ``min``, ``mid``, ``max``) name a *position* on
 whichever ladder the harness has, so one matrix line can sweep both arms at comparable
@@ -44,8 +45,7 @@ class Effort(StrEnum):
     MIN = "min"
     MID = "mid"
     MAX = "max"
-    # Native rungs, lowest first. ``max`` above is claude's top rung as well as an alias.
-    MINIMAL = "minimal"
+    # Native rungs, lowest first. ``max`` above is a native top rung as well as an alias.
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"

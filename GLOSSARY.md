@@ -20,7 +20,7 @@ Two standing obligations, restated in [AGENTS.md](AGENTS.md):
 | harness | The agent CLI a cell runs on, `claude` or `codex`; the first half of a cell id |
 | matrix | The list of `harness/model` or `harness/model/effort` entries a case expands into cells; three scopes, case over project over plugin; `--harness`, `--model`, `--effort` and `-k` narrow it |
 | effort | The reasoning budget a cell asks its CLI for: the third matrix axis, and the optional third component of an entry. An entry that names none leaves the CLI on its own default (ADR 0049) |
-| rung | One level of a harness's own effort ladder (`Harness.efforts`, lowest first) -- `low`..`max` for `claude`, `minimal`..`xhigh` for `codex`. A matrix entry may name a rung exactly, and a rung the named harness lacks is a collection error, never the nearest one (ADR 0049) |
+| rung | One level of a harness's own effort ladder (`Harness.efforts`, lowest first). Both shipped harnesses declare `low, medium, high, xhigh, max`; the ladder is per-harness, not shared. A matrix entry may name a rung exactly, and a rung the named harness lacks is a collection error, never the nearest one (ADR 0049) |
 | alias | A portable effort word naming a *position* rather than a level: `min`, `mid`, `max`. It resolves against whichever ladder the harness has, once, at matrix expansion -- so one line sweeps both arms at comparable intensity and nothing downstream ever holds a word the CLI would not understand (ADR 0049) |
 | skills root | The directory under the rootdir holding `<skill>/evals/` trees; ini key `xharness_skills_dir` |
 | fixture | A committed seed directory under `evals/fixtures/<name>/` that a workspace is copied from; several cases may share one |

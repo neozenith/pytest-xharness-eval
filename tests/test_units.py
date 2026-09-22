@@ -173,33 +173,51 @@ CLAUDE_LADDER = claude_harness.CLAUDE_EFFORTS
 CODEX_LADDER = codex_harness.CODEX_EFFORTS
 
 
-@pytest.mark.parametrize(
-    ("alias", "on_claude", "on_codex"),
-    [("min", "low", "minimal"), ("mid", "high", "medium"), ("max", "max", "xhigh")],
-)
-def test_a_portable_alias_names_a_position_on_each_harnesss_own_ladder(
-    alias: str, on_claude: str, on_codex: str
-) -> None:
-    """``min``/``mid``/``max`` are the point of the vocabulary: one matrix line, both arms.
+@pytest.mark.parametrize(("alias", "rung"), [("min", "low"), ("mid", "high"), ("max", "max")])
+def test_a_portable_alias_names_a_position_on_each_harnesss_own_ladder(alias: str, rung: str) -> None:
+    """``min``/``mid``/``max`` name a position, and both shipped ladders answer the same.
 
-    The two ladders do not share a top rung -- claude's is ``max``, codex's is ``xhigh`` --
-    so an author who had to name a native rung could not write a line that swept both at
-    comparable intensity. ``max`` doubles as claude's own top rung, and resolves to itself
-    there, which is why this resolves rather than merely validating.
+    That the two agree is a fact about these two CLIs, not a rule: the ladder lives on the
+    harness class, so the resolution is by index either way.
     """
-    assert effort_words.resolve(alias, CLAUDE_LADDER, harness="claude") == on_claude
-    assert effort_words.resolve(alias, CODEX_LADDER, harness="codex") == on_codex
+    assert effort_words.resolve(alias, CLAUDE_LADDER, harness="claude") == rung
+    assert effort_words.resolve(alias, CODEX_LADDER, harness="codex") == rung
+
+
+#: A third harness's ladder: shorter, and sharing only its middle with the shipped two.
+#: Divergence has to be written down here, because both shipped CLIs declare the same five
+#: rungs and so cannot demonstrate a rung one harness has and another lacks.
+PROBE_LADDER = ("cheap", "medium", "lavish")
+
+
+@pytest.mark.parametrize(("alias", "rung"), [("min", "cheap"), ("mid", "medium"), ("max", "lavish")])
+def test_an_alias_follows_a_ladder_that_is_not_the_shipped_one(alias: str, rung: str) -> None:
+    """The resolution is positional, so a harness with its own vocabulary needs no special case."""
+    assert effort_words.resolve(alias, PROBE_LADDER, harness="probe") == rung
 
 
 def test_a_native_rung_resolves_to_itself_and_a_foreign_one_is_refused() -> None:
-    """Exact, never nearest: codex has ``minimal`` and claude does not, and that is an error.
+    """Exact, never nearest.
 
-    Rounding it to claude's ``low`` would silently run a different experiment than the
-    matrix line asked for, and the run would still be billed in full.
+    Rounding a missing rung to the closest one this harness does have would silently run a
+    different experiment than the matrix line asked for, and bill it in full.
     """
     assert effort_words.resolve("high", CLAUDE_LADDER, harness="claude") == "high"
-    with pytest.raises(effort_words.UnknownEffort, match="no effort rung 'minimal'"):
-        effort_words.resolve("minimal", CLAUDE_LADDER, harness="claude")
+    with pytest.raises(effort_words.UnknownEffort, match="no effort rung 'medium'"):
+        effort_words.resolve("medium", ("cheap", "lavish"), harness="probe")
+
+
+def test_a_rung_the_provider_rejects_is_not_in_the_vocabulary_at_all() -> None:
+    """``minimal`` was in codex-cli's local enum and is not a rung any gpt-5.6 model accepts.
+
+    A paid sweep proved it: the CLI forwarded the value, the API answered 400 ``unsupported
+    _value``, and the run exited 1 having produced nothing. The ladder is pinned to the
+    provider's answer, so the word is now unknown everywhere rather than accepted here and
+    rejected on the wire (ADR 0049).
+    """
+    for word in ("minimal", "none", "ultra", "persistent"):
+        with pytest.raises(effort_words.UnknownEffort, match="unknown effort"):
+            effort_words.resolve(word, CODEX_LADDER, harness="codex")
 
 
 def test_a_word_outside_the_vocabulary_names_the_whole_vocabulary() -> None:
@@ -228,14 +246,14 @@ def test_a_matrix_entry_may_name_an_effort_and_resolves_it_once() -> None:
     cells = mx.expand(["claude/claude-opus-5/mid", "codex/gpt-5.6-sol/max", "claude/claude-opus-5"])
     assert cells == [
         Cell("claude", "claude-opus-5", "high"),
-        Cell("codex", "gpt-5.6-sol", "xhigh"),
+        Cell("codex", "gpt-5.6-sol", "max"),
         Cell("claude", "claude-opus-5"),
     ]
     # The node id shows the rung that was sent, and omits the component entirely when the
     # entry named none -- so a pre-0049 matrix keys its history exactly as it always did.
     assert [c.id for c in cells] == [
         "claude/claude-opus-5/high",
-        "codex/gpt-5.6-sol/xhigh",
+        "codex/gpt-5.6-sol/max",
         "claude/claude-opus-5",
     ]
 
@@ -244,7 +262,7 @@ def test_a_matrix_entry_may_name_an_effort_and_resolves_it_once() -> None:
     ("entry", "match"),
     [
         ("claude/claude-opus-5/hgih", "unknown effort"),
-        ("claude/claude-opus-5/minimal", "no effort rung"),
+        ("claude/claude-opus-5/minimal", "unknown effort"),
         ("claude/claude-opus-5/high/extra", "matrix entry must be"),
     ],
 )

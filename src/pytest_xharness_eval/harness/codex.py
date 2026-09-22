@@ -127,12 +127,24 @@ def primary_rollout(rollouts: list[Path]) -> Path:
 
 #: codex's reasoning-effort ladder, lowest rung first.
 #:
-#: Verified against codex-cli 0.155.1, whose ``model_reasoning_effort`` enum also carries
-#: ``none``, ``max``, ``ultra`` and ``persistent``. Those are deliberately left off: the
-#: CLI accepts any of them silently, so a rung this plugin cannot vouch for would buy a
-#: full-priced run of an experiment nobody can name. Adding one is one tuple entry, and
-#: moves what ``mid`` resolves to -- which is why the order here is the ladder, not a set.
-CODEX_EFFORTS = ("minimal", "low", "medium", "high", "xhigh")
+#: Taken from the API's own rejection message rather than from the CLI's enum, which is
+#: wider than any model accepts. A paid sweep at ``minimal`` returned, for both gpt-5.6
+#: models::
+#:
+#:     Unsupported value: 'minimal' is not supported with the 'gpt-5.6-sol' model.
+#:     Supported values are: 'none', 'low', 'medium', 'high', 'xhigh', and 'max'.
+#:
+#: So ``minimal`` is not a rung (the run exits 1 having produced nothing) and ``max`` is,
+#: which is the opposite of what codex-cli 0.155.1's local ``model_reasoning_effort`` enum
+#: suggests -- it also lists ``ultra`` and ``persistent``, neither of which the API offers
+#: here. The CLI validates none of this: it forwards the value and the request fails at the
+#: provider, which is why the ladder is pinned to the provider's answer.
+#:
+#: ``none`` is supported and deliberately omitted: it disables reasoning rather than
+#: setting a budget, so including it would put a no-reasoning cell in every default sweep.
+#:
+#: The order is the ladder, not a set: ``mid`` resolves by index.
+CODEX_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 #: The config key codex reads its reasoning budget from. ``run_codex`` passes
 #: ``--ignore-user-config``, so this ``-c`` override is the only thing that sets it and a

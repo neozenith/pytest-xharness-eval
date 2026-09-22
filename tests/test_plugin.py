@@ -201,15 +201,15 @@ def test_a_matrix_entry_sweeps_one_model_at_several_efforts(pytester: pytest.Pyt
     assert cell_ids(result) == [
         "claude/claude-opus-5/high",
         "claude/claude-opus-5/low",
-        "codex/gpt-5.6-sol/xhigh",
+        "codex/gpt-5.6-sol/max",
     ]
 
 
 def test_effort_narrows_the_matrix_by_the_rung_each_alias_resolved_to(pytester: pytest.Pytester) -> None:
     make_tree(pytester, ini=EFFORT_INI)
     assert cell_ids(pytester.runpytest("--collect-only", "-q", "--effort", "low")) == ["claude/claude-opus-5/low"]
-    # One flag, both arms: ``max`` is claude's top rung and codex's ``xhigh``.
-    assert cell_ids(pytester.runpytest("--collect-only", "-q", "--effort", "max")) == ["codex/gpt-5.6-sol/xhigh"]
+    # One flag, both arms: ``max`` is the top rung of whichever ladder the harness has.
+    assert cell_ids(pytester.runpytest("--collect-only", "-q", "--effort", "max")) == ["codex/gpt-5.6-sol/max"]
 
 
 def test_an_effort_rung_the_harness_lacks_aborts_at_collection_before_any_spend(pytester: pytest.Pytester) -> None:
@@ -217,7 +217,7 @@ def test_an_effort_rung_the_harness_lacks_aborts_at_collection_before_any_spend(
     make_tree(pytester, ini="xharness_matrix =\n    claude/claude-opus-5/minimal\n")
     result = pytester.runpytest("--collect-only")
     assert result.ret != 0
-    result.stdout.fnmatch_lines(["*no effort rung 'minimal'*"])
+    result.stdout.fnmatch_lines(["*unknown effort 'minimal'*"])
 
 
 def test_a_cell_with_an_effort_keeps_its_rung_through_the_dry_run_record(pytester: pytest.Pytester) -> None:
@@ -229,7 +229,7 @@ def test_a_cell_with_an_effort_keeps_its_rung_through_the_dry_run_record(pyteste
     assert sorted((c["model"], c["effort"]) for c in report["cells"]) == [
         ("claude-opus-5", "high"),
         ("claude-opus-5", "low"),
-        ("gpt-5.6-sol", "xhigh"),
+        ("gpt-5.6-sol", "max"),
     ]
 
 

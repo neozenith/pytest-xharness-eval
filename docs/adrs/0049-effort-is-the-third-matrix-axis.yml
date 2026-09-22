@@ -68,11 +68,19 @@ body:
     result, and the report names a rung the run never had. That is exactly the failure
     0007 refuses for an unpriced model, arriving through a different door.
 
-    The vocabularies also disagree. claude's ladder tops out at `max`; codex's
-    `model_reasoning_effort` enum carries `minimal` at the bottom and `xhigh` among its
-    upper rungs. An author who had to name a native rung could not write one matrix
-    line that swept both arms at comparable intensity, which is the comparison the
-    matrix is for.
+    The vocabularies may also disagree, and neither CLI is a reliable witness to its
+    own. codex-cli 0.155.1's local `model_reasoning_effort` enum lists `none`,
+    `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra` and `persistent`; the
+    gpt-5.6 models accept six of those, and the CLI validates none of it. A paid sweep
+    at `minimal` returned, for both models::
+
+        Unsupported value: 'minimal' is not supported with the 'gpt-5.6-sol' model.
+        Supported values are: 'none', 'low', 'medium', 'high', 'xhigh', and 'max'.
+
+    So a ladder read off a CLI's own enum is wrong in both directions at once: it
+    offers rungs the provider rejects and omits rungs the provider has. An author
+    naming a native rung therefore cannot know from the CLI whether the word will
+    survive the request.
   decision: |-
     **A matrix entry gains an optional third component: `harness/model/effort`.** An
     entry with two components is unchanged in every respect -- it leaves the CLI on
@@ -90,11 +98,17 @@ body:
     domain into the adapter layer (ADR 0039).
 
     **The portable aliases `min`, `mid` and `max` name a position, not a level.** They
-    resolve against whichever ladder the harness has -- `max` is `max` on claude and
-    `xhigh` on codex; `mid` is the ladder's middle rung by index, so it follows a
-    harness that gains or loses one. `max` is deliberately both an alias and claude's
-    own top rung, and resolves to itself there. This is what lets one line sweep both
-    arms at comparable intensity.
+    resolve against whichever ladder the harness has, by index, so they follow a harness
+    that gains or loses a rung. `max` is deliberately both an alias and a native top
+    rung, and resolves to itself where a harness has it. Both shipped harnesses declare
+    the same five rungs, so the aliases resolve identically on each today; that is a
+    fact about these two CLIs, not a rule the resolution depends on.
+
+    **A ladder is pinned to what the provider accepts, not to what the CLI offers.**
+    `Harness.efforts` is a claim about the request surviving, so a rung goes in only
+    when it has been seen to work, and a rung the provider rejects comes out. `none` is
+    accepted by codex and still omitted: it disables reasoning rather than setting a
+    budget, so it would put a no-reasoning cell in every default sweep.
 
     **Resolution happens once, at matrix expansion, and an unresolvable rung is an
     error there.** `mx.expand` turns the typed word into a native rung before a `Cell`
@@ -138,8 +152,15 @@ body:
     Two cells of one case may now differ in nothing but their rung, so the build
     workspace name includes it; without that the pair would overwrite each other.
 
-    codex's enum carries `none`, `max`, `ultra` and `persistent` beyond the rungs
-    declared here. They are left off deliberately: the CLI accepts any of them
-    silently, so a rung this plugin cannot vouch for would buy a full-priced run of an
-    experiment nobody can name. Adding one later is one tuple entry -- and it moves
+    The first paid sweep across the axis (20 cells, one case, both harnesses) paid for
+    itself by falsifying the ladder this record was first written with. `minimal` was
+    declared a codex rung and is not one; `max` was withheld as unverifiable and is one.
+    Both `minimal` cells exited 1 having produced nothing, and `check_run_is_real`
+    failed them rather than grading an empty run -- which is the evidence gate of
+    ADR 0002 doing exactly its job, on the first axis value that needed it.
+
+    That is the argument for validating at expansion rather than trusting the flag,
+    restated as data: the CLI forwarded a word it listed in its own enum, and the
+    request died at the provider. A ladder is a claim about the request surviving, and
+    only a run can settle it. Adding or removing a rung is one tuple entry, and it moves
     what `mid` resolves to, which is why the ladder is ordered rather than a set.
