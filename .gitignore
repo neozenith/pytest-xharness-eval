@@ -234,3 +234,8 @@ report-ui/dist/
 !report-ui/src/lib/
 report-ui/test-results/
 report-ui/playwright-report/
+
+.playwright*/
+notes/
+reviewable-ui/
+node_modules/
