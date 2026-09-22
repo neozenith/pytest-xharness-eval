@@ -14,6 +14,7 @@
  *   report.html?skill=<a>[,<b>]                overview, only those skills (absent = every skill)
  *   &harness=<a>[,<b>]                         overview, only those harnesses
  *   &model=<a>[,<b>]                           overview, only those models
+ *   &effort=<a>[,<b>]                          overview, only those effort rungs (ADR 0049)
  *   &theme=light|dark                          forced theme (any route; otherwise remembered)
  *
  * Query strings — not path segments — because the shipped page is one static file copied
@@ -42,13 +43,14 @@ export interface FacetSelection {
   skill: string[] | null;
   harness: string[] | null;
   model: string[] | null;
+  effort: string[] | null;
 }
 
 /** Nothing selected: the unfiltered overview, and what a non-overview route reports. */
-export const NO_FACETS: FacetSelection = Object.freeze({ skill: null, harness: null, model: null });
+export const NO_FACETS: FacetSelection = Object.freeze({ skill: null, harness: null, model: null, effort: null });
 
-/** The three params, in the order they serialise; `lib/facets.ts` re-declares them as its vocabulary. */
-const FACET_PARAMS = ["skill", "harness", "model"] as const;
+/** The four params, in the order they serialise; `lib/facets.ts` re-declares them as its vocabulary. */
+const FACET_PARAMS = ["skill", "harness", "model", "effort"] as const;
 
 export interface SortState {
   key: string;
@@ -115,7 +117,12 @@ export function parseSearch(search: string): Route {
   const theme = oneOf(params.get("theme"), ["light", "dark"]);
   const sessionId = params.get("session");
   if (!sessionId) {
-    const facets: FacetSelection = { skill: list(params.get("skill")), harness: list(params.get("harness")), model: list(params.get("model")) };
+    const facets: FacetSelection = {
+      skill: list(params.get("skill")),
+      harness: list(params.get("harness")),
+      model: list(params.get("model")),
+      effort: list(params.get("effort")),
+    };
     return {
       view: "overview",
       sort: sortState(params.get("sort"), params.get("dir")),

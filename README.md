@@ -81,7 +81,7 @@ with `--dry-run` before a sweep. The design rationale lives in
        goldens/<name>/                                  # optional known-good output (ADR 0046)
    .xharness_eval_cache/
      build/                                             # per-cell workspaces
-     results/{skill}/{harness}/{model}/{run}/{session}/ # log.jsonl, result.json, history.json
+     results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/  # log.jsonl, result.json, history.json
      report/                                            # report.json + the aggregated microsite
    ```
 
@@ -141,7 +141,7 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    Each cell leaves its verbatim session log (`log.jsonl`), a normalised
    `result.json` with a per-turn ledger, and one `history.json` metrics record in
-   its own `results/{skill}/{harness}/{model}/{run}/{session}/` directory, no two
+   its own `results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/` directory, no two
    cells share a file, so parallel workers never contend (ADR 0032). At session end
    the one combine step aggregates everything under `results/`, every skill, every
    run, into `report/`: `report.json`, the accumulated `history.jsonl`, and a
@@ -166,6 +166,7 @@ stock pytest (`-k`, `-x`, `-m eval`, node ids).
 | path | One skill or all of them | `pytest skills/x/evals`, `pytest skills/*/evals` |
 | `--harness <name>` | Only cells for that harness (`claude` or `codex`), repeatable | `pytest skills/x/evals --harness codex` |
 | `--model <substring>` | Only cells whose model id contains the string, or one exact `harness/model`, repeatable | `pytest skills/x/evals --model opus` |
+| `--effort <rung>` | Only cells at that reasoning rung, repeatable. Matches the *resolved* rung, so `--effort max` selects claude's `max` and codex's `xhigh` alike | `pytest skills/x/evals --effort max` |
 | `-k <expr>` | Boolean slices over cell ids and case names (stock pytest) | `-k "opus or sol"`, `-k "codex and not sol"` |
 | `--dry-run` | Enumerate cells and validate pricing, invoke nothing | `pytest skills/x/evals --dry-run` |
 | `--collect-only -q` | List cell node ids (stock pytest) | `pytest --collect-only -q skills/x/evals` |
@@ -174,6 +175,39 @@ Do not run `pytest skills` from the root: it walks into every skill's `scripts/`
 directory and collects their unit tests too. `skills/*/evals` is the full matrix.
 
 A case overrides the matrix with `@evalcase(..., models=["codex/gpt-5.6-sol"])`.
+
+### The effort axis
+
+A matrix entry may name a third component, the reasoning budget the CLI is asked for:
+
+```toml
+[tool.pytest.ini_options]
+xharness_matrix = """
+claude/claude-opus-5/low
+claude/claude-opus-5/max
+codex/gpt-5.6-sol/mid
+"""
+```
+
+Each line is a separately graded cell, so one model at two rungs is the cost-versus-quality
+comparison the axis exists for. An entry with no third component is unchanged: it leaves
+the CLI on whatever default its own configuration gives it.
+
+The two CLIs do not share a ladder — `claude` has `low, medium, high, xhigh, max`, `codex`
+has `minimal, low, medium, high, xhigh` — so three portable aliases name a *position*
+instead of a level and resolve per harness:
+
+| You write | On `claude` | On `codex` |
+|-----------|-------------|------------|
+| `min` | `low` | `minimal` |
+| `mid` | `high` | `medium` |
+| `max` | `max` | `xhigh` |
+
+Resolution happens once, at collection, so a node id, an evidence directory and a report
+row all carry the rung that was actually sent. A rung the named harness does not have
+(`claude/claude-opus-5/minimal`) stops the sweep at collection, before anything is spent —
+both CLIs otherwise accept an unknown rung, warn at most, and bill a full run at their
+default (ADR 0049).
 
 ----
 
@@ -188,7 +222,7 @@ Four ini keys, paths relative to pytest's rootdir:
 
 | Key | Default | Purpose |
 |-----|---------|---------|
-| `xharness_matrix` | (plugin default) | Project matrix: `harness/model` entries every case sweeps unless it sets `models=` |
+| `xharness_matrix` | (plugin default) | Project matrix: `harness/model` or `harness/model/effort` entries every case sweeps unless it sets `models=` |
 | `xharness_skills_dir` | `skills` | Directory holding `<skill>/evals/` trees |
 | `xharness_cache_dir` | `.xharness_eval_cache` | The git-ignored root for build workspaces, results and the report (ADR 0032) |
 | `xharness_skill_ignore` | (none) | gitignore-style patterns for skill files that are not decision surface; a bare pattern applies to every skill, `<skill>: <pattern>` to the skills matching the selector (ADR 0026) |

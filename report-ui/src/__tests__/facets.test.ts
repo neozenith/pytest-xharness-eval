@@ -30,7 +30,24 @@ test("a null skill survives only while the skill facet is null", () => {
   expect(filterCells(cells, { ...NO_FACETS, harness: ["claude"] }).map((c) => c.session_id)).toContain("z");
 });
 
-test("facetCount cross-filters by the other two facets, never by its own", () => {
+test("effort is a facet like any other, and a rung-less cell is never selectable by rung", () => {
+  // Every session captured before ADR 0049 has a null effort, and so does every cell whose
+  // matrix entry named no rung: it ran at a CLI default nobody wrote down, so there is no
+  // value to compare it against and it must not be swept up by a rung selection.
+  const cells = [
+    cell({ session_id: "hi", harness: "claude", effort: "high" }),
+    cell({ session_id: "lo", harness: "claude", effort: "low" }),
+    cell({ session_id: "none", harness: "claude", effort: null }),
+  ];
+  expect(facetOptions(cells, "effort")).toEqual(["high", "low"]);
+  expect(filterCells(cells, { ...NO_FACETS, effort: ["high"] }).map((c) => c.session_id)).toEqual(["hi"]);
+  expect(filterCells(cells, NO_FACETS).map((c) => c.session_id)).toContain("none");
+  expect(filterCells(cells, { ...NO_FACETS, effort: ["high", "low"] }).map((c) => c.session_id)).not.toContain("none");
+  // The rung is the resolved one, so it AND-s with the model the way every other facet does.
+  expect(toggleFacet(NO_FACETS, "effort", "high")).toEqual({ ...NO_FACETS, effort: ["high"] });
+});
+
+test("facetCount cross-filters by the other facets, never by its own", () => {
   const cells = sweep();
   const facets = { ...NO_FACETS, harness: ["claude"] };
   // claude never ran gpt-5.6-sol: the chip says so rather than disappearing

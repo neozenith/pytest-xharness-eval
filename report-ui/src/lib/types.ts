@@ -27,6 +27,13 @@ export interface Cell {
   prompt: string | null;
   harness: string;
   model: string;
+  /**
+   * The reasoning rung this cell ran at, resolved to its harness's own ladder (ADR 0049).
+   * Null when the cell named none and inherited the CLI's default — and on every session
+   * captured before the axis existed, which is why it is a facet value like any other and
+   * never a filter the page applies on its own.
+   */
+  effort: string | null;
   session_id: string;
   verdict: string | null;
   at: string | null;
@@ -138,6 +145,7 @@ export interface Subagent {
 export interface RunResult {
   harness: string;
   model: string;
+  effort: string | null;
   session_id: string;
   turns: number;
   reported_turns: number | null;

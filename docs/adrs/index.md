@@ -65,6 +65,7 @@ Each record is authored as `NNNN-slug.yml` and its markdown is generated
 | [0046](0046-a-golden-is-compared-facet-by-facet-within-a-declared-tolerance.md) | A golden is compared facet by facet, and every facet declares its tolerance | accepted, 2026-08-31. Refines [0012](0012-grading-is-composable-not-prescribed.md) (grading is composable, not prescribed), [0018](0018-fixtures-directory-and-metrics-history.md) (fixtures live under `evals/fixtures/`) and [0045](0045-the-verifiers-ship-with-the-plugin.md) (the verifiers ship with the plugin). |
 | [0047](0047-adrs-are-authored-as-data-and-their-markdown-is-generated.md) | ADRs are authored as data, and the argument travels verbatim | accepted, 2026-08-31. Refines [0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (generated output has one owner). Structural only: no record's argument changes, every id, slug, anchor and inbound citation still resolves, and each generated `.md` is byte-identical to the file it replaced from its `# NNNN:` heading down. |
 | [0048](0048-coverage-reads-the-command-the-shell-ran.md) | Coverage reads the command the shell ran, and expands what only the shell knew | accepted, 2026-09-18. Refines [0027](0027-coverage-follows-the-shells-working-directory.md) (coverage follows the shell's working directory) with the second half of the same problem, and [0022](0022-record-kind-catalogue-and-skill-coverage.md) (its detection rule). Extends the per-call ledger of [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) with one field, `call.executed`: a new key of `result.json`. |
+| [0049](0049-effort-is-the-third-matrix-axis.md) | Effort is the third matrix axis, and a bad rung stops the sweep before it spends | accepted, 2026-09-22. Refines [0015](0015-harness-is-the-axis-and-the-project-owns-the-matrix.md) (harness is the axis and the project owns the matrix) with a third axis, [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) (a harness is a class and the registry is the only dispatch) with a fourth question asked of a harness, and [0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md) (the cache tree has one owner) with a sixth coordinate that is not a sixth level. Extends [0007](0007-unpriced-model-aborts-before-spend.md)'s stop-before-spend rule to the new axis. Additive: `result.json` gains `effort`, `history.json` gains `effort`, `report/index.json` gains `effort`, and every existing capture still walks, links and replays unchanged. |
 ## The typed relation graph
 
 Open [graph.html](graph.html) to browse it: records cluster by domain, selecting one
@@ -188,3 +189,7 @@ same edge set is [graph.md](graph.md) and, as raw data, [graph.json](graph.json)
 - ADR-0048 --extends--> ADR-0027
 - ADR-0048 --extends--> ADR-0022
 - ADR-0048 --extends--> ADR-0019
+- ADR-0049 --extends--> ADR-0015
+- ADR-0049 --extends--> ADR-0034
+- ADR-0049 --extends--> ADR-0037
+- ADR-0049 --extends--> ADR-0007
