@@ -47,6 +47,15 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - run: bun run test
+      # Playwright Component Testing: every component mounted alone in Chromium, fed by
+      # ct/fixtures.ts, so it needs no captured cache and runs on every push.
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run ct
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: ct-results
+          path: report-ui/test-results/ct
       - run: bun run build
       # The committed asset is the build (ADR 0028); a stale promotion fails here.
       - run: cmp dist/index.html ../src/pytest_xharness_eval/assets/report.html
