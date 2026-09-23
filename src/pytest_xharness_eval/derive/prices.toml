@@ -7,6 +7,22 @@
 # cache_write is the 5-minute TTL rate (1.25x input on Anthropic); cache_write_1h is
 # the 1-hour TTL rate (2x input). Claude Code writes 1-hour entries and the log says
 # which (ADR 0019). A row that omits cache_write_1h gets cache_write x 1.6.
+#
+# Verified 2026-09-24 against platform.claude.com/docs/en/about-claude/pricing and
+# developers.openai.com/api/docs/pricing (standard tier, short context). OpenAI now
+# publishes a cache-write rate (1.25x input) but no 1-hour tier, so every OpenAI row's
+# cache_write_1h repeats its cache_write: an assumption, stated, never a zero.
+# OpenAI bills prompts past its long-context threshold (272K on gpt-6-sol) at a higher
+# rate that this flat table does not model.
+
+["claude-opus-5-5"]
+# Released 2026-09-22. Dateless id; the alias is the same string. Cache read is 0.05x
+# input, not the usual 0.1x: stated on the pricing page, not derived.
+input          = 4.0e-6
+output         = 2.0e-5
+cache_read     = 2.0e-7
+cache_write    = 5.0e-6
+cache_write_1h = 8.0e-6
 
 ["claude-opus-5"]
 input          = 5.0e-6
@@ -16,37 +32,54 @@ cache_write    = 6.25e-6
 cache_write_1h = 1.0e-5
 
 ["claude-sonnet-5"]
-input          = 3.0e-6
-output         = 1.5e-5
-cache_read     = 3.0e-7
-cache_write    = 3.75e-6
-cache_write_1h = 6.0e-6
+# $2 / $10: the introductory rate became standard and the planned 2026-09-01 move to
+# $3 / $15 was cancelled.
+input          = 2.0e-6
+output         = 1.0e-5
+cache_read     = 2.0e-7
+cache_write    = 2.5e-6
+cache_write_1h = 4.0e-6
+
+["gpt-6-sol"]
+# Released 2026-09-22; the Codex slug.
+input          = 2.0e-6
+output         = 1.0e-5
+cache_read     = 2.0e-7
+cache_write    = 2.5e-6
+cache_write_1h = 2.5e-6
+
+["gpt-6-luna"]
+# Released 2026-09-22; the Codex slug.
+input          = 1.0e-7
+output         = 5.0e-7
+cache_read     = 1.0e-8
+cache_write    = 1.25e-7
+cache_write_1h = 1.25e-7
 
 ["gpt-5.6-sol"]
-# Codex alias; no public row upstream (ADR 0006 assumption). GPT-5-class rates.
-# OpenAI bills no cache-write tier; the rows exist so an untagged write never prices as zero.
-input          = 1.25e-6
-output         = 1.0e-5
-cache_read     = 1.25e-7
-cache_write    = 1.25e-6
-cache_write_1h = 1.25e-6
+# The published row. The page runs a Sol promotion "at least through November 21,
+# 2026" and does not say whether these figures are the promotional or regular rate.
+input          = 4.0e-6
+output         = 2.0e-5
+cache_read     = 4.0e-7
+cache_write    = 5.0e-6
+cache_write_1h = 5.0e-6
 
 ["gpt-5.6-terra"]
-# Codex alias; no public row upstream (ADR 0006 assumption). GPT-5-class rates, the same
-# assumption sol and luna carry. Bundled because the plugin's default matrix names it, and
-# an entry there with no row would abort every default sweep at collection (ADR 0007).
-input          = 1.25e-6
-output         = 1.0e-5
-cache_read     = 1.25e-7
-cache_write    = 1.25e-6
-cache_write_1h = 1.25e-6
+# Bundled because the plugin's default matrix names it, and an entry there with no row
+# would abort every default sweep at collection (ADR 0007).
+input          = 2.0e-6
+output         = 1.2e-5
+cache_read     = 2.0e-7
+cache_write    = 2.5e-6
+cache_write_1h = 2.5e-6
 
 ["gpt-5.6-luna"]
-input          = 1.25e-6
-output         = 1.0e-5
-cache_read     = 1.25e-7
-cache_write    = 1.25e-6
-cache_write_1h = 1.25e-6
+input          = 2.0e-7
+output         = 1.2e-6
+cache_read     = 2.0e-8
+cache_write    = 2.5e-7
+cache_write_1h = 2.5e-7
 
 ["claude-haiku-4-5-20251001"]
 # The id Claude logs for the `haiku` alias (verified 2026-08-21). Public Haiku 4.5 rates.
