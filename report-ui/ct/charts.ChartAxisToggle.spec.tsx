@@ -1,5 +1,5 @@
 /** The per-turn / per-line switch the four session charts share. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { ChartAxisToggle } from "../src/components/charts/ChartAxisToggle";
 import type { HooksConfig } from "../playwright";

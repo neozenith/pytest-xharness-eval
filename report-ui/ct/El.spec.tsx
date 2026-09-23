@@ -2,7 +2,7 @@
  * `El`: the component's glossary name beside its heading (ADR 0021). A quiet mono tag in `$muted`
  * that never inherits its heading's uppercase or letter-spacing.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { HooksConfig } from "../playwright/index";
 import { El } from "../src/components/El";
 

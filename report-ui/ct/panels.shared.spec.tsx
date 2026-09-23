@@ -2,7 +2,7 @@
  * The panels' shared pieces (`shared.tsx`): the category-coloured kind `Pill`, the `Chip`
  * (display span, or a toggle button when it has an `onClick`), the `KvTable` and the `Notice`.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Chip, KvTable, Notice, Pill } from "../src/components/panels/shared";
 import { PHONE, pageOverflowX, resolveColour } from "./panels.data";
 

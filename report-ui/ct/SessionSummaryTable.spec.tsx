@@ -4,7 +4,7 @@
  * pair, and only in its fixed key order does it band by skill and mute a repeated skill. Each test
  * states its cells and, where the order matters, a `hooksConfig.search`.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { SessionSummaryTable } from "../src/components/SessionSummaryTable";
 import { cell, sweep } from "./fixtures";

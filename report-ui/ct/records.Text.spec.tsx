@@ -1,5 +1,5 @@
 /** `Text`: prose that wraps; ANSI prose in colour; nothing at all for empty text. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Text } from "../src/components/records/values";
 import { ANSI_TEXT, UNBROKEN } from "./fixtures";
 

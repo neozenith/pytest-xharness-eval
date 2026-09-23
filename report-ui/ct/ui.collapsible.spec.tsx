@@ -3,7 +3,7 @@
  * Tamagui's disclosure behind the radix-style surface, with the trigger's bare text wrapped in
  * an inheriting Text node (the same `wrapTextChildren` Button uses).
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../src/components/ui/collapsible";
 import type { HooksConfig } from "../playwright/index";

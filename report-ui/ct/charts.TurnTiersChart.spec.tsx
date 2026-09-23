@@ -1,5 +1,5 @@
 /** The four billing tiers stacked per turn, or at each turn's measuring log line. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { TurnTiersChart } from "../src/components/charts/TurnTiersChart";
 import type { HooksConfig } from "../playwright";
 import { call, log, result, usage } from "./fixtures";

@@ -7,7 +7,7 @@
  * model (claude-opus-5) at max, low, high and no rung, plus claude-sonnet-5 at medium; under
  * codex, gpt-5.6-sol at xhigh. The discovery skill holds one codex gpt-5.6-luna · low session.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator, Page } from "@playwright/test";
 import type { HooksConfig } from "../playwright/index";
 import { NavSidebar } from "../src/components/NavSidebar";

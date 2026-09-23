@@ -3,7 +3,7 @@
  * (`exec` JavaScript and `apply_patch`), its command executions and its token counts each get
  * their renderer; a Claude line handed to it is classified as Codex would, never as Claude.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { RecordCardCodex } from "../src/components/records/RecordCard";
 import { ANSI_TEXT, claudeToolUse, codexCompleted, codexResponse, codexTokenCount } from "./fixtures";
 

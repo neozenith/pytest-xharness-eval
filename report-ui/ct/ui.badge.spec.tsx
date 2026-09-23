@@ -3,7 +3,7 @@
  * token. The file's own promise is that ink-on-tint "clears AA in both themes for every
  * semantic colour", so contrast is measured here, composited the way the browser paints it.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { Badge } from "../src/components/ui/badge";
 import type { HooksConfig } from "../playwright/index";

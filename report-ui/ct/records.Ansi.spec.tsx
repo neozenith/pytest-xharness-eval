@@ -1,5 +1,5 @@
 /** `Ansi`: terminal output rendered in colour through ansi_up; the escape codes never show. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Ansi } from "../src/components/records/values";
 import { ANSI_TEXT } from "./fixtures";
 

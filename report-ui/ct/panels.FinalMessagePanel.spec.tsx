@@ -1,7 +1,7 @@
 /**
  * FinalMessagePanel: the agent's final message verbatim in a scrolling `pre`, or `(empty)`.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { FinalMessagePanel } from "../src/components/panels/FinalMessagePanel";
 import { PHONE, pageOverflowX, resolveColour } from "./panels.data";

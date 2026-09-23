@@ -24,6 +24,9 @@ export default defineConfig({
     viewport: { width: 1280, height: 800 },
     // Overridable so several suites can build and serve side by side without sharing a port or
     // a bundle directory; the defaults are what `make ui-ct` uses.
+    // A failing test hands back its DOM, network and console, so a failure seen only on CI's
+    // Linux is readable without reproducing it there (the artifact is uploaded on failure).
+    trace: "retain-on-failure",
     ctPort: Number(process.env.XH_CT_PORT ?? 3199),
     ctCacheDir: process.env.XH_CT_CACHE ?? "./playwright/.cache",
     // The same resolution and defines the app build uses (vite.config.ts), so a mounted

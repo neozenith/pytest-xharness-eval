@@ -2,7 +2,7 @@
  * `Code`: a titled, highlighted, scrollable code block. highlight.js is bundled; its theme is
  * injected once and has a dark variant. Unknown languages show plain; ANSI switches to colour.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Code } from "../src/components/records/values";
 import type { HooksConfig } from "../playwright/index";
 import { ANSI_TEXT, UNBROKEN } from "./fixtures";

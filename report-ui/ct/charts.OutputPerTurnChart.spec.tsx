@@ -1,5 +1,5 @@
 /** Thinking and visible output stacked per turn, or at each turn's measuring log line. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { OutputPerTurnChart } from "../src/components/charts/OutputPerTurnChart";
 import type { HooksConfig } from "../playwright";
 import { call, log, result, usage } from "./fixtures";

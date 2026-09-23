@@ -1,5 +1,5 @@
 /** The chart with its legend on the right, wrapping beneath only when the row gets too narrow. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Data } from "plotly.js";
 import { PlotWithLegend } from "../src/components/charts/Plot";
 import { graph, readGraph } from "./charts.helpers";

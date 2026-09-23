@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { ContextWindowChart } from "../src/components/charts/ContextWindowChart";
 import type { HooksConfig } from "../playwright";
 import { call, log, result } from "./fixtures";

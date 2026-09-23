@@ -3,7 +3,7 @@
  * (Bash's command, Edit's diff, Write's content highlighted by extension); Codex's `exec` is
  * JavaScript whose `cmd` is dug out; any other tool shows its input as JSON or code.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { ToolInput } from "../src/components/records/tools";
 
 test("Bash: description, timeout and background flag, then the command highlighted as bash", async ({ mount }) => {

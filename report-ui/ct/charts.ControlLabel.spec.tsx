@@ -1,5 +1,5 @@
 /** The label on a chart control: description size and measure, heading weight, full ink. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { ControlLabel } from "../src/components/charts/common";
 import type { HooksConfig } from "../playwright";
 import { rgb, tokens } from "./charts.helpers";

@@ -7,7 +7,7 @@
  * returns a Promise and React rejects the async component; the first test pins that), so the
  * records path runs through `TurnTableStory`, which wires it in the browser as SessionView does.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { SessionTurnTable } from "../src/components/panels/SessionTurnTable";
 import type { TurnView } from "../src/lib/route";

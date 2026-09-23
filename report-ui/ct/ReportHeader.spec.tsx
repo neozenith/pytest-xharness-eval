@@ -3,7 +3,7 @@
  * [· effort] tuple inside a SessionView. The rung rides the tuple only when the cell named one
  * (ADR 0049); the meta line summarises the index; the theme toggle is a callback.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import type { HooksConfig } from "../playwright/index";
 import { ReportHeader } from "../src/components/ReportHeader";

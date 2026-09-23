@@ -2,7 +2,7 @@
  * `Prose`: plain text as wrapped prose, or, when the text opens with a tag, XML-tagged sections.
  * ANSI colour in prose renders as colour.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Prose } from "../src/components/records/blocks";
 import { ANSI_TEXT, UNBROKEN } from "./fixtures";
 

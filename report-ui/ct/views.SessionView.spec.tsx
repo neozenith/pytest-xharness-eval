@@ -3,7 +3,7 @@
  * log arrive through the data hooks from `hooksConfig.inline`, and every control writes the whole
  * route back with `replaceRoute` — so a control is asserted against `location.search`.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { SessionView } from "../src/views/SessionView";
 import { EFFORT_DEFAULT } from "../src/lib/effort";

@@ -1,5 +1,5 @@
 /** `Json`: a value pretty-printed and highlighted as JSON, optionally titled. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Json } from "../src/components/records/values";
 
 test("an object is pretty-printed with one-space indent and highlighted keys", async ({ mount }) => {

@@ -3,7 +3,7 @@
  * `checked`/`onCheckedChange` surface, a 34x20 track (hit area pushed to 28px tall by
  * `.XhSwitch::after`), an accent track when on, and the report's focus ring.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { Switch } from "../src/components/ui/switch";
 import type { HooksConfig } from "../playwright/index";

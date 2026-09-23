@@ -3,7 +3,7 @@
  * third strength and lights on hover or focus, flips to a tick for 1.2s after a copy, and keeps
  * its box throughout. The click never bubbles (it sits inside clickable table rows).
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { HooksConfig } from "../playwright/index";
 import { CopyId } from "../src/components/CopyId";
 

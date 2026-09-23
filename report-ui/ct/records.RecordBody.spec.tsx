@@ -3,7 +3,7 @@
  * and checks the fields its renderer promises to lift out of the JSON, and that the envelope
  * follows. A kind no renderer claims falls back to its JSON.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { RecordBody } from "../src/components/records/records";
 import {
   claudeAssistant,

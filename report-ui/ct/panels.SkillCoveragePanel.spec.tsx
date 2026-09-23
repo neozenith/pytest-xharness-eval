@@ -3,7 +3,7 @@
  * status word (and its colour) per file state, the summary chips that filter the table, and
  * the `ShowIgnored` switch that reveals the files the ignore rules removed (ADR 0022, 0023).
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { SkillCoveragePanel, type SkillCoverage } from "../src/components/panels/SkillCoveragePanel";
 import { coverage, PHONE, pageOverflowX, resolveColour } from "./panels.data";

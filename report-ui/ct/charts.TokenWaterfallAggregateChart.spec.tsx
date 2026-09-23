@@ -2,7 +2,7 @@
  * The overview's aggregate waterfall: a mean column per turn index over the runs that reached it,
  * faded by how many did, with a min–max whisker riding the top of each stack.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { TokenWaterfallAggregateChart } from "../src/components/charts/TokenWaterfallAggregateChart";
 import type { HooksConfig } from "../playwright";
 import type { Cell, RunResult } from "../src/lib/types";

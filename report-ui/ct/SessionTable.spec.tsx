@@ -4,7 +4,7 @@
  * A sort click writes the URL through `replaceRoute`; a row click pushes a session route. Both
  * are asserted on `location.search`, which is what a reader shares.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { SessionTable } from "../src/components/SessionTable";
 import { cell, sweep } from "./fixtures";

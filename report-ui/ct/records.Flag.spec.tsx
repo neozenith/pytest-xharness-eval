@@ -1,5 +1,5 @@
 /** `Flag`: true as a green check, false as a muted cross, anything else as its text. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Flag } from "../src/components/records/values";
 
 test("true, false and other values", async ({ mount, page }) => {

@@ -2,7 +2,7 @@
  * The shared frame behind TurnTiersChart and OutputPerTurnChart, mounted through `UsageBars`
  * (charts.stories.tsx) because `valueOf` is a synchronous function the runner cannot proxy.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { log, result } from "./fixtures";
 import { chips, drawnTitles, graph, readGraph } from "./charts.helpers";
 import { UsageBars } from "./charts.stories";

@@ -2,7 +2,7 @@
  * The per-session token waterfall: stacked bars from baseline_tokens to accumulative_billed_tokens
  * with a USD line on a second axis per turn, a stacked step area per session-log line.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { TokenWaterfallChart } from "../src/components/charts/TokenWaterfallChart";
 import type { HooksConfig } from "../playwright";
 import type { Subagent } from "../src/lib/types";

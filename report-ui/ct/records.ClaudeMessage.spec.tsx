@@ -2,7 +2,7 @@
  * `ClaudeMessage`: a Claude API message: its blocks, then the call's model, stop reason and id,
  * then a captioned token grid (with the 1h/5m cache split when the API reports it).
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { ClaudeMessage } from "../src/components/records/blocks";
 import { claudeAssistant } from "./fixtures";
 

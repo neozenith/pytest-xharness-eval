@@ -1,5 +1,5 @@
 /** `Bash`: a shell command, highlighted as bash. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Bash } from "../src/components/records/values";
 
 test("highlights builtins, strings and variables", async ({ mount }) => {

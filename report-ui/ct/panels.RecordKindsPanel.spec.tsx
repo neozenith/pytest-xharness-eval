@@ -2,7 +2,7 @@
  * RecordKindsPanel: every record kind in the session log with its count, the pill coloured by
  * its category's design token (`--xh-category-<category>`, ADR 0022, 0024).
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { RecordKindsPanel } from "../src/components/panels/RecordKindsPanel";
 import { PHONE, pageOverflowX, resolveColour, result } from "./panels.data";

@@ -1,5 +1,5 @@
 /** The one Plotly mount point: draws what it is handed, reserves its height, redraws on new data. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Data, Layout } from "plotly.js";
 import { Plot } from "../src/components/charts/Plot";
 import { graph, readGraph } from "./charts.helpers";

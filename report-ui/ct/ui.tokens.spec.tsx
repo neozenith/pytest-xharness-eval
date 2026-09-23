@@ -4,7 +4,7 @@
  * text on both surfaces, and every chart colour clears 1.4.11's 3:1 against the plot it is drawn
  * on. A theme edit that slips under either fails here, before any component spec has to notice.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import type { HooksConfig } from "../playwright/index";
 

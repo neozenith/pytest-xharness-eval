@@ -4,7 +4,7 @@
  * The filter lives in the URL, so a deeplink (`hooksConfig.search`) and a chip click must land on
  * the same page.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator, Page } from "@playwright/test";
 import { SweepOverview } from "../src/views/SweepOverview";
 import { NO_MATCH } from "../src/lib/facets";

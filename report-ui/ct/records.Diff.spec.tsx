@@ -1,5 +1,5 @@
 /** `Diff`: a unified diff with removed and added lines highlighted. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Diff } from "../src/components/records/values";
 import type { HooksConfig } from "../playwright/index";
 

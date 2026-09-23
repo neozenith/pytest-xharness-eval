@@ -6,7 +6,7 @@
  * permalink, the failure paths (unparseable line, unknown kind, a renderer that throws), dark
  * mode, and a line whose one token is wider than any viewport.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { RecordCard } from "../src/components/records/RecordCard";
 import { CATEGORIES, categoryOf } from "../src/lib/records";

@@ -2,7 +2,7 @@
  * `RecordCardClaude`: the card with its harness fixed to `claude`. Whatever the line, it is
  * classified through the `claude/*` catalogue: a Codex line handed to it is not a Codex kind.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { RecordCardClaude } from "../src/components/records/RecordCard";
 import { claudeAssistant, claudeToolResult, claudeToolUse, claudeUser, codexTokenCount } from "./fixtures";
 

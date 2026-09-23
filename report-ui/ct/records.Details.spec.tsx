@@ -1,5 +1,5 @@
 /** `Details`: a collapsed disclosure; opens and closes on its summary, and is nothing when empty. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Details } from "../src/components/records/values";
 
 test("starts collapsed, opens on click, closes again", async ({ mount }) => {

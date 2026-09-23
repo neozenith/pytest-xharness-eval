@@ -2,7 +2,7 @@
  * `Block`: one content block, left-ruled in its category's colour and headed by its type. A
  * block type with no renderer falls back to its JSON under a grey rule.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Block } from "../src/components/records/blocks";
 import { CATEGORIES } from "../src/lib/records";
 import { ANSI_TEXT } from "./fixtures";

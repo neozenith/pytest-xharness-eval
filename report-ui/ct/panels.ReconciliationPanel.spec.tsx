@@ -4,7 +4,7 @@
  * compare the primary thread's share; spawned subagents are their own row
  * (docs/token-accounting.md §5).
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { ReconciliationPanel } from "../src/components/panels/ReconciliationPanel";
 import type { RunResult } from "../src/lib/types";

@@ -1,5 +1,5 @@
 /** `Kvs`: a key/value grid; a pair with no value is dropped, and a grid with no pairs is nothing. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Kvs } from "../src/components/records/values";
 import { UNBROKEN } from "./fixtures";
 

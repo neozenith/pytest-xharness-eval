@@ -1,5 +1,5 @@
 /** The HTML legend column every chart shares: chips that toggle series, a fading edge when clipped. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { ChartLegend } from "../src/components/charts/Plot";
 import type { HooksConfig } from "../playwright";
 import { rgb, tokens } from "./charts.helpers";

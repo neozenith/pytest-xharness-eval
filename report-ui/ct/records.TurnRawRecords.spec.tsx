@@ -3,7 +3,7 @@
  * names the line ranges and the turn's context; each card is the harness's own card, anchored
  * at `L<line>`, annotated with its context and deep-linked with `line=`.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { TurnRawRecords } from "../src/components/records/TurnRawRecords";
 import type { HooksConfig } from "../playwright/index";
 import {

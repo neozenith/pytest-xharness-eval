@@ -4,7 +4,7 @@
  * back and forward walk it. Without an inline payload the page fetches `index.json` from beside
  * itself, and a failed fetch must say so rather than spin.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { App } from "../src/App";
 import { cell, inline, sweep } from "./fixtures";

@@ -1,5 +1,5 @@
 /** `Xmlish`: harness-injected XML-tagged text as titled sections, nested and with markdown bodies. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Xmlish } from "../src/components/records/values";
 import { CATEGORIES } from "../src/lib/records";
 

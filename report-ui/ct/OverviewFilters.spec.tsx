@@ -7,7 +7,7 @@
  * harnesses claude(5) / codex(2), four models, and rungs low(2) medium high xhigh max plus one
  * rung-less cell.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator, Page } from "@playwright/test";
 import type { HooksConfig } from "../playwright/index";
 import { OverviewFilters } from "../src/components/OverviewFilters";

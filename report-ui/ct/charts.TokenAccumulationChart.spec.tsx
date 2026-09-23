@@ -2,7 +2,7 @@
  * The overview's accumulation chart: one mean line per suite × harness × model × effort (ADR 0049),
  * a min–max envelope when a group ran more than once, and the two different empty states.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { TokenAccumulationChart } from "../src/components/charts/TokenAccumulationChart";
 import { NO_MATCH } from "../src/lib/facets";
 import type { HooksConfig } from "../playwright";

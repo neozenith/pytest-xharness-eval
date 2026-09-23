@@ -3,7 +3,7 @@
  * `.xh-table` head cell, because every rule that styles it (`.sort-ico` opacity, the sorted wash)
  * is scoped to `.xh-table thead th`, and a bare button would test a component no page renders.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { ColumnHead } from "../src/components/ColumnHead";
 
 const MUTED = { light: "rgb(91, 96, 112)", dark: "rgb(154, 160, 176)" };

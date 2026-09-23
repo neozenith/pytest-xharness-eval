@@ -1,5 +1,5 @@
 /** `Usage`: either dialect's usage object as one token grid. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Usage } from "../src/components/records/values";
 
 test("a Claude usage object, with thinking tokens and the cache split", async ({ mount }) => {

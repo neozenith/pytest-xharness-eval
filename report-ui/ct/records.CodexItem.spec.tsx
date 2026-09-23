@@ -2,7 +2,7 @@
  * `CodexItem`: a Codex item's content blocks, with every other field of the item collapsed
  * into one JSON disclosure.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { CodexItem } from "../src/components/records/blocks";
 
 test("content blocks show, the other item fields wait behind a disclosure", async ({ mount }) => {

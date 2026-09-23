@@ -1,5 +1,5 @@
 /** The frame every chart sits in: glossary id on the root, the name beside the heading, an optional note. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { ChartPanel } from "../src/components/charts/common";
 
 test.describe("ChartPanel", () => {

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { HooksConfig } from "../playwright/index";
 import { VerdictBadge } from "../src/components/VerdictBadge";
 

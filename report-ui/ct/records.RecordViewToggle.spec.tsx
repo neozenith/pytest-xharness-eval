@@ -3,7 +3,7 @@
  * shows which one is current, and never reports an empty choice when the pressed segment is
  * pressed again.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { RecordViewToggle } from "../src/components/records/RecordViewToggle";
 import type { HooksConfig } from "../playwright/index";
 

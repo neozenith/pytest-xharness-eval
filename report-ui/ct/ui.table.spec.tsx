@@ -4,7 +4,7 @@
  * given `scrollLabel`, becomes a named region whose tab stop is *measured*: tabindex 0 only while
  * columns are clipped. Its focus ring lives on the unmasked `.table-scroll-ring` wrapper.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "../src/components/ui/table";
 import type { HooksConfig } from "../playwright/index";

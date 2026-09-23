@@ -2,7 +2,7 @@
  * `Blocks`: a message's content. A string is prose; a list is one `Block` per element, in
  * order; anything else is nothing rather than a crash.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Blocks } from "../src/components/records/blocks";
 
 test("a list renders one block per element, in order", async ({ mount, page }) => {

@@ -2,7 +2,7 @@
  * `Comp`: the labelled frame every record-card renderer wraps its output in, so the HTML names
  * what drew it; and the four small wrappers beside it (`Muted`, `Notice`, `Mono`, `Tag`).
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Comp, Mono, Muted, Notice, Tag } from "../src/components/records/Comp";
 
 test("wraps its children under a hidden label naming the component", async ({ mount }) => {

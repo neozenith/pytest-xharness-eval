@@ -3,7 +3,7 @@
  * `estimated_cost_usd`, the harness's own per-model estimate, its reported total, and the
  * per-tier USD-per-token rates the estimate used (ADR 0019, ADR 0021).
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { CostByTierPanel, RatesApplied } from "../src/components/panels/CostByTierPanel";
 import { PHONE, pageOverflowX, resolveColour, result } from "./panels.data";

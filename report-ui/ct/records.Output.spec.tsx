@@ -1,5 +1,5 @@
 /** `Output`: tool output sniffed as JSON, a diff, ANSI or plain text. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Output } from "../src/components/records/values";
 import { ANSI_TEXT } from "./fixtures";
 

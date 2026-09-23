@@ -4,7 +4,7 @@
  * segment is painted by `.XhToggleGroup [data-state="on"]` in index.css: a raised thumb in ink,
  * the others muted.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { ToggleGroup, ToggleGroupItem } from "../src/components/ui/toggle-group";
 import type { HooksConfig } from "../playwright/index";

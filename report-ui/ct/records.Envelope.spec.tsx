@@ -1,5 +1,5 @@
 /** `Envelope`: the harness's bookkeeping fields, collapsed, for either dialect. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Envelope } from "../src/components/records/values";
 import { claudeToolUse, codexTurnContext } from "./fixtures";
 

@@ -3,7 +3,7 @@
  * hairline and a shadow, a `<header>`, an `<h2>` title in ink, a `<p>` description in muted, and
  * a padded content column.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../src/components/ui/card";
 import type { HooksConfig } from "../playwright/index";

@@ -3,7 +3,7 @@
  * four sizes, per-size typography, string children wrapped in an inheriting Text node, and
  * `render={<a href/>}` for link-shaped buttons.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { Button } from "../src/components/ui/button";
 import type { HooksConfig } from "../playwright/index";

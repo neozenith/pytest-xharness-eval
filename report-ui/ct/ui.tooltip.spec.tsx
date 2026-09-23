@@ -4,7 +4,7 @@
  * (`$color` fill, `$panel` ink), a max-content width capped at 280px. `TooltipProvider` is a
  * pass-through; `playwright/index.tsx` mounts every component inside one.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import type { Locator } from "@playwright/test";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../src/components/ui/tooltip";
 import type { HooksConfig } from "../playwright/index";

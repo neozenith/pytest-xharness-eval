@@ -1,5 +1,5 @@
 /** `Listing`: `- name: description` lines as a two-column table; anything else as markdown. */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Listing } from "../src/components/records/values";
 import { UNBROKEN } from "./fixtures";
 

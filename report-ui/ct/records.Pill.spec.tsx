@@ -3,7 +3,7 @@
  * `--xh-category-<category>` token with the catalogue's value behind it, its ink the same in
  * both themes, and its full kind is kept in the tooltip even when a narrow card elides it.
  */
-import { expect, test } from "@playwright/experimental-ct-react";
+import { expect, test } from "./test";
 import { Pill } from "../src/components/records/RecordCard";
 import { CATEGORIES, KINDS, categoryOf } from "../src/lib/records";
 import type { HooksConfig } from "../playwright/index";
