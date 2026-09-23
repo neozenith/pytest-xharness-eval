@@ -66,10 +66,14 @@ test.describe("rendering", () => {
     await expect(clear).toHaveAttribute("tabindex", "-1");
     await expect(clear).toBeHidden();
     await expect(clear).toHaveCSS("pointer-events", "none");
-    // hidden, not unmounted: its box is still reserved in the line (the documented 102x28)
+    // hidden, not unmounted: its box is still reserved in the line, at the control tier's 28px
+    // and at the very width it has once shown (font metrics vary by platform, so no literal)
     const box = (await clear.boundingBox())!;
-    expect(Math.round(box.width)).toBe(102);
+    expect(box.width).toBeGreaterThan(0);
     expect(box.height).toBeCloseTo(28, 3);
+    await c.locator("button.filter-chip").first().click();
+    await expect(clear).toBeVisible();
+    expect((await clear.boundingBox())!.width).toBeCloseTo(box.width, 1);
   });
 
   test("a facet with a single value says so", async ({ mount }) => {

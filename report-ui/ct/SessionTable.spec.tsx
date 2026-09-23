@@ -252,12 +252,15 @@ test.describe("SessionTable: layout", () => {
     );
     const box = page.locator("[data-slot='table-container']");
     await expect.poll(() => box.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
-    const inView = await page.evaluate(() => {
-      const view = document.querySelector("[data-slot='table-container']")!.getBoundingClientRect();
-      const th = document.querySelector('#SessionTable thead th[data-k="wall_ms"]')!.getBoundingClientRect();
-      return th.left >= view.left && th.right <= view.right;
-    });
-    expect(inView).toBe(true);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const view = document.querySelector("[data-slot='table-container']")!.getBoundingClientRect();
+          const th = document.querySelector('#SessionTable thead th[data-k="wall_ms"]')!.getBoundingClientRect();
+          return th.left >= view.left && th.right <= view.right;
+        }),
+      )
+      .toBe(true);
   });
 
   test("a sort on a visible head never moves the table", async ({ mount, page }) => {

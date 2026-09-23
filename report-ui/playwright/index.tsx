@@ -30,6 +30,9 @@ beforeMount<HooksConfig>(async ({ App, hooksConfig }) => {
   else delete window.__XH_DATA__;
   applyTokens(tokens as unknown as DesignTokens, mode);
   document.body.style.background = "var(--xh-bg)";
+  // Measure against settled metrics: a layout read before a late font swaps in is a different
+  // layout on every platform (CI's Linux fonts load after mount; macOS's are already there).
+  await document.fonts.ready;
   return (
     <TamaguiProvider config={config} defaultTheme={mode}>
       <Theme name={mode}>
