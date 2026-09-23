@@ -13,20 +13,60 @@ type Input = Record<string, unknown>;
 const code = (v: unknown): ReactNode => (v ? <Mono>{String(v)}</Mono> : undefined);
 const str = (v: unknown): string | undefined => (v == null ? undefined : String(v));
 
-/** The object literal inside `tools.exec_command({...})`, parsed leniently. */
+/**
+ * A JavaScript object literal rewritten as JSON: bare keys quoted, single-quoted strings
+ * double-quoted, trailing commas dropped. Anything that is not data (a call, an expression)
+ * survives the rewrite and fails `JSON.parse`, which is the point: the session log is agent
+ * output, so this text is never *evaluated* — an earlier `Function(...)` here ran it in the
+ * reader's browser.
+ */
+function literalToJson(lit: string): string {
+  let out = "";
+  let i = 0;
+  while (i < lit.length) {
+    const ch = lit[i]!;
+    if (ch === '"' || ch === "'") {
+      let s = "";
+      i++;
+      while (i < lit.length && lit[i] !== ch) {
+        if (lit[i] === "\\" && i + 1 < lit.length) {
+          const next = lit[i + 1]!;
+          s += next === "'" ? "'" : `\\${next}`;
+          i += 2;
+        } else {
+          s += lit[i] === '"' ? '\\"' : lit[i];
+          i++;
+        }
+      }
+      out += `"${s}"`;
+      i++;
+    } else if (/[A-Za-z_$]/.test(ch)) {
+      const id = /^[A-Za-z_$][\w$]*/.exec(lit.slice(i))![0];
+      i += id.length;
+      out += /^\s*:/.test(lit.slice(i)) ? `"${id}"` : id;
+    } else if (ch === ",") {
+      i++;
+      if (!/^\s*[}\]]/.test(lit.slice(i))) out += ",";
+    } else {
+      out += ch;
+      i++;
+    }
+  }
+  return out;
+}
+
+/** The object literal inside `tools.exec_command({...})`, parsed leniently and never evaluated. */
 export function codexExec(input: string): Input | null {
   const m = /exec_command\s*\(\s*(\{[\s\S]*?\})\s*\)/.exec(input || "");
   if (!m) return null;
   const lit = m[1]!;
-  try {
-    return JSON.parse(lit) as Input;
-  } catch {
-    /* not strict JSON */
-  }
-  try {
-    return Function(`"use strict"; return (${lit});`)() as Input;
-  } catch {
-    /* not a literal either */
+  for (const text of [lit, literalToJson(lit)]) {
+    try {
+      const v: unknown = JSON.parse(text);
+      if (v && typeof v === "object" && !Array.isArray(v)) return v as Input;
+    } catch {
+      /* not (yet) JSON */
+    }
   }
   const cmd = /cmd\s*:\s*"((?:\\.|[^"\\])*)"/.exec(lit);
   return cmd ? { cmd: JSON.parse(`"${cmd[1]}"`) as string } : null;

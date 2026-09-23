@@ -107,3 +107,23 @@ test("a missing input is an empty object, not a crash", async ({ mount }) => {
   const c = await mount(<ToolInput name={null} input={null} />);
   await expect(c.locator('[data-el="V.json"]')).toContainText("{}");
 });
+
+// Finding: `codexExec` parsed a non-JSON literal with `Function(...)`, i.e. it *ran* whatever
+// JavaScript the session log carried between the braces. A log line is agent output (and an
+// agent echoes what a repository tells it to), so opening the report executed it in the
+// reader's browser. The literal is now read by a parser that never evaluates.
+test("Codex exec: a literal that is code, not data, is never executed", async ({ mount, page }) => {
+  const input = 'tools.exec_command({ cmd: "ls", workdir: (window.__pwned = 1, "/w") })';
+  const c = await mount(<ToolInput name="exec" input={input} />);
+  await expect(c.locator('[data-el="T.exec"]')).toContainText("ls");
+  expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
+});
+
+test("Codex exec: an unquoted-key literal with a trailing comma and single quotes still yields its fields", async ({ mount }) => {
+  const input = "tools.exec_command({ cmd: 'rg -n \"a: b\" src', workdir: '/w', yield_time_ms: 1000, })";
+  const c = await mount(<ToolInput name="exec" input={input} />);
+  const kvs = c.locator('[data-el="T.exec"] > [data-el="V.kvs"]');
+  await expect(kvs).toContainText("workdir/w");
+  await expect(kvs).toContainText("yield_time_ms1000");
+  await expect(c.locator('[data-el="V.bash"] code')).toHaveText('rg -n "a: b" src');
+});
