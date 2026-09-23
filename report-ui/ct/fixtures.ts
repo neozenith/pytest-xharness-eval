@@ -7,7 +7,7 @@
  * vary is an override, never a second fixture that drifts from this one.
  */
 import type { Call, Cell, DesignTokens, Index, InlineData, RunResult, Usage } from "../src/lib/types";
-import tokens from "../../src/pytest_xharness_eval/assets/report.tokens.json";
+import tokens from "../../src/pytest_xharness_eval/assets/report.tokens.json" with { type: "json" };
 
 export const SID = "1feb573f-ba51-4e77-845f-12c4bcb08252";
 
@@ -143,3 +143,103 @@ export const inline = (cells: Cell[] = sweep()): InlineData => ({
   logs: Object.fromEntries(cells.map((c) => [c.session_id, log().join("\n")])),
   tokens: tokens as unknown as DesignTokens,
 });
+
+// ---- session-log records, as the two harnesses write them (records.*.spec.tsx) --------------
+
+type LogRec = Record<string, unknown>;
+
+/** A Claude `user` line around `content` (a string or a list of blocks). */
+export const claudeUser = (content: unknown, over: LogRec = {}): LogRec => ({
+  type: "user",
+  timestamp: "2026-08-23T07:18:05.537Z",
+  uuid: "u-1",
+  parentUuid: "u-0",
+  sessionId: SID,
+  cwd: "/w",
+  version: "2.1.90",
+  gitBranch: "main",
+  isSidechain: false,
+  message: { role: "user", content },
+  ...over,
+});
+
+/** A Claude `assistant` line: one API message with its content blocks and usage. */
+export const claudeAssistant = (content: unknown, model = "claude-opus-5", over: LogRec = {}): LogRec => ({
+  type: "assistant",
+  timestamp: "2026-08-23T07:18:06.000Z",
+  requestId: "req_011",
+  uuid: "a-1",
+  sessionId: SID,
+  effort: "high",
+  message: {
+    id: "msg_011",
+    model,
+    role: "assistant",
+    stop_reason: "tool_use",
+    content,
+    usage: {
+      input_tokens: 2,
+      cache_read_input_tokens: 35_865,
+      cache_creation_input_tokens: 4_234,
+      cache_creation: { ephemeral_1h_input_tokens: 4_234, ephemeral_5m_input_tokens: 0 },
+      output_tokens: 264,
+    },
+  },
+  ...over,
+});
+
+/** A Claude `tool_use` line for `name` with `input`. */
+export const claudeToolUse = (name: string, input: unknown, id = "toolu_01"): LogRec => claudeAssistant([{ type: "tool_use", id, name, input }]);
+
+/** A Claude `tool_result` line answering `id`. */
+export const claudeToolResult = (content: unknown, over: LogRec = {}, id = "toolu_01"): LogRec =>
+  claudeUser([{ type: "tool_result", tool_use_id: id, content, ...over }], { toolUseResult: { stdout: String(content), stderr: "", interrupted: false } });
+
+/** A Claude `attachment` line of attachment type `type`. */
+export const claudeAttachment = (type: string, attachment: LogRec = {}): LogRec => ({
+  type: "attachment",
+  timestamp: "2026-08-23T07:18:04.000Z",
+  uuid: "at-1",
+  attachment: { type, ...attachment },
+});
+
+/** A Codex line: `{timestamp, type, payload}`. */
+export const codexLine = (type: string, payload: LogRec): LogRec => ({ timestamp: "2026-08-23T07:20:00.000Z", type, payload });
+
+export const codexResponse = (payload: LogRec): LogRec => codexLine("response_item", payload);
+export const codexEvent = (payload: LogRec): LogRec => codexLine("event_msg", payload);
+export const codexCompleted = (item: LogRec): LogRec => codexEvent({ type: "item_completed", thread_id: "th_1", turn_id: "turn_1", item });
+
+/** A Codex `turn_context` as codex-cli writes it: the rung is `effort`, echoed in `collaboration_mode`. */
+export const codexTurnContext = (effort = "xhigh"): LogRec =>
+  codexLine("turn_context", {
+    turn_id: "turn_1",
+    cwd: "/w",
+    current_date: "2026-08-23",
+    timezone: "Australia/Melbourne",
+    approval_policy: "never",
+    sandbox_policy: { type: "workspace-write", network_access: false },
+    model: "gpt-5.6-sol",
+    personality: "pragmatic",
+    collaboration_mode: { mode: "default", settings: { model: "gpt-5.6-sol", reasoning_effort: effort } },
+    effort,
+    summary: "auto",
+  });
+
+/** A Codex `token_count` event: the measurement record of a turn. */
+export const codexTokenCount = (): LogRec =>
+  codexEvent({
+    type: "token_count",
+    info: {
+      last_token_usage: { input_tokens: 10_000, cached_input_tokens: 8_000, output_tokens: 120, reasoning_output_tokens: 64, total_tokens: 10_120 },
+      total_token_usage: { input_tokens: 30_000, cached_input_tokens: 24_000, output_tokens: 400, reasoning_output_tokens: 200, total_tokens: 30_400 },
+      model_context_window: 258_400,
+    },
+    rate_limits: { primary: { used_percent: 12.5, window_minutes: 300 } },
+  });
+
+/** Terminal output with colour codes, as a CLI writes it. */
+export const ANSI_TEXT = "\u001b[31mFAILED\u001b[0m tests/test_x.py::test_y\n\u001b[32mPASSED\u001b[0m tests/test_x.py::test_z";
+
+/** One token longer than any viewport: no space, no hyphen, nothing to break on. */
+export const UNBROKEN = "x".repeat(4_000);

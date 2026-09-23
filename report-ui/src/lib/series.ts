@@ -3,7 +3,7 @@
  * each turn, the step series that hold a value from one measurement to the next, and the
  * token-waterfall decomposition. No rendering here, so every number is unit-testable.
  */
-import { armLabel } from "./effort";
+import { armLabel, compareEffort } from "./effort";
 import { short } from "./format";
 import type { Call, Cell, RunResult, Usage } from "./types";
 
@@ -234,16 +234,26 @@ const suiteName = (c: Cell): string => (c.suite ? (c.suite.split("/").pop() ?? c
  * averaged line: they are two experiments (ADR 0049).
  */
 export function accumulationGroups(cells: Cell[], results: Record<string, RunResult | null | undefined>): AccumulationGroup[] {
-  const byKey = new Map<string, { label: string; series: number[][] }>();
+  const byKey = new Map<string, { label: string; arm: string; effort: string | null; series: number[][] }>();
   for (const c of cells) {
     const result = results[c.session_id];
     if (!c.has_ledger || !result?.calls?.length) continue;
     const key = `${suiteName(c)}|${c.harness}|${c.model}${c.effort ? `|${c.effort}` : ""}`;
-    const entry = byKey.get(key) ?? { label: `${suiteName(c)} · ${armLabel(c.harness, c.model, c.effort)}`, series: [] };
+    const entry = byKey.get(key) ?? {
+      label: `${suiteName(c)} · ${armLabel(c.harness, c.model, c.effort)}`,
+      arm: `${suiteName(c)}|${c.harness}|${c.model}`,
+      effort: c.effort,
+      series: [],
+    };
     entry.series.push(accumulation(result.calls, subagentsByTurn(result)).map((p) => p.billed));
     byKey.set(key, entry);
   }
-  return [...byKey.entries()].map(([key, { label, series }]) => {
+  // Arms in first-seen order (the index's), and one arm's rungs beside each other in ladder order —
+  // the legend, and the series colours assigned down it, read `low` before `max` whatever order the
+  // cells ran in; a rung-less line comes after every rung.
+  const arms = [...new Set([...byKey.values()].map((g) => g.arm))];
+  const ordered = [...byKey.entries()].sort(([, a], [, b]) => arms.indexOf(a.arm) - arms.indexOf(b.arm) || compareEffort(a.effort, b.effort));
+  return ordered.map(([key, { label, series }]) => {
     const turnCount = Math.max(...series.map((s) => s.length));
     const turns: number[] = [];
     const mean: number[] = [];

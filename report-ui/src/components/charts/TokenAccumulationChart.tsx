@@ -81,14 +81,14 @@ export function TokenAccumulationChart({ cells, results }: Props) {
     <ChartPanel
       id="TokenAccumulationChart"
       title="accumulative_billed_tokens accumulating per turn"
-      note="One line per suite × harness × model, averaged across its runs; the shaded envelope is the min–max spread when a cell ran more than once."
+      note="One line per suite × harness × model × effort rung, averaged across its runs; the shaded envelope is the min–max spread when a cell ran more than once."
     >
       {legend.length ? (
         <PlotWithLegend
           data={traces}
           layout={layout}
           height={420}
-          ariaLabel="Billed tokens accumulating per turn, one aggregated line per suite, harness and model"
+          ariaLabel="Billed tokens accumulating per turn, one aggregated line per suite, harness, model and effort rung"
           items={legend}
           hidden={hidden}
           onToggle={toggle}

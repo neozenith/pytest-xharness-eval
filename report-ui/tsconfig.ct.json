@@ -20,5 +20,5 @@
     "types": ["node"],
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["ct", "playwright", "playwright-ct.config.ts"]
+  "include": ["ct", "playwright", "playwright-ct.config.ts", "src/plotly-basic.d.ts", "src/vite-env.d.ts"]
 }

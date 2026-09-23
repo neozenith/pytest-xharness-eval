@@ -226,7 +226,7 @@ const COLUMNS: Column[] = [
 ];
 
 /**
- * The identity columns a constant value may collapse out of. Only these four: a *measure* that
+ * The identity columns a constant value may collapse out of. Only these five: a *measure* that
  * happens to be equal on every row is a finding the reader wants to see repeated down the
  * column, while an identity that is equal on every row is the table's subject, not its data.
  */
@@ -267,8 +267,11 @@ const sortValue = (c: Cell, key: SortKey): string | number | null =>
 export function SessionTable({ cells, shortModel = modelShort }: { cells: Cell[]; shortModel?: (model: string) => string }) {
   const route = useRoute();
   const routeSort = route.view === "overview" ? route.sort : null;
-  const sortKey: SortKey = routeSort && COLUMNS.some((c) => c.key === routeSort.key) ? (routeSort.key as SortKey) : "at";
-  const dir: 1 | -1 = routeSort ? (routeSort.dir === "asc" ? 1 : -1) : -1;
+  // A key no column answers to is no sort at all: the default key AND its default direction, never
+  // `at` ascending borrowed from the bogus pair (which `parseSearch` defaults to `asc`).
+  const known = routeSort && COLUMNS.some((c) => c.key === routeSort.key) ? routeSort : null;
+  const sortKey: SortKey = known ? (known.key as SortKey) : "at";
+  const dir: 1 | -1 = known ? (known.dir === "asc" ? 1 : -1) : -1;
   const theme = route.theme;
   const ctx: RowContext = { shortModel };
 

@@ -14,7 +14,7 @@ Run everything through the repository `Makefile`:
 | Develop against a real cache root (ADR 0032) | `make ui-dev CAPTURED=../agentic-dotfiles/.xharness_eval_cache`                      |
 | Types, lint, formatting                      | `make ui-check` (`make ui-format` to fix)                                            |
 | Unit tests (Vitest, jsdom)                   | `make ui-test`                                                                       |
-| Component tests (Playwright CT, `ct/`)      | `make ui-ct` (`UPDATE=1` is reserved for screenshot baselines; none today)           |
+| Component tests (Playwright CT, `ct/`)       | `make ui-ct` (`UPDATE=1` is reserved for screenshot baselines; none today)           |
 | Build one file                               | `make ui-build` → `dist/index.html`                                                  |
 | Sweep the deeplink permutation matrix (e2e)  | `make ui-e2e CAPTURED=… TIER=small\|medium\|large` (+`SAMPLE=<n>`, `E2E_TARGET=dev`) |
 | Build, populate inline, boot over `file://`  | `make ui-smoke CAPTURED=…`                                                           |

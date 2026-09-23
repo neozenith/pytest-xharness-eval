@@ -855,7 +855,8 @@ button.filter-chip[data-on="true"] > .muted {
 }
 
 /* The figure is the datum; "of 24 sessions" is its qualifier — the same split the chips make. */
-.filter-count .n {
+.filter-count .n,
+.filter-count .sizer .fig {
   color: var(--xh-ink);
   font-weight: 600;
 }
@@ -1852,7 +1853,8 @@ button.filter-chip[data-on="true"] > .muted {
 
 #SessionTable caption .const,
 #SessionSummaryTable caption .const {
-  color: var(--xh-color);
+  /* `--xh-ink`: the tokens write no `--xh-color`, so that fell back to the caption's own muted ink. */
+  color: var(--xh-ink);
 }
 
 /*

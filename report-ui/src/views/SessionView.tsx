@@ -58,7 +58,9 @@ export function SessionView({ cell, route }: Props) {
     replaceRoute({
       view: "session",
       sessionId,
-      turn: openTurn,
+      // The turn the reader is *looking at*: one a `line=` deeplink opened is shown without being
+      // stored, and writing only the stored one closed it on the next control click.
+      turn: shownTurn,
       turnView: view,
       axis: axis === "turn" ? null : axis,
       rec: recordView === "nice" ? null : recordView,
