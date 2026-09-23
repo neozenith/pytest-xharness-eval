@@ -314,15 +314,22 @@ test("the record envelope collapses the bookkeeping fields, including the Claude
   await expect(kvs).toContainText("efforthigh");
 });
 
-// ADR 0049: the effort rung reaches every place the report names an arm. The Codex turn_context
-// card names the model in its summary grid, but the rung it ran at (`effort`, echoed as
-// `collaboration_mode.settings.reasoning_effort`) is only in the collapsed "all turn context"
-// JSON. records.tsx `"codex/turn_context"` builds its Kvs without it.
-test.fail("codex/turn_context names the effort rung beside the model", async ({ mount }) => {
+// ADR 0049: the effort rung reaches every place the report names an arm. Regression: the Codex
+// turn_context card once named the model in its grid but left the rung it ran at in the
+// collapsed "all turn context" JSON only.
+test("codex/turn_context names the effort rung beside the model", async ({ mount }) => {
   const c = await mount(<RecordCard harness="codex" lineNo={2} raw={JSON.stringify(codexTurnContext("xhigh"))} view="nice" />);
   const grid = c.locator('[data-el="R.codex/turn_context"] > [data-el="V.kvs"]');
+  await expect(grid.locator("b")).toHaveText(["model", "effort", "cwd", "approval", "sandbox", "network", "personality", "timezone", "date"]);
   await expect(grid).toContainText("modelgpt-5.6-sol");
-  await expect(grid).toContainText(/effort\s*xhigh/, { timeout: 2_000 });
+  await expect(grid).toContainText("effortxhigh");
+});
+
+test("a Claude assistant card names the effort rung beside the model", async ({ mount }) => {
+  const c = await mount(<RecordCard harness="claude" lineNo={3} raw={JSON.stringify(claudeToolUse("Read", { file_path: "SKILL.md" }))} view="nice" />);
+  const grid = c.locator('[data-el="claudeMessage"] > [data-el="V.kvs"]');
+  await expect(grid.locator("b")).toHaveText(["model", "effort", "stop", "message id"]);
+  await expect(grid).toContainText("efforthigh");
 });
 
 test.describe("dark mode", () => {

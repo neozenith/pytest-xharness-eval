@@ -124,17 +124,22 @@ test("many chips wrap onto several lines at phone width without pushing the page
   expect(await pageOverflowX(page)).toBeLessThanOrEqual(0);
 });
 
-test("the longest catalogued kind stays inside the card at phone width", async ({ mount, page }) => {
-  // BUG: RecordKindsPanel.tsx:22-24 with shared.tsx:14 — the kind `Pill` inside each chip is
-  // `white-space: nowrap` (index.css `.pill`), so the chip's own `max-width: 100%` and
-  // `overflow-wrap: anywhere` cannot shorten it. A real catalogue kind (helpers.ts:80,
-  // `codex/event_msg/item_completed/UserMessage/injected`) at 375px pushes the whole page 24px
-  // sideways. Expected: the pill wraps or elides inside the card (as `.rec-head .pill` does,
-  // index.css:1150); actual: horizontal page scroll.
-  test.fail();
+// Regression: the kind pill inherited `.pill`'s `white-space: nowrap`, so this real catalogue
+// kind pushed the page 24px sideways at 375px. It now wraps after a `/`, whole and unelided.
+test("the longest catalogued kind wraps inside the card at phone width, text intact", async ({ mount, page }) => {
   await page.setViewportSize(PHONE);
   const kind = "codex/event_msg/item_completed/UserMessage/injected";
   const c = await mount(<RecordKindsPanel recordKinds={{ [kind]: 1 }} />);
   await expect(pill(c, kind)).toHaveAttribute("title", "harness_context");
   expect(await pageOverflowX(page)).toBeLessThanOrEqual(0);
+  const box = await pill(c, kind).boundingBox();
+  const card = await c.locator('[data-el="RecordKindsPanel"]:not(.el)').boundingBox();
+  expect(box!.x + box!.width).toBeLessThanOrEqual(card!.x + card!.width);
+  expect(box!.height).toBeGreaterThan(24); // it wrapped, rather than being clipped or elided
+  expect(await pill(c, kind).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+});
+
+test("a short kind stays on one line at desktop width", async ({ mount }) => {
+  const c = await mount(<RecordKindsPanel recordKinds={{ "claude/user/prompt": 3 }} />);
+  expect((await pill(c, "claude/user/prompt").boundingBox())!.height).toBeLessThanOrEqual(22);
 });

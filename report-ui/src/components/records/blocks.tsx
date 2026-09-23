@@ -113,8 +113,11 @@ export function Blocks({ content }: { content: unknown }) {
   );
 }
 
-/** A Claude API message: its blocks, then model, stop reason, message id and usage. */
-export function ClaudeMessage({ message }: { message: unknown }) {
+/**
+ * A Claude API message: its blocks, then model, effort rung, stop reason, message id and usage.
+ * `effort` is the line's own top-level field (the API message carries none); absent, it drops.
+ */
+export function ClaudeMessage({ message, effort }: { message: unknown; effort?: unknown }) {
   const m = isObj(message) ? message : {};
   return (
     <Comp el="claudeMessage">
@@ -122,6 +125,7 @@ export function ClaudeMessage({ message }: { message: unknown }) {
       <Kvs
         pairs={[
           ["model", str(m.model)],
+          ["effort", str(effort)],
           ["stop", str(m.stop_reason)],
           ["message id", code(m.id)],
         ]}

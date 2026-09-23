@@ -6,7 +6,8 @@
  * Shapes follow `src/lib/types.ts`, which mirrors what `emit/` writes. A field a spec needs to
  * vary is an override, never a second fixture that drifts from this one.
  */
-import type { Call, Cell, DesignTokens, Index, InlineData, RunResult, Usage } from "../src/lib/types";
+import type { Page } from "@playwright/test";
+import type { Call, Cell, DesignTokens, Index, InlineData, RunResult, Subagent, Usage } from "../src/lib/types";
 import tokens from "../../src/pytest_xharness_eval/assets/report.tokens.json" with { type: "json" };
 
 export const SID = "1feb573f-ba51-4e77-845f-12c4bcb08252";
@@ -243,3 +244,43 @@ export const ANSI_TEXT = "\u001b[31mFAILED\u001b[0m tests/test_x.py::test_y\n\u0
 
 /** One token longer than any viewport: no space, no hyphen, nothing to break on. */
 export const UNBROKEN = "x".repeat(4_000);
+
+// ---- subagents and page probes (shared by the panels.*.spec.tsx files) ------------------------
+
+/** One spawned thread (`result.subagents[]`) with its own small bill and no per-call ledger. */
+export const subagent = (over: Partial<Subagent> = {}): Subagent => ({
+  agent: "Explore",
+  id: "abcdef12-3456-7890-abcd-ef1234567890",
+  log: "subagents/agent-abcdef12.jsonl",
+  parent_turn: 1,
+  turns: 1,
+  description: "",
+  usage: usage({
+    input_tokens: 100,
+    output_tokens: 50,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
+    cache_write_1h_tokens: 0,
+    reasoning_tokens: 0,
+    accumulative_billed_tokens: 150,
+  }),
+  calls: [],
+  ...over,
+});
+
+/** The computed `color` a CSS colour expression resolves to on this page, e.g. `var(--xh-good)`. */
+export const resolveColour = (page: Page, expr: string): Promise<string> =>
+  page.evaluate((e) => {
+    const probe = document.createElement("span");
+    probe.style.color = e;
+    document.body.append(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  }, expr);
+
+/** How far the document scrolls sideways: 0 when nothing pushes the page past the viewport. */
+export const pageOverflowX = (page: Page): Promise<number> => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+
+/** The phone width the page must hold at without scrolling sideways. */
+export const PHONE = { width: 375, height: 800 };

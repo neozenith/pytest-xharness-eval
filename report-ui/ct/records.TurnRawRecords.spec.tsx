@@ -109,12 +109,12 @@ test("a turn with no attributed records says so", async ({ mount }) => {
   await expect(c).toContainText("no records attributed to this turn");
 });
 
-test("a record line past the end of the log still gets a visible card", async ({ mount }) => {
+test("a record line past the end of the log still gets a visible, anchored card that says it is missing", async ({ mount }) => {
   const r = result({ calls: [call(1, { records: [99] })] });
   const c = await mount(<TurnRawRecords result={r} call={r.calls[0]!} lines={claudeLines()} view="nice" />);
   await expect(c.locator("#L99")).toBeVisible();
-  await expect(c.locator("#L99")).toHaveAttribute("data-kind", "claude/unparseable");
-  await expect(c.locator("#L99 .chars")).toHaveText("0 chars");
+  await expect(c.locator("#L99")).toHaveText("line 99 is not in the captured log (it has 7 lines)");
+  await expect(c.locator("#L99")).not.toHaveAttribute("data-kind", /unparseable/);
 });
 
 test("dark mode tints the block on the dark page and keeps the cards on the dark panel", async ({ mount }) => {
@@ -129,4 +129,16 @@ test("a very long unbroken line does not scroll the page sideways", async ({ mou
   const c = await mount(<TurnRawRecords result={r} call={r.calls[0]!} lines={lines} view="nice" />);
   await expect(c.locator("#L2")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+});
+
+// Finding: a ledger line past the end of the captured log (a log truncated after the result
+// was written) became `lines[n - 1] ?? ""`: a card classed `unparseable`, "0 chars", and an
+// empty code box, i.e. it read as a corrupt line rather than a missing one.
+test("a line the captured log does not have is named as missing, not drawn as an empty unparseable record", async ({ mount }) => {
+  const r = result({ calls: [call(1, { records: [1, 2, 9] })] });
+  const c = await mount(<TurnRawRecords result={r} call={r.calls[0]!} lines={claudeLines().slice(0, 2)} view="nice" />);
+  await expect(c.locator('.rec[data-el="RecordCard"]')).toHaveCount(2);
+  const missing = c.locator("#L9");
+  await expect(missing).toContainText("line 9 is not in the captured log (it has 2 lines)");
+  await expect(missing.locator(".xh-pre")).toHaveCount(0);
 });

@@ -13,7 +13,9 @@ test.describe("Pill", () => {
     await expect(pill).toHaveText("claude/assistant/thinking");
     await expect(pill).toHaveAttribute("title", "thinking");
     expect(await pill.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(await resolveColour(page, "#6d28d9"));
-    expect(await pill.evaluate((el) => getComputedStyle(el).whiteSpace)).toBe("nowrap");
+    // The kind is the datum here, so it wraps (after a `/`) rather than overflow; see RecordKindsPanel.
+    expect(await pill.evaluate((el) => getComputedStyle(el).whiteSpace)).toBe("normal");
+    await expect(pill.locator("wbr")).toHaveCount(2);
   });
 
   test("an unmapped kind is the `unknown` category, never uncoloured", async ({ mount, page }) => {
@@ -79,6 +81,7 @@ test.describe("KvTable", () => {
     const c = await mount(
       <KvTable
         id="Kv"
+        label="kv"
         rows={[
           ["alpha", "1", "2"],
           ["beta", <b key="b">3</b>],
@@ -97,26 +100,32 @@ test.describe("KvTable", () => {
   });
 
   test("no rows is an empty table, not an error", async ({ mount }) => {
-    const c = await mount(<KvTable id="Kv" rows={[]} />);
+    const c = await mount(<KvTable id="Kv" rows={[]} label="kv" />);
     await expect(c.locator("#Kv tr")).toHaveCount(0);
   });
 
-  test("a clipped KvTable at phone width is reachable from the keyboard", async ({ mount, page }) => {
-    // BUG: shared.tsx:42 — KvTable renders `<Table>` without `scrollLabel`, and a KvTable's rows
-    // are text only. ui/table.tsx:47-52 requires `scrollLabel` of "any table whose rows hold
-    // nothing focusable", or the columns past the clipped right edge are pointer-only (WCAG
-    // 2.1.1). Expected: when the box clips, it is a tab stop. Actual: no tabindex. Affects
-    // CostByTierPanel, RatesApplied and ReconciliationPanel.
-    // The precondition (the box really clips) is pinned by the passing test below.
-    test.fail();
+  // Regression: KvTable rendered `<Table>` without `scrollLabel`, and its rows are text only, so
+  // at phone width the value columns past the clipped edge were pointer-only (WCAG 2.1.1).
+  // CostByTierPanel, RatesApplied and ReconciliationPanel all draw through it.
+  test("a clipped KvTable at phone width is a named tab stop that scrolls from the keyboard", async ({ mount, page }) => {
     await page.setViewportSize(PHONE);
-    const c = await mount(<KvTable id="Kv" rows={WIDE_ROWS} />);
-    await expect(c.locator("#Kv").locator("xpath=..")).toHaveAttribute("tabindex", "0", { timeout: 1000 });
+    const c = await mount(<KvTable id="Kv" rows={WIDE_ROWS} label="reconciliation" />);
+    const box = c.locator("#Kv").locator("xpath=..");
+    await expect(box).toHaveAttribute("tabindex", "0");
+    await expect(c.getByRole("region", { name: "reconciliation" })).toHaveCount(1);
+    await box.focus();
+    for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowRight");
+    await expect.poll(() => box.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  });
+
+  test("a KvTable that fits costs no tab stop", async ({ mount }) => {
+    const c = await mount(<KvTable id="Kv" rows={WIDE_ROWS} label="reconciliation" />);
+    await expect(c.locator("#Kv").locator("xpath=..")).toHaveAttribute("tabindex", "-1");
   });
 
   test("at phone width a reconciliation-shaped KvTable clips inside its box, never the page", async ({ mount, page }) => {
     await page.setViewportSize(PHONE);
-    const c = await mount(<KvTable id="Kv" rows={WIDE_ROWS} />);
+    const c = await mount(<KvTable id="Kv" rows={WIDE_ROWS} label="reconciliation" />);
     const box = c.locator("#Kv").locator("xpath=..");
     await expect(box).toHaveClass(/table-scroll/);
     expect(await pageOverflowX(page)).toBeLessThanOrEqual(0);

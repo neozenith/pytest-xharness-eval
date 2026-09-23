@@ -298,12 +298,15 @@ test.describe("summary vs detailed", () => {
 });
 
 test.describe("keyboard", () => {
-  test("the view toggle is reachable by Tab and switches with the keyboard", async ({ mount, page }) => {
+  // The toggle is one tab stop (the selected segment); the arrow keys rove within it (ui/toggle-group.tsx).
+  test("the view toggle is one tab stop, roves with the arrows and switches with Enter", async ({ mount, page }) => {
     const views: TurnView[] = [];
     const c = await mount(<TurnTableStory result={result()} onViewChangeSpy={(v) => views.push(v)} />);
+    await expect(c.locator('[data-view="summary"]')).toHaveAttribute("tabindex", "0");
+    await expect(c.locator('[data-view="detailed"]')).toHaveAttribute("tabindex", "-1");
     await c.locator('[data-view="summary"]').focus();
     await expect(c.locator('[data-view="summary"]')).toBeFocused();
-    await page.keyboard.press("Tab");
+    await page.keyboard.press("ArrowRight");
     await expect(c.locator('[data-view="detailed"]')).toBeFocused();
     await page.keyboard.press("Enter");
     await expect.poll(() => views).toEqual(["detailed"]);
@@ -317,19 +320,43 @@ test.describe("keyboard", () => {
     await expect(copy).toBeFocused();
   });
 
-  test("a turn row opens from the keyboard (Enter on the focused row)", async ({ mount, page }) => {
-    // BUG: SessionTurnTable.tsx:304-310 — the SessionTurnRow is a click-only <tr>: no tabIndex,
-    // no role, no onKeyDown. Expected: a keyboard user can focus a turn and open it with Enter,
-    // as SessionTable's SessionRow allows (SessionTable.tsx:386 tabIndex, :402 onKeyDown) and as
-    // index.css's `tr.SessionRow:focus-visible` ring anticipates. Actual: the row never takes
-    // focus, so the details row (the turn's records) is reachable by pointer only (WCAG 2.1.1).
-    test.fail();
+  // Regression: the SessionTurnRow was a click-only <tr>, so a turn's records were reachable by
+  // pointer only (WCAG 2.1.1). It now takes the tab order and answers Enter and Space, as
+  // SessionTable's SessionRow does.
+  test("a turn row is a tab stop that opens with Enter and closes with Space", async ({ mount, page }) => {
+    const calls: (number | null)[] = [];
+    const c = await mount(<TurnTableStory result={result()} onOpenTurnSpy={(n) => calls.push(n)} />);
+    await expect(row(c, 1)).toHaveAttribute("tabindex", "0");
+    await expect(row(c, 1)).toHaveAttribute("aria-expanded", "false");
+    await row(c, 1).focus();
+    await expect(row(c, 1)).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(detail(c, 1)).toHaveCount(1);
+    await expect(row(c, 1)).toHaveAttribute("aria-expanded", "true");
+    await page.keyboard.press(" ");
+    await expect(detail(c, 1)).toHaveCount(0);
+    expect(calls).toEqual([1, null]);
+  });
+
+  test("Tab walks from one turn row to the next, through the row's own copy chip", async ({ mount, page }) => {
+    const c = await mount(<SessionTurnTable result={result()} {...plain} />);
+    await row(c, 1).focus();
+    await page.keyboard.press("Tab");
+    await expect(row(c, 1).getByRole("button", { name: `Copy ${SID}/t1` })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(row(c, 2)).toBeFocused();
+  });
+
+  test("Enter on the copy chip inside a row copies, and never toggles the row", async ({ mount, page }) => {
     const calls: (number | null)[] = [];
     const c = await mount(<SessionTurnTable result={result()} {...plain} onOpenTurn={(n) => calls.push(n)} />);
-    await row(c, 1).focus();
-    await expect(row(c, 1)).toBeFocused({ timeout: 1000 });
+    await row(c, 1)
+      .getByRole("button", { name: `Copy ${SID}/t1` })
+      .focus();
     await page.keyboard.press("Enter");
-    await expect.poll(() => calls, { timeout: 1000 }).toEqual([1]);
+    await page.keyboard.press(" ");
+    await c.getByRole("button", { name: `Copy ${SID}/t1` }).click();
+    expect(calls).toEqual([]);
   });
 });
 
@@ -443,21 +470,37 @@ test.describe("subagents", () => {
     await expect(band).toContainText("Spawned by turn ? of 1feb573f");
   });
 
-  test("a subagent whose parent turn is not in the ledger is still shown", async ({ mount }) => {
-    // BUG: SessionTurnTable.tsx:249-256 / :299-301 — bands are only rendered inside the
-    // `calls.map` loop, keyed by parent_turn. A subagent whose parent_turn matches no call
-    // (a ledger truncated, or parent_turn past the last call) is silently dropped, while the
-    // toolbar prose (:271-273) still says "each appears under the turn that spawned it".
-    // Expected: the thread (and its bill) is visible somewhere. Actual: no band at all.
-    test.fail();
+  // Regression: bands were rendered only inside the `calls.map` loop, so a thread whose
+  // parent_turn matched no call vanished, bill and all, while the prose promised every one.
+  test("a subagent whose parent turn is not in the ledger is listed after the last turn, and the prose says so", async ({ mount }) => {
     const c = await mount(<SessionTurnTable result={result({ subagents: [subagent({ parent_turn: 7 })] })} {...plain} />);
-    await expect(c.locator('[data-el="SubagentBand"]')).toHaveCount(1, { timeout: 1000 });
+    const band = c.locator('tr.subagent-band-row[data-n="unattributed"]');
+    await expect(band.locator('[data-el="SubagentBand"] > [data-agent="Explore"]')).toContainText("1 turn · 150 billed tokens");
+    await expect(band).toContainText("Spawned by turn 7, not in this ledger of 1feb573f; each thread's bill");
+    const order = await c.locator("#SessionTurnTable > tbody > tr").evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-n")));
+    expect(order).toEqual(["1", "2", "unattributed"]);
+    await expect(c).toContainText("This session spawned 1 parallel subagent; the spawning turn is not in this ledger, so it is listed after the last turn.");
+    await expect(c).not.toContainText("each appears under the turn that spawned it");
   });
 
-  test("an orphaned subagent is still counted in the toolbar prose (the claim the test above checks)", async ({ mount }) => {
-    const c = await mount(<SessionTurnTable result={result({ subagents: [subagent({ parent_turn: 7 })] })} {...plain} />);
-    await expect(c).toContainText("This session spawned 1 parallel subagent; each appears under the turn that spawned it.");
-    await expect(c.locator("tr.SessionTurnRow")).toHaveCount(2);
+  test("attributed and orphaned threads together: each under its turn, the orphans gathered at the end", async ({ mount }) => {
+    const subs = [
+      subagent({ id: "a-1", parent_turn: 2 }),
+      subagent({ id: "b-1", agent: "Plan", parent_turn: 9 }),
+      subagent({ id: "c-1", agent: "Plan", parent_turn: 12 }),
+    ];
+    const c = await mount(<SessionTurnTable result={result({ subagents: subs })} {...plain} />);
+    await expect(c.locator('tr.subagent-band-row[data-n="2"] [data-agent]')).toHaveCount(1);
+    const orphans = c.locator('tr.subagent-band-row[data-n="unattributed"]');
+    await expect(orphans.locator("[data-agent]")).toHaveCount(2);
+    await expect(orphans).toContainText("Spawned by turn 9, turn 12, not in this ledger");
+    await expect(c).toContainText("each appears under the turn that spawned it, except 2 whose turn is not in this ledger, listed after the last turn.");
+  });
+
+  test("a result with no ledger still shows every spawned thread beneath the notice", async ({ mount }) => {
+    const c = await mount(<SessionTurnTable result={result({ calls: [], subagents: [subagent({ parent_turn: null })] })} {...plain} />);
+    await expect(c.locator("td.warn")).toContainText("no per-turn ledger");
+    await expect(c.locator('tr.subagent-band-row[data-n="unattributed"]')).toContainText("Spawned by an unrecorded turn, not in this ledger");
   });
 });
 
@@ -493,3 +536,27 @@ test.describe("layout and theme", () => {
     expect(open).not.toBe("rgba(0, 0, 0, 0)");
   });
 });
+
+/** WCAG relative-luminance contrast of two computed `rgb(...)` colours. */
+const contrast = (a: string, b: string): number => {
+  const lum = (c: string) => {
+    const [r, g, bl] = (c.match(/[\d.]+/g) ?? []).slice(0, 3).map((v) => {
+      const s = Number(v) / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * bl!;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi! + 0.05) / (lo! + 0.05);
+};
+
+// Finding: the band's agent pill set white ink on `--xh-waterfall-sub`: 3.6:1 on the light
+// theme's #ea580c and 2.3:1 on the dark theme's #fb923c, under WCAG AA's 4.5:1 for 11px text.
+for (const mode of ["light", "dark"] as const) {
+  test(`${mode}: the subagent pill's ink passes AA contrast on the waterfall's sub colour`, async ({ mount }) => {
+    const c = await mount(<SessionTurnTable result={result({ subagents: [subagent()] })} {...plain} />, { hooksConfig: { mode } });
+    const p = c.locator('[data-el="SubagentBand"] .pill').first();
+    const [fg, bg] = await p.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el).backgroundColor]);
+    expect(contrast(fg!, bg!)).toBeGreaterThanOrEqual(4.5);
+  });
+}

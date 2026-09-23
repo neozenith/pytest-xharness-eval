@@ -280,18 +280,15 @@ test.describe("layout", () => {
     expect(await pageOverflowX(page)).toBeLessThanOrEqual(0);
   });
 
-  test("a clipped table is reachable from the keyboard", async ({ mount, page }) => {
-    // BUG: SkillCoveragePanel.tsx:143 — the file table is a `<Table>` with no `scrollLabel`,
-    // and its rows hold nothing focusable. ui/table.tsx:47-52 says `scrollLabel` "is required of
-    // any table whose rows hold nothing focusable: without it the columns past the clipped right
-    // edge can only be reached with a pointer (WCAG 2.1.1)". Expected at phone width: the
-    // clipping scroll box is a tab stop (tabindex=0, role=region). Actual: tabindex is absent.
-    // The precondition (the box really clips) is pinned by the passing test below.
-    test.fail();
+  // Regression: the file table had no `scrollLabel` and its rows hold nothing focusable, so at
+  // phone width the columns past the clipped edge were pointer-only (WCAG 2.1.1).
+  test("a clipped table is a named tab stop", async ({ mount, page }) => {
     await page.setViewportSize(PHONE);
     const c = await mount(<SkillCoveragePanel coverage={longCoverage()} />);
     await expect(bodyRows(c)).toHaveCount(6);
-    await expect(scrollBox(c)).toHaveAttribute("tabindex", "0", { timeout: 1000 });
+    await expect(scrollBox(c)).toHaveAttribute("tabindex", "0");
+    await expect(scrollBox(c)).toHaveAttribute("role", "region");
+    await expect(scrollBox(c)).toHaveAttribute("aria-label", "skill files");
   });
 
   test("at phone width the table box does clip (the precondition of the keyboard test above)", async ({ mount, page }) => {

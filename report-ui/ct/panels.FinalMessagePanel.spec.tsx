@@ -68,6 +68,19 @@ test("a long message is capped at 480px and scrolls inside the block", async ({ 
   await expect(pre(c)).toHaveCSS("overflow-y", "auto");
 });
 
+// Finding: the capped pre scrolls but held nothing focusable and had no name, so a keyboard
+// user could not scroll past line ~30, and a screen reader met an unnamed box. The record
+// cards' own `Pre` (records/values.tsx) already follows this rule.
+test("the scrolling block is a named region the keyboard can reach and scroll", async ({ mount, page }) => {
+  const c = await mount(<FinalMessagePanel text={Array.from({ length: 200 }, (_, i) => `line ${i + 1}`).join("\n")} />);
+  const region = c.getByRole("region", { name: "final message (scrollable)" });
+  await expect(region).toHaveAttribute("id", "FinalMessage");
+  await expect(region).toHaveAttribute("tabindex", "0");
+  await region.focus();
+  await page.keyboard.press("End");
+  await expect.poll(() => pre(c).evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+});
+
 for (const mode of ["light", "dark"] as const) {
   test(`${mode}: the block sits on the code surface in the theme's ink`, async ({ mount, page }) => {
     const c = await mount(<FinalMessagePanel text="done" />, { hooksConfig: { mode } });

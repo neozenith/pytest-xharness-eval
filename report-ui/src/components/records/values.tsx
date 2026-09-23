@@ -185,16 +185,26 @@ export function Usage({ usage }: { usage: unknown }) {
   const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
   const creation = u.cache_creation as Record<string, unknown> | undefined;
   const details = u.output_tokens_details as Record<string, unknown> | undefined;
+  /*
+   * A tier the dialect has no field for is not a row: Codex caches implicitly and never writes a
+   * cache-write count, and "cache write –" on every token_count card read as "unknown" rather
+   * than "not a thing here" (the turn table drops the same tier for Codex). A field that is
+   * present but null still prints the dash.
+   */
+  const tier = (...keys: [Record<string, unknown> | undefined, string][]): string | undefined => {
+    const hit = keys.find(([o, k]) => o != null && k in o);
+    return hit ? fmt(num(hit[0]![hit[1]])) : undefined;
+  };
   return (
     <Comp el="V.usage">
       <Kvs
         pairs={[
           ["input", fmt(num(u.input_tokens))],
-          ["cache read", fmt(num(u.cache_read_input_tokens ?? u.cached_input_tokens))],
-          ["cache write", fmt(num(u.cache_creation_input_tokens ?? u.cache_write_input_tokens))],
+          ["cache read", tier([u, "cache_read_input_tokens"], [u, "cached_input_tokens"])],
+          ["cache write", tier([u, "cache_creation_input_tokens"], [u, "cache_write_input_tokens"])],
           ["1h / 5m", creation ? `${fmt(num(creation.ephemeral_1h_input_tokens))} / ${fmt(num(creation.ephemeral_5m_input_tokens))}` : undefined],
           ["output", fmt(num(u.output_tokens))],
-          ["thinking", fmt(num(details?.thinking_tokens ?? u.reasoning_output_tokens))],
+          ["thinking", tier([details, "thinking_tokens"], [u, "reasoning_output_tokens"])],
           ["total", u.total_tokens != null ? fmt(num(u.total_tokens)) : undefined],
         ]}
       />

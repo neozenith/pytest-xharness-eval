@@ -45,7 +45,7 @@ export function RatesApplied({ rates }: { rates: Rates | null | undefined }) {
         rates applied (USD per token)
         <El name="RatesApplied" />
       </h3>
-      <KvTable id="RatesApplied" rows={rows} />
+      <KvTable id="RatesApplied" rows={rows} label="rates applied" />
     </div>
   );
 }
@@ -77,7 +77,7 @@ export function CostByTierPanel({ result }: { result: RunResult }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <KvTable id="CostByTierPanel" rows={rows} />
+        <KvTable id="CostByTierPanel" rows={rows} label="cost by tier" />
         <RatesApplied rates={result.rates_applied as Rates} />
       </CardContent>
     </Card>

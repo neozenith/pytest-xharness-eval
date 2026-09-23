@@ -124,9 +124,29 @@ test("codex/turn_context lifts model, sandbox and network, and keeps the whole c
   await expect(kvs).toContainText("sandboxworkspace-write");
   await expect(kvs).toContainText("network✗ false");
   await expect(kvs).toContainText("approvalnever");
-  // The rung is reachable only by opening the collapsed JSON (see the test.fail in records.RecordCard.spec.tsx).
+  await expect(kvs).toContainText("effortxhigh");
   await c.getByText("all turn context").click();
   await expect(c.locator('[data-el="R.codex/turn_context"] [data-el="V.json"]')).toContainText('"effort": "xhigh"');
+});
+
+test("codex/turn_context takes the rung from collaboration_mode when `effort` is absent, and drops the row when neither names one", async ({ mount }) => {
+  const rec = codexTurnContext("medium");
+  delete (rec.payload as Record<string, unknown>).effort;
+  const c = await mount(<RecordBody harness="codex" rec={rec} />);
+  const kvs = c.locator('[data-el="R.codex/turn_context"] > [data-el="V.kvs"]');
+  await expect(kvs).toContainText("effortmedium");
+  await c.update(<RecordBody harness="codex" rec={codexLine("turn_context", { model: "gpt-5.6-sol", cwd: "/w" })} />);
+  await expect(kvs.locator("b")).toHaveText(["model", "cwd"]);
+});
+
+test("a Claude assistant record names its rung beside the model; a pre-ADR 0049 line has no effort row", async ({ mount }) => {
+  const c = await mount(<RecordBody harness="claude" rec={claudeAssistant([{ type: "text", text: "done" }])} />);
+  const grid = c.locator('[data-el="claudeMessage"] > [data-el="V.kvs"]');
+  await expect(grid).toContainText("modelclaude-opus-5efforthigh");
+  const old = claudeAssistant([{ type: "text", text: "done" }]);
+  delete old.effort;
+  await c.update(<RecordBody harness="claude" rec={old} />);
+  await expect(grid.locator("b")).toHaveText(["model", "stop", "message id"]);
 });
 
 test("codex/world_state lists its state, and says so when empty", async ({ mount }) => {
@@ -250,4 +270,14 @@ test("the envelope carries the Codex turn_id and passthrough create_time", async
   await expect(env).toContainText("turn_idturn_7");
   await expect(env).toContainText("create_time1756000000");
   await expect(env).toContainText("timestamp2026-08-23T07:20:00.000Z");
+});
+
+// Finding: a boolean field the record does not carry printed as the word "undefined"
+// (`<Flag value={undefined} />` is an element, so the Kvs row survived its own empty check).
+test("a Flag field the record does not carry is no row, never the word undefined", async ({ mount }) => {
+  const c = await mount(<RecordBody harness="codex" rec={codexLine("turn_context", { model: "gpt-5.6-sol", sandbox_policy: { type: "read-only" } })} />);
+  await expect(c.locator('[data-el="R.codex/turn_context"] > [data-el="V.kvs"] b')).toHaveText(["model", "sandbox"]);
+  await c.update(<RecordBody harness="codex" rec={codexLine("world_state", { state: { branch: "main" } })} />);
+  await expect(c.locator('[data-el="R.codex/world_state"]')).not.toContainText("undefined");
+  await expect(c.locator('[data-el="R.codex/world_state"] [data-el="V.kvs"] b')).toHaveText(["branch"]);
 });
