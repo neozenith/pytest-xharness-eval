@@ -13,6 +13,7 @@ const cell = (over: Partial<Cell>): Cell => ({
   task: "go",
   prompt: "/mermaidjs-diagrams go",
   harness: "claude",
+  effort: null,
   model: "claude-sonnet-5",
   session_id: "1feb573f-ba51-4e77-845f-12c4bcb08252",
   verdict: "pass",

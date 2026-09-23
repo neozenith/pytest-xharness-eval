@@ -751,6 +751,20 @@
     },
     {
       "data": {
+        "id": "ADR-0049",
+        "label": "0049",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0049-effort-is-the-third-matrix-axis.md",
+        "title": "Effort is the third matrix axis, and a bad rung stops the sweep before it spends",
+        "description": "Effort is the third matrix axis, and a bad rung stops the sweep before it spends",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection, harness"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -1874,6 +1888,46 @@
         "id": "ADR-0048-extends-ADR-0019",
         "source": "ADR-0048",
         "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0049-extends-ADR-0015",
+        "source": "ADR-0049",
+        "target": "ADR-0015",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0049-extends-ADR-0034",
+        "source": "ADR-0049",
+        "target": "ADR-0034",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0049-extends-ADR-0037",
+        "source": "ADR-0049",
+        "target": "ADR-0037",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0049-extends-ADR-0007",
+        "source": "ADR-0049",
+        "target": "ADR-0007",
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"extends\""

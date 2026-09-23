@@ -139,6 +139,13 @@ const COLUMNS: Column[] = [
     render: (c, ctx) => <code title={c.model}>{ctx.shortModel(c.model)}</code>,
   },
   {
+    key: "effort",
+    name: "effort",
+    label: "effort",
+    title: "the reasoning rung the CLI was asked for, on that harness's own ladder; blank when the cell named none and ran at the CLI's default",
+    render: (c) => orNil(c.effort, c.effort ?? ""),
+  },
+  {
     key: "estimated_cost_usd",
     name: "estimated_cost_usd",
     label: "cost",
@@ -222,7 +229,7 @@ const COLUMNS: Column[] = [
  * happens to be equal on every row is a finding the reader wants to see repeated down the
  * column, while an identity that is equal on every row is the table's subject, not its data.
  */
-const COLLAPSIBLE: readonly SortKey[] = ["skill", "case", "harness", "model"] as const;
+const COLLAPSIBLE: readonly SortKey[] = ["skill", "case", "harness", "model", "effort"] as const;
 
 /**
  * The identity columns whose value is the same on every visible row, and that value.

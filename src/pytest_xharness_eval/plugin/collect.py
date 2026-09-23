@@ -7,8 +7,8 @@ with the same name elsewhere in the repository is not an eval suite and is never
 Within a matched suite the rule repeats itself for functions -- the ``eval_`` prefix is to
 this plugin what ``test_`` is to pytest -- and every way of getting it slightly wrong is a
 loud :class:`pytest.UsageError` at collection rather than a session that quietly grades
-nothing: no ``@evalcase`` in the file, a case whose grader is misnamed, or a model nobody
-has a price for (ADR 0007).
+nothing: no ``@evalcase`` in the file, a case whose grader is misnamed, a model nobody
+has a price for (ADR 0007), or an effort rung the named harness does not have (ADR 0049).
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ class EvalFile(pytest.File):
             # cell of the sweep is measured against the same inventory.
             skill_dir = settings.skill_dir(case.skill)
             files = skillcov.catalog(skill_dir, ignore=settings.skill_ignore) if skill_dir.is_dir() else []
-            for cell in mx.narrow(mx.expand(models), opts.model, opts.harness):
+            for cell in mx.narrow(mx.expand(models), opts.model, opts.harness, opts.effort):
                 yield EvalItem.from_parent(
                     self, name=f"{case.name}[{cell.id}]", case=case, cell=cell, skill_files=files
                 )

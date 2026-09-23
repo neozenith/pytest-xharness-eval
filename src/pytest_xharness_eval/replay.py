@@ -6,7 +6,7 @@ skill coverage) is derived, so it can be derived again after the plugin changes:
 
     uv run -m pytest_xharness_eval.replay .xharness_eval_cache
 
-rewrites every ``results/{skill}/{harness}/{model}/{run}/{session}/result.json``
+rewrites every ``results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/result.json``
 from its ``log.jsonl``, re-prices it with the current price tables, re-annotates
 skill coverage against the skill's current tree and ignore rules, rewrites each
 session's ``history.json`` (verdict, timestamps and wall clock are kept; metrics
@@ -78,7 +78,19 @@ def rebuild_result(
     case = CaseRef.stored(old.get("case")) or case_meta(
         session, skill, agent, settings or Settings.from_cache(session_dir)
     )
-    return pipeline.derive(result, table=table, skill=skill, skill_files=files, case=case)
+    # The rung the CLI was asked for is not in the log either, and unlike the case it cannot
+    # be recovered from the suite: the matrix may have moved since. Carry the stored value
+    # forward, so a rebuild reports the effort the run actually had rather than the effort
+    # today's matrix would give it (ADR 0049).
+    effort = old.get("effort")
+    return pipeline.derive(
+        result,
+        table=table,
+        skill=skill,
+        skill_files=files,
+        case=case,
+        effort=str(effort) if effort else None,
+    )
 
 
 def case_meta(session: SessionDir, skill: str, agent: harness.Harness, settings: Settings) -> CaseRef | None:

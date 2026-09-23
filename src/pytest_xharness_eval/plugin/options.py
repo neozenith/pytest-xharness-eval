@@ -22,6 +22,7 @@ import pytest
 from pytest_xharness_eval.derive import pricing
 from pytest_xharness_eval.derive.ignorerules import IgnoreRules
 from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model.effort import Effort
 from pytest_xharness_eval.plugin.cell import run_stamp
 from pytest_xharness_eval.plugin.results import RESULTS_KEY, ResultCollector
 from pytest_xharness_eval.runtime.settings import (
@@ -32,6 +33,7 @@ from pytest_xharness_eval.runtime.settings import (
     INI_REPORT_TOKENS,
     INI_SKILL_IGNORE,
     INI_SKILLS_DIR,
+    INI_TIMEOUT,
     Settings,
 )
 
@@ -55,6 +57,24 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=None,
         metavar="SUBSTRING",
         help="narrow the matrix to models containing this string, or to one exact harness/model cell (repeatable)",
+    )
+    g.addoption(
+        "--effort",
+        action="append",
+        default=None,
+        choices=[e.value for e in Effort],
+        help=(
+            "narrow the matrix to cells at this reasoning-effort rung (repeatable); "
+            "the portable aliases min/mid/max match whatever rung they resolved to per harness"
+        ),
+    )
+    g.addoption(
+        "--xharness-timeout",
+        dest="xharness_timeout",
+        type=int,
+        default=None,
+        metavar="SECONDS",
+        help="how long one cell's CLI may run before it is killed (overrides the ini key; default 600)",
     )
     g.addoption(
         "--dry-run",
@@ -81,7 +101,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         INI_MATRIX,
         type="linelist",
         default=[],
-        help="project matrix: harness/model entries, one per line; a case's models= overrides it",
+        help=(
+            "project matrix: 'harness/model' or 'harness/model/effort' entries, one per line; "
+            "a case's models= overrides it"
+        ),
     )
     g.addoption(
         "--xharness-report-design-tokens",
@@ -101,6 +124,14 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         INI_REPORT_TOKENS, default="", help="design tokens JSON for captured/report.html, relative to rootdir"
     )
     parser.addini(INI_REPORT_INLINE, type="bool", default=False, help="embed all data into captured/report.html")
+    parser.addini(
+        INI_TIMEOUT,
+        default="",
+        help=(
+            "seconds one cell's CLI may run before it is killed (default 600); raise it for a sweep "
+            "across the top effort rungs, which think for longer by design (ADR 0049)"
+        ),
+    )
     parser.addini(
         INI_SKILL_IGNORE,
         type="linelist",

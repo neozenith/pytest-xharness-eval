@@ -7,14 +7,17 @@
  * matches every cell, which is exactly what an absent param means, so the unfiltered overview
  * runs the same predicate as a filtered one.
  *
- * `Cell.skill` may be null. Null is never an option and is never selectable, so a skill-less
- * cell survives only while the skill facet is `null` — a selection is always a positive claim
- * about a value the data actually carries.
+ * `Cell.skill` and `Cell.effort` may be null. Null is never an option and is never selectable,
+ * so a skill-less (or rung-less) cell survives only while that facet is `null` — a selection is
+ * always a positive claim about a value the data actually carries. For `effort` that reading is
+ * the right one twice over: a cell that named no rung ran at a CLI default nobody wrote down,
+ * so there is no value to compare it against, and every session captured before ADR 0049 is in
+ * exactly that position.
  */
 import type { FacetSelection } from "./route";
 import type { Cell } from "./types";
 
-export const FACETS = ["skill", "harness", "model"] as const;
+export const FACETS = ["skill", "harness", "model", "effort"] as const;
 export type Facet = (typeof FACETS)[number];
 
 export const facetValue = (cell: Cell, facet: Facet): string | null => cell[facet];
@@ -46,7 +49,7 @@ export function matchesFacets(cell: Cell, facets: FacetSelection): boolean {
 export const filterCells = (cells: Cell[], facets: FacetSelection): Cell[] => cells.filter((cell) => matchesFacets(cell, facets));
 
 /**
- * What clicking a chip would actually get you: the cells matching the OTHER two facets whose own
+ * What clicking a chip would actually get you: the cells matching the OTHER facets whose own
  * value equals `value`. A facet never filters itself, so selecting `claude` does not collapse the
  * harness row to a single count of one — but it does zero the models claude never ran.
  */

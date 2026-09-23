@@ -126,6 +126,7 @@
   },
   "cost_status": "priced",
   "duration_ms": 10000,
+  "effort": null,
   "envelope": {},
   "estimated_cost_usd": 0.002333,
   "exit_code": 0,

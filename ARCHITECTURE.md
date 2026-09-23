@@ -112,6 +112,12 @@ scopes ambient configuration out and the skill under test in.
 | Working directory | process cwd, plus `--add-dir` | `-C <workspace>` |
 | Skill under test in | `--add-dir <skill dir>` | copied to `$CODEX_HOME/skills/<skill>` |
 | Permissions | `--permission-mode bypassPermissions` | `--sandbox workspace-write` |
+| Reasoning budget | `--effort <rung>` | `-c model_reasoning_effort=<rung>` |
+
+The reasoning-budget lever is the one that is *not* purely isolation: it is the third
+matrix axis, so a cell either names a rung or deliberately names none and inherits the
+CLI's own default. Both CLIs accept a rung they do not recognise and run at that default
+anyway, so the rung is validated at collection rather than trusted at the flag (ADR 0049).
 
 The workspace itself is a plain copy of the fixture tree under the work directory,
 discarded and rebuilt for every cell. No git repository is created, which puts

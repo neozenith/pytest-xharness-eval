@@ -81,7 +81,7 @@ with `--dry-run` before a sweep. The design rationale lives in
        goldens/<name>/                                  # optional known-good output (ADR 0046)
    .xharness_eval_cache/
      build/                                             # per-cell workspaces
-     results/{skill}/{harness}/{model}/{run}/{session}/ # log.jsonl, result.json, history.json
+     results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/  # log.jsonl, result.json, history.json
      report/                                            # report.json + the aggregated microsite
    ```
 
@@ -116,8 +116,12 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    ============================ agent eval report ============================
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-opus-5]
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-sonnet-5]
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-haiku-4-5-20251001]
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-sol]
-     total spend: $0.0000 across 2 cell(s)
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-luna]
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-terra]
+     total spend: $0.0000 across 6 cell(s)
      report: /repo/.xharness_eval_cache/report/report.json
    ```
 
@@ -141,7 +145,7 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    Each cell leaves its verbatim session log (`log.jsonl`), a normalised
    `result.json` with a per-turn ledger, and one `history.json` metrics record in
-   its own `results/{skill}/{harness}/{model}/{run}/{session}/` directory, no two
+   its own `results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/` directory, no two
    cells share a file, so parallel workers never contend (ADR 0032). At session end
    the one combine step aggregates everything under `results/`, every skill, every
    run, into `report/`: `report.json`, the accumulated `history.jsonl`, and a
@@ -166,7 +170,9 @@ stock pytest (`-k`, `-x`, `-m eval`, node ids).
 | path | One skill or all of them | `pytest skills/x/evals`, `pytest skills/*/evals` |
 | `--harness <name>` | Only cells for that harness (`claude` or `codex`), repeatable | `pytest skills/x/evals --harness codex` |
 | `--model <substring>` | Only cells whose model id contains the string, or one exact `harness/model`, repeatable | `pytest skills/x/evals --model opus` |
+| `--effort <rung>` | Only cells at that reasoning rung, repeatable. Matches the *resolved* rung, so `--effort max` selects claude's `max` and codex's `xhigh` alike | `pytest skills/x/evals --effort max` |
 | `-k <expr>` | Boolean slices over cell ids and case names (stock pytest) | `-k "opus or sol"`, `-k "codex and not sol"` |
+| `--xharness-timeout <s>` | Seconds one cell's CLI may run before it is killed (default 600). Raise it for the top effort rungs, which think for longer by design | `pytest skills/x/evals --xharness-timeout 1800` |
 | `--dry-run` | Enumerate cells and validate pricing, invoke nothing | `pytest skills/x/evals --dry-run` |
 | `--collect-only -q` | List cell node ids (stock pytest) | `pytest --collect-only -q skills/x/evals` |
 
@@ -175,25 +181,70 @@ directory and collects their unit tests too. `skills/*/evals` is the full matrix
 
 A case overrides the matrix with `@evalcase(..., models=["codex/gpt-5.6-sol"])`.
 
+### The effort axis
+
+A matrix entry may name a third component, the reasoning budget the CLI is asked for:
+
+```toml
+[tool.pytest.ini_options]
+xharness_matrix = """
+claude/claude-opus-5/low
+claude/claude-opus-5/max
+codex/gpt-5.6-sol/mid
+"""
+```
+
+Each line is a separately graded cell, so one model at two rungs is the cost-versus-quality
+comparison the axis exists for. An entry with no third component is unchanged: it leaves
+the CLI on whatever default its own configuration gives it.
+
+Each harness declares its own ladder, and three portable aliases name a *position* on it
+rather than a level:
+
+| You write | Position | On `claude` | On `codex` |
+|-----------|----------|-------------|------------|
+| `min` | first rung | `low` | `low` |
+| `mid` | middle rung | `high` | `high` |
+| `max` | last rung | `max` | `max` |
+
+Both shipped CLIs happen to declare the same five rungs (`low, medium, high, xhigh, max`),
+so the aliases resolve identically on each today. That is a fact about these two CLIs and
+not a rule: the ladder lives on the harness class, so a third CLI may declare any rungs it
+likes and the aliases keep working by position.
+
+Resolution happens once, at collection, so a node id, an evidence directory and a report
+row all carry the rung that was actually sent. A rung no harness has
+(`claude/claude-opus-5/minimal`) stops the sweep at collection, before anything is spent.
+That check is not theoretical: `minimal` appears in codex-cli's own local enum, and a paid
+sweep found that no gpt-5.6 model accepts it — the CLI forwards it, the API answers 400,
+and the run exits having produced nothing (ADR 0049).
+
 ----
 
 ## Configuration
 
 The matrix has three scopes, highest precedence first: a case's `models=`, the
-project's `xharness_matrix` ini key, and the plugin's bundled default
-(`claude/claude-opus-5`, `codex/gpt-5.6-sol`). The report header names which one
-applied.
+project's `xharness_matrix` ini key, and the plugin's bundled default. The report
+header names which one applied.
+
+The bundled default is every model the bundled price table carries: three per harness,
+`claude/{claude-opus-5, claude-sonnet-5, claude-haiku-4-5-20251001}` and
+`codex/{gpt-5.6-sol, gpt-5.6-luna, gpt-5.6-terra}`. An axis nobody narrowed means the
+whole axis, so this is deliberately the widest default that cannot abort at collection —
+a model with no price row would stop the sweep before it spent anything (ADR 0007).
+Preview it with `--dry-run` and narrow it with `xharness_matrix` before a first paid run.
 
 Four ini keys, paths relative to pytest's rootdir:
 
 | Key | Default | Purpose |
 |-----|---------|---------|
-| `xharness_matrix` | (plugin default) | Project matrix: `harness/model` entries every case sweeps unless it sets `models=` |
+| `xharness_matrix` | (plugin default) | Project matrix: `harness/model` or `harness/model/effort` entries every case sweeps unless it sets `models=` |
 | `xharness_skills_dir` | `skills` | Directory holding `<skill>/evals/` trees |
 | `xharness_cache_dir` | `.xharness_eval_cache` | The git-ignored root for build workspaces, results and the report (ADR 0032) |
 | `xharness_skill_ignore` | (none) | gitignore-style patterns for skill files that are not decision surface; a bare pattern applies to every skill, `<skill>: <pattern>` to the skills matching the selector (ADR 0026) |
 | `xharness_report_design_tokens` | bundled | design tokens JSON that themes `report/report.html` (flag: `--xharness-report-design-tokens FILE`) |
 | `xharness_report_inline` | `false` | embed every result, log and the tokens into `report/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
+| `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`) |
 | `xharness_prices` | (none) | Price rows that add to or override the bundled table: `<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..]` (ADR 0030) |
 
 ```toml

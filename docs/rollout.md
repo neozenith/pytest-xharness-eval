@@ -58,6 +58,7 @@ that only checks `exists` passes for a run that did nothing at all.
 |---|---|---|
 | `harness` | `str` | `claude` or `codex`, the first matrix axis. |
 | `model` | `str` | The model id the harness was told to use. |
+| `effort` | `str \| None` | The reasoning rung the CLI was asked for, resolved to that harness's own ladder; `None` when the cell named none and inherited the CLI's default. The third matrix axis (ADR 0049). |
 | `session_id` | `str` | The session this verdict is tied to. |
 | `session_log` | `str` | Path to the captured JSONL. Exists on disk during grading. |
 | `workspace` | `str` | The same directory as `output.workspace`, as the run recorded it. |

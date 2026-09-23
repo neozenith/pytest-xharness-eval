@@ -30,7 +30,7 @@ In a consuming repository with the plugin installed:
 | Preview cells and validate pricing | `pytest skills/<skill>/evals --dry-run` | free |
 | Run one skill's evals, or all | `pytest skills/<skill>/evals -v`, `pytest skills/*/evals -v` | paid |
 | Run cells in parallel | `pytest skills/*/evals -v -n 4`; add `--dist loadgroup` to keep each harness serial | paid |
-| Run one harness or model only | `pytest skills/<skill>/evals --harness codex`, `--model opus`, `-k "opus or sol"` | paid |
+| Run one harness, model or effort only | `pytest skills/<skill>/evals --harness codex`, `--model opus`, `--effort max`, `-k "opus or sol"` | paid |
 | Read the last report | `cat .xharness_eval_cache/report/report.json` | free |
 | Rebuild results, history and `report.html` from captured logs after a plugin change | `uv run -m pytest_xharness_eval.replay .xharness_eval_cache` (a legacy `<skill>/evals/captured` dir migrates into the cache, ADR 0032) | free |
 
@@ -49,7 +49,7 @@ this list:
 
 | Layer | What lives there |
 |-------|------------------|
-| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
+| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
 | `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, and the record-kind catalogue `records.py` |
 | `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, and the bundled `prices.toml` |
 | `verify/` | what a *grader* is written with: `checks.py` (the shared `check_*` verifiers), `tolerance.py` (`Facet` and the six tolerances), `facets.py` (markdown/mermaid extractors), `golden.py` (`GoldenCase`) |
@@ -63,12 +63,13 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 |-----------------|------|
 | How a CLI is invoked or its log is found | `harness/claude.py` or `harness/codex.py`; the shared spawn contract is `harness/base.py` (ADR 0034) |
 | How a skill is *named* to a CLI, or registered with it | `Harness.invoke` in `harness/<provider>.py` -- `/<skill> <task>` for claude (registered by `skill_plugin`'s `--plugin-dir` wrapper), `$<skill> <task>` for codex (copied into the private `CODEX_HOME/skills/`). The one edge from beneath is `model/registry.invocation` (ADR 0044) |
-| A whole new agent CLI | one module under `harness/`: subclass `Harness`, implement `run`, `session_from_capture`, `classify_record`, `shell_tools` / `persistent_shells`, then `register()` it in `harness/__init__.py`. Nothing else dispatches on the name (ADR 0034) |
+| A whole new agent CLI | one module under `harness/`: subclass `Harness`, implement `run`, `session_from_capture`, `classify_record`, `shell_tools` / `persistent_shells`, `efforts` / `effort_args` (an empty ladder is a coherent "no effort control", ADR 0049), then `register()` it in `harness/__init__.py`. Nothing else dispatches on the name (ADR 0034) |
 | How subagent transcripts are found, attributed and billed | `harness/claude.py` and `harness/codex.py` (`subagents_of` per dialect), `runtime/pipeline.py`'s `capture_subagents` (capture into `subagents/`) (ADR 0033) |
 | How a session log maps to `RunResult` fields | the harness's `SessionLog.to_result` in `harness/<provider>.py`; the primitives both dialects fold with are `harness/normalise.py` |
 | A new field on the run record | `model/runresult.py`, then `harness/claude.py` and `harness/codex.py` for both dialects |
 | A bundled model price | `derive/prices.toml` only; a project overrides with `xharness_prices` ini lines, USD per MTok (ADR 0030) |
 | The plugin-default matrix or narrowing | `model/matrix.py`; the *known* harnesses are the registry, reached through `model/registry.py` and never a second list (ADR 0034, ADR 0039) |
+| The effort vocabulary, or a portable alias's meaning | `model/effort.py` (`Effort`, `resolve`); a harness's own ladder is `Harness.efforts` in `harness/<provider>.py` and the rendering is its `effort_args`, reached from beneath through `model/registry.py` (ADR 0049) |
 | A plugin option or ini key's registration | `plugin/options.py` (which also validates the price and ignore lines at configure time, and prints the header) |
 | The collection rule, the cell item, or how one cell runs | `plugin/collect.py` (`EvalFile`, `EvalItem`), `plugin/cell.py` (`CellRun`: materialise, invoke, store, grade, record; only `invoke` spends, ADR 0002) |
 | How a record reaches the xdist controller, or a cell's status word | `plugin/results.py` (`PROPERTY`, the stash keys, the one dict crossing, ADR 0016) |
@@ -78,7 +79,7 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | An ini key, or how a location is resolved for a sweep *and* a replay | `runtime/settings.py` (`Settings.from_config` / `from_cache`); `Settings.cache` is the `CacheLayout`, never a bare path (ADR 0034, ADR 0037) |
 | What happens to a `RunResult` after the CLI returns (price, coverage, case, evidence, metrics) | `runtime/pipeline.py` -- one sequence, run by both the live cell and a replay (ADR 0034) |
 | The per-cell metrics record or the verbose status word | `emit/metrics.py` (`CellMetrics`; its keys are a wire format, pinned in `tests/test_units.py`, ADR 0037) |
-| A directory or file name under the cache root, or the `{skill}/{harness}/{model}/{run}/{session}` shape | `model/layout.py` (`CacheLayout`, `SessionDir`, `LocatedSession`) and nowhere else (ADR 0037, ADR 0038) |
+| A directory or file name under the cache root, or the `{skill}/{harness}/{model}[--{effort}]/{run}/{session}` shape | `model/layout.py` (`CacheLayout`, `SessionDir`, `LocatedSession`, `model_level`) and nowhere else (ADR 0037, ADR 0038, ADR 0049) |
 | `report/index.json` or the aggregated `report/history.jsonl` | `emit/index.py` (`IndexRow`); the combine step that writes the microsite is `emit/page.py`, the design tokens `emit/tokens.py` (ADR 0032, ADR 0039) |
 | The browsable `report/report.html` | `report-ui/src/` (the SPA, ADR 0028, ADR 0031: Tamagui base, Plotly charts), then `make ui-promote`; `assets/report.html` is the built artifact, never edited by hand |
 | A page component, its id or its data contract | `report-ui/src/components/` or `views/`, `report-ui/src/lib/types.ts` (mirrors the JSON `emit/` writes), then the glossary |
@@ -101,7 +102,7 @@ Evals themselves do not live here. They live beside the skill they grade, in the
 consuming repository: `skills/<skill>/evals/eval_<suite>.py`, seed trees under
 `evals/fixtures/<name>/`, and known-good outputs under `evals/goldens/<name>/` mirroring
 them (ADR 0046). Run output never lands in the skills tree (ADR 0032): each
-session's evidence is `.xharness_eval_cache/results/{skill}/{harness}/{model}/{run}/{session}/`
+session's evidence is `.xharness_eval_cache/results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/`
 (`log.jsonl`, `result.json`, `history.json`, all git-ignored by the `.*_cache` convention),
 and the aggregated report is `.xharness_eval_cache/report/`. Per-cell metrics are built
 in `emit/metrics.py`.
@@ -144,6 +145,11 @@ in `emit/metrics.py`.
   other location is an ini key resolved against `config.rootpath` (ADR 0014).
 - Never register the plugin through a `conftest.py` or `-p` flag. The `pytest11`
   entry point in `pyproject.toml` is the one registration (ADR 0014).
+- Never let an effort rung reach a CLI unvalidated, and never round one to the nearest
+  rung a harness does have. Both CLIs accept an unknown rung, warn at most, and bill a
+  full run at their default, so the vocabulary closes in `model/effort.py` and resolves at
+  matrix expansion -- and what a `Cell` carries is the resolved native rung, never the word
+  the author typed (ADR 0049).
 - Never branch on a harness name (`if harness == "claude"`, a dict keyed by it, a set
   unioning both providers' vocabularies). Reach a provider through `harness.get(name)`
   and put the difference on the class. A ruff `TID251` rule fails the build if anything
@@ -166,10 +172,11 @@ in `emit/metrics.py`.
 ## Vocabulary
 
 Use the terms in [GLOSSARY.md](GLOSSARY.md) for identifiers, docs, and conversation:
-*case*, *cell*, *harness*, *matrix*, *fixture*, *workspace*, *session log*,
-*RunResult*, *captured*, *skills root*. The first matrix axis is *harness*, never
-*cli* (ADR 0015). When a new domain term enters the code, add it to the glossary in
-the same change.
+*case*, *cell*, *harness*, *matrix*, *effort*, *rung*, *alias*, *fixture*, *workspace*,
+*session log*, *RunResult*, *captured*, *skills root*. The first matrix axis is *harness*,
+never *cli* (ADR 0015); the third is *effort*, and one level of a harness's ladder is a
+*rung*, never a "level" or a "thinking budget" (ADR 0049). When a new domain term enters
+the code, add it to the glossary in the same change.
 
 ## When you change one thing, update the other
 
@@ -181,6 +188,7 @@ the same change.
 | A plugin option or ini key | `README.md` tables and `tests/test_plugin.py` |
 | A `RunResult` field, a `CaseOutput` accessor, or a bundled verifier | `docs/rollout.md` -- it is the published grader surface, so a field a suite may assert on and cannot find there does not exist |
 | The default matrix | `README.md` Quickstart expected output, `tests/test_plugin.py` |
+| A harness's `efforts` ladder, or a word in `model/effort.py` | `README.md`'s alias table, `GLOSSARY.md`, `ARCHITECTURE.md`'s isolation-levers table, and `tests/test_units.py` -- the ladder is ordered, so adding a rung moves what `mid` resolves to |
 | A decision recorded in an ADR | Write a new ADR that supersedes it; do not edit the old one |
 | A key `emit/index.py` or `emit/metrics.py` writes | `report-ui/src/lib/types.ts`, the glossary's metric table, the frozen key lists in `tests/test_units.py`, and the `SessionTable` column definitions if it is shown |
 | `report-ui/src/` | `make ui-check`, `make ui-test`; a `TIER=small` sweep while iterating, `TIER=medium` before shipping, `large` when the change ripples wide |

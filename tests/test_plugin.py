@@ -13,6 +13,9 @@ from pathlib import Path
 # Third Party
 import pytest
 
+# Our Libraries
+from pytest_xharness_eval.runtime.settings import Settings
+
 CASE = textwrap.dedent(
     """
     from pytest_xharness_eval import evalcase
@@ -24,8 +27,24 @@ CASE = textwrap.dedent(
 )
 
 
-def make_tree(pytester: pytest.Pytester, *, models: str = "", skills_dir: str = "skills", ini: str = "") -> Path:
+#: The two-cell project matrix nearly every test here wants: one arm per harness, enough to
+#: exercise grouping and narrowing, and *pinned* so that widening the plugin default does not
+#: renumber forty unrelated assertions. A test that is about the default itself passes
+#: ``matrix=None`` and gets the bundled one.
+PINNED_MATRIX = "xharness_matrix =\n    claude/claude-opus-5\n    codex/gpt-5.6-sol\n"
+
+
+def make_tree(
+    pytester: pytest.Pytester,
+    *,
+    models: str = "",
+    skills_dir: str = "skills",
+    ini: str = "",
+    matrix: str | None = PINNED_MATRIX,
+) -> Path:
     """Lay out ``<skills_dir>/demo/evals/eval_demo.py`` with ``fixtures/seed/`` and return the evals dir."""
+    if matrix and "xharness_matrix" not in ini:
+        ini = f"{ini}\n{matrix}" if ini else matrix
     pytester.makeini(f"[pytest]\n{ini}\n")
     skill = pytester.path / skills_dir / "demo"
     (skill / "evals" / "fixtures" / "seed").mkdir(parents=True)
@@ -45,7 +64,9 @@ def cell_ids(result: pytest.RunResult) -> list[str]:
 
 def test_help_lists_options_and_ini_keys(pytester: pytest.Pytester) -> None:
     result = pytester.runpytest("--help")
-    result.stdout.fnmatch_lines(["*--harness=*", "*--model=SUBSTRING*", "*--dry-run*"])
+    result.stdout.fnmatch_lines(
+        ["*--harness=*", "*--model=SUBSTRING*", "*--effort=*", "*--xharness-timeout=SECONDS*", "*--dry-run*"]
+    )
     result.stdout.fnmatch_lines(
         ["*xharness_skills_dir*", "*xharness_cache_dir*", "*xharness_prices*", "*xharness_matrix*"]
     )
@@ -85,12 +106,12 @@ def test_skill_ignore_lines_scope_by_skill_name(pytester: pytest.Pytester) -> No
 
 
 def test_header_names_the_skills_root_and_matrix_source(pytester: pytest.Pytester) -> None:
-    make_tree(pytester)
+    make_tree(pytester, matrix=None)
     result = pytester.runpytest("--collect-only")
     result.stdout.fnmatch_lines(
         [
             "xharness-eval: skills root = *skills, cache = *.xharness_eval_cache",
-            "xharness-eval: matrix = plugin default (2 entries)*",
+            "xharness-eval: matrix = plugin default (6 entries)*",
         ]
     )
 
@@ -107,9 +128,16 @@ def test_missing_skills_root_is_named_in_the_header_without_warning(pytester: py
 
 
 def test_plugin_default_matrix_when_nothing_else_is_set(pytester: pytest.Pytester) -> None:
-    make_tree(pytester)
+    make_tree(pytester, matrix=None)
     result = pytester.runpytest("--collect-only", "-q")
-    assert cell_ids(result) == ["claude/claude-opus-5", "codex/gpt-5.6-sol"]
+    assert cell_ids(result) == [
+        "claude/claude-opus-5",
+        "claude/claude-sonnet-5",
+        "claude/claude-haiku-4-5-20251001",
+        "codex/gpt-5.6-sol",
+        "codex/gpt-5.6-luna",
+        "codex/gpt-5.6-terra",
+    ]
 
 
 def test_project_matrix_ini_replaces_the_plugin_default(pytester: pytest.Pytester) -> None:
@@ -153,6 +181,79 @@ def test_unknown_harness_is_rejected_by_argparse(pytester: pytest.Pytester) -> N
     result = pytester.runpytest("--harness", "gemini")
     assert result.ret != 0
     result.stderr.fnmatch_lines(["*--harness: invalid choice: 'gemini'*"])
+
+
+def test_the_cell_timeout_is_an_option_over_an_ini_key_over_the_default(pytester: pytest.Pytester) -> None:
+    """A sweep across the top effort rungs needs a longer budget than 600s (ADR 0049).
+
+    The rungs that think longest are exactly the ones a default cutoff kills, and a timeout
+    raises RunError — so without this knob the report would show the skill failing where the
+    budget was simply too small.
+    """
+    make_tree(pytester)
+    assert Settings.from_config(pytester.parseconfig()).timeout_s == 600
+    assert Settings.from_config(pytester.parseconfig("-o", "xharness_timeout_s=1800")).timeout_s == 1800
+    # the flag wins over the ini key
+    config = pytester.parseconfig("-o", "xharness_timeout_s=1800", "--xharness-timeout", "2400")
+    assert Settings.from_config(config).timeout_s == 2400
+
+
+def test_an_effort_outside_the_vocabulary_is_rejected_by_argparse(pytester: pytest.Pytester) -> None:
+    """The narrowing flag is a closed choice, so a typo cannot silently select nothing."""
+    make_tree(pytester)
+    result = pytester.runpytest("--effort", "hgih")
+    assert result.ret != 0
+    result.stderr.fnmatch_lines(["*--effort: invalid choice: 'hgih'*"])
+
+
+# -- effort: the third matrix axis (ADR 0049) -----------------------------------
+
+EFFORT_INI = (
+    "xharness_matrix =\n    claude/claude-opus-5/high\n    claude/claude-opus-5/low\n    codex/gpt-5.6-sol/max\n"
+)
+
+
+def test_a_matrix_entry_sweeps_one_model_at_several_efforts(pytester: pytest.Pytester) -> None:
+    """The axis earns its keep here: one model, two rungs, two separately graded cells.
+
+    codex's ``max`` shows as ``xhigh`` because the alias resolved to that harness's own top
+    rung at expansion -- the node id names what was sent, not what was typed.
+    """
+    make_tree(pytester, ini=EFFORT_INI)
+    result = pytester.runpytest("--collect-only", "-q")
+    assert cell_ids(result) == [
+        "claude/claude-opus-5/high",
+        "claude/claude-opus-5/low",
+        "codex/gpt-5.6-sol/max",
+    ]
+
+
+def test_effort_narrows_the_matrix_by_the_rung_each_alias_resolved_to(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, ini=EFFORT_INI)
+    assert cell_ids(pytester.runpytest("--collect-only", "-q", "--effort", "low")) == ["claude/claude-opus-5/low"]
+    # One flag, both arms: ``max`` is the top rung of whichever ladder the harness has.
+    assert cell_ids(pytester.runpytest("--collect-only", "-q", "--effort", "max")) == ["codex/gpt-5.6-sol/max"]
+
+
+def test_an_effort_rung_the_harness_lacks_aborts_at_collection_before_any_spend(pytester: pytest.Pytester) -> None:
+    """ADR 0049 borrows ADR 0007's rule: both CLIs accept a bad rung and bill the run anyway."""
+    make_tree(pytester, ini="xharness_matrix =\n    claude/claude-opus-5/minimal\n")
+    result = pytester.runpytest("--collect-only")
+    assert result.ret != 0
+    result.stdout.fnmatch_lines(["*unknown effort 'minimal'*"])
+
+
+def test_a_cell_with_an_effort_keeps_its_rung_through_the_dry_run_record(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, ini=EFFORT_INI)
+    result = pytester.runpytest("--dry-run", "-v")
+    result.assert_outcomes(skipped=3)
+    result.stdout.fnmatch_lines(["*eval_demo?claude/claude-opus-5/high? DRY-RUN*"])
+    report = json.loads((pytester.path / ".xharness_eval_cache" / "report" / "report.json").read_text("utf-8"))
+    assert sorted((c["model"], c["effort"]) for c in report["cells"]) == [
+        ("claude-opus-5", "high"),
+        ("claude-opus-5", "low"),
+        ("gpt-5.6-sol", "max"),
+    ]
 
 
 # -- visibility: verbose status words and the report -----------------------------

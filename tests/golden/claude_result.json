@@ -116,6 +116,7 @@
   },
   "cost_status": "priced",
   "duration_ms": 9000,
+  "effort": null,
   "envelope": {
     "duration_api_ms": 7200,
     "duration_ms": 9000,

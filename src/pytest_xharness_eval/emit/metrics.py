@@ -95,6 +95,9 @@ class CellMetrics:
     fixture: str | None = None
     harness: str = ""
     model: str = ""
+    # The reasoning-effort rung this cell ran at; empty when it ran at the CLI's own
+    # default, which is what every record written before ADR 0049 holds.
+    effort: str = ""
     session_id: str = ""
     verdict: str = ""
     # What it did.
@@ -156,6 +159,7 @@ class CellMetrics:
             fixture=case.fixture if case else None,
             harness=result.harness,
             model=result.model,
+            effort=result.effort or "",
             session_id=result.session_id,
             # The word, never the member: this record is shipped by execnet (ADR 0041).
             verdict=outcome.verdict.value if outcome.verdict else "",
@@ -205,7 +209,13 @@ class CellMetrics:
         A dry run is the fourth word's only producer, and it names it from the vocabulary
         like every other producer does (ADR 0041).
         """
-        return cls(node=node, harness=cell.harness, model=cell.model, verdict=Verdict.DRY_RUN.value)
+        return cls(
+            node=node,
+            harness=cell.harness,
+            model=cell.model,
+            effort=cell.effort or "",
+            verdict=Verdict.DRY_RUN.value,
+        )
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> Self:

@@ -1,7 +1,7 @@
 import { overviewSearch, overviewWith, parseSearch, routeSearch, sessionSearch } from "@/lib/route";
 
 test("query routes parse and round-trip; legacy fragments parse identically", () => {
-  const noFacets = { skill: null, harness: null, model: null };
+  const noFacets = { skill: null, harness: null, model: null, effort: null };
   const bare = { view: "overview", sort: null, summarySort: null, facets: noFacets, theme: null };
   expect(parseSearch("")).toEqual(bare);
   expect(parseSearch("?")).toEqual(bare);
@@ -39,7 +39,7 @@ test("overview sort and theme round-trip", () => {
     view: "overview",
     sort: { key: "turns", dir: "asc" },
     summarySort: null,
-    facets: { skill: null, harness: null, model: null },
+    facets: { skill: null, harness: null, model: null, effort: null },
     theme: null,
   });
   expect(parseSearch("?sort=turns")).toMatchObject({ sort: { key: "turns", dir: "asc" } });
@@ -71,7 +71,7 @@ test("overviewWith changes one param and carries every sibling through", () => {
     view: "overview",
     sort: { key: "at", dir: "asc" },
     summarySort: null,
-    facets: { skill: null, harness: null, model: null },
+    facets: { skill: null, harness: null, model: null, effort: null },
     theme: "dark",
   });
 });
@@ -94,15 +94,15 @@ test("the three overview facets parse as lists, and absent or empty means every 
 });
 
 test("facets serialise last, in a fixed order, with literal commas", () => {
-  expect(overviewSearch(null, null, { skill: ["discovery"], harness: null, model: null })).toBe("?skill=discovery");
-  expect(overviewSearch(null, null, { harness: ["b", "c"], skill: null, model: null })).toBe("?harness=b,c");
-  expect(overviewSearch({ key: "turns", dir: "desc" }, "dark", { skill: ["a"], harness: ["b", "c"], model: ["d"] })).toBe(
-    "?sort=turns&dir=desc&skill=a&harness=b,c&model=d&theme=dark",
+  expect(overviewSearch(null, null, { skill: ["discovery"], harness: null, model: null, effort: null })).toBe("?skill=discovery");
+  expect(overviewSearch(null, null, { harness: ["b", "c"], skill: null, model: null, effort: null })).toBe("?harness=b,c");
+  expect(overviewSearch({ key: "turns", dir: "desc" }, "dark", { skill: ["a"], harness: ["b", "c"], model: ["d"], effort: ["high"] })).toBe(
+    "?sort=turns&dir=desc&skill=a&harness=b,c&model=d&effort=high&theme=dark",
   );
   // today's deeplinks stay byte-identical: the third argument is optional and last
   expect(overviewSearch()).toBe("?");
   expect(overviewSearch({ key: "estimated_cost_usd", dir: "desc" }, "dark")).toBe("?sort=estimated_cost_usd&dir=desc&theme=dark");
-  expect(overviewSearch(null, null, { skill: null, harness: null, model: null })).toBe("?");
+  expect(overviewSearch(null, null, { skill: null, harness: null, model: null, effort: null })).toBe("?");
 });
 
 test("routeSearch reproduces exactly the parsed route", () => {

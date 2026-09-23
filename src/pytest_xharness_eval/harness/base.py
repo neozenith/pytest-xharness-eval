@@ -29,6 +29,9 @@ from abc import ABC, abstractmethod
 from collections import Counter
 from typing import TYPE_CHECKING, Any, ClassVar
 
+# Our Libraries
+from pytest_xharness_eval.model import effort as effort_words
+
 if TYPE_CHECKING:
     # Standard Library
     from pathlib import Path
@@ -105,6 +108,14 @@ class Harness(ABC):
     shell_tools: ClassVar[frozenset[str]] = frozenset()
     #: Of those, the ones whose working directory persists between calls.
     persistent_shells: ClassVar[frozenset[str]] = frozenset()
+    #: This CLI's reasoning-effort rungs, lowest first: the third matrix axis (ADR 0049).
+    #:
+    #: The order is the ladder, not decoration -- the portable aliases ``min``/``mid``/``max``
+    #: are resolved by position against this tuple, so a rung inserted in the wrong place
+    #: silently redefines what ``mid`` sweeps. An empty ladder means this CLI exposes no
+    #: effort control, and a matrix entry that names one for it is a collection error rather
+    #: than a flag quietly dropped.
+    efforts: ClassVar[tuple[str, ...]] = ()
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.name}>"
@@ -122,6 +133,25 @@ class Harness(ABC):
         a matrix the same experiment rather than two different ones (ADR 0044).
         """
 
+    def resolve_effort(self, effort: str) -> str:
+        """The rung of *this* CLI's ladder that ``effort`` names (ADR 0049).
+
+        A native rung passes through; a portable alias resolves by position. Called once,
+        at matrix expansion, so the resolved rung is what the cell id, the evidence
+        directory and the report row all carry.
+        """
+        return effort_words.resolve(effort, self.efforts, harness=self.name)
+
+    def effort_args(self, effort: str | None) -> list[str]:
+        """The argv fragment that asks this CLI for ``effort``; empty when none is set.
+
+        Omitting the flag is not the same as naming a rung: it leaves the CLI on whatever
+        default the user's own configuration gives it, which is what a matrix entry with no
+        third component asks for. A rung is validated before it gets here, so an
+        implementation renders it rather than checking it again.
+        """
+        raise NotImplementedError
+
     @abstractmethod
     def run(
         self,
@@ -129,13 +159,16 @@ class Harness(ABC):
         prompt: str,
         model: str,
         workspace: Path,
+        effort: str | None = None,
         skill_dir: Path | None = None,
         timeout_s: int = DEFAULT_TIMEOUT_S,
     ) -> RunResult:
         """Invoke the CLI in ``workspace`` and return the normalised result.
 
-        ``prompt`` is what :meth:`invoke` rendered; ``skill_dir`` is the skill to register
-        with this CLI so that the rendered invocation resolves (ADR 0011, ADR 0044).
+        ``prompt`` is what :meth:`invoke` rendered; ``effort`` is the already-resolved rung
+        of this CLI's own ladder, or None to leave the CLI on its default (ADR 0049);
+        ``skill_dir`` is the skill to register with this CLI so that the rendered
+        invocation resolves (ADR 0011, ADR 0044).
 
         Implementations must correlate the run to its own session log without searching
         for it, and raise :class:`RunError` rather than grading a run whose evidence is

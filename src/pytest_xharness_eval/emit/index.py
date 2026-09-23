@@ -53,6 +53,9 @@ class IndexRow:
     prompt: str | None
     harness: str | None
     model: str | None
+    # The reasoning-effort rung the run was asked for; None when it ran at the CLI's own
+    # default, and on every session captured before ADR 0049.
+    effort: str | None
     session_id: str | None
     # How it graded, from the metrics record; None when the session has none.
     verdict: str | None
@@ -106,6 +109,7 @@ class IndexRow:
             prompt=meta.get("prompt"),
             harness=result.get("harness"),
             model=result.get("model"),
+            effort=result.get("effort") or session.effort,
             session_id=result.get("session_id"),
             verdict=hist.verdict if hist else None,
             at=hist.at if hist else None,

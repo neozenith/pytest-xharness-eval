@@ -1,0 +1,166 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0049
+slug: effort-is-the-third-matrix-axis
+title: Effort is the third matrix axis, and a bad rung stops the sweep before it spends
+status: accepted
+status_note: |-
+  accepted, 2026-09-22. Refines
+  [0015](0015-harness-is-the-axis-and-the-project-owns-the-matrix.md) (harness is the
+  axis and the project owns the matrix) with a third axis,
+  [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) (a harness
+  is a class and the registry is the only dispatch) with a fourth question asked of a
+  harness, and
+  [0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md) (the
+  cache tree has one owner) with a sixth coordinate that is not a sixth level. Extends
+  [0007](0007-unpriced-model-aborts-before-spend.md)'s stop-before-spend rule to the new
+  axis. Additive: `result.json` gains `effort`, `history.json` gains `effort`,
+  `report/index.json` gains `effort`, and every existing capture still walks, links and
+  replays unchanged.
+accepted_on: '2026-09-22'
+last_changed_on: '2026-09-22'
+group: collection
+tags:
+- collection
+- harness
+lens: |-
+  An axis is only an axis once a wrong value on it can fail. A knob that every
+  consumer accepts and silently ignores is not a parameter, it is a comment: the
+  sweep spends full price and reports a number that names a setting it never had. So
+  the vocabulary closes where the plugin can still refuse, and the word the author
+  typed is resolved into the word the CLI received before anything downstream stores
+  it -- because a record that keeps the typed word cannot say what was measured.
+relates_to:
+- relation: extends
+  target: ADR-0015
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0034
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0037
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0007
+  note: the record's status line says "extends"
+body:
+  context: |-
+    Both shipped CLIs now take a reasoning budget, and it moves the two things a sweep
+    exists to compare: how much a cell costs and how well it does. `claude --effort
+    <level>` accepts `low, medium, high, xhigh, max`; codex reads
+    `model_reasoning_effort` from its config, which `codex exec -c` overrides. A matrix
+    that could only name a harness and a model could not ask the question at all --
+    "is opus at `low` cheaper *and* good enough here than sol at `xhigh`" is a
+    three-axis question, and the plugin had two axes.
+
+    The obstacle is that neither CLI fails on a rung it does not recognise. Verified
+    against the installed versions:
+
+    ```
+    $ claude --effort bogus -p "hi"
+    Warning: Unknown --effort value 'bogus' - ignoring it and using the default
+    effort. Valid values: low, medium, high, xhigh, max.
+    ```
+
+    and `codex exec -c model_reasoning_effort=bogus` launches without comment. A typo
+    in a matrix line therefore buys a full-priced run at the default budget, stores a
+    result, and the report names a rung the run never had. That is exactly the failure
+    0007 refuses for an unpriced model, arriving through a different door.
+
+    The vocabularies may also disagree, and neither CLI is a reliable witness to its
+    own. codex-cli 0.155.1's local `model_reasoning_effort` enum lists `none`,
+    `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra` and `persistent`; the
+    gpt-5.6 models accept six of those, and the CLI validates none of it. A paid sweep
+    at `minimal` returned, for both models::
+
+        Unsupported value: 'minimal' is not supported with the 'gpt-5.6-sol' model.
+        Supported values are: 'none', 'low', 'medium', 'high', 'xhigh', and 'max'.
+
+    So a ladder read off a CLI's own enum is wrong in both directions at once: it
+    offers rungs the provider rejects and omits rungs the provider has. An author
+    naming a native rung therefore cannot know from the CLI whether the word will
+    survive the request.
+  decision: |-
+    **A matrix entry gains an optional third component: `harness/model/effort`.** An
+    entry with two components is unchanged in every respect -- it leaves the CLI on
+    whatever default its own configuration gives it, produces the node id it always
+    produced, and writes to the directory it always wrote to. The absence of a rung is
+    a value, not a gap.
+
+    **The vocabulary is closed, and it lives in `model/effort.py`.** `Effort` is a
+    `StrEnum` holding every word an entry may use (ADR 0041), and a harness declares
+    the rungs it actually has as an ordered `Harness.efforts` ladder -- lowest first,
+    because the order is load-bearing. `harness/claude.py` and `harness/codex.py` each
+    render the rung in their own dialect (`--effort <rung>` against `-c
+    model_reasoning_effort=<rung>`), so nothing outside `harness/` knows either
+    (ADR 0034). `model/registry.py` gains the lookup, as the one declared edge from the
+    domain into the adapter layer (ADR 0039).
+
+    **The portable aliases `min`, `mid` and `max` name a position, not a level.** They
+    resolve against whichever ladder the harness has, by index, so they follow a harness
+    that gains or loses a rung. `max` is deliberately both an alias and a native top
+    rung, and resolves to itself where a harness has it. Both shipped harnesses declare
+    the same five rungs, so the aliases resolve identically on each today; that is a
+    fact about these two CLIs, not a rule the resolution depends on.
+
+    **A ladder is pinned to what the provider accepts, not to what the CLI offers.**
+    `Harness.efforts` is a claim about the request surviving, so a rung goes in only
+    when it has been seen to work, and a rung the provider rejects comes out. `none` is
+    accepted by codex and still omitted: it disables reasoning rather than setting a
+    budget, so it would put a no-reasoning cell in every default sweep.
+
+    **Resolution happens once, at matrix expansion, and an unresolvable rung is an
+    error there.** `mx.expand` turns the typed word into a native rung before a `Cell`
+    exists, so the node id, the evidence directory and the report row all carry what
+    was actually sent rather than what was typed. A word outside the vocabulary, a rung
+    this harness does not have, or a fourth component stops collection with the
+    offending line named -- before any cell has spent anything, which is the only
+    moment at which refusing is free.
+
+    **Effort is a sixth coordinate but not a sixth level.** The evidence tree is a
+    published contract: the report page fetches
+    `../results/{skill}/{harness}/{model}/{run}/{session}/log.jsonl` by that exact
+    shape. So the rung rides the model's level as `{model}--{effort}`, owned by
+    `model/layout.py` like every other name under the cache root (ADR 0037). A level
+    with no separator named no effort, which is precisely what every capture written
+    before this record holds -- so the glob, the links and the replay are all unchanged
+    and no migration exists to forget to run.
+
+    **The rung is attached by the derivation pipeline, not folded by a harness.** No
+    session log records what a CLI was *asked* for, only what it then did; a harness
+    that folded the rung would be reporting its own argv back to itself. `RunResult`
+    gains `effort` alongside `case` and `skill_coverage`, set by `runtime/pipeline.py`
+    from the cell that ran, and carried forward from the stored result on a replay --
+    so a rebuild reports the effort the run had rather than the effort today's matrix
+    would give it.
+  consequences: |-
+    Three emitted documents gain one key each: `result.json`, `history.json` and
+    `report/index.json` all carry `effort` (empty or null when the cell named none),
+    mirrored in `report-ui/src/lib/types.ts` and the shipped glossary. The
+    characterization goldens move by that key alone and no measured value in them
+    changes, which is the evidence that this adds a coordinate rather than
+    redistributing one.
+
+    `--effort` narrows a sweep the way `--harness` and `--model` do, and matches the
+    *resolved* rung -- so `--effort mid` selects whatever `mid` meant on each harness,
+    which is the only reading under which one flag narrows both arms of a two-harness
+    sweep to the same intensity. A word that resolves on one harness and not another
+    simply does not match the other's cells: narrowing a sweep is not the moment to
+    refuse a flag, because nothing is about to be billed.
+
+    Two cells of one case may now differ in nothing but their rung, so the build
+    workspace name includes it; without that the pair would overwrite each other.
+
+    The first paid sweep across the axis (20 cells, one case, both harnesses) paid for
+    itself by falsifying the ladder this record was first written with. `minimal` was
+    declared a codex rung and is not one; `max` was withheld as unverifiable and is one.
+    Both `minimal` cells exited 1 having produced nothing, and `check_run_is_real`
+    failed them rather than grading an empty run -- which is the evidence gate of
+    ADR 0002 doing exactly its job, on the first axis value that needed it.
+
+    That is the argument for validating at expansion rather than trusting the flag,
+    restated as data: the CLI forwarded a word it listed in its own enum, and the
+    request died at the provider. A ladder is a claim about the request surviving, and
+    only a run can settle it. Adding or removing a rung is one tuple entry, and it moves
+    what `mid` resolves to, which is why the ladder is ordered rather than a set.

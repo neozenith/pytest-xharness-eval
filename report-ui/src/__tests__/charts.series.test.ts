@@ -41,6 +41,7 @@ const call = (n: number, records: number[], u: Partial<Usage>, context_pct: numb
 /** Three turns over nine log lines. Turn 2's first record (line 4) is a user record; its assistant record is line 5. */
 export const result: RunResult = {
   harness: "claude",
+  effort: null,
   model: "m",
   session_id: "s",
   turns: 3,
