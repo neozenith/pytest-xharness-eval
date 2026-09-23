@@ -101,10 +101,8 @@ for (const mode of MODES) {
 
     for (const surface of ["bg", "panel"] as const) {
       test(`Badge tone=${tone} in ${mode} on --xh-${surface}: text contrast >= 4.5:1`, async ({ mount }) => {
-        // BUG (badge.tsx:5-13): the doc comment promises ink-on-tint "clears AA in both themes for
-        // every semantic colour", but in light the 13% self-tint drags `good` to 4.30:1 on --xh-bg and
-        // `warn` to 3.95:1 (bg) / 4.21:1 (panel) for 11px text. Expected >= 4.5:1.
-        test.fail(mode === "light" && (`${tone}/${surface}` === "good/bg" || tone === "warn"), "badge tone below AA in light");
+        // Regression: the 13% self-tint once dragged light `good` to 4.30:1 on --xh-bg and `warn` to
+        // 3.95:1 / 4.21:1; the light tokens were darkened (same hue) until every tone clears AA.
         const root = await mount(
           <div style={{ background: `var(--xh-${surface})`, padding: 8 }}>
             <Badge tone={tone}>{tone}</Badge>
@@ -123,6 +121,6 @@ test("Badge tones differ between light and dark (tokens, not constants)", async 
   await light.unmount();
   const dark = await mount(<Badge tone="good">good</Badge>, { hooksConfig: { mode: "dark" } satisfies HooksConfig });
   const darkInk = await dark.getByText("good").evaluate((n) => getComputedStyle(n).color);
-  expect(lightInk).toBe("rgb(4, 120, 87)");
+  expect(lightInk).toBe("rgb(4, 111, 81)");
   expect(darkInk).toBe("rgb(52, 211, 153)");
 });

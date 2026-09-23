@@ -83,7 +83,7 @@ test.describe("copying", () => {
     await expect(button.locator("svg.lucide-copy")).toHaveCount(0);
     // the tick is $good at full strength
     const glyph = button.locator("svg").locator("xpath=..");
-    await expect(glyph).toHaveCSS("color", "rgb(4, 120, 87)");
+    await expect(glyph).toHaveCSS("color", "rgb(4, 111, 81)");
     await expect(glyph).toHaveCSS("opacity", "1");
     // the glyph keeps its box: nothing reflows when it flips
     expect((await button.boundingBox())!.width).toBe(w0);

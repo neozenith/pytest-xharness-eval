@@ -200,11 +200,28 @@ test("Button render={<a/>} shows the same focus-visible ring", async ({ page, mo
   await expect(a).toHaveCSS("outline-color", await resolved(a, "accent"));
 });
 
-test("Button disabled shows the not-allowed cursor", async ({ page, mount }) => {
-  // BUG (button.tsx:14): the frame's unconditional `cursor: "pointer"` is an atomic class that
-  // outranks index.css's page-wide `button:disabled { cursor: not-allowed }` ("one disabled look
-  // for every control"), so a disabled Button still promises a click. Expected not-allowed.
-  test.fail(true, "disabled Button keeps cursor: pointer");
+test("Button disabled shows the not-allowed cursor; an enabled one the pointer", async ({ page, mount }) => {
+  // Regression: an unconditional frame `cursor: pointer` outranked index.css's
+  // `button:disabled { cursor: not-allowed }`, so a disabled Button still promised a click.
+  const c = await mount(<Button disabled>Run</Button>);
+  await expect(page.getByRole("button")).toHaveCSS("cursor", "not-allowed");
+  await c.update(<Button>Run</Button>);
+  await expect(page.getByRole("button")).toHaveCSS("cursor", "pointer");
+});
+
+test("Button disabled does not answer hover: the outline fill stays --xh-panel", async ({ page, mount }) => {
   await mount(<Button disabled>Run</Button>);
-  await expect(page.getByRole("button")).toHaveCSS("cursor", "not-allowed", { timeout: 1_000 });
+  const b = page.getByRole("button");
+  const panel = await resolved(b, "panel");
+  await expect(b).toHaveCSS("background-color", panel);
+  await b.hover({ force: true });
+  await page.waitForTimeout(250);
+  await expect(b).toHaveCSS("background-color", panel);
+});
+
+test("Button transitions stop under prefers-reduced-motion", async ({ page, mount }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mount(<Button>Run</Button>);
+  const d = await page.getByRole("button").evaluate((n) => getComputedStyle(n).transitionDuration);
+  expect(d.split(",").every((x) => Number.parseFloat(x) < 0.001)).toBe(true);
 });

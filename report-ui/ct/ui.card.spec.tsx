@@ -132,3 +132,10 @@ for (const mode of ["light", "dark"] as const) {
     expect(await contrast(desc)).toBeGreaterThanOrEqual(4.5);
   });
 }
+
+test("Card does not slide in under prefers-reduced-motion", async ({ page, mount }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mount(full);
+  const d = await page.locator("section#Panel").evaluate((n) => getComputedStyle(n).transitionDuration);
+  expect(d.split(",").every((x) => Number.parseFloat(x) < 0.001)).toBe(true);
+});

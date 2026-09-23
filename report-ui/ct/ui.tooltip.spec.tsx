@@ -72,7 +72,8 @@ test("Tooltip opens on hover and describes its trigger", async ({ page, mount })
   const t = page.getByRole("tooltip");
   await expect(t).toBeVisible();
   await expect(t).toHaveText("the price at bundled rates");
-  await expect(trigger).toHaveAttribute("aria-describedby", (await t.getAttribute("id"))!);
+  const by = (await trigger.getAttribute("aria-describedby"))!;
+  await expect(t.locator(`[id="${by}"]`)).toHaveText("the price at bundled rates");
   await expect(trigger).toHaveAccessibleDescription("the price at bundled rates");
 });
 
@@ -85,18 +86,55 @@ test("Tooltip closes when the pointer leaves", async ({ page, mount }) => {
 });
 
 test("Tooltip opens on keyboard focus and closes on blur", async ({ page, mount }) => {
-  // BUG (tooltip.tsx:13-14): the wrapper never enables Tamagui's `focus` option, so a keyboard
-  // user who tabs to the trigger gets no tooltip at all (WCAG 1.4.13 / 2.1.1: content shown on
-  // hover must also be reachable by focus). ColumnHead works around it with an sr-only
-  // description, but the primitive itself fails. Expected: role=tooltip visible on focus.
-  test.fail(true, "Tooltip does not open on keyboard focus");
+  // Regression: a keyboard user who tabbed to the trigger got no tooltip at all (WCAG 1.4.13 /
+  // 2.1.1: content shown on hover must also be reachable by focus).
   await mount(tip());
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "cost" })).toBeFocused();
-  await expect(page.getByRole("tooltip")).toBeVisible({ timeout: 1_000 });
+  const trigger = page.getByRole("button", { name: "cost" });
+  await expect(trigger).toBeFocused();
+  await expect(page.getByRole("tooltip")).toBeVisible();
   await expect(page.getByRole("tooltip")).toHaveText("the price at bundled rates");
+  await expect(trigger).toHaveAccessibleDescription("the price at bundled rates");
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "elsewhere" })).toBeFocused();
   await expect(page.getByRole("tooltip")).toBeHidden();
+});
+
+test("Tooltip opened by focus is dismissed with Escape, focus staying on the trigger", async ({ page, mount }) => {
+  await mount(tip());
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("tooltip")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await expect(page.getByRole("button", { name: "cost" })).toBeFocused();
+});
+
+test("Tooltip does not pop on a pointer click's focus (focus-visible only)", async ({ page, mount }) => {
+  await mount(tip());
+  const box = (await page.getByRole("button", { name: "cost" }).boundingBox())!;
+  await page.mouse.move(box.x + 2, box.y + 2);
+  await page.mouse.down();
+  await page.mouse.up();
+  // The click toggles or leaves it; either way the focus handler must not have forced it open.
+  await page.mouse.move(5, 5);
+  await expect(page.getByRole("tooltip")).toBeHidden();
+});
+
+test("Tooltip controlled: focus reports through onOpenChange, the open prop decides", async ({ page, mount }) => {
+  const seen: boolean[] = [];
+  await mount(
+    <div style={{ padding: 120 }}>
+      <Tooltip open={false} onOpenChange={(o) => seen.push(o)}>
+        <TooltipTrigger asChild>
+          <button type="button">cost</button>
+        </TooltipTrigger>
+        <TooltipContent>tip</TooltipContent>
+      </Tooltip>
+    </div>,
+  );
+  await page.keyboard.press("Tab");
+  await expect.poll(() => seen).toContain(true);
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
 });
 
 test("Tooltip is dismissed with Escape (hover-opened)", async ({ page, mount }) => {
@@ -172,4 +210,24 @@ test("TooltipProvider passes its children straight through", async ({ page, moun
     </TooltipProvider>,
   );
   await expect(page.locator("#child")).toHaveText("inside");
+});
+
+test("Tooltip is hoverable: moving the pointer onto it keeps it open (WCAG 1.4.13)", async ({ page, mount }) => {
+  await mount(tip(LONG));
+  await page.getByRole("button", { name: "cost" }).hover();
+  const t = page.getByRole("tooltip");
+  await expect(t).toBeVisible();
+  const box = (await t.boundingBox())!;
+  const trig = (await page.getByRole("button", { name: "cost" }).boundingBox())!;
+  // Straight up from the trigger into the tooltip body.
+  await page.mouse.move(trig.x + trig.width / 2, box.y + box.height / 2, { steps: 8 });
+  await page.waitForTimeout(600);
+  await expect(t).toBeVisible();
+});
+
+test("TooltipContent does not animate under prefers-reduced-motion", async ({ page, mount }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mount(tip("pinned", { open: true }));
+  const d = await page.locator(".tip-extra").evaluate((n) => getComputedStyle(n).transitionDuration);
+  expect(d.split(",").every((x) => Number.parseFloat(x) < 0.001)).toBe(true);
 });

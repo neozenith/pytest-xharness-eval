@@ -297,7 +297,7 @@ test.describe("navigation", () => {
     await expect(dot("claude-opus-5 · low")).toHaveAttribute("title", "fail");
     await expect(dot("claude-opus-5 · low")).toHaveCSS("background-color", "rgb(185, 28, 28)");
     await expect(dot("claude-opus-5 · high")).toHaveAttribute("title", "pass");
-    await expect(dot("claude-opus-5 · high")).toHaveCSS("background-color", "rgb(4, 120, 87)");
+    await expect(dot("claude-opus-5 · high")).toHaveCSS("background-color", "rgb(4, 111, 81)");
     await expect(dot("claude-opus-5")).toHaveAttribute("title", "no history");
     await expect(dot("claude-opus-5")).toHaveCSS("background-color", "rgb(226, 228, 234)");
   });

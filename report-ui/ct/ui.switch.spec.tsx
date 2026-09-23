@@ -150,10 +150,8 @@ for (const mode of ["light", "dark"] as const) {
   });
 
   test(`Switch off thumb is distinguishable from its track, >= 3:1 non-text contrast (${mode})`, async ({ page, mount }) => {
-    // BUG (switch.tsx:23,37): the off knob (muted 72% into panel) against the off track (muted 12%
-    // into code) is 2.52:1 in light and 2.98:1 in dark, under WCAG 1.4.11's 3:1 for the graphic
-    // that identifies the state, though the comment says it "stays legible in both themes".
-    test.fail(true, "off-state knob below 3:1 against its track");
+    // Regression: at muted 72% into panel the off knob was 2.52:1 (light) and 2.98:1 (dark)
+    // against its track, under WCAG 1.4.11's 3:1 for the graphic that identifies the state.
     await mount(<Switch checked={false} aria-label="x" />, { hooksConfig: { mode } satisfies HooksConfig });
     const s = page.getByRole("switch");
     const track = await s.evaluate((n) => getComputedStyle(n).backgroundColor);
@@ -191,4 +189,16 @@ test("Switch disabled: not operable by click or keyboard", async ({ page, mount 
   await page.keyboard.press("Space");
   await expect(s).toHaveAttribute("aria-checked", "false");
   expect(seen).toEqual([]);
+});
+
+test("Switch disabled shows the not-allowed cursor", async ({ page, mount }) => {
+  await mount(<Switch checked={false} disabled aria-label="x" />);
+  await expect(page.getByRole("switch")).toHaveCSS("cursor", "not-allowed");
+});
+
+test("Switch thumb does not slide under prefers-reduced-motion", async ({ page, mount }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mount(<Switch checked={false} aria-label="x" />);
+  const d = await page.locator(".is_SwitchThumb").evaluate((n) => getComputedStyle(n).transitionDuration);
+  expect(d.split(",").every((x) => Number.parseFloat(x) < 0.001)).toBe(true);
 });

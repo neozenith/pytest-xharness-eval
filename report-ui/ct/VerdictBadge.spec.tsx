@@ -15,7 +15,7 @@ for (const verdict of ["pass", "fail", "error", null]) {
  * A pass keeps the quiet tint at weight 600; anything not a pass is "loud": a 20% wash, a 58%
  * border and weight 700. Colours are the bundled design tokens (light / dark).
  */
-const LIGHT = { good: "rgb(4, 120, 87)", bad: "rgb(185, 28, 28)", warn: "rgb(180, 83, 9)", muted: "rgb(91, 96, 112)", line: "rgb(226, 228, 234)" };
+const LIGHT = { good: "rgb(4, 111, 81)", bad: "rgb(185, 28, 28)", warn: "rgb(158, 73, 8)", muted: "rgb(91, 96, 112)", line: "rgb(226, 228, 234)" };
 const DARK = { good: "rgb(52, 211, 153)", bad: "rgb(248, 113, 113)", warn: "rgb(251, 191, 36)", muted: "rgb(154, 160, 176)", line: "rgb(42, 46, 58)" };
 
 const CASES: { verdict: string | null; text: string; tone: keyof typeof LIGHT; weight: string }[] = [

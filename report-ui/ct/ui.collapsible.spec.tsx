@@ -106,12 +106,39 @@ for (const mode of ["light", "dark"] as const) {
 }
 
 test("CollapsibleTrigger aria-controls points at the open content", async ({ page, mount }) => {
-  // BUG (collapsible.tsx:12,15): the trigger renders aria-controls="_r_N_" but
-  // CollapsibleContent never renders an element with that id, so the reference dangles and
-  // assistive tech cannot follow it (WCAG 4.1.2). Expected: the open content carries the id.
-  test.fail(true, "aria-controls references an id no element has");
+  // Regression: the trigger named an id (`_r_N_`) that CollapsibleContent never rendered.
   await mount(disclosure({ defaultOpen: true }));
   const controls = await page.getByRole("button", { name: "environment" }).getAttribute("aria-controls");
   expect(controls).toBeTruthy();
-  await expect(page.locator(`[id="${controls}"]`)).toContainText("PATH=/usr/bin", { timeout: 1_000 });
+  await expect(page.locator(`[id="${controls}"]`)).toHaveCount(1);
+  await expect(page.locator(`[id="${controls}"]`)).toContainText("PATH=/usr/bin");
+});
+
+test("CollapsibleTrigger never references an absent node: no aria-controls while closed", async ({ page, mount }) => {
+  await mount(disclosure());
+  const t = page.getByRole("button", { name: "environment" });
+  await expect(t).not.toHaveAttribute("aria-controls", /.*/);
+  await t.click();
+  const controls = await t.getAttribute("aria-controls");
+  await expect(page.locator(`[id="${controls}"]`)).toContainText("PATH=/usr/bin");
+  await t.click();
+  await expect(t).not.toHaveAttribute("aria-controls", /.*/);
+});
+
+test("Two Collapsibles on one page control their own content", async ({ page, mount }) => {
+  await mount(
+    <div>
+      {disclosure({ defaultOpen: true })}
+      <Collapsible defaultOpen>
+        <CollapsibleTrigger>second</CollapsibleTrigger>
+        <CollapsibleContent>
+          <p>HOME=/root</p>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>,
+  );
+  const first = await page.getByRole("button", { name: "environment" }).getAttribute("aria-controls");
+  const second = await page.getByRole("button", { name: "second" }).getAttribute("aria-controls");
+  expect(first).not.toBe(second);
+  await expect(page.locator(`[id="${second}"]`)).toHaveText("HOME=/root");
 });

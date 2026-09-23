@@ -21,10 +21,10 @@ interface Props {
  * heads are literally one object rather than two that happen to agree today.
  *
  * The definition reaches a pointer through the tooltip and a screen reader through
- * `aria-describedby` on a visually-hidden span. Tamagui's `Tooltip` opens on pointer events
- * only, so a keyboard reader who tabbed to a head got a focus ring and nothing else (WCAG
- * 2.1.1) — and these heads are the only place `accumulative_billed_tokens` and its siblings are
- * spelled out. The span costs no tab stop and is announced with the button's own name.
+ * `aria-describedby` on a visually-hidden span. The tooltip now also opens on keyboard focus
+ * (`ui/tooltip.tsx`), but a tooltip is a visual affordance: the span is what a screen reader
+ * hears, and these heads are the only place `accumulative_billed_tokens` and its siblings are
+ * spelled out (WCAG 2.1.1). The span costs no tab stop and is announced with the button's own name.
  *
  * The arrow is always in the DOM: an active column that grew one on click shifted every column
  * to its right, and a sortable column that showed nothing until you hovered it never said it was

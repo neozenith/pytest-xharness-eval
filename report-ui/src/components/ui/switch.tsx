@@ -17,7 +17,8 @@ export function Switch({ className, ...props }: ComponentProps<typeof TamaguiSwi
       width={34}
       height={20}
       padding={2}
-      cursor="pointer"
+      // A disabled switch must not promise a click (the same rule index.css states for buttons).
+      cursor={props.disabled ? "not-allowed" : "pointer"}
       // Off is a recessed slot, a shade deeper than the panel it sits on, so the knob reads as
       // a knob in a track rather than a filled dot floating on a card.
       backgroundColor={on ? "$accent" : "color-mix(in srgb, var(--xh-muted) 12%, var(--xh-code))"}
@@ -32,9 +33,10 @@ export function Switch({ className, ...props }: ComponentProps<typeof TamaguiSwi
         height={14}
         borderRadius={999}
         borderWidth={0}
-        // Off, the knob is muted pulled back toward the panel: it stays legible against the
-        // track in both themes without the full-strength dot reading as an "on" state.
-        backgroundColor={on ? "$panel" : "color-mix(in srgb, var(--xh-muted) 72%, var(--xh-panel))"}
+        // Off, the knob is muted pulled a little back toward the panel, so the full-strength dot
+        // does not read as an "on" state. 85% is the floor that holds WCAG 1.4.11's 3:1 against
+        // the off track in both themes (3.3:1 light, 3.8:1 dark); 72% was 2.5:1 and 3.0:1.
+        backgroundColor={on ? "$panel" : "color-mix(in srgb, var(--xh-muted) 85%, var(--xh-panel))"}
         boxShadow="0 1px 2px var(--xh-shadow)"
         transition="200ms"
       />

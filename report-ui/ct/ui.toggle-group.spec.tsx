@@ -89,15 +89,35 @@ test("ToggleGroupItem marks the selected segment data-state=on and forwards data
   await expect(on).toHaveAttribute("data-view", "summary");
 });
 
-test("ToggleGroup exposes the selected segment to assistive tech", async ({ page, mount }) => {
-  // BUG (toggle-group.tsx:17,24): the items are plain <button>s whose selection lives only in
-  // `data-state` — no aria-pressed, and no role=radio/aria-checked — so a screen reader cannot
-  // tell which view is chosen (WCAG 4.1.2). Expected aria-pressed=true (or aria-checked) on the
-  // selected segment.
-  test.fail(true, "selected ToggleGroupItem has no aria-pressed/aria-checked");
-  await mount(group("summary"));
-  const on = page.getByRole("button", { name: "Summary view" });
-  await expect(on).toHaveAttribute("aria-pressed", "true", { timeout: 1_000 });
+test("ToggleGroup exposes the selected segment to assistive tech (aria-pressed)", async ({ page, mount }) => {
+  // Regression: Tamagui's single mode strips aria-pressed, leaving the choice in data-state only.
+  const c = await mount(group("summary"));
+  const a = page.getByRole("button", { name: "Summary view" });
+  const b = page.getByRole("button", { name: "Detailed view" });
+  await expect(a).toHaveAttribute("aria-pressed", "true");
+  await expect(b).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { pressed: true })).toHaveCount(1);
+  await c.update(group("detailed"));
+  await expect(a).toHaveAttribute("aria-pressed", "false");
+  await expect(b).toHaveAttribute("aria-pressed", "true");
+});
+
+test("ToggleGroup uncontrolled (defaultValue) moves aria-pressed and the tab stop on click", async ({ page, mount }) => {
+  await mount(
+    <ToggleGroup defaultValue="a" aria-label="g">
+      <ToggleGroupItem value="a">A</ToggleGroupItem>
+      <ToggleGroupItem value="b">B</ToggleGroupItem>
+    </ToggleGroup>,
+  );
+  const a = page.getByRole("button", { name: "A" });
+  const b = page.getByRole("button", { name: "B" });
+  await expect(a).toHaveAttribute("aria-pressed", "true");
+  await b.click();
+  await expect(b).toHaveAttribute("aria-pressed", "true");
+  await expect(b).toHaveAttribute("data-state", "on");
+  await expect(a).toHaveAttribute("aria-pressed", "false");
+  await expect(b).toHaveAttribute("tabindex", "0");
+  await expect(a).toHaveAttribute("tabindex", "-1");
 });
 
 test("ToggleGroup click reports the chosen value; the value prop moves the selection", async ({ page, mount }) => {
@@ -213,8 +233,13 @@ for (const mode of ["light", "dark"] as const) {
   test(`ToggleGroupItem focus-visible ring is 2px solid --xh-accent, inset 1px (${mode})`, async ({ page, mount }) => {
     await mount(group("summary"), { hooksConfig: { mode } satisfies HooksConfig });
     const on = page.getByRole("button", { name: "Summary view" });
+    // Tab only once the roving group has registered its items, as a reader always does. Before
+    // that, the group itself was a tab stop that forwarded focus with `focusVisible: false`, so
+    // the first Tab into a settled control drew no ring at all (it passed only by racing mount).
+    await expect(page.getByRole("group")).toHaveAttribute("tabindex", /-?\d/);
     await page.keyboard.press("Tab");
     await expect(on).toBeFocused();
+    expect(await on.evaluate((n) => n.matches(":focus-visible"))).toBe(true);
     await expect(on).toHaveCSS("outline-style", "solid");
     await expect(on).toHaveCSS("outline-width", "2px");
     await expect(on).toHaveCSS("outline-offset", "-1px");
@@ -222,19 +247,79 @@ for (const mode of ["light", "dark"] as const) {
   });
 }
 
+const framed = (value: string) => (
+  <div>
+    <button type="button">before</button>
+    {group(value)}
+    <button type="button">after</button>
+  </div>
+);
+
 test("ToggleGroup costs one Tab stop: Tab from the group's segment leaves the control", async ({ page, mount }) => {
-  // BUG (toggle-group.tsx:17,24): every segment renders tabindex=0, so Tab walks Summary, then
-  // Detailed, then leaves: one stop per segment rather than the single roving stop of the
-  // toolbar/radio-group pattern the arrow keys already implement. Expected: the next Tab leaves.
-  test.fail(true, "ToggleGroup is one Tab stop per segment, not one roving stop");
+  // Regression: every segment rendered tabindex=0, one stop per segment rather than the single
+  // roving stop of the toolbar/radio-group pattern the arrow keys already implement.
+  await mount(framed("summary"));
+  await page.getByRole("button", { name: "before" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Summary view" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "after" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Summary view" })).toHaveAttribute("tabindex", "0");
+  await expect(page.getByRole("button", { name: "Detailed view" })).toHaveAttribute("tabindex", "-1");
+});
+
+test("ToggleGroup's one Tab stop is the selected segment, from either direction", async ({ page, mount }) => {
+  await mount(framed("detailed"));
+  await page.getByRole("button", { name: "before" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Detailed view" })).toBeFocused();
+  await page.getByRole("button", { name: "after" }).focus();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("button", { name: "Detailed view" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("button", { name: "before" })).toBeFocused();
+});
+
+test("ToggleGroup with nothing selected is still reachable by Tab, and costs one stop", async ({ page, mount }) => {
+  await mount(framed(""));
+  await page.getByRole("button", { name: "before" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Summary view" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "after" })).toBeFocused();
+});
+
+test("ToggleGroup arrow keys reach a non-tab-stop segment and wrap", async ({ page, mount }) => {
+  await mount(framed("summary"));
+  const a = page.getByRole("button", { name: "Summary view" });
+  const b = page.getByRole("button", { name: "Detailed view" });
+  await a.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(b).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(a).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(b).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(b).toHaveAttribute("data-state", "off"); // controlled: the prop decides
+});
+
+test("ToggleGroupItem disabled shows the not-allowed cursor", async ({ page, mount }) => {
+  await mount(group("summary", undefined, { disabledB: true }));
+  await expect(page.getByRole("button", { name: "Detailed view" })).toHaveCSS("cursor", "not-allowed");
+});
+
+test("ToggleGroup fits a 343px column (375px phone less gutters) without overflow", async ({ page, mount }) => {
+  await page.setViewportSize({ width: 375, height: 700 });
   await mount(
-    <div>
-      {group("summary")}
-      <button type="button">after</button>
+    <div style={{ width: 343 }} id="col">
+      <ToggleGroup value="turn" aria-label="chart x-axis">
+        <ToggleGroupItem value="turn">per turn</ToggleGroupItem>
+        <ToggleGroupItem value="line">per session-log line</ToggleGroupItem>
+      </ToggleGroup>
     </div>,
   );
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Summary view" })).toBeFocused({ timeout: 1_000 });
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "after" })).toBeFocused({ timeout: 1_000 });
+  const g = (await page.getByRole("group").boundingBox())!;
+  expect(g.x + g.width).toBeLessThanOrEqual(16 + 343 + 16);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 });

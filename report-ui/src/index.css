@@ -17,9 +17,14 @@
   --xh-muted: #5b6070;
   --xh-line: #e2e4ea;
   --xh-accent: #4f46e5;
-  --xh-good: #047857;
+  /*
+   * `good` and `warn` sit a step darker than their Tailwind 700 origins (same hue): a Badge
+   * paints them as ink on a 13% tint of themselves, and at #047857 / #b45309 that tint dragged
+   * 11px text under AA (4.3:1 and 3.95:1 on --xh-bg). These clear 4.5:1 on bg, panel and code.
+   */
+  --xh-good: #046f51;
   --xh-bad: #b91c1c;
-  --xh-warn: #b45309;
+  --xh-warn: #9e4908;
   --xh-code: #f1f2f6;
   --xh-grid: #e6e8ee;
   /*
@@ -127,6 +132,21 @@ button[aria-disabled="true"],
   outline: 2px solid var(--xh-accent);
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+/*
+ * Reduced motion: every transition on the page (Tamagui's included — its CSS driver writes
+ * plain `transition` declarations) collapses to an instant. Not 0s: Tamagui unmounts exiting
+ * content on `transitionend`, which a zero-length transition never fires. Animations are left
+ * alone; the one keyframe here (`xh-target-flash`) changes a colour, it moves nothing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
 }
 
 /* -- text helpers (document content only; chrome uses Tamagui props) -------------- */
