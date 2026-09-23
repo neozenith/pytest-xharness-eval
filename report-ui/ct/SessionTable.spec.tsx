@@ -257,7 +257,9 @@ test.describe("SessionTable: layout", () => {
         page.evaluate(() => {
           const view = document.querySelector("[data-slot='table-container']")!.getBoundingClientRect();
           const th = document.querySelector('#SessionTable thead th[data-k="wall_ms"]')!.getBoundingClientRect();
-          return th.left >= view.left && th.right <= view.right;
+          // 1px of slack: at maximum scroll the last column ends on a sub-pixel boundary that an
+          // integer scrollLeft cannot reach (Verdana on this table: 700.33 against 700).
+          return th.left >= view.left - 1 && th.right <= view.right + 1;
         }),
       )
       .toBe(true);
