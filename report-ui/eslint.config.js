@@ -20,7 +20,7 @@ export default tseslint.config(
   },
   {
     // The e2e runner is Node; `page.evaluate` callbacks still run in the browser.
-    files: ["e2e/**/*.ts", "playwright.config.ts"],
+    files: ["e2e/**/*.ts", "playwright.config.ts", "ct/**/*.{ts,tsx}", "playwright/**/*.tsx", "playwright-ct.config.ts"],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
 );

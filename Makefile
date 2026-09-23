@@ -80,6 +80,12 @@ ui-smoke: ui-build
 	uv run report-ui/scripts/inline.py $(abspath $(CAPTURED)) report-ui/dist/index.html report-ui/dist/inline.html
 	cd report-ui && XH_INLINE_HTML=dist/inline.html bunx playwright test e2e/inline.spec.ts
 
+# Playwright Component Testing (playwright-ct.config.ts): every component mounted alone in a
+# real Chromium with the page stylesheet, Tamagui provider and design tokens around it, fed by
+# ct/fixtures.ts. Needs no captured directory. UPDATE=1 rewrites the screenshot baselines.
+ui-ct: report-ui/node_modules
+	cd report-ui && bun run ct $(if $(UPDATE),--update-snapshots,)
+
 # Playwright matrix sweep of the built page against a captured directory: one full page
 # load, screenshot, console assertion and network timing per deeplink permutation, saved
 # under tmp/e2e/<test>/<slug>/. TIER=small|medium|large (default large) constrains each
@@ -91,7 +97,7 @@ ui-e2e: ui-build
 
 # Make the built SPA the page report.py ships; the Python tests then gate it, and CI fails
 # when the committed asset is not the current build.
-ui-promote: ui-check ui-test ui-build
+ui-promote: ui-check ui-test ui-ct ui-build
 	cp report-ui/dist/index.html src/pytest_xharness_eval/assets/report.html
 	$(MAKE) test
 
@@ -139,4 +145,4 @@ clean:
 	rm -rf .mmdc_cache/
 	rm -rf node_modules/
 
-.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-e2e ui-promote adrs adrs-check
+.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-ct ui-e2e ui-promote adrs adrs-check
