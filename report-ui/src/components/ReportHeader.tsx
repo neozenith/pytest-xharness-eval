@@ -22,7 +22,7 @@ const Sep = () => (
 
 /**
  * The page header. On the sweep the title is the report's; inside a SessionView it is the
- * eval · session · harness · model tuple, so the tab and the top line say where you are.
+ * eval · session · harness · model [· effort] tuple, so the tab and the top line say where you are.
  */
 export function ReportHeader({ index, cell, mode, onToggleMode }: Props) {
   const total = index ? index.cells.reduce((s, c) => s + (c.estimated_cost_usd ?? 0), 0) : 0;
@@ -74,6 +74,19 @@ export function ReportHeader({ index, cell, mode, onToggleMode }: Props) {
             <Text fontFamily="$mono" fontSize={16}>
               {cell.model}
             </Text>
+            {/*
+             * The rung is part of the arm's identity, so it rides the tuple — but only when the
+             * cell named one. A cell that did not ran at a default nobody wrote down, and the
+             * header prints what was sent, not a placeholder for what was not (ADR 0049).
+             */}
+            {cell.effort ? (
+              <>
+                <Sep />
+                <Text render={<span id="ReportTitleEffort" title="effort: the reasoning rung the CLI was sent" />} fontFamily="$mono" fontSize={16}>
+                  {cell.effort}
+                </Text>
+              </>
+            ) : null}
           </>
         ) : null}
         <El name="ReportTitle" />

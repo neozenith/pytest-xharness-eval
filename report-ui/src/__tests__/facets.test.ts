@@ -39,7 +39,7 @@ test("effort is a facet like any other, and a rung-less cell is never selectable
     cell({ session_id: "lo", harness: "claude", effort: "low" }),
     cell({ session_id: "none", harness: "claude", effort: null }),
   ];
-  expect(facetOptions(cells, "effort")).toEqual(["high", "low"]);
+  expect(facetOptions(cells, "effort")).toEqual(["low", "high"]);
   expect(filterCells(cells, { ...NO_FACETS, effort: ["high"] }).map((c) => c.session_id)).toEqual(["hi"]);
   expect(filterCells(cells, NO_FACETS).map((c) => c.session_id)).toContain("none");
   expect(filterCells(cells, { ...NO_FACETS, effort: ["high", "low"] }).map((c) => c.session_id)).not.toContain("none");

@@ -20,6 +20,7 @@ import { RecordViewToggle, TurnRawRecords, turnId, type RecordView } from "@/com
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { useLog } from "@/hooks/useLog";
 import { useResult } from "@/hooks/useResult";
+import { armLabel, EFFORT_DEFAULT } from "@/lib/effort";
 import { fmt, pct, secs, usd, when, windowLabel } from "@/lib/format";
 import { navigateOnClick, replaceRoute, type SessionRoute } from "@/lib/route";
 import type { AxisMode } from "@/lib/series";
@@ -131,6 +132,9 @@ export function SessionView({ cell, route }: Props) {
       ),
     ],
     ["harness / model", `${cell.harness} / ${cell.model}`],
+    // Its own row, not a third slash: "none named" is a fact about the run worth stating in words,
+    // and it would read as a missing value if it were a blank tail on the identity above.
+    ["effort", cell.effort ? <code key="e">{cell.effort}</code> : <span className="muted">{EFFORT_DEFAULT}</span>],
     ["started", when(cell.at)],
     ["wall", secs(cell.wall_ms)],
     ["estimated_cost_usd", usd(cell.estimated_cost_usd)],
@@ -168,7 +172,7 @@ export function SessionView({ cell, route }: Props) {
           ← all sessions
         </Button>
         <Text render={<h2 id="SessionTitle" />} fontFamily="$body" fontSize={16} fontWeight="600" margin={0}>
-          {cell.case} · {cell.harness}/{cell.model} <CopyId id={cell.session_id} />
+          {cell.case} · {armLabel(cell.harness, cell.model, cell.effort)} <CopyId id={cell.session_id} />
           <El name="SessionView" />
         </Text>
       </XStack>

@@ -66,7 +66,7 @@ export interface OverviewRoute {
    * independently — one is the other rolled up, and a reader ranks groups by mean cost while
    * ranking sessions by when they ran — so a shared pair would have made every summary click
    * silently reorder the table below it, and no single URL could express the pair of orders
-   * the reader is actually looking at. Null is the fixed skill|case|harness|model key order,
+   * the reader is actually looking at. Null is the fixed skill|case|harness|model|effort key order,
    * which is the only order in which the table's banding and repeat-muting tell the truth.
    */
   summarySort: SortState | null;

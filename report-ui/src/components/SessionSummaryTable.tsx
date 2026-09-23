@@ -1,13 +1,13 @@
 /**
  * The aggregate view of exactly the runs `SessionTable` lists (glossary: `SessionSummaryTable`,
- * ADR 0042): one row per skill × case × harness × model, which is one line of the
+ * ADR 0042): one row per skill × case × harness × model × effort, which is one line of the
  * `TokenAccumulationChart` above it, so the two read as a pair.
  *
  * It takes the cells it is given and knows nothing about filters; its arithmetic is in
  * `lib/summary.ts`. It sorts on its OWN param pair (`ssort`/`sdir`), because the reader ranks
  * groups by mean cost while ranking sessions by when they ran, and a shared pair would have made
  * every click here silently reorder the table below. Unsorted, the rows come out in the fixed
- * `skill|case|harness|model` key order — the only order in which the banding and the repeat
+ * `skill|case|harness|model|effort` key order — the only order in which the banding and the repeat
  * muting below tell the truth, which is why both switch off the moment a column is sorted.
  *
  * Every aggregate is named `mean <field>` in full (ADR 0021) in its tooltip and its accessible
@@ -21,6 +21,7 @@ import { useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ColumnHead } from "@/components/ColumnHead";
 import { caseShort, compact, dec, fmt, modelShort, NONE, pct, secs, usd, windowLabel } from "@/lib/format";
+import { effortSortValue } from "@/lib/effort";
 import { NO_MATCH } from "@/lib/facets";
 import { overviewWith, replaceRoute, useRoute, type SortDir } from "@/lib/route";
 import { summaryRows, type SummaryRow } from "@/lib/summary";
@@ -87,6 +88,16 @@ const COLUMNS: Column[] = [
     title: "the model the harness was told to use, without its vendor prefix; hover a cell for the full id",
     sortValue: (r) => r.model,
     render: (r, ctx) => <code title={r.model}>{ctx.shortModel(r.model)}</code>,
+  },
+  {
+    key: "effort",
+    name: "effort",
+    label: "effort",
+    title: "the reasoning rung every run in this group was sent, on that harness's own ladder; blank when none was named and the CLI ran at its default",
+    // A rung is a position on a ladder, so it ranks by that position: `low` before `max`, never
+    // `high` before `low` because h sorts before l.
+    sortValue: (r) => effortSortValue(r.effort),
+    render: (r) => orNil(r.effort, r.effort ?? ""),
   },
   {
     key: "runs",
@@ -217,7 +228,7 @@ const COLUMNS: Column[] = [
 ];
 
 /**
- * One row per skill × case × harness × model group of the cells it is given, in the fixed key
+ * One row per skill × case × harness × model × effort group of the cells it is given, in the fixed key
  * order until a head is clicked.
  */
 export function SessionSummaryTable({ cells, shortModel = modelShort }: { cells: Cell[]; shortModel?: (model: string) => string }) {

@@ -85,8 +85,8 @@ export function SweepOverview({ index }: { index: Index }) {
             <El name="SessionSummaryTable" />
           </CardTitle>
           <CardDescription>
-            The same runs the table below lists, aggregated one row per line of the chart above: skill × case × harness × model, with a run count and the mean
-            of each measure over the runs that carry it.
+            The same runs the table below lists, aggregated one row per line of the chart above: skill × case × harness × model × effort, with a run count and
+            the mean of each measure over the runs that carry it.
           </CardDescription>
         </CardHeader>
         <CardContent>

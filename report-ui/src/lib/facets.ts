@@ -14,6 +14,7 @@
  * so there is no value to compare it against, and every session captured before ADR 0049 is in
  * exactly that position.
  */
+import { compareEffort } from "./effort";
 import type { FacetSelection } from "./route";
 import type { Cell } from "./types";
 
@@ -24,7 +25,9 @@ export const facetValue = (cell: Cell, facet: Facet): string | null => cell[face
 
 /**
  * The facet's distinct values across the sweep, lexicographic (`.sort()`, locale-independent,
- * the same order `ReportHeader` puts its skills in). Nulls are dropped: they are not options.
+ * the same order `ReportHeader` puts its skills in) — except `effort`, whose rungs come in ladder
+ * order (`lib/effort.ts`): `low medium high` is a scale, and alphabetised it reads
+ * `high low medium`. Nulls are dropped: they are not options.
  */
 export function facetOptions(cells: Cell[], facet: Facet): string[] {
   const values = new Set<string>();
@@ -32,7 +35,7 @@ export function facetOptions(cells: Cell[], facet: Facet): string[] {
     const value = facetValue(cell, facet);
     if (value != null) values.add(value);
   }
-  return [...values].sort();
+  return facet === "effort" ? [...values].sort(compareEffort) : [...values].sort();
 }
 
 export function matchesFacets(cell: Cell, facets: FacetSelection): boolean {

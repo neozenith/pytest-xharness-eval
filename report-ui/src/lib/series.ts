@@ -3,6 +3,7 @@
  * each turn, the step series that hold a value from one measurement to the next, and the
  * token-waterfall decomposition. No rendering here, so every number is unit-testable.
  */
+import { armLabel } from "./effort";
 import { short } from "./format";
 import type { Call, Cell, RunResult, Usage } from "./types";
 
@@ -208,10 +209,10 @@ export function accumulation(calls: Call[], bySub?: Map<number, number>): { n: n
   });
 }
 
-/** The legend / hover label of a session: case · harness/model · short id. */
-export const sessionLabel = (c: Cell): string => `${c.case} · ${c.harness}/${c.model} · ${short(c.session_id)}`;
+/** The legend / hover label of a session: case · harness/model[ · effort] · short id. */
+export const sessionLabel = (c: Cell): string => `${c.case} · ${armLabel(c.harness, c.model, c.effort)} · ${short(c.session_id)}`;
 
-/** One aggregated line of the overview accumulation chart: every run of a suite × harness × model cell. */
+/** One aggregated line of the overview accumulation chart: every run of a suite × harness × model × effort cell. */
 export interface AccumulationGroup {
   key: string;
   label: string;
@@ -227,17 +228,18 @@ export interface AccumulationGroup {
 const suiteName = (c: Cell): string => (c.suite ? (c.suite.split("/").pop() ?? c.suite) : c.case);
 
 /**
- * Group the ledgered sessions by suite × harness × model and aggregate their per-turn
+ * Group the ledgered sessions by suite × harness × model × effort and aggregate their per-turn
  * `accumulative_billed_tokens`: the mean line with a min–max envelope. A turn only some
- * runs reached aggregates over the runs that did.
+ * runs reached aggregates over the runs that did. Two rungs of one model are two lines, never one
+ * averaged line: they are two experiments (ADR 0049).
  */
 export function accumulationGroups(cells: Cell[], results: Record<string, RunResult | null | undefined>): AccumulationGroup[] {
   const byKey = new Map<string, { label: string; series: number[][] }>();
   for (const c of cells) {
     const result = results[c.session_id];
     if (!c.has_ledger || !result?.calls?.length) continue;
-    const key = `${suiteName(c)}|${c.harness}|${c.model}`;
-    const entry = byKey.get(key) ?? { label: `${suiteName(c)} · ${c.harness}/${c.model}`, series: [] };
+    const key = `${suiteName(c)}|${c.harness}|${c.model}${c.effort ? `|${c.effort}` : ""}`;
+    const entry = byKey.get(key) ?? { label: `${suiteName(c)} · ${armLabel(c.harness, c.model, c.effort)}`, series: [] };
     entry.series.push(accumulation(result.calls, subagentsByTurn(result)).map((p) => p.billed));
     byKey.set(key, entry);
   }

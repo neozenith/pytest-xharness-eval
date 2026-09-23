@@ -37,8 +37,9 @@ export function slugify(...parts: (string | number | null | undefined)[]): strin
 
 function cellSlug(cell: Cell): string {
   // The case × harness × model triple reads well; the session-id prefix guarantees
-  // uniqueness when the same cell was captured more than once.
-  return slugify(cell.case, `${cell.harness}-${cell.model}`, cell.session_id.slice(0, 8));
+  // uniqueness when the same cell was captured more than once. A rung joins the arm only when
+  // the cell named one, so every slug written before ADR 0049 is unchanged.
+  return slugify(cell.case, [cell.harness, cell.model, cell.effort].filter(Boolean).join("-"), cell.session_id.slice(0, 8));
 }
 
 function turnCount(cell: Cell, result: RunResult | null | undefined): number {
@@ -51,7 +52,7 @@ function turnCount(cell: Cell, result: RunResult | null | undefined): number {
  * the cartesian product scales with the cost you are willing to absorb:
  *
  *   small   the inner loop: one session per harness, one mid turn, detailed view only
- *   medium  breadth: one session per harness×model, first/middle/last turns, every variant
+ *   medium  breadth: one session per harness×model×effort, first/middle/last turns, every variant
  *   large   the full covering matrix: every session, every turn, both views, every variant
  *
  * A tier's permutations keep the slugs they would have in `large`, so a faster run
@@ -93,7 +94,7 @@ export const TIERS: Record<TierName, MatrixTier> = {
   },
   medium: {
     name: "medium",
-    cells: (cells) => firstBy(cells, (c) => `${c.harness}/${c.model}`),
+    cells: (cells) => firstBy(cells, (c) => `${c.harness}/${c.model}/${c.effort ?? ""}`),
     turns: (n) => (n ? [...new Set([1, mid(n), n])] : []),
     views: ["summary", "detailed"],
     variants: { sortedOverview: true, darkOverview: true, filteredOverview: true, axisLine: true, dark: true, recRaw: true, line: true },
