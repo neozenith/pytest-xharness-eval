@@ -29,8 +29,23 @@ export const TOTAL = { key: "total" as const, label: "accumulative_billed_tokens
 const COST_KEY = "cost";
 const COST_LABEL = "accumulative cost (est. USD)";
 
-const NOTE =
-  "Starts at baseline_tokens (the harness's own prompt on turn 1); each turn adds the cache it re-read, the new context it ingested, its thinking, its visible output, and the whole bill of any subagent it spawned. The last bar is accumulative_billed_tokens. The line on the right axis is the running estimated cost, priced with rates_applied.";
+/**
+ * What the panel says it draws, which depends on what it does draw: bars per turn or a stacked
+ * area per line, and a cost line only when the result carries rates to price it with. One fixed
+ * sentence promised a cost line an unpriced run never has, and "the last bar" on a chart of none.
+ */
+const note = (perLine: boolean, priced: boolean): string =>
+  [
+    perLine
+      ? "Per session-log line: the same categories stacked as cumulative tokens, each held from the latest turn measured at or before that line, so the top of the stack is accumulative_billed_tokens so far."
+      : "Starts at baseline_tokens (the harness's own prompt on turn 1); each turn adds the cache it re-read, the new context it ingested, its thinking, its visible output, and the whole bill of any subagent it spawned. The last bar is accumulative_billed_tokens.",
+    priced
+      ? `The ${perLine ? "step" : "line"} on the right axis is the running estimated cost, priced with rates_applied.`
+      : "No cost is drawn: the result carries no rates_applied to price it with.",
+  ].join(" ");
+
+const ariaLabel = (perLine: boolean, priced: boolean): string =>
+  `Token waterfall from baseline to accumulative billed tokens${perLine ? ", stacked per session-log line" : ""}${priced ? ", with the running estimated cost on a second axis" : ""}`;
 
 const legendItems = (theme: ChartTheme, withTotal: boolean, withCost: boolean): LegendItem[] => [
   ...[...CATEGORIES, ...(withTotal ? [TOTAL] : [])].map((c) => ({ key: c.key, label: c.label, color: theme.waterfall[c.key] ?? theme.accent })),
@@ -142,12 +157,12 @@ export function TokenWaterfallChart({ result, lines, mode }: Props) {
   }, [theme, hidden, byLine, columns, cost, result, lines]);
 
   return (
-    <ChartPanel id="TokenWaterfallChart" title="Token waterfall" note={NOTE}>
+    <ChartPanel id="TokenWaterfallChart" title="Token waterfall" note={note(byLine != null, cost != null)}>
       <PlotWithLegend
         data={traces}
         layout={layout}
         height={440}
-        ariaLabel="Token waterfall from baseline to accumulative billed tokens, with the running estimated cost on a second axis"
+        ariaLabel={ariaLabel(byLine != null, cost != null)}
         items={legend}
         hidden={hidden}
         onToggle={toggle}

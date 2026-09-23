@@ -158,6 +158,36 @@ test.describe("TokenWaterfallChart", () => {
     });
   }
 
+  // The note and the plot label were one fixed string: they promised a cost line an unpriced run
+  // never draws, and described "the last bar" on the per-line chart, which has no bars.
+  test("an unpriced result's note and label promise no cost line", async ({ mount }) => {
+    const c = await mount(<TokenWaterfallChart result={result({ rates_applied: {} })} lines={lines} mode="turn" />);
+    await readGraph(c);
+    const panel = c.locator("#TokenWaterfallChart");
+    await expect(panel).not.toContainText("running estimated cost");
+    await expect(panel).toContainText("no rates_applied");
+    await expect(graph(c)).not.toHaveAttribute("aria-label", /cost/);
+  });
+
+  test("per line the note describes the stacked area, not bars", async ({ mount }) => {
+    const c = await mount(<TokenWaterfallChart result={result()} lines={lines} mode="line" />);
+    await readGraph(c);
+    const panel = c.locator("#TokenWaterfallChart");
+    await expect(panel).not.toContainText(/\bbars?\b/);
+    await expect(panel).toContainText("Per session-log line");
+    await expect(panel).toContainText("running estimated cost");
+    await expect(graph(c)).toHaveAttribute("aria-label", /session-log line/);
+  });
+
+  test("per turn the note names the last bar and the cost line", async ({ mount }) => {
+    const c = await mount(<TokenWaterfallChart result={result()} lines={lines} mode="turn" />);
+    await readGraph(c);
+    const panel = c.locator("#TokenWaterfallChart");
+    await expect(panel).toContainText("The last bar is accumulative_billed_tokens");
+    await expect(panel).toContainText("running estimated cost");
+    await expect(graph(c)).toHaveAttribute("aria-label", /cost/);
+  });
+
   test("at a narrow viewport the legend wraps beneath the plot", async ({ mount, page }) => {
     await page.setViewportSize({ width: 480, height: 900 });
     const c = await mount(<TokenWaterfallChart result={result()} lines={lines} mode="turn" />);

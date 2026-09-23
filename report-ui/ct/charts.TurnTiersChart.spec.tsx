@@ -90,6 +90,29 @@ test.describe("TurnTiersChart", () => {
     });
   }
 
+  // `~s` is d3's SI format: a billion tokens read "1G", giga, on a token axis.
+  test("a billion-token axis reads B, never SI giga", async ({ mount }) => {
+    const r = result({
+      calls: [call(1, { usage: usage({ cache_read_tokens: 1_200_000_000 }) }), call(2, { usage: usage({ cache_read_tokens: 2_400_000_000 }) })],
+    });
+    const c = await mount(<TurnTiersChart result={r} lines={lines} mode="turn" />);
+    await readGraph(c);
+    const ticks = await graph(c).locator(".ytick text").allTextContents();
+    expect(ticks.some((t) => /\dB$/.test(t))).toBe(true);
+    expect(ticks.filter((t) => /G$/.test(t))).toEqual([]);
+  });
+
+  test("a legend chip toggles from the keyboard", async ({ mount, page }) => {
+    const c = await mount(<TurnTiersChart result={result()} lines={lines} mode="turn" />);
+    await readGraph(c);
+    await chips(c).first().focus();
+    await page.keyboard.press("Space");
+    await expect(chips(c).first()).toHaveAttribute("aria-pressed", "false");
+    await expect.poll(async () => (await readGraph(c)).traces[0]!.visible).toBe("legendonly");
+    await page.keyboard.press("Enter");
+    await expect(chips(c).first()).toHaveAttribute("aria-pressed", "true");
+  });
+
   test("two viewport widths: the plot narrows with the page", async ({ mount, page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const c = await mount(<TurnTiersChart result={result()} lines={lines} mode="turn" />);

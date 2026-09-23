@@ -75,6 +75,25 @@ test.describe("TokenWaterfallAggregateChart", () => {
     await expect(c.locator("#TokenWaterfallAggregateChart")).toContainText("averaged over 2 runs");
   });
 
+  // ADR 0049: two rungs are two experiments. The accumulation chart keeps them apart; this chart
+  // pools them by design, so its note has to say it is pooling, and how many arms.
+  test("pooling several arms is named in the note; one arm is not called a pool", async ({ mount }) => {
+    const cells = sweep();
+    const c = await mount(<TokenWaterfallAggregateChart cells={cells} results={resultsFor(cells)} />);
+    await expect(c.locator("#TokenWaterfallAggregateChart")).toContainText("pools 7 arms (harness × model × effort rung)");
+    const one = [cell({ session_id: "a", effort: "high" }), cell({ session_id: "b", effort: "high" })];
+    await c.update(<TokenWaterfallAggregateChart cells={one} results={resultsFor(one)} />);
+    await expect(c.locator("#TokenWaterfallAggregateChart")).toContainText("averaged over 2 runs");
+    await expect(c.locator("#TokenWaterfallAggregateChart")).not.toContainText("pools");
+  });
+
+  test("an unledgered arm does not count toward the pool", async ({ mount }) => {
+    const cells = [cell({ session_id: "a", effort: "high" }), cell({ session_id: "b", effort: "low", has_ledger: false })];
+    const c = await mount(<TokenWaterfallAggregateChart cells={cells} results={resultsFor(cells)} />);
+    await expect(c.locator("#TokenWaterfallAggregateChart")).toContainText("averaged over 1 run");
+    await expect(c.locator("#TokenWaterfallAggregateChart")).not.toContainText("pools");
+  });
+
   test("one run: the singular title", async ({ mount }) => {
     const cells = [cell()];
     const c = await mount(<TokenWaterfallAggregateChart cells={cells} results={resultsFor(cells)} />);

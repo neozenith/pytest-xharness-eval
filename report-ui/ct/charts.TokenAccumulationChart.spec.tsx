@@ -68,7 +68,9 @@ test.describe("TokenAccumulationChart", () => {
     expect(band[0]!.y).toEqual([300, 600, 300]);
     expect(band[1]!.y).toEqual([100, 200, 300]);
     expect(band[1]!.fill).toBe("tonexty");
-    expect(band[1]!.fillcolor).toBe(`${high!.lineColor}26`);
+    // washed in the line's own colour (series 1, #4f46e5) at a low alpha
+    expect(band[1]!.fillcolor).toBe("rgba(79,70,229,0.15)");
+    expect(high!.lineColor).toBe(tokens.themes.light.series[0]);
     await expect(chips(c)).toHaveCount(2);
   });
 
@@ -177,6 +179,34 @@ test.describe("TokenAccumulationChart", () => {
       expect(g.fontColor).toBe(theme.ink);
       await expect(graph(c).locator(".scatterlayer .js-line").first()).toHaveCSS("stroke", rgb(theme.series[0]!));
       await expect(chips(c).first().locator("div[aria-hidden]").first()).toHaveCSS("background-color", rgb(theme.series[0]!));
+    });
+  }
+
+  // A project may override the series tokens (`xharness_report_design_tokens`) with any CSS
+  // colour Plotly parses; the envelope only handled `#rrggbb` and fell back to a grey wash that
+  // no longer matched its line.
+  for (const [token, drawn] of [
+    ["#4f46e5", "rgb(79, 70, 229)"],
+    ["#36c", "rgb(51, 102, 204)"],
+    ["rgb(51, 102, 204)", "rgb(51, 102, 204)"],
+  ] as const) {
+    test(`the envelope takes the line's own colour for a ${token} series token`, async ({ mount, page }) => {
+      const cells = [cell({ session_id: "h1", effort: "high" }), cell({ session_id: "h2", effort: "high" })];
+      const c = await mount(<TokenAccumulationChart cells={cells} results={resultsFor(cells, (x) => flat(x.session_id === "h2" ? [5, 5] : [1, 1]))} />);
+      await readGraph(c);
+      await page.evaluate((col) => document.documentElement.style.setProperty("--xh-series-1", col), token);
+      await expect.poll(async () => mainLines((await readGraph(c)).traces)[0]!.lineColor).toBe(token);
+      const fill = await graph(c)
+        .locator(".scatterlayer .js-fill")
+        .first()
+        .evaluate((p) => {
+          const s = getComputedStyle(p);
+          // the effective wash: the fill's own alpha, its path, and the trace group Plotly drew it in
+          return { fill: s.fill, opacity: Number(s.fillOpacity) * Number(s.opacity) * Number(getComputedStyle(p.closest(".trace")!).opacity) };
+        });
+      expect(fill.fill).toBe(drawn);
+      expect(fill.opacity).toBeGreaterThan(0.05);
+      expect(fill.opacity).toBeLessThan(0.3);
     });
   }
 

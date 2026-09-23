@@ -71,6 +71,22 @@ test.describe("Plot", () => {
     await expect(c.locator(".scatterlayer .trace, .barlayer .trace")).toHaveCount(0);
   });
 
+  // React removing the div hides the SVG whether or not Plotly let go of it, so the test above is
+  // blind to a missing purge. Held by a handle past unmount, the node shows what was released:
+  // Plotly's state, and the window resize listener `responsive: true` installs.
+  test("unmounting releases Plotly's state and its resize listener", async ({ mount }) => {
+    const c0 = await mount(<Plot data={line} layout={{}} height={200} ariaLabel="x" />);
+    const el = await graph(c0).elementHandle();
+    await expect(graph(c0).locator(".main-svg").first()).toBeVisible();
+    expect(await el!.evaluate((n) => typeof (n as unknown as { _responsiveChartHandler?: unknown })._responsiveChartHandler)).toBe("function");
+    await c0.unmount();
+    const left = await el!.evaluate((n) => {
+      const gd = n as unknown as Record<string, unknown>;
+      return { fullLayout: gd._fullLayout !== undefined, handler: gd._responsiveChartHandler !== undefined, svg: n.querySelectorAll("svg").length };
+    });
+    expect(left).toEqual({ fullLayout: false, handler: false, svg: 0 });
+  });
+
   test("unmounting purges the graph", async ({ mount, page }) => {
     const c0 = await mount(<Plot data={line} layout={{}} height={200} ariaLabel="x" />);
     const c = graph(c0);
