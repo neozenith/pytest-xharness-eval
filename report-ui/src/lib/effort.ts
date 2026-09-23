@@ -25,17 +25,27 @@ export const effortRank = (effort: string): number => {
 
 /** Ladder order, unknown rungs after it (lexically), null last. */
 export const compareEffort = (a: string | null, b: string | null): number => {
+  // `== null` on both sides, not `===`: a key a pre-axis row never wrote (`undefined`) and a
+  // `null` are the same no-rung, or the comparator answers 1 both ways and a sort is undefined.
+  if (a == null || b == null) return a == null ? (b == null ? 0 : 1) : -1;
   if (a === b) return 0;
-  if (a == null) return 1;
-  if (b == null) return -1;
   return effortRank(a) - effortRank(b) || (a < b ? -1 : a > b ? 1 : 0);
 };
 
 /**
- * A sort value for a table column: numeric, so a column comparator that ranks with `<` puts the
- * ladder in order. Unknown rungs share one rank past the ladder; null stays null (sorts last).
+ * A sort value for a table column, which ranks with a plain `<`: the ladder position, zero-padded,
+ * then the rung itself, so `<` on it is exactly `compareEffort`. Unknown rungs sort lexically
+ * among themselves rather than tying (a tie left two of a third harness's rungs in whatever order
+ * the rows arrived, and a descending click did not reverse them). Null stays null (sorts last).
  */
-export const effortSortValue = (effort: string | null): number | null => (effort == null ? null : effortRank(effort));
+export const effortSortValue = (effort: string | null): string | null => (effort == null ? null : `${String(effortRank(effort)).padStart(3, "0")} ${effort}`);
+
+/**
+ * The rung a wire row carries, or null for none. ADR 0049 lets an emitter write the empty string
+ * for a cell that named no rung, and a row captured before the axis has no key at all; both are
+ * "no rung", and `Cell` says `string | null`, so the index reader folds them here, once.
+ */
+export const rungOf = (effort: unknown): string | null => (typeof effort === "string" && effort !== "" ? effort : null);
 
 /** `claude/claude-opus-5 · high`, or `claude/claude-opus-5` for a cell that named no rung. */
 export const armLabel = (harness: string, model: string, effort: string | null): string => `${harness}/${model}${effort ? ` · ${effort}` : ""}`;

@@ -66,6 +66,17 @@ test("inline page boots over file:// and binds the captured data", async ({ page
     if ((await page.locator(`#${id}`).count()) === 0) missing.push(id);
   }
   expect(missing, "glossary element ids missing from an open session").toEqual([]);
+  // `ReportTitleEffort` is the one conditional glossary id: present exactly when the open cell
+  // was sent a rung (ADR 0049), so it is checked against the data rather than listed above.
+  const effort = await page.evaluate(
+    (id) =>
+      (window as unknown as { __XH_DATA__?: { index: { cells: { session_id: string; effort?: string | null }[] } } }).__XH_DATA__?.index.cells.find(
+        (c) => c.session_id === id,
+      )?.effort || null,
+    sid,
+  );
+  await expect(page.locator("#ReportTitleEffort")).toHaveCount(effort ? 1 : 0);
+  if (effort) await expect(page.locator("#ReportTitleEffort")).toHaveText(effort);
 
   // A turn opened in the detailed view renders its records.
   await page.goto(`${url}?session=${sid}&turn=1&view=detailed`, { waitUntil: "load" });

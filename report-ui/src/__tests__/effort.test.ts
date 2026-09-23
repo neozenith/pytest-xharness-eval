@@ -10,7 +10,7 @@ test("rungs order by ladder position, an unknown rung after the ladder, null las
   expect(LADDER).toEqual(["low", "medium", "high", "xhigh", "max"]);
 });
 
-test("a rung's sort value is numeric, so a `<` comparator ranks the ladder, and null stays null", () => {
+test("a rung's sort value ranks the ladder under a plain `<` comparator, and null stays null", () => {
   expect(effortSortValue("low")! < effortSortValue("high")!).toBe(true);
   expect(effortSortValue("max")! < effortSortValue("never-heard-of-it")!).toBe(true);
   expect(effortSortValue(null)).toBeNull();
@@ -28,14 +28,17 @@ test("two rungs of one model are two summary rows, in ladder order, never one av
     cell({ session_id: "2", effort: "low", estimated_cost_usd: 1 }),
     cell({ session_id: "3", effort: null, estimated_cost_usd: 5 }),
     cell({ session_id: "4", effort: "low", estimated_cost_usd: 3 }),
+    // `high` sorts before `low` by spelling: only a ladder comparator puts it after
+    cell({ session_id: "5", effort: "high", estimated_cost_usd: 4 }),
   ]);
   expect(rows.map((r) => [r.effort, r.runs, r.mean_estimated_cost_usd])).toEqual([
     ["low", 2, 2],
+    ["high", 1, 4],
     ["max", 1, 9],
     [null, 1, 5],
   ]);
   // a rung-less group keeps the key it had before the axis existed
-  expect(rows[2]!.key).toBe("discovery|eval_case|claude|claude-opus-5");
+  expect(rows[3]!.key).toBe("discovery|eval_case|claude|claude-opus-5");
   expect(rows[0]!.key).toBe("discovery|eval_case|claude|claude-opus-5|low");
 });
 

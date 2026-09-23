@@ -53,7 +53,14 @@ export interface SummaryRow {
   mean_wall_ms: number | null;
 }
 
-const groupKey = (c: Cell): string => `${c.skill ?? ""}|${c.case}|${c.harness}|${c.model}${c.effort ? `|${c.effort}` : ""}`;
+/** The arm a group belongs to: its key without the rung, so one arm's rungs can be ordered side by side. */
+export const armKey = (c: Cell): string => `${c.skill ?? ""}|${c.case}|${c.harness}|${c.model}`;
+
+/**
+ * The one partition key, exported so `accumulationGroups` draws with *this* function rather than
+ * a second spelling of it: the pairing is structural, not a coincidence two keys keep up.
+ */
+export const groupKey = (c: Cell): string => `${armKey(c)}${c.effort ? `|${c.effort}` : ""}`;
 
 const mean = (cells: Cell[], valueOf: (c: Cell) => number | null | undefined): number | null => {
   const values = cells.map(valueOf).filter((v): v is number => v != null && !Number.isNaN(v));

@@ -151,10 +151,16 @@ test("without a collision the tables print the short model name", async ({ mount
   expect(models.sort()).toEqual(["opus-5", "sonnet-5"]);
 });
 
+/*
+ * A push is witnessed by Back, not by `history.length`. CT reuses one page per worker, and once
+ * earlier tests have walked it to Chromium's 50-entry cap a push drops the oldest entry and the
+ * length stays 50: under a full parallel suite `before + 1` read 51 against 50. Back landing on
+ * the overview is what a push means to a reader, and a replace would have left nothing to return to.
+ */
 test("clicking a session row pushes the session route", async ({ mount, page }) => {
   await mountAt(mount);
-  const before = await page.evaluate(() => history.length);
   await page.locator("#SessionTable tr[data-sid='bbbbbbbb-0001'] td[data-k='case']").click();
   await expect.poll(() => page.evaluate(() => location.search)).toBe("?session=bbbbbbbb-0001");
-  await expect.poll(() => page.evaluate(() => history.length)).toBe(before + 1);
+  await page.evaluate(() => history.back());
+  await expect.poll(() => page.evaluate(() => location.search)).toBe("");
 });

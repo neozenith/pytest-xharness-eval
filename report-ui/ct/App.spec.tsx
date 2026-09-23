@@ -161,3 +161,27 @@ test("a control used under ?line= keeps the turn the line opened", async ({ moun
   await expect(detail).toHaveAttribute("data-n", "2");
   await expect.poll(() => search(page)).toContain("turn=2");
 });
+
+/*
+ * A capture from before ADR 0049: `index.json` rows carry no `effort` key at all, and ADR 0049
+ * lets a later emitter write `""` for "none named". The page folds both to null where it reads
+ * the index, so neither reaches a chip, a cell, a label or the header as a value.
+ */
+test("a pre-axis capture (no effort key, or an empty one) renders with no rung anywhere", async ({ mount, page }) => {
+  const data = inline();
+  data.index.cells = data.index.cells.map((c, i) => {
+    const rest: Partial<typeof c> = { ...c };
+    delete rest.effort;
+    return (i % 2 ? { ...rest, effort: "" } : rest) as typeof c;
+  });
+  await mount(<App />, { hooksConfig: { inline: data } });
+  await expect(page.locator("#SessionTable tbody tr.SessionRow")).toHaveCount(7);
+  await expect(page.locator(".filter-chip[data-facet='effort']")).toHaveCount(0);
+  await expect(page.locator("#SweepOverview")).not.toContainText("undefined");
+  const sid = data.index.cells[0]!.session_id;
+  await row(page, sid).click();
+  await expect.poll(() => search(page)).toBe(`?session=${sid}`);
+  await expect(page.locator("#ReportTitleEffort")).toHaveCount(0);
+  await expect(page.locator("#SessionTitle")).not.toContainText(" · undefined");
+  await expect(page.locator("#SessionMetaTable")).toContainText("not named: the CLI's default");
+});

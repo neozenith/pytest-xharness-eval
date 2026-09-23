@@ -243,6 +243,27 @@ def test_a_harness_with_no_ladder_cannot_be_asked_for_an_effort() -> None:
         effort_words.resolve("high", (), harness="probe")
 
 
+def test_the_report_page_ranks_rungs_on_the_ladders_the_harnesses_declare(pytestconfig: pytest.Config) -> None:
+    """``LADDER`` in ``report-ui/src/lib/effort.ts`` is the page's copy of the rung order.
+
+    The page sorts chips, table columns, summary rows, sidebar branches and chart lines by it, so a
+    rung a harness gains here and the page lacks would sort after every known rung as if it came
+    from a third CLI, and a reordered ladder would print ``high`` above ``low``. The page cannot
+    import Python, so the copy is pinned here instead: every registered harness's ladder must be
+    the page's ladder read in order, and the page may name no rung no harness has (ADR 0049).
+    """
+    source = (pytestconfig.rootpath / "report-ui" / "src" / "lib" / "effort.ts").read_text(encoding="utf-8")
+    declared = re.search(r"export const LADDER\b[^=]*=\s*\[([^\]]*)\]", source)
+    assert declared, "report-ui/src/lib/effort.ts no longer declares LADDER as an array literal"
+    page_ladder = tuple(re.findall(r'"([^"]+)"', declared.group(1)))
+    ladders = {name: tuple(harnesses.get(name).efforts) for name in harnesses.names()}
+    for name, ladder in ladders.items():
+        in_page_order = tuple(rung for rung in page_ladder if rung in ladder)
+        assert in_page_order == ladder, f"{name}'s ladder is not the page's, in order"
+    assert set(page_ladder) == {rung for ladder in ladders.values() for rung in ladder}
+    assert set(page_ladder) <= {word.value for word in effort_words.Effort}
+
+
 def test_each_harness_renders_the_rung_in_its_own_dialect() -> None:
     """claude has a first-class flag; codex has only the config mechanism (ADR 0049)."""
     assert claude_harness.effort_argv("high") == ["--effort", "high"]

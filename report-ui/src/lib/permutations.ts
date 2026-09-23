@@ -112,8 +112,8 @@ export const TIERS: Record<TierName, MatrixTier> = {
  * The overview's filter states (ADR 0042), derived from the data rather than hardcoded: one
  * single-select per facet that offers a real choice, one multi-select (which is what covers the
  * comma serialisation, and is not the same URL as the param being absent), and — when the data
- * offers one — a harness × model pair that selects zero sessions, which is the empty state the
- * matrix must look at every sweep. A facet with fewer than two options emits nothing: there is
+ * offers one — a harness × model pair, and a harness × effort pair, that select zero sessions:
+ * the empty states the matrix must look at every sweep. A facet with fewer than two options emits nothing: there is
  * no choice there to cover.
  */
 function filterPermutations(cells: Cell[]): Permutation[] {
@@ -144,6 +144,24 @@ function filterPermutations(cells: Cell[]): Permutation[] {
         slug: "overview--filter-none",
         search: overviewSearch(null, null, { ...NO_FACETS, harness: [harness], model: [model] }),
         description: `SweepOverview filtered to ${harness} × ${model}, which no session matches`,
+      });
+      break;
+    }
+  }
+  /*
+   * The effort empty state (ADR 0049): a harness × rung pair no session matches, which is the
+   * shape a real two-harness sweep produces whenever one ladder has a rung the other arm never
+   * ran. It exercises the one facet whose rung-less cells can never be selected, so it is swept
+   * on its own rather than trusted to the harness × model case above.
+   */
+  if (options.harness.length >= 2 && options.effort.length >= 1) {
+    for (const harness of options.harness) {
+      const effort = options.effort.find((e) => filterCells(cells, { ...NO_FACETS, harness: [harness], effort: [e] }).length === 0);
+      if (effort === undefined) continue;
+      perms.push({
+        slug: "overview--filter-none-effort",
+        search: overviewSearch(null, null, { ...NO_FACETS, harness: [harness], effort: [effort] }),
+        description: `SweepOverview filtered to ${harness} × effort ${effort}, which no session matches`,
       });
       break;
     }
