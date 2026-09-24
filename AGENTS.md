@@ -19,7 +19,7 @@ Run everything from the repository root.
 | Lint and type-check (`ruff`, `isort`, `mypy --strict`) | `make check` | free |
 | Run the plugin's own tests with coverage | `make test` | free |
 | Build a wheel | `make build` | free |
-| Work on the report page (`report-ui/`, ADR 0028, ADR 0031) | `make ui-dev CAPTURED=<project>/.xharness_eval_cache`, then `make ui-check`, `make ui-test`, `make ui-e2e CAPTURED=… TIER=small|medium|large` (Playwright permutation sweep; `small` is the inner loop, `large` the full matrix), `make ui-smoke CAPTURED=…`, and `make ui-promote` to ship the build (CI fails if the asset is stale) | free |
+| Work on the report page (`report-ui/`, ADR 0028, ADR 0031) | `make ui-dev CAPTURED=<project>/.xharness_eval_cache`, then `make ui-check`, `make ui-test`, `make ui-ct` (Playwright Component Testing: each component mounted alone in Chromium from `report-ui/ct/fixtures.ts`, no capture needed), `make ui-e2e CAPTURED=… TIER=small|medium|large` (Playwright permutation sweep; `small` is the inner loop, `large` the full matrix), `make ui-smoke CAPTURED=…`, and `make ui-promote` to ship the build (CI fails if the asset is stale) | free |
 | Release to PyPI | bump `version` and `__version__` together, `make test`, then publish a GitHub Release tagged `vX.Y.Z`; `publish.yml` does the rest (ADR 0017) | free |
 
 In a consuming repository with the plugin installed:
@@ -191,7 +191,7 @@ the code, add it to the glossary in the same change.
 | A harness's `efforts` ladder, or a word in `model/effort.py` | `README.md`'s alias table, `GLOSSARY.md`, `ARCHITECTURE.md`'s isolation-levers table, and `tests/test_units.py` -- the ladder is ordered, so adding a rung moves what `mid` resolves to |
 | A decision recorded in an ADR | Write a new ADR that supersedes it; do not edit the old one |
 | A key `emit/index.py` or `emit/metrics.py` writes | `report-ui/src/lib/types.ts`, the glossary's metric table, the frozen key lists in `tests/test_units.py`, and the `SessionTable` column definitions if it is shown |
-| `report-ui/src/` | `make ui-check`, `make ui-test`; a `TIER=small` sweep while iterating, `TIER=medium` before shipping, `large` when the change ripples wide |
+| `report-ui/src/` | `make ui-check`, `make ui-test`, `make ui-ct` (and the component's `report-ui/ct/<Component>.spec.tsx`); a `TIER=small` sweep while iterating, `TIER=medium` before shipping, `large` when the change ripples wide |
 | A route param in `report-ui/src/lib/route.ts` | `report-ui/src/lib/permutations.ts` in the same change, or the e2e matrix silently stops covering it |
 
 ## Out of scope this iteration

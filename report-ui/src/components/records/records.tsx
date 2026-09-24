@@ -19,6 +19,8 @@ const str = (v: unknown): string | undefined => (v == null ? undefined : String(
 const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
 const ms = (v: unknown): string => (v == null ? "–" : `${fmt(Math.round(Number(v)))} ms`);
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+/** A field the record may not carry: `<Flag>` is an element, so Kvs would keep it and print "undefined". */
+const flag = (v: unknown): ReactNode => (v === undefined ? undefined : <Flag value={v} />);
 
 const Injected = () => <Muted>harness-injected; not the prompt under test</Muted>;
 
@@ -49,9 +51,10 @@ const R: Record<string, (r: Rec) => ReactNode> = {
       <Details summary="toolUseResult (harness view of the result)">{r.toolUseResult ? <Json value={r.toolUseResult} /> : null}</Details>
     </>
   ),
-  "claude/assistant/text": (r) => <ClaudeMessage message={r.message} />,
-  "claude/assistant/thinking": (r) => <ClaudeMessage message={r.message} />,
-  "claude/assistant/tool_use": (r) => <ClaudeMessage message={r.message} />,
+  // The rung the call ran at is a top-level field of the line, not of the API message (ADR 0049).
+  "claude/assistant/text": (r) => <ClaudeMessage message={r.message} effort={r.effort} />,
+  "claude/assistant/thinking": (r) => <ClaudeMessage message={r.message} effort={r.effort} />,
+  "claude/assistant/tool_use": (r) => <ClaudeMessage message={r.message} effort={r.effort} />,
   "claude/assistant/synthetic": (r) => (
     <>
       <Notice>harness-generated message, not a model call</Notice>
@@ -139,15 +142,19 @@ const R: Record<string, (r: Rec) => ReactNode> = {
   "codex/turn_context": (r) => {
     const p = obj(r.payload);
     const sandbox = obj(p.sandbox_policy);
+    // The rung (ADR 0049) sits beside the model it qualifies. codex-cli writes it as `effort`
+    // and echoes it in `collaboration_mode.settings`, so either spelling names it.
+    const effort = p.effort ?? obj(obj(p.collaboration_mode).settings).reasoning_effort;
     return (
       <>
         <Kvs
           pairs={[
             ["model", code(p.model)],
+            ["effort", str(effort)],
             ["cwd", code(p.cwd)],
             ["approval", str(p.approval_policy)],
             ["sandbox", str(sandbox.type)],
-            ["network", <Flag key="n" value={sandbox.network_access} />],
+            ["network", flag(sandbox.network_access)],
             ["personality", str(p.personality)],
             ["timezone", str(p.timezone)],
             ["date", str(p.current_date)],
@@ -162,7 +169,7 @@ const R: Record<string, (r: Rec) => ReactNode> = {
   "codex/world_state": (r) => {
     const p = obj(r.payload);
     const state = obj(p.state);
-    const pairs: Pair[] = [["full snapshot", <Flag key="f" value={p.full} />]];
+    const pairs: Pair[] = [["full snapshot", flag(p.full)]];
     for (const [k, v] of Object.entries(state)) pairs.push([k, typeof v === "boolean" ? <Flag key={k} value={v} /> : pretty(v)]);
     return (
       <>

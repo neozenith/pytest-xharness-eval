@@ -90,7 +90,7 @@ export function ReconciliationPanel({ result }: { result: RunResult }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <KvTable id="ReconciliationPanel" rows={rows} />
+        <KvTable id="ReconciliationPanel" rows={rows} label="reconciliation: ledger against harness aggregate" />
       </CardContent>
     </Card>
   );

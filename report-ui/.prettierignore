@@ -4,4 +4,6 @@ bun.lock
 src/components/ui
 test-results
 playwright-report
+playwright/.cache*
+ct/__snapshots__
 DESIGN-LOG.md

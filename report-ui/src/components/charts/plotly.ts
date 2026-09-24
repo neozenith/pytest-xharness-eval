@@ -23,30 +23,32 @@ export interface ChartTheme {
 }
 
 const FALLBACK: Record<string, string> = {
-  "--xh-ink": "#1f2430",
-  "--xh-muted": "#6b7280",
-  "--xh-grid": "#e5e7eb",
+  // The bundled light theme (assets/report.tokens.json), so a chart drawn before the tokens load
+  // is the chart it will be once they do. Pinned to the tokens by src/__tests__/charts.fallback.test.ts.
+  "--xh-ink": "#1b1d23",
+  "--xh-muted": "#5b6070",
+  "--xh-grid": "#e6e8ee",
   "--xh-axis": "#c8ccd6",
   "--xh-plot": "#ffffff",
   "--xh-panel": "#ffffff",
-  "--xh-accent": "#2563eb",
+  "--xh-accent": "#4f46e5",
   "--xh-font-body": "system-ui, sans-serif",
   "--xh-font-mono": "ui-monospace, monospace",
-  "--xh-series-1": "#2563eb",
-  "--xh-series-2": "#0d9488",
-  "--xh-series-3": "#d97706",
-  "--xh-series-4": "#dc2626",
-  "--xh-series-5": "#7c3aed",
-  "--xh-series-6": "#db2777",
-  "--xh-series-7": "#65a30d",
-  "--xh-series-8": "#0891b2",
-  "--xh-waterfall-baseline": "#94a3b8",
-  "--xh-waterfall-read": "#93c5fd",
+  "--xh-series-1": "#4f46e5",
+  "--xh-series-2": "#d97706",
+  "--xh-series-3": "#059669",
+  "--xh-series-4": "#db2777",
+  "--xh-series-5": "#0284c7",
+  "--xh-series-6": "#7c3aed",
+  "--xh-series-7": "#dc2626",
+  "--xh-series-8": "#0d9488",
+  "--xh-waterfall-baseline": "#64748b",
+  "--xh-waterfall-read": "#7d8ba1",
   "--xh-waterfall-context": "#2563eb",
-  "--xh-waterfall-thinking": "#a855f7",
-  "--xh-waterfall-output": "#16a34a",
+  "--xh-waterfall-thinking": "#7c3aed",
+  "--xh-waterfall-output": "#059669",
   "--xh-waterfall-sub": "#ea580c",
-  "--xh-waterfall-total": "#475569",
+  "--xh-waterfall-total": "#1b1d23",
 };
 
 function cssVar(styles: CSSStyleDeclaration, name: string): string {
@@ -107,7 +109,8 @@ export function axis(t: ChartTheme, { title, compact, integer }: AxisOptions = {
     linecolor: t.axis,
     tickfont: { color: t.muted, size: 11 },
     automargin: true,
-    ...(compact ? { tickformat: "~s" } : {}),
+    // Plotly's own `B` suffixes (k, M, B), not d3's `~s`: SI reads a billion tokens as "1G", giga.
+    ...(compact ? { exponentformat: "B" as const } : {}),
     ...(integer ? { tickformat: ",d", dtick: undefined } : {}),
   };
 }

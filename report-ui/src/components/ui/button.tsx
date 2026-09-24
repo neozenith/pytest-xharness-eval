@@ -11,7 +11,6 @@ import { styled, Text, View } from "tamagui";
 const ButtonFrame = styled(View, {
   name: "XhButton",
   render: "button",
-  cursor: "pointer",
   flexDirection: "row",
   display: "inline-flex",
   alignSelf: "flex-start",
@@ -80,6 +79,16 @@ export function wrapTextChildren(children: ReactNode): ReactNode {
   return Array.isArray(children) ? children.map((child, i) => wrap(child, i)) : wrap(children);
 }
 
+/*
+ * A disabled button's hover and press restate its resting surface: the variants' `hoverStyle`
+ * is a CSS `:hover` rule, which a disabled `<button>` still matches, so it used to light up
+ * under the pointer exactly like one that would answer the click.
+ */
+const INERT = {
+  outline: { backgroundColor: "$panel", borderColor: "$line", boxShadow: "0 1px 2px -1px var(--xh-shadow)", scale: 1 },
+  ghost: { backgroundColor: "transparent", scale: 1 },
+} as const;
+
 /** Typography per size, applied as plain CSS on the frame so the wrapped Text inherits it. */
 const TYPE = {
   default: { fontSize: 13, lineHeight: "16px" },
@@ -90,8 +99,18 @@ const TYPE = {
 
 export function Button({ children, ...props }: ComponentProps<typeof ButtonFrame>) {
   const type = TYPE[(props.size as keyof typeof TYPE) ?? "default"] ?? TYPE.default;
+  /*
+   * The cursor is decided here, not on the frame: a frame-level `cursor: pointer` is an atomic
+   * class that outranks index.css's `button:disabled { cursor: not-allowed }`, so a disabled
+   * Button kept promising a click.
+   */
+  const inert = props.disabled ? INERT[(props.variant as keyof typeof INERT) ?? "outline"] : undefined;
   return (
-    <ButtonFrame {...props} style={{ fontWeight: 500, whiteSpace: "nowrap", ...type, ...(props.style as object) }}>
+    <ButtonFrame
+      cursor={props.disabled ? "not-allowed" : "pointer"}
+      {...props}
+      {...(inert && { hoverStyle: inert, pressStyle: inert })}
+      style={{ fontWeight: 500, whiteSpace: "nowrap", ...type, ...(props.style as object) }}>
       {wrapTextChildren(children)}
     </ButtonFrame>
   );

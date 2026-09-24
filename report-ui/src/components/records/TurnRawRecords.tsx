@@ -83,7 +83,18 @@ export function TurnRawRecords({ result, call, lines, view }: Props) {
         </p>
       ) : (
         records.map((n) => {
-          const raw = lines[n - 1] ?? "";
+          // A ledger line past the end of the captured log (a log truncated after the result
+          // was written) is missing, not unparseable: say so instead of drawing an empty card.
+          if (n < 1 || n > lines.length) {
+            return (
+              <div key={n} id={`L${n}`} className="rec rec-missing">
+                <Muted>
+                  line {n} is not in the captured log (it has {fmt(lines.length)} line{lines.length === 1 ? "" : "s"})
+                </Muted>
+              </div>
+            );
+          }
+          const raw = lines[n - 1]!;
           let kind = `${result.harness}/unparseable`;
           try {
             kind = classify(result.harness, JSON.parse(raw));

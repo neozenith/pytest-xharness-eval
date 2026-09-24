@@ -37,8 +37,9 @@ export function slugify(...parts: (string | number | null | undefined)[]): strin
 
 function cellSlug(cell: Cell): string {
   // The case × harness × model triple reads well; the session-id prefix guarantees
-  // uniqueness when the same cell was captured more than once.
-  return slugify(cell.case, `${cell.harness}-${cell.model}`, cell.session_id.slice(0, 8));
+  // uniqueness when the same cell was captured more than once. A rung joins the arm only when
+  // the cell named one, so every slug written before ADR 0049 is unchanged.
+  return slugify(cell.case, [cell.harness, cell.model, cell.effort].filter(Boolean).join("-"), cell.session_id.slice(0, 8));
 }
 
 function turnCount(cell: Cell, result: RunResult | null | undefined): number {
@@ -51,7 +52,7 @@ function turnCount(cell: Cell, result: RunResult | null | undefined): number {
  * the cartesian product scales with the cost you are willing to absorb:
  *
  *   small   the inner loop: one session per harness, one mid turn, detailed view only
- *   medium  breadth: one session per harness×model, first/middle/last turns, every variant
+ *   medium  breadth: one session per harness×model×effort, first/middle/last turns, every variant
  *   large   the full covering matrix: every session, every turn, both views, every variant
  *
  * A tier's permutations keep the slugs they would have in `large`, so a faster run
@@ -93,7 +94,7 @@ export const TIERS: Record<TierName, MatrixTier> = {
   },
   medium: {
     name: "medium",
-    cells: (cells) => firstBy(cells, (c) => `${c.harness}/${c.model}`),
+    cells: (cells) => firstBy(cells, (c) => `${c.harness}/${c.model}/${c.effort ?? ""}`),
     turns: (n) => (n ? [...new Set([1, mid(n), n])] : []),
     views: ["summary", "detailed"],
     variants: { sortedOverview: true, darkOverview: true, filteredOverview: true, axisLine: true, dark: true, recRaw: true, line: true },
@@ -111,8 +112,8 @@ export const TIERS: Record<TierName, MatrixTier> = {
  * The overview's filter states (ADR 0042), derived from the data rather than hardcoded: one
  * single-select per facet that offers a real choice, one multi-select (which is what covers the
  * comma serialisation, and is not the same URL as the param being absent), and — when the data
- * offers one — a harness × model pair that selects zero sessions, which is the empty state the
- * matrix must look at every sweep. A facet with fewer than two options emits nothing: there is
+ * offers one — a harness × model pair, and a harness × effort pair, that select zero sessions:
+ * the empty states the matrix must look at every sweep. A facet with fewer than two options emits nothing: there is
  * no choice there to cover.
  */
 function filterPermutations(cells: Cell[]): Permutation[] {
@@ -143,6 +144,24 @@ function filterPermutations(cells: Cell[]): Permutation[] {
         slug: "overview--filter-none",
         search: overviewSearch(null, null, { ...NO_FACETS, harness: [harness], model: [model] }),
         description: `SweepOverview filtered to ${harness} × ${model}, which no session matches`,
+      });
+      break;
+    }
+  }
+  /*
+   * The effort empty state (ADR 0049): a harness × rung pair no session matches, which is the
+   * shape a real two-harness sweep produces whenever one ladder has a rung the other arm never
+   * ran. It exercises the one facet whose rung-less cells can never be selected, so it is swept
+   * on its own rather than trusted to the harness × model case above.
+   */
+  if (options.harness.length >= 2 && options.effort.length >= 1) {
+    for (const harness of options.harness) {
+      const effort = options.effort.find((e) => filterCells(cells, { ...NO_FACETS, harness: [harness], effort: [e] }).length === 0);
+      if (effort === undefined) continue;
+      perms.push({
+        slug: "overview--filter-none-effort",
+        search: overviewSearch(null, null, { ...NO_FACETS, harness: [harness], effort: [effort] }),
+        description: `SweepOverview filtered to ${harness} × effort ${effort}, which no session matches`,
       });
       break;
     }

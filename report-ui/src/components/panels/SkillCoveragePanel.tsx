@@ -140,7 +140,7 @@ export function SkillCoveragePanel({ coverage }: { coverage: SkillCoverage | nul
             show ignored files
           </Text>
         </XStack>
-        <Table id="SkillCoveragePanel">
+        <Table id="SkillCoveragePanel" scrollLabel="skill files">
           <TableHeader>
             <TableRow>
               <TableHead>path</TableHead>

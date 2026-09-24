@@ -20,6 +20,17 @@ const NOTE =
   "Where the tokens went, averaged over every run in view: each column is the mean over the runs that reached that turn, faded in proportion to how many, with their min–max spread as a whisker.";
 
 /**
+ * How many arms (harness × model × effort rung) the mean pools: the same ledgered runs
+ * `aggregateWaterfall` averages. Two rungs are two experiments (ADR 0049); the accumulation chart
+ * keeps them apart, this one deliberately does not, so the note has to say when it is mixing them.
+ */
+const pooledArms = (cells: Cell[], results: Record<string, RunResult | null | undefined>): number =>
+  new Set(cells.filter((c) => c.has_ledger && results[c.session_id]?.calls?.length).map((c) => `${c.harness}|${c.model}|${c.effort ?? ""}`)).size;
+
+const poolNote = (arms: number): string =>
+  arms > 1 ? ` It pools ${arms} arms (harness × model × effort rung) into one mean; filter to one arm to read a single experiment.` : "";
+
+/**
  * How solid a column is drawn: the share of the runs that reached it. A turn only one run of
  * twenty-four survived to is a mean of one, and drawing it at the same strength as turn 1 — a
  * mean of twenty-four — would let the eye read a thinning tail as a rising trend. The floor keeps
@@ -37,6 +48,7 @@ export function TokenWaterfallAggregateChart({ cells, results }: Props) {
   const theme = useChartTheme();
   const { hidden, toggle } = useHiddenSeries();
   const agg = useMemo(() => aggregateWaterfall(cells, results), [cells, results]);
+  const arms = useMemo(() => pooledArms(cells, results), [cells, results]);
 
   const { traces, legend } = useMemo(() => {
     const legend: LegendItem[] = [
@@ -103,7 +115,11 @@ export function TokenWaterfallAggregateChart({ cells, results }: Props) {
   );
 
   return (
-    <ChartPanel id="TokenWaterfallAggregateChart" title={`Token waterfall, averaged over ${agg.runs} run${agg.runs === 1 ? "" : "s"}`} note={NOTE}>
+    <ChartPanel
+      id="TokenWaterfallAggregateChart"
+      title={`Token waterfall, averaged over ${agg.runs} run${agg.runs === 1 ? "" : "s"}`}
+      note={`${NOTE}${poolNote(arms)}`}
+    >
       {agg.runs ? (
         <PlotWithLegend
           data={traces}

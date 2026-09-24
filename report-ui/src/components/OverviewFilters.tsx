@@ -1,6 +1,6 @@
 /**
- * The one global filter on the overview (glossary: `OverviewFilters`, ADR 0042): three facets —
- * skill, harness, model — held in the URL and rippling through the `TokenAccumulationChart`, the
+ * The one global filter on the overview (glossary: `OverviewFilters`, ADR 0042): four facets —
+ * skill, harness, model, effort — held in the URL and rippling through the `TokenAccumulationChart`, the
  * `SessionSummaryTable` and the `SessionTable`.
  *
  * It is the *producer* of the filter state, not a consumer, so unlike those three it reads
@@ -145,7 +145,9 @@ export function OverviewFilters({ cells }: { cells: Cell[] }) {
           <span id="OverviewFilterCount" className="filter-count tnum" role="status" aria-atomic="true">
             {/* The widest sentence this box can ever hold; it sets the width, and says nothing. */}
             <span className="sizer" aria-hidden>
-              {`${cells.length} of ${cells.length} sessions`}
+              {/* The figure at the weight it is lit at (600, as `.n` sets it), or the box would grow when it lights. */}
+              <b className="fig">{cells.length}</b>
+              {` of ${cells.length} sessions`}
             </span>
             <span>
               {anySelected ? (
@@ -181,7 +183,7 @@ export function OverviewFilters({ cells }: { cells: Cell[] }) {
                 {options.map((value, chipIndex) => {
                   const on = selected?.includes(value) ?? false;
                   // The cross-filtered count: what clicking this chip would actually get you,
-                  // given the other two facets. Zero is hollowed out but stays clickable — it is
+                  // given the other facets. Zero is hollowed out but stays clickable — it is
                   // a legal way to reach the empty state, and hiding it would move the row.
                   const count = facetCount(cells, facets, facet, value);
                   return (

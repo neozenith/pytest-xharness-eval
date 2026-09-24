@@ -3,7 +3,9 @@
  * each turn, the step series that hold a value from one measurement to the next, and the
  * token-waterfall decomposition. No rendering here, so every number is unit-testable.
  */
+import { armLabel, compareEffort } from "./effort";
 import { short } from "./format";
+import { armKey, groupKey } from "./summary";
 import type { Call, Cell, RunResult, Usage } from "./types";
 
 export type AxisMode = "turn" | "line";
@@ -208,10 +210,10 @@ export function accumulation(calls: Call[], bySub?: Map<number, number>): { n: n
   });
 }
 
-/** The legend / hover label of a session: case · harness/model · short id. */
-export const sessionLabel = (c: Cell): string => `${c.case} · ${c.harness}/${c.model} · ${short(c.session_id)}`;
+/** The legend / hover label of a session: case · harness/model[ · effort] · short id. */
+export const sessionLabel = (c: Cell): string => `${c.case} · ${armLabel(c.harness, c.model, c.effort)} · ${short(c.session_id)}`;
 
-/** One aggregated line of the overview accumulation chart: every run of a suite × harness × model cell. */
+/** One aggregated line of the overview accumulation chart: every run of a suite × harness × model × effort cell. */
 export interface AccumulationGroup {
   key: string;
   label: string;
@@ -227,21 +229,38 @@ export interface AccumulationGroup {
 const suiteName = (c: Cell): string => (c.suite ? (c.suite.split("/").pop() ?? c.suite) : c.case);
 
 /**
- * Group the ledgered sessions by suite × harness × model and aggregate their per-turn
+ * Group the ledgered sessions by the summary's own key — skill × case × harness × model × effort,
+ * `lib/summary.ts`'s `groupKey` itself — and aggregate their per-turn
  * `accumulative_billed_tokens`: the mean line with a min–max envelope. A turn only some
- * runs reached aggregates over the runs that did.
+ * runs reached aggregates over the runs that did. Two rungs of one model are two lines, never one
+ * averaged line: they are two experiments (ADR 0049).
+ *
+ * A line is labelled by its suite file, which names it for a reader; when two lines would share
+ * that label (two cases of one suite, or one suite basename under two skills) both are qualified
+ * with `skill/suite::case`, so the pair the ADR 0042 table promises is still told apart.
  */
 export function accumulationGroups(cells: Cell[], results: Record<string, RunResult | null | undefined>): AccumulationGroup[] {
-  const byKey = new Map<string, { label: string; series: number[][] }>();
+  const byKey = new Map<string, { cell: Cell; arm: string; effort: string | null; series: number[][] }>();
   for (const c of cells) {
     const result = results[c.session_id];
     if (!c.has_ledger || !result?.calls?.length) continue;
-    const key = `${suiteName(c)}|${c.harness}|${c.model}`;
-    const entry = byKey.get(key) ?? { label: `${suiteName(c)} · ${c.harness}/${c.model}`, series: [] };
+    const key = groupKey(c);
+    const entry = byKey.get(key) ?? { cell: c, arm: armKey(c), effort: c.effort, series: [] };
     entry.series.push(accumulation(result.calls, subagentsByTurn(result)).map((p) => p.billed));
     byKey.set(key, entry);
   }
-  return [...byKey.entries()].map(([key, { label, series }]) => {
+  const plain = (c: Cell): string => `${suiteName(c)} · ${armLabel(c.harness, c.model, c.effort)}`;
+  const taken = new Map<string, number>();
+  for (const { cell } of byKey.values()) taken.set(plain(cell), (taken.get(plain(cell)) ?? 0) + 1);
+  const labelOf = (c: Cell): string =>
+    (taken.get(plain(c)) ?? 0) > 1 ? `${c.skill ? `${c.skill}/` : ""}${suiteName(c)}::${c.case} · ${armLabel(c.harness, c.model, c.effort)}` : plain(c);
+  // Arms in first-seen order (the index's), and one arm's rungs beside each other in ladder order —
+  // the legend, and the series colours assigned down it, read `low` before `max` whatever order the
+  // cells ran in; a rung-less line comes after every rung.
+  const arms = [...new Set([...byKey.values()].map((g) => g.arm))];
+  const ordered = [...byKey.entries()].sort(([, a], [, b]) => arms.indexOf(a.arm) - arms.indexOf(b.arm) || compareEffort(a.effort, b.effort));
+  return ordered.map(([key, { cell, series }]) => {
+    const label = labelOf(cell);
     const turnCount = Math.max(...series.map((s) => s.length));
     const turns: number[] = [];
     const mean: number[] = [];

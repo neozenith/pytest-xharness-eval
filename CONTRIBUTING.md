@@ -36,7 +36,8 @@ page; the plugin ships the built file.
 ```sh
 make ui-dev CAPTURED=path/to/.xharness_eval_cache      # hot reload against real cached data
 make ui-check                                          # tsc + eslint + prettier
-make ui-test                                           # vitest component tests
+make ui-test                                           # vitest unit tests (jsdom)
+make ui-ct                                             # Playwright component tests (real Chromium, no capture needed)
 make ui-e2e CAPTURED=path/to/.xharness_eval_cache TIER=small  # Playwright permutation sweep
 make ui-smoke CAPTURED=path/to/.xharness_eval_cache    # build, populate inline, boot over file://
 make ui-promote                                        # ship the build as assets/report.html (CI checks it is current)

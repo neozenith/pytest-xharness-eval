@@ -13,12 +13,38 @@ interface Props {
   results: Record<string, RunResult | null | undefined>;
 }
 
-/** `#rrggbb` at low opacity for the min–max envelope; non-hex tokens fall back to a neutral wash. */
-const envelope = (color: string): string => (/^#[0-9a-fA-F]{6}$/.test(color) ? `${color}26` : "rgba(128,128,128,0.15)");
+/** How strongly the min–max envelope is washed in its line's colour. */
+const ENVELOPE_ALPHA = 0.15;
+
+const RGB = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i;
+
+/**
+ * The line's colour at `ENVELOPE_ALPHA`, for any colour a project's tokens may use (`#36c`,
+ * `#4f46e5`, `rgb()`, a name, `hsl()`): hex is expanded here, and anything else is resolved by the
+ * browser's own colour parser to `rgb()`. Plotly has no fill opacity for a scatter, and a trace's
+ * `opacity` does not reach a `tonexty` fill (it is painted in the previous trace's group), so the
+ * alpha has to be in the colour itself. Only a colour the browser cannot express as `rgb()` gets
+ * the neutral wash, and Plotly could not have drawn its line either.
+ */
+const envelope = (color: string): string => {
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color)?.[1];
+  const full = hex?.length === 3 ? [...hex].map((c) => c + c).join("") : hex;
+  if (full)
+    return `rgba(${Number.parseInt(full.slice(0, 2), 16)},${Number.parseInt(full.slice(2, 4), 16)},${Number.parseInt(full.slice(4, 6), 16)},${ENVELOPE_ALPHA})`;
+  let m = RGB.exec(color);
+  if (!m && typeof document !== "undefined") {
+    const probe = document.createElement("span");
+    probe.style.color = color;
+    document.body.appendChild(probe);
+    m = RGB.exec(getComputedStyle(probe).color);
+    probe.remove();
+  }
+  return m ? `rgba(${m[1]},${m[2]},${m[3]},${ENVELOPE_ALPHA})` : `rgba(128,128,128,${ENVELOPE_ALPHA})`;
+};
 
 /**
  * `accumulative_billed_tokens` accumulating per turn, aggregated across runs: one mean line
- * per suite × harness × model, with a min–max envelope when the group holds more than one
+ * per suite × harness × model × effort rung, with a min–max envelope when the group holds more than one
  * run (glossary: `TokenAccumulationChart`).
  */
 export function TokenAccumulationChart({ cells, results }: Props) {
@@ -81,14 +107,14 @@ export function TokenAccumulationChart({ cells, results }: Props) {
     <ChartPanel
       id="TokenAccumulationChart"
       title="accumulative_billed_tokens accumulating per turn"
-      note="One line per suite × harness × model, averaged across its runs; the shaded envelope is the min–max spread when a cell ran more than once."
+      note="One line per suite × harness × model × effort rung, averaged across its runs; the shaded envelope is the min–max spread when a cell ran more than once."
     >
       {legend.length ? (
         <PlotWithLegend
           data={traces}
           layout={layout}
           height={420}
-          ariaLabel="Billed tokens accumulating per turn, one aggregated line per suite, harness and model"
+          ariaLabel="Billed tokens accumulating per turn, one aggregated line per suite, harness, model and effort rung"
           items={legend}
           hidden={hidden}
           onToggle={toggle}

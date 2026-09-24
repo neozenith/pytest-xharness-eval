@@ -162,13 +162,18 @@ const billedOf = (s: Subagent): number =>
  * ledger, indented and bordered in the waterfall's `sub` colour so the band reads as a
  * fork off the primary thread (glossary: `SubagentBand`).
  */
-function SubagentBand({ result, subs }: { result: RunResult; subs: Subagent[] }) {
+function SubagentBand({ result, subs, unattributed = false }: { result: RunResult; subs: Subagent[]; unattributed?: boolean }) {
   return (
     <div data-el="SubagentBand" style={{ display: "grid", gap: 12, padding: "4px 0 4px 24px", borderLeft: "3px solid var(--xh-waterfall-sub)" }}>
       {subs.map((s) => (
         <div key={s.id} data-agent={s.agent} style={{ display: "grid", gap: 6 }}>
           <XStack alignItems="center" flexWrap="wrap" gap={10}>
-            <span className="pill" style={{ background: "var(--xh-waterfall-sub)", color: "#fff" }}>
+            {/*
+             * Dark ink, not white: `sub` is a bright orange in both themes (#ea580c / #fb923c),
+             * which white ink meets at 3.6:1 and 2.3:1, under AA's 4.5:1 for this 11px label.
+             * The page's light-theme ink clears 4.7:1 and 7.5:1.
+             */}
+            <span className="pill" style={{ background: "var(--xh-waterfall-sub)", color: "#1b1d23" }}>
               ⑂ {s.agent}
             </span>
             <CopyId id={s.id} label={short(s.id)} />
@@ -238,7 +243,10 @@ function SubagentBand({ result, subs }: { result: RunResult; subs: Subagent[] })
         </div>
       ))}
       <span className="muted" style={{ fontSize: 12 }}>
-        Spawned by turn {subs[0]?.parent_turn ?? "?"} of {short(result.session_id)}; each thread's bill is inside the session's accumulative_billed_tokens.
+        {unattributed
+          ? `Spawned by ${[...new Set(subs.map((s) => (s.parent_turn == null ? "an unrecorded turn" : `turn ${s.parent_turn}`)))].join(", ")}, not in this ledger of ${short(result.session_id)}`
+          : `Spawned by turn ${subs[0]?.parent_turn ?? "?"} of ${short(result.session_id)}`}
+        ; each thread's bill is inside the session's accumulative_billed_tokens.
       </span>
     </div>
   );
@@ -246,17 +254,27 @@ function SubagentBand({ result, subs }: { result: RunResult; subs: Subagent[] })
 
 function SessionTurnTableBase({ result, harness, columns, view, onViewChange, openTurn, onOpenTurn, renderTurnRecords, toolbarExtra }: BaseProps) {
   const calls = result.calls ?? [];
-  const subsByTurn = useMemo(() => {
+  /*
+   * A thread with no recorded parent lands on turn 1, as the charts place it (lib/series.ts).
+   * One whose turn is not in the ledger (a truncated ledger, or none at all) has no row to sit
+   * under, so it is gathered into one band after the last turn rather than dropped: its bill is
+   * inside the session's total, and the toolbar promises every thread is shown.
+   */
+  const { subsByTurn, unattributed } = useMemo(() => {
+    const turns = new Set((result.calls ?? []).map((k) => k.n));
     const map = new Map<number, Subagent[]>();
+    const orphans: Subagent[] = [];
     for (const s of result.subagents ?? []) {
       const turn = s.parent_turn ?? 1;
-      map.set(turn, [...(map.get(turn) ?? []), s]);
+      if (turns.has(turn)) map.set(turn, [...(map.get(turn) ?? []), s]);
+      else orphans.push(s);
     }
-    return map;
+    return { subsByTurn: map, unattributed: orphans };
   }, [result]);
   const toggle = (n: number) => {
     onOpenTurn(openTurn === n ? null : n);
   };
+  const nSubs = result.subagents?.length ?? 0;
   return (
     <Card id="SessionTurnTablePanel" data-el="SessionTurnTable" data-harness={harness}>
       <CardHeader>
@@ -268,8 +286,14 @@ function SessionTurnTableBase({ result, harness, columns, view, onViewChange, op
           <Text color="$muted" fontSize={14} fontFamily="$body" flexShrink={1} maxWidth="100%">
             One row per model API call (a SessionTurn). A turn's records are its own blocks, the results of the tools it issued, and the harness records written
             before the next turn began.
-            {result.subagents?.length
-              ? ` This session spawned ${result.subagents.length} parallel subagent${result.subagents.length === 1 ? "" : "s"}; each appears under the turn that spawned it.`
+            {nSubs
+              ? ` This session spawned ${nSubs} parallel subagent${nSubs === 1 ? "" : "s"}; ${
+                  !unattributed.length
+                    ? "each appears under the turn that spawned it."
+                    : unattributed.length === nSubs
+                      ? `the spawning turn is not in this ledger, so ${nSubs === 1 ? "it is" : "they are"} listed after the last turn.`
+                      : `each appears under the turn that spawned it, except ${unattributed.length} whose turn is not in this ledger, listed after the last turn.`
+                }`
               : ""}
           </Text>
           <XStack flexGrow={1} />
@@ -306,7 +330,22 @@ function SessionTurnTableBase({ result, harness, columns, view, onViewChange, op
                       style={{ cursor: "pointer" }}
                       data-n={k.n}
                       data-el="SessionTurnRow"
-                      onClick={() => toggle(k.n)}
+                      // A row is the only way into its turn's records, so it takes the tab order
+                      // and answers Enter/Space, as SessionTable's SessionRow does.
+                      tabIndex={0}
+                      aria-expanded={open}
+                      onClick={(e) => {
+                        if (e.target instanceof Element && e.target.closest("button, a[href], input, [role='button']")) return;
+                        toggle(k.n);
+                      }}
+                      // A keydown targets whatever holds focus: when that is a child (the copy
+                      // chip), the key is the child's, and taking it would swallow its click.
+                      onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key !== "Enter" && e.key !== " ") return;
+                        e.preventDefault();
+                        toggle(k.n);
+                      }}
                     >
                       {columns.map((col) => (
                         <TableCell key={col.key} className={col.num ? "num" : undefined}>
@@ -338,6 +377,13 @@ function SessionTurnTableBase({ result, harness, columns, view, onViewChange, op
                 );
               })
             )}
+            {unattributed.length ? (
+              <TableRow className="subagent-band-row" data-n="unattributed">
+                <TableCell colSpan={columns.length} style={{ whiteSpace: "normal" }}>
+                  <SubagentBand result={result} subs={unattributed} unattributed />
+                </TableCell>
+              </TableRow>
+            ) : null}
           </TableBody>
         </Table>
       </CardContent>

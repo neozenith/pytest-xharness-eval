@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ColumnHead } from "@/components/ColumnHead";
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { caseShort, compact, coverageShare, coverageText, dec, fmt, modelShort, NONE, pct, secs, usd, usd3, when, windowLabel } from "@/lib/format";
+import { armLabel, effortSortValue } from "@/lib/effort";
 import { NO_MATCH } from "@/lib/facets";
 import { overviewWith, pushRoute, replaceRoute, useRoute, type SortDir } from "@/lib/route";
 import type { Cell } from "@/lib/types";
@@ -225,7 +226,7 @@ const COLUMNS: Column[] = [
 ];
 
 /**
- * The identity columns a constant value may collapse out of. Only these four: a *measure* that
+ * The identity columns a constant value may collapse out of. Only these five: a *measure* that
  * happens to be equal on every row is a finding the reader wants to see repeated down the
  * column, while an identity that is equal on every row is the table's subject, not its data.
  */
@@ -251,7 +252,9 @@ function constantColumns(rows: Cell[], ctx: RowContext): { key: SortKey; name: s
   return out;
 }
 
-const sortValue = (c: Cell, key: SortKey): string | number | null => (key === "coverage" ? coverageShare(c) : (c[key] as string | number | null));
+/** What a column ranks by. Effort ranks by rung position, never by spelling (`lib/effort.ts`). */
+const sortValue = (c: Cell, key: SortKey): string | number | null =>
+  key === "coverage" ? coverageShare(c) : key === "effort" ? effortSortValue(c.effort) : (c[key] as string | number | null);
 
 /**
  * One row per captured session; click a header to sort (recorded as `sort=`/`dir=`), a row to
@@ -264,8 +267,11 @@ const sortValue = (c: Cell, key: SortKey): string | number | null => (key === "c
 export function SessionTable({ cells, shortModel = modelShort }: { cells: Cell[]; shortModel?: (model: string) => string }) {
   const route = useRoute();
   const routeSort = route.view === "overview" ? route.sort : null;
-  const sortKey: SortKey = routeSort && COLUMNS.some((c) => c.key === routeSort.key) ? (routeSort.key as SortKey) : "at";
-  const dir: 1 | -1 = routeSort ? (routeSort.dir === "asc" ? 1 : -1) : -1;
+  // A key no column answers to is no sort at all: the default key AND its default direction, never
+  // `at` ascending borrowed from the bogus pair (which `parseSearch` defaults to `asc`).
+  const known = routeSort && COLUMNS.some((c) => c.key === routeSort.key) ? routeSort : null;
+  const sortKey: SortKey = known ? (known.key as SortKey) : "at";
+  const dir: 1 | -1 = known ? (known.dir === "asc" ? 1 : -1) : -1;
   const theme = route.theme;
   const ctx: RowContext = { shortModel };
 
@@ -381,7 +387,7 @@ export function SessionTable({ cells, shortModel = modelShort }: { cells: Cell[]
             // A row is the only way into a SessionView, so it has to be reachable without a
             // mouse; the implicit `row` role stays, so the table still reads as a table.
             tabIndex={0}
-            aria-label={`${c.case} · ${c.harness}/${c.model} · ${c.verdict ?? "no history"}`}
+            aria-label={`${c.case} · ${armLabel(c.harness, c.model, c.effort)} · ${c.verdict ?? "no history"}`}
             // A click always targets a cell rather than the row, so the row cannot ask whether
             // the event is its own — it asks instead whether it started on a control of its
             // own. The chip's `stopPropagation` already covers today's one control; this is
