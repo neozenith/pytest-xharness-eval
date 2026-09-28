@@ -20,11 +20,13 @@ from __future__ import annotations
 
 # Standard Library
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Standard Library
     from collections.abc import Iterator
+    from datetime import date
     from pathlib import Path
 
 #: What joins a model to its effort rung in the one directory level they share (ADR 0049).
@@ -138,6 +140,11 @@ class LocatedSession(SessionDir):
         return "/".join((self.skill, self.harness, self.model_level, self.run, self.session))
 
     @property
+    def run_date(self) -> date | None:
+        """The day this session's run was stamped on: what chooses its price record (ADR 0050)."""
+        return run_date(self.run)
+
+    @property
     def report_link_prefix(self) -> str:
         """The path from ``report/`` to this directory: the page fetches relative (ADR 0032)."""
         return f"../{RESULTS_DIR}/{self.rel}"
@@ -161,6 +168,20 @@ def split_model_level(level: str) -> tuple[str, str | None]:
     """
     model, sep, effort = level.rpartition(MODEL_EFFORT_SEP)
     return (model, effort) if sep else (level, None)
+
+
+def run_date(run: str) -> date | None:
+    """The UTC day a ``{run}`` stamp (``20260928T101500Z``) was minted on, or None.
+
+    The day chooses which dated price record a session is priced from, live and on replay
+    alike (ADR 0050). None is an honest answer for a stamp that names no day -- the
+    all-zero stamp a legacy migration writes for a capture it could not date -- and the
+    caller prices such a session from the rates still in effect.
+    """
+    try:
+        return datetime.strptime(run[:8], "%Y%m%d").replace(tzinfo=UTC).date()
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True, slots=True)

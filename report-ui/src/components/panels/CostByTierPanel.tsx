@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { El } from "@/components/El";
-import { fmt, usd } from "@/lib/format";
-import type { RunResult } from "@/lib/types";
+import { NONE, fmt, usd } from "@/lib/format";
+import { effectiveInterval, isLegacyRates, ratesPerMtok } from "@/lib/rates";
+import type { RatesApplied as RatesAppliedRecord, RunResult } from "@/lib/types";
 import { KvTable, type KvRow } from "./shared";
 import { rate } from "./helpers";
 
@@ -13,36 +14,29 @@ interface ModelUsage {
   cacheCreationInputTokens?: number;
 }
 
-interface Rates {
-  model?: string;
-  source?: string;
-  applied_at?: string;
-  input?: number;
-  output?: number;
-  cache_read?: number;
-  cache_write?: number;
-  cache_write_1h?: number;
-}
-
-/** RatesApplied: the per-tier USD-per-token rates the estimate used, and where they came from (ADR 0021). */
-export function RatesApplied({ rates }: { rates: Rates | null | undefined }) {
+/** RatesApplied: the per-tier rates the estimate used, the interval they held, and where they came from (ADR 0021, ADR 0050). */
+export function RatesApplied({ rates }: { rates: RatesAppliedRecord | null | undefined }) {
   const ra = rates ?? {};
+  const mtok = ratesPerMtok(ra);
   const rows: KvRow[] = Object.keys(ra).length
     ? [
         ["price row", <code key="m">{ra.model}</code>],
+        ["harness", ra.harness],
         ["source file", <code key="s">{ra.source}</code>],
+        ["in effect", effectiveInterval(ra) ?? NONE],
+        ["unit", isLegacyRates(ra) ? "usd_per_token (before ADR 0050; shown per MTok)" : ra.unit],
         ["applied at", ra.applied_at],
-        ["input", rate(ra.input)],
-        ["output", rate(ra.output)],
-        ["cache_read", rate(ra.cache_read)],
-        ["cache_write (5m)", rate(ra.cache_write)],
-        ["cache_write_1h", rate(ra.cache_write_1h)],
+        ["input", rate(mtok.input)],
+        ["output", rate(mtok.output)],
+        ["cache_read", rate(mtok.cache_read)],
+        ["cache_write (5m)", rate(mtok.cache_write)],
+        ["cache_write_1h", rate(mtok.cache_write_1h)],
       ]
     : [["no rates_applied", "this result predates ADR 0021; replay the captured directory"]];
   return (
     <div data-el="RatesApplied">
       <h3 className="muted" style={{ margin: "1rem 0 0.25rem", fontSize: "0.8rem", fontWeight: 500 }}>
-        rates applied (USD per token)
+        rates applied (USD per million tokens)
         <El name="RatesApplied" />
       </h3>
       <KvTable id="RatesApplied" rows={rows} label="rates applied" />
@@ -78,7 +72,7 @@ export function CostByTierPanel({ result }: { result: RunResult }) {
       </CardHeader>
       <CardContent>
         <KvTable id="CostByTierPanel" rows={rows} label="cost by tier" />
-        <RatesApplied rates={result.rates_applied as Rates} />
+        <RatesApplied rates={result.rates_applied} />
       </CardContent>
     </Card>
   );

@@ -33,8 +33,8 @@ export const clock = (iso: string | null | undefined): string => {
 
 export const ms = (v: number | null | undefined): string => (v == null ? NONE : `${fmt(Math.round(v))} ms`);
 
-/** A USD-per-token rate shown per million tokens, as `rates_applied` is read. */
-export const rate = (x: number | null | undefined): string => (x == null ? NONE : `$${(Number(x) * 1e6).toFixed(3)} /M`);
+/** A USD-per-million-token rate, as `ratesPerMtok` returns it (ADR 0050). */
+export const rate = (x: number | null | undefined): string => (x == null ? NONE : `$${Number(x).toFixed(3)} /M`);
 
 // Mirrors pytest_xharness_eval/records.py KINDS (ADR 0022, 0024); the colour is `--xh-category-<category>`.
 const KIND_CATEGORY: Record<string, string> = {

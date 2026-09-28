@@ -108,9 +108,9 @@ matching `history.jsonl` lines (verdict, timestamps, wall clock kept), and regen
 
 | Metric (JSON key) | Definition | Calculation |
 |-------------------|------------|-------------|
-| `estimated_cost_usd` | this plugin's price-table estimate | `Σ tier_tokens × rate` using `rates_applied`; cache writes tagged `ephemeral_1h` at `cache_write_1h`, the rest at `cache_write` |
+| `estimated_cost_usd` | this plugin's price-table estimate | `Σ tier_tokens × rate ÷ 1e6` using `rates_applied` (USD per MTok); cache writes tagged `ephemeral_1h` at `cache_write_1h`, the rest at `cache_write` |
 | `harness_reported_cost_usd` | what the harness CLI itself said the run cost | Claude: `total_cost_usd` from the stdout envelope (includes a ~$0.001 session-title side call); Codex: none |
-| `rates_applied` | provenance of the estimate | per-tier USD per token, the row key, its source (`xharness_prices` for an ini row, the bundled `prices.toml` path otherwise), and when it was applied |
+| `rates_applied` | provenance of the estimate | per-tier USD per million tokens (`unit: usd_per_mtok`), the `harness` and `model` the row is keyed by, its source (`xharness_prices` for an ini row, the bundled `prices-YYYYMMDD.toml` record otherwise), the `effective_from` / `effective_to` interval the row held over (null when open), and when it was applied. A result written before ADR 0050 has no `unit` and states its rates per token; the page shows both per MTok |
 | `accumulative_billed_tokens` | every billed token | `Σ over turns (input + output + cache_read + cache_write)`; the cached prefix counts once per turn that re-read it, so on a long run this exceeds the context window many times over; it is a spend figure, never a context figure |
 | `baseline_tokens` | the harness's own prompt before the agent acts | `input + cache_read + cache_write` of turn 1 |
 | `turns` | model API calls | Claude: distinct `message.id`; Codex: `token_count` events. `reported_turns` is the CLI's own count (Claude: tool calls + 1; Codex: tasks, always 1) |

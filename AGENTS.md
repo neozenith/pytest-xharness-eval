@@ -51,7 +51,7 @@ this list:
 |-------|------------------|
 | `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
 | `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, and the record-kind catalogue `records.py` |
-| `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, and the bundled `prices.toml` |
+| `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, and the bundled `prices/prices-YYYYMMDD.toml` records |
 | `verify/` | what a *grader* is written with: `checks.py` (the shared `check_*` verifiers), `tolerance.py` (`Facet` and the six tolerances), `facets.py` (markdown/mermaid extractors), `golden.py` (`GoldenCase`) |
 | `emit/` | the documents that leave: `metrics.py`, `index.py`, `summary.py`, `tokens.py`, `page.py` |
 | `runtime/` | how a sweep is wired: `settings.py`, `pipeline.py`, and the transitional `legacy.py` |
@@ -67,7 +67,7 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | How subagent transcripts are found, attributed and billed | `harness/claude.py` and `harness/codex.py` (`subagents_of` per dialect), `runtime/pipeline.py`'s `capture_subagents` (capture into `subagents/`) (ADR 0033) |
 | How a session log maps to `RunResult` fields | the harness's `SessionLog.to_result` in `harness/<provider>.py`; the primitives both dialects fold with are `harness/normalise.py` |
 | A new field on the run record | `model/runresult.py`, then `harness/claude.py` and `harness/codex.py` for both dialects |
-| A bundled model price | `derive/prices.toml` only; a project overrides with `xharness_prices` ini lines, USD per MTok (ADR 0030) |
+| A bundled model price | `derive/prices/` only, USD per MTok, rows under their harness's table. A price *change* never edits a closed record: set `effective_to` on the open one and add `prices-<date>.toml` whose `effective_from` is that date. A project overrides with `<harness>/<model>: ...` `xharness_prices` lines, optionally `from=`/`to=` bounded (ADR 0030, ADR 0050) |
 | The plugin-default matrix or narrowing | `model/matrix.py`; the *known* harnesses are the registry, reached through `model/registry.py` and never a second list (ADR 0034, ADR 0039) |
 | The effort vocabulary, or a portable alias's meaning | `model/effort.py` (`Effort`, `resolve`); a harness's own ladder is `Harness.efforts` in `harness/<provider>.py` and the rendering is its `effort_args`, reached from beneath through `model/registry.py` (ADR 0049) |
 | A plugin option or ini key's registration | `plugin/options.py` (which also validates the price and ignore lines at configure time, and prints the header) |
@@ -129,6 +129,11 @@ in `emit/metrics.py`.
   session id, or zero tokens is a failure, not a skip.
 - Never price an unknown model as zero or `None` and continue. Add the bundled row or
   an `xharness_prices` ini line, or let the sweep stop at collection (ADR 0007, ADR 0030).
+  The same holds for a *day* no record covers: never borrow a neighbouring record's rates
+  (ADR 0050).
+- Never edit the rates in a closed price record, or re-price a run at a rate other than
+  the one in effect on its `{run}` day. A price change is a new
+  `derive/prices/prices-YYYYMMDD.toml`, and history stays reproducible (ADR 0050).
 - Never write a prompt that explains the harness to the agent. A case declares a `task`;
   the invocation (`/<skill> ...`, `$<skill> ...`) is `Harness.invoke`'s to render, and a
   `prompt=` reaching `@evalcase` is a `TypeError`, never an alias (ADR 0044).
@@ -141,8 +146,8 @@ in `emit/metrics.py`.
 - Never write run output under `evals/fixtures/`. A fixture is copied into every
   workspace, so anything placed there leaks into the next agent's working directory.
 - Never add a runtime dependency beyond pytest and the standard library (ADR 0003).
-- Never derive a path from `__file__` except for the bundled `derive/prices.toml`. Every
-  other location is an ini key resolved against `config.rootpath` (ADR 0014).
+- Never derive a path from `__file__` except for the bundled `derive/prices/` records.
+  Every other location is an ini key resolved against `config.rootpath` (ADR 0014, ADR 0050).
 - Never register the plugin through a `conftest.py` or `-p` flag. The `pytest11`
   entry point in `pyproject.toml` is the one registration (ADR 0014).
 - Never let an effort rung reach a CLI unvalidated, and never round one to the nearest

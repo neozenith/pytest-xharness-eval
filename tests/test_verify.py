@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 # Third Party
 import pytest
-from characterization_fixtures import PRICE_ROWS, SKILL, claude_capture, skill_tree
+from characterization_fixtures import PRICE_ROWS, RUN_DATE, SKILL, claude_capture, skill_tree
 
 # Our Libraries
 from pytest_xharness_eval import CaseOutput, harness, pricing, skillcov, verify
@@ -56,7 +56,7 @@ def rollout(tmp_path: Path) -> CaseOutput:
     agent = harness.get("claude")
     result = agent.session_from_capture(session, stored).to_result(workspace, ["a.md"])
     result.session_log = str(session.log)
-    pricing.price(result, pricing.load_table(rows=PRICE_ROWS))
+    pricing.price(result, pricing.load_table(rows=PRICE_ROWS), RUN_DATE)
     result.skill_coverage = skillcov.annotate(SKILL, skillcov.catalog(skill_tree(tmp_path / "skill")), result)
     return CaseOutput(run=result, workspace=workspace, seeded=frozenset({"seed.md"}))
 

@@ -93,8 +93,9 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         type="linelist",
         default=[],
         help=(
-            "price rows that add to or override the bundled table: "
-            "'<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..]'"
+            "price rows that add to or override the bundled records: "
+            "'<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] "
+            "[cache_write_1h=..] [from=YYYY-MM-DD] [to=YYYY-MM-DD]'"
         ),
     )
     parser.addini(

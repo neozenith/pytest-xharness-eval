@@ -245,7 +245,7 @@ Four ini keys, paths relative to pytest's rootdir:
 | `xharness_report_design_tokens` | bundled | design tokens JSON that themes `report/report.html` (flag: `--xharness-report-design-tokens FILE`) |
 | `xharness_report_inline` | `false` | embed every result, log and the tokens into `report/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
 | `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`) |
-| `xharness_prices` | (none) | Price rows that add to or override the bundled table: `<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..]` (ADR 0030) |
+| `xharness_prices` | (none) | Price rows that add to or override the bundled price records: `<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..] [from=YYYY-MM-DD] [to=YYYY-MM-DD]` (ADR 0030, ADR 0050) |
 
 ```toml
 [tool.pytest.ini_options]
@@ -260,13 +260,21 @@ xharness_matrix = [
 ```
 
 An unpriced model stops the sweep at collection, before any spend. Add a price row
-to the same ini block, in USD per million tokens (ADR 0030):
+to the same ini block, naming the harness that runs the model, in USD per million
+tokens (ADR 0030, ADR 0050). A row with `from=`/`to=` applies only to runs stamped
+inside `[from, to)`:
 
 ```toml
 xharness_prices = [
-    "gpt-5.6-luna: input=1.25 output=10.00 cache_read=0.125 cache_write=1.25",
+    "codex/gpt-5.6-luna: input=1.25 output=10.00 cache_read=0.125 cache_write=1.25",
+    "claude/claude-sonnet-5: input=3.00 output=15.00 from=2026-10-01",
 ]
 ```
+
+The bundled rates are dated records, one `derive/prices/prices-YYYYMMDD.toml` per
+interval, and every run is priced from the record in effect on the day it ran, so a
+replay of an old capture reproduces the bill it had then. Each estimate's
+`rates_applied` names the record and its `effective_from` / `effective_to`.
 
 ----
 

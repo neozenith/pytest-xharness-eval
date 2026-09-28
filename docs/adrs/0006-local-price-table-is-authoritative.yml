@@ -11,7 +11,9 @@ status_note: |-
   `xharness_prices` file ([0014](0014-register-through-the-pytest11-entry-point.md)).
   The project-level override moved from a rootdir `prices.toml` into `xharness_prices`
   ini lines with [0030](0030-price-rows-live-in-the-pytest-config.md); the bundled
-  table is unchanged.
+  table is unchanged. Refined by
+  [0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md): the one
+  table became dated `prices-YYYYMMDD.toml` records, grouped by harness, in USD per MTok.
 accepted_on: '2026-08-21'
 last_changed_on: '2026-08-21'
 group: pricing
@@ -20,7 +22,10 @@ tags:
 lens: |-
   Keep the price table owned, not generated. An upstream is a convenience for
   filling it, never the thing the harness reads.
-relates_to: []
+relates_to:
+- relation: extended_by
+  target: ADR-0050
+  note: the record's status line says "refined by"
 body:
   context: |-
     Neither CLI's session log carries cost, and Codex reports none anywhere. The

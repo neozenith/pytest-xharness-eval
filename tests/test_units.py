@@ -10,6 +10,7 @@ import sys
 import textwrap
 import tomllib
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +49,7 @@ from pytest_xharness_eval.model import matrix as mx
 from pytest_xharness_eval.model import runresult
 from pytest_xharness_eval.model import suite as suites
 from pytest_xharness_eval.model import workspace as ws
-from pytest_xharness_eval.model.layout import CacheLayout, SessionDir, model_level, split_model_level
+from pytest_xharness_eval.model.layout import CacheLayout, SessionDir, model_level, run_date, split_model_level
 from pytest_xharness_eval.model.registry import Shells
 from pytest_xharness_eval.model.runresult import Subagent
 from pytest_xharness_eval.model.suite import EvalSuite
@@ -427,9 +428,20 @@ def _result(model: str, usage: Usage, harness: str = "claude") -> RunResult:
     )
 
 
-def _applied_rates(model: str = "m", source: str = "/p/prices.toml") -> pricing.AppliedRates:
+# The day every bundled-table test prices on: inside the one open record, so the tests
+# pin today's rates without depending on the wall clock (ADR 0050).
+DAY = date(2026, 9, 28)
+
+
+def _applied_rates(model: str = "m", source: str = "/p/prices-20260820.toml") -> pricing.AppliedRates:
     """A provenance block for tests that need one without going through a price table."""
-    return pricing.Rates(1e-6, 1e-6, 1e-6, 1e-6, 1e-6, model=model, source=source).applied("2026-08-22T00:00:00+00:00")
+    return pricing.Rates.of(
+        {"input": 1.0, "output": 1.0},
+        harness="claude",
+        model=model,
+        source=source,
+        interval=pricing.Interval(date(2026, 8, 20), None),
+    ).applied("2026-08-22T00:00:00+00:00")
 
 
 def _metrics(
@@ -451,16 +463,18 @@ def _metrics(
 
 def test_bundled_table_prices_each_tier_separately() -> None:
     table = pricing.load_table()
-    r = pricing.price(_result("claude-opus-5", Usage(1_000_000, 1_000_000, 1_000_000, 1_000_000)), table)
+    r = pricing.price(_result("claude-opus-5", Usage(1_000_000, 1_000_000, 1_000_000, 1_000_000)), table, DAY)
     assert r.cost_status is CostStatus.PRICED and r.cost_status == "priced"  # a StrEnum on the wire
     # An untagged cache write prices at the 5-minute rate.
     assert r.estimated_cost_usd == pytest.approx(5.0 + 25.0 + 0.5 + 6.25)
-    # Provenance rides with the estimate (ADR 0021): the row, the file, the rates, the time.
+    # Provenance rides with the estimate (ADR 0021): the row, the file, the interval, the rates, the time.
     applied = r.rates_applied
     assert applied is not None
-    assert applied.model == "claude-opus-5"
-    assert applied.source.endswith("prices.toml")
-    assert applied.cache_write_1h == 1.0e-5 and applied.applied_at.endswith("+00:00")
+    assert (applied.harness, applied.model, applied.unit) == ("claude", "claude-opus-5", "usd_per_mtok")
+    assert applied.source.endswith("prices-20260820.toml")
+    assert (applied.effective_from, applied.effective_to) == ("2026-08-20", None)
+    # Rates are USD per MTok on the wire, exactly as the record states them (ADR 0050).
+    assert applied.cache_write_1h == 10.0 and applied.applied_at.endswith("+00:00")
     assert r.cost_by_tier == {
         "input": 5.0,
         "output": 25.0,
@@ -474,71 +488,211 @@ def test_cache_writes_price_by_ttl() -> None:
     """Claude Code writes 1-hour cache entries at 2x input; the log says so and the price follows (ADR 0019)."""
     table = pricing.load_table()
     one_hour = Usage(cache_write_tokens=1_000_000, cache_write_1h_tokens=1_000_000)
-    assert pricing.price(_result("claude-opus-5", one_hour), table).estimated_cost_usd == pytest.approx(10.0)
+    assert pricing.price(_result("claude-opus-5", one_hour), table, DAY).estimated_cost_usd == pytest.approx(10.0)
     mixed = Usage(cache_write_tokens=1_000_000, cache_write_1h_tokens=400_000, cache_write_5m_tokens=100_000)
-    r = pricing.price(_result("claude-opus-5", mixed), table)
+    r = pricing.price(_result("claude-opus-5", mixed), table, DAY)
     # 400k at 1h, 100k tagged 5m plus 500k untagged at the 5m rate.
     assert r.cost_by_tier["cache_write_1h"] == pytest.approx(4.0)
-    assert r.cost_by_tier["cache_write_5m"] == pytest.approx(600_000 * 6.25e-6)
-    # A row without cache_write_1h gets the Anthropic 2.0 / 1.25 ratio (per-MTok line -> per-token rate).
-    table = pricing.load_table(rows=["m: input=1.0 output=1.0 cache_write=2.0"])
-    assert table["m"].cache_write_1h == pytest.approx(3.2e-6)
+    assert r.cost_by_tier["cache_write_5m"] == pytest.approx(600_000 * 6.25 / 1e6)
+    # A row without cache_write_1h gets the Anthropic 2.0 / 1.25 ratio.
+    table = pricing.load_table(rows=["claude/m: input=1.0 output=1.0 cache_write=2.0"])
+    row = table.get("claude", "m")
+    assert row is not None and row.cache_write_1h == pytest.approx(3.2)
+
+
+def test_per_mtok_rates_divide_once_so_round_rates_give_round_costs() -> None:
+    """Multiplying by the published $/MTok and dividing once avoids the error a pre-divided rate carries (ADR 0050).
+
+    ``3_000_000 * 1e-7`` is ``0.30000000000000004``; ``3_000_000 * 0.10 / 1e6`` is ``0.3``.
+    Fewer representation errors, not none: the breakdown is unrounded here on purpose.
+    """
+    table = pricing.load_table(rows=["codex/m: input=0.10 output=1.00 cache_read=0.125"])
+    row = table.resolve("codex", "m", DAY)
+    tiers = row.breakdown(Usage(input_tokens=3_000_000, cache_read_tokens=170_000))
+    assert tiers["input"] == 0.3 and tiers["cache_read"] == 0.02125
 
 
 def test_cache_reads_are_not_billed_at_the_input_rate() -> None:
     table = pricing.load_table()
-    flat = pricing.price(_result("gpt-5.6-sol", Usage(input_tokens=200_000)), table).estimated_cost_usd
+    codex = "codex"
+    flat = pricing.price(_result("gpt-5.6-sol", Usage(input_tokens=200_000), codex), table, DAY).estimated_cost_usd
     tiered = pricing.price(
-        _result("gpt-5.6-sol", Usage(input_tokens=30_000, cache_read_tokens=170_000)), table
+        _result("gpt-5.6-sol", Usage(input_tokens=30_000, cache_read_tokens=170_000), codex), table, DAY
     ).estimated_cost_usd
     assert flat is not None and tiered is not None
     assert tiered < flat / 3
 
 
-def test_resolve_is_prefix_tolerant_both_ways() -> None:
+def test_resolve_is_prefix_tolerant_both_ways_within_a_harness() -> None:
     table = pricing.load_table()
-    assert pricing.resolve("claude-opus-5[1m]", table) == table["claude-opus-5"]
-    assert pricing.resolve("gpt-5.6", table) in (table["gpt-5.6-sol"], table["gpt-5.6-luna"])
+    assert table.resolve("claude", "claude-opus-5[1m]", DAY) == table.get("claude", "claude-opus-5", DAY)
+    assert table.resolve("codex", "gpt-5.6", DAY).model in ("gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra")
+
+
+def test_a_row_is_found_only_under_the_harness_it_is_grouped_by() -> None:
+    """Rows are keyed by (harness, model): a codex model is not priced for a claude run (ADR 0050)."""
+    table = pricing.load_table()
+    with pytest.raises(pricing.PricingError, match="no price row for claude/gpt-6-sol"):
+        table.resolve("claude", "gpt-6-sol", DAY)
 
 
 def test_unknown_model_raises_rather_than_pricing_zero() -> None:
     table = pricing.load_table()
     with pytest.raises(pricing.PricingError, match="Refusing to price as zero"):
-        pricing.resolve("mystery-model", table)
-    with pytest.raises(pricing.PricingError, match=r"unpriced models in matrix: \['codex/mystery-model'\]"):
-        pricing.validate_matrix(["claude/claude-opus-5", "codex/mystery-model"], table)
+        table.resolve("claude", "mystery-model", DAY)
+    with pytest.raises(pricing.PricingError, match=r"unpriced models in matrix: \['codex/mystery-model/high'\]"):
+        table.validate_matrix(["claude/claude-opus-5/high", "codex/mystery-model/high"], DAY)
 
 
-def test_price_lines_layer_on_top_of_the_bundled_table() -> None:
-    """`xharness_prices` lines are USD per MTok in pytest's `name: text` idiom (ADR 0030)."""
+def test_a_run_before_every_record_is_unpriced_not_zero() -> None:
+    """A date no record covers stops at resolution rather than borrowing a neighbour's rates (ADR 0007)."""
+    table = pricing.load_table()
+    with pytest.raises(pricing.PricingError, match="in effect on 2026-01-01"):
+        table.resolve("claude", "claude-opus-5", date(2026, 1, 1))
+
+
+def _record(directory: Path, name: str, body: str) -> Path:
+    path = directory / name
+    path.write_text(textwrap.dedent(body), encoding="utf-8")
+    return path
+
+
+def test_dated_records_choose_the_rates_in_effect_on_the_run_day(tmp_path: Path) -> None:
+    """Consecutive records meet at a boundary day that belongs to the newer one: ``[from, to)`` (ADR 0050)."""
+    _record(
+        tmp_path,
+        "prices-20260101.toml",
+        """
+        effective_from = 2026-01-01
+        effective_to = 2026-06-01
+        [claude."claude-x"]
+        input = 1.0
+        output = 2.0
+        """,
+    )
+    _record(
+        tmp_path,
+        "prices-20260601.toml",
+        """
+        effective_from = 2026-06-01
+        [claude."claude-x"]
+        input = 3.0
+        output = 4.0
+        """,
+    )
+    table = pricing.load_table(tmp_path)
+    assert table.resolve("claude", "claude-x", date(2026, 5, 31)).input == 1.0
+    assert table.resolve("claude", "claude-x", date(2026, 6, 1)).input == 3.0
+    # A capture with no datable stamp prices from the record still open.
+    assert table.resolve("claude", "claude-x", None).input == 3.0
+    old = table.resolve("claude", "claude-x", date(2026, 3, 1)).applied("t")
+    assert (old.effective_from, old.effective_to) == ("2026-01-01", "2026-06-01")
+
+
+@pytest.mark.parametrize(
+    ("name", "body", "match"),
+    [
+        ("prices.toml", "effective_from = 2026-01-01\n", "named prices-YYYYMMDD.toml"),
+        ("prices-20260101.toml", "[claude.m]\ninput = 1\noutput = 1\n", "must be TOML dates"),
+        ("prices-20260101.toml", 'effective_from = "2026-01-01"\n', "must be TOML dates"),
+        ("prices-20260102.toml", "effective_from = 2026-01-01\n", "the name says 20260102"),
+        ("prices-20260101.toml", "effective_from = 2026-01-01\neffective_to = 2026-01-01\n", "is not after"),
+        ("prices-20260101.toml", "effective_from = 2026-01-01\n[cursor.m]\ninput = 1\noutput = 1\n", "unknown harness"),
+        ("prices-20260101.toml", "effective_from = 2026-01-01\n[claude.m]\ninput = 1\n", "missing required tier"),
+        ("prices-20260101.toml", "effective_from = 2026-01-01\n[claude.m]\ninput = 1e-6\noutput = 1\n", "per-token"),
+        ("prices-20260101.toml", "effective_from = 2026-01-01\n[claude.m]\ninput = 1\noutput = 1\nturbo = 1\n", "tier"),
+        ("prices-20260101.toml", "effective_from = 2026-01-01\nclaude = 3\n", "must be a table of models"),
+    ],
+)
+def test_a_malformed_record_is_refused(tmp_path: Path, name: str, body: str, match: str) -> None:
+    with pytest.raises(pricing.PricingError, match=match):
+        pricing.parse_record(_record(tmp_path, name, body))
+
+
+def test_overlapping_records_are_refused(tmp_path: Path) -> None:
+    _record(tmp_path, "prices-20260101.toml", "effective_from = 2026-01-01\n[claude.m]\ninput = 1\noutput = 1\n")
+    _record(tmp_path, "prices-20260601.toml", "effective_from = 2026-06-01\n[claude.m]\ninput = 2\noutput = 2\n")
+    with pytest.raises(pricing.PricingError, match="overlap: prices-20260101.toml and prices-20260601.toml"):
+        pricing.load_table(tmp_path)
+
+
+def test_every_bundled_record_loads_and_one_is_still_open() -> None:
+    """The shipped records are well-formed, and today's sweep has rates to price from."""
+    rows = pricing.load_records()
+    assert rows and all(r.source.startswith(str(pricing.PRICES_DIR)) for r in rows)
+    assert any(r.interval.end is None for r in rows)
+    assert {r.harness for r in rows} <= set(harnesses.names())
+
+
+def test_price_lines_layer_on_top_of_the_bundled_records() -> None:
+    """`xharness_prices` lines are USD per MTok in pytest's `name: text` idiom (ADR 0030, ADR 0050)."""
     table = pricing.load_table(
-        rows=["# a comment", "", "claude-opus-5: input=1.0 output=1.0", "new-model: input=2.0 output=3.0"]
+        rows=["# a comment", "", "claude/claude-opus-5: input=1.0 output=1.0", "codex/new-model: input=2.0 output=3.0"]
     )
-    # Cache tiers default to input; every row remembers its key and that the ini supplied it.
-    assert table["claude-opus-5"] == pricing.Rates(
-        1.0e-6, 1.0e-6, 1.0e-6, 1.0e-6, 1.6e-6, model="claude-opus-5", source="xharness_prices"
+    # Cache tiers default to input; every row remembers its pair and that the ini supplied it.
+    assert table.resolve("claude", "claude-opus-5", DAY) == pricing.Rates(
+        input=1.0,
+        output=1.0,
+        cache_read=1.0,
+        cache_write=1.0,
+        cache_write_1h=1.6,
+        harness="claude",
+        model="claude-opus-5",
+        source="xharness_prices",
+        interval=pricing.Interval(None, None),
     )
-    assert table["gpt-5.6-sol"].source == str(pricing.PRICES_PATH)  # bundled rows survive
-    assert table["new-model"].output == 3.0e-6
+    sol = table.resolve("codex", "gpt-5.6-sol", DAY)
+    assert sol.source.endswith("prices-20260820.toml")  # bundled rows survive
+    assert table.resolve("codex", "new-model", DAY).output == 3.0
     assert pricing.load_table(rows=[]) == pricing.load_table()
+
+
+def test_a_dated_price_line_overrides_only_inside_its_interval() -> None:
+    table = pricing.load_table(rows=["claude/claude-opus-5: input=9 output=9 from=2026-09-01 to=2026-10-01"])
+    assert table.resolve("claude", "claude-opus-5", date(2026, 9, 15)).input == 9.0
+    assert table.resolve("claude", "claude-opus-5", date(2026, 10, 1)).input == 5.0  # the bundled row again
+    assert table.resolve("claude", "claude-opus-5", date(2026, 9, 15)).applied("t").effective_to == "2026-10-01"
 
 
 @pytest.mark.parametrize(
     ("line", "match"),
     [
-        ("claude-opus-5 input=1 output=1", "expected"),
-        ("claude-opus-5:", "expected"),
-        (": input=1 output=1", "expected"),
-        ("m: input=1 output=1 turbo=9", "unknown tier"),
-        ("m: input=one output=1", "not a number"),
-        ("m: input=1 cache_read=2", r"missing required tier\(s\) \['output'\]"),
-        ("m: input=5.0e-6 output=25", "looks like a per-token rate"),
-        ("m: input=1 output=-3", "looks like a per-token rate"),
+        ("claude/claude-opus-5 input=1 output=1", "expected"),
+        ("claude/claude-opus-5:", "expected"),
+        (": input=1 output=1", "selector"),
+        ("claude-opus-5: input=1 output=1", r"'<harness>/<model>'"),
+        ("cursor/m: input=1 output=1", "unknown harness 'cursor'"),
+        ("claude/m: input=1 output=1 turbo=9", "unknown key"),
+        ("claude/m: input=one output=1", "not a number"),
+        ("claude/m: input=1 cache_read=2", r"missing required tier\(s\) \['output'\]"),
+        ("claude/m: input=5.0e-6 output=25", "looks like a per-token rate"),
+        ("claude/m: input=1 output=-3", "looks like a per-token rate"),
+        ("claude/m: input=1 output=1 from=yesterday", "not an ISO date"),
+        ("claude/m: input=1 output=1 from=2026-09-01 to=2026-08-01", "is not after"),
     ],
 )
 def test_malformed_price_lines_stop_before_any_spend(line: str, match: str) -> None:
     with pytest.raises(pricing.PricingError, match=match):
         pricing.parse_price_lines([line])
+
+
+def test_two_price_lines_for_one_pair_may_not_overlap_in_time() -> None:
+    with pytest.raises(pricing.PricingError, match="overlap in time"):
+        pricing.parse_price_lines(["claude/m: input=1 output=1", "claude/m: input=2 output=2 from=2026-09-01"])
+    rows = pricing.parse_price_lines(
+        ["claude/m: input=1 output=1 to=2026-09-01", "claude/m: input=2 output=2 from=2026-09-01"]
+    )
+    assert [r.input for r in rows] == [1.0, 2.0]
+
+
+def test_a_run_stamp_names_the_day_it_is_priced_on() -> None:
+    assert run_date("20260928T101500Z") == date(2026, 9, 28)
+    # The all-zero stamp a legacy migration writes for an undatable capture names no day.
+    assert run_date("00000000T000000Z") is None
+    located = CacheLayout(Path("/c")).session(
+        skill="s", harness="claude", model="m", run="20260101T000000Z", session="x"
+    )
+    assert located.run_date == date(2026, 1, 1)
 
 
 # -- runresult -----------------------------------------------------------------------
@@ -1234,15 +1388,20 @@ def test_metrics_record_is_flat_and_complete() -> None:
     assert (rec["accumulative_billed_tokens"], rec["baseline_tokens"], rec["peak_context_tokens"]) == (100, 40, 40)
     assert not {"tokens", "billed_tokens", "context_tokens", "cost_usd", "reported_cost_usd"} & rec.keys()
     assert (rec["harness_reported_cost_usd"], rec["reported_turns"]) == (None, None)
-    assert rec["rates_applied"]["model"] == "m" and rec["rates_applied"]["source"] == "/p/prices.toml"
+    assert rec["rates_applied"]["model"] == "m" and rec["rates_applied"]["source"] == "/p/prices-20260820.toml"
+    # A wire contract mirrored by report-ui/src/lib/types.ts (ADR 0021, ADR 0050).
     assert set(rec["rates_applied"]) == {
         "input",
         "output",
         "cache_read",
         "cache_write",
         "cache_write_1h",
+        "unit",
+        "harness",
         "model",
         "source",
+        "effective_from",
+        "effective_to",
         "applied_at",
     }
     assert rec["files_written"] == 2
@@ -2002,7 +2161,7 @@ def test_derive_prices_annotates_and_names_the_case_in_one_order(tmp_path: Path)
         "skills/demo/evals/eval_x.py",
         "/demo go",
     )
-    out = pipeline.derive(r, table=pricing.load_table(), skill="demo", skill_files=files, case=case)
+    out = pipeline.derive(r, table=pricing.load_table(), run_date=DAY, skill="demo", skill_files=files, case=case)
     assert out is r
     assert r.cost_status is CostStatus.PRICED and r.estimated_cost_usd == pytest.approx(5.0)
     assert r.skill_coverage is not None and r.skill_coverage.loaded == ["SKILL.md"]
@@ -2444,11 +2603,11 @@ def test_replay_main_rebuilds_the_cache_named_on_its_command_line(tmp_path: Path
     """The ``python -m`` entry point: parse, rebuild, report -- and spend nothing (ADR 0032)."""
     cache, session_dir = _stale_cache(tmp_path)
 
-    replay.main([str(cache), "--price", "claude-opus-5: input=1.00 output=2.00", "-v"])
+    replay.main([str(cache), "--price", "claude/claude-opus-5: input=1.00 output=2.00", "-v"])
 
     fresh = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
     assert fresh["turns"] == 1  # the stale 99 is gone
-    assert fresh["rates_applied"]["input"] == pytest.approx(1e-6)  # the --price line was applied
+    assert fresh["rates_applied"]["input"] == 1.0  # the --price line was applied, in USD per MTok
     assert (cache / "report" / "report.html").is_file()
 
 
@@ -2689,7 +2848,7 @@ def test_report_indexes_every_captured_result_and_writes_the_page(tmp_path: Path
     )
     assert first["run"] == "20260822T010000Z" and second["case"] == "(unknown case)"
     assert (first["estimated_cost_usd"], first["harness_reported_cost_usd"], first["turns"]) == (0.55, 0.66, 13)
-    assert first["rates_applied"]["source"] == "/p/prices.toml"
+    assert first["rates_applied"]["source"] == "/p/prices-20260820.toml"
     assert (first["accumulative_billed_tokens"], first["baseline_tokens"]) == (526_467, 22_956)
     # The billed sum and the peak prompt are different quantities; the row carries both so the
     # page never has to pair accumulative_billed_tokens with a context percentage.

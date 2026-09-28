@@ -765,12 +765,36 @@
     },
     {
       "data": {
+        "id": "ADR-0050",
+        "label": "0050",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md",
+        "title": "Prices are dated records in USD per MTok, grouped by harness, and a run is priced on the day it ran",
+        "description": "Prices are dated records in USD per MTok, grouped by harness, and a run is priced on the day it ran",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing, harness"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
         "label": "superseded by",
         "relation": "superseded_by",
         "note": "the record's status line says \"superseded by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0006-extended_by-ADR-0050",
+        "source": "ADR-0006",
+        "target": "ADR-0050",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
       }
     },
     {
@@ -1211,6 +1235,16 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0030-extended_by-ADR-0050",
+        "source": "ADR-0030",
+        "target": "ADR-0050",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
       }
     },
     {
@@ -1927,6 +1961,46 @@
       "data": {
         "id": "ADR-0049-extends-ADR-0007",
         "source": "ADR-0049",
+        "target": "ADR-0007",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0050-extends-ADR-0006",
+        "source": "ADR-0050",
+        "target": "ADR-0006",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0050-extends-ADR-0030",
+        "source": "ADR-0050",
+        "target": "ADR-0030",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0050-extends-ADR-0021",
+        "source": "ADR-0050",
+        "target": "ADR-0021",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0050-extends-ADR-0007",
+        "source": "ADR-0050",
         "target": "ADR-0007",
         "label": "extends",
         "relation": "extends",

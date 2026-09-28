@@ -9,7 +9,10 @@ status_note: |-
   accepted, 2026-08-24. Refines [0006](0006-local-price-table-is-authoritative.md),
   [0014](0014-register-through-the-pytest11-entry-point.md) and
   [0026](0026-skill-ignore-lives-in-the-pytest-config.md); ADR 0007's
-  stop-before-spend rule is unchanged.
+  stop-before-spend rule is unchanged. Refined by
+  [0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md): a line's
+  selector is `<harness>/<model>` and may carry `from=`/`to=` bounds, and the bundled
+  table is now dated records in USD per MTok.
 accepted_on: '2026-08-24'
 last_changed_on: '2026-08-24'
 group: pricing
@@ -29,6 +32,9 @@ relates_to:
 - relation: extends
   target: ADR-0026
   note: the record's status line says "refines"
+- relation: extended_by
+  target: ADR-0050
+  note: the record's status line says "refined by"
 body:
   context: |-
     0026 moved skill-ignore rules out of a dotfile beside the skill and into the

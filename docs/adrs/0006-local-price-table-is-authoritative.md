@@ -7,6 +7,8 @@ tags: [pricing]
 status: accepted
 accepted_on: 2026-08-21
 last_changed_on: 2026-08-21
+relates_to:
+  - { relation: extended_by, target: ADR-0050 }
 generated: { by: human:neozenith, at: 2026-08-21T00:00:00Z }
 ---
 
@@ -17,7 +19,9 @@ bundled inside the package and layered with the consumer's optional
 `xharness_prices` file ([0014](0014-register-through-the-pytest11-entry-point.md)).
 The project-level override moved from a rootdir `prices.toml` into `xharness_prices`
 ini lines with [0030](0030-price-rows-live-in-the-pytest-config.md); the bundled
-table is unchanged.
+table is unchanged. Refined by
+[0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md): the one
+table became dated `prices-YYYYMMDD.toml` records, grouped by harness, in USD per MTok.
 
 ## Context
 

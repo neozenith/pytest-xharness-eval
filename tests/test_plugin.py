@@ -382,18 +382,38 @@ def test_price_lines_in_the_ini_add_rows_to_the_bundled_table(pytester: pytest.P
     make_tree(
         pytester,
         models=', models=["codex/gpt-house-blend"]',
-        ini="xharness_prices =\n    gpt-house-blend: input=1.00 output=2.00\n",
+        ini="xharness_prices =\n    codex/gpt-house-blend: input=1.00 output=2.00\n",
     )
     result = pytester.runpytest("--dry-run")
     result.assert_outcomes(skipped=1)
 
 
+def test_a_price_line_that_expired_does_not_price_todays_sweep(pytester: pytest.Pytester) -> None:
+    """ADR 0050: a row bounded to the past leaves today's cells unpriced, so collection stops (ADR 0007)."""
+    make_tree(
+        pytester,
+        models=', models=["codex/gpt-house-blend"]',
+        ini="xharness_prices =\n    codex/gpt-house-blend: input=1.00 output=2.00 to=2020-01-01\n",
+    )
+    result = pytester.runpytest("--dry-run")
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(["*PricingError*unpriced models in matrix*codex/gpt-house-blend*"])
+
+
 def test_a_malformed_price_line_stops_the_session_before_collection(pytester: pytest.Pytester) -> None:
-    """ADR 0030: a per-token value pasted from the bundled table must not under-price by 1e6."""
-    make_tree(pytester, ini="xharness_prices =\n    gpt-house-blend: input=1.0e-6 output=2.0e-6\n")
+    """ADR 0030: a per-token value pasted from an old table must not under-price by 1e6."""
+    make_tree(pytester, ini="xharness_prices =\n    codex/gpt-house-blend: input=1.0e-6 output=2.0e-6\n")
     result = pytester.runpytest("--collect-only")
     assert result.ret == pytest.ExitCode.USAGE_ERROR
     result.stderr.fnmatch_lines(["*looks like a per-token rate*USD per million tokens*"])
+
+
+def test_a_price_line_without_a_harness_stops_the_session_before_collection(pytester: pytest.Pytester) -> None:
+    """ADR 0050: rows are grouped by harness; the old bare-model selector names the new form."""
+    make_tree(pytester, ini="xharness_prices =\n    gpt-house-blend: input=1.00 output=2.00\n")
+    result = pytester.runpytest("--collect-only")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*'<harness>/<model>'*"])
 
 
 def test_module_without_evalcase_is_a_usage_error(pytester: pytest.Pytester) -> None:
