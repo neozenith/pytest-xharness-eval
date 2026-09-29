@@ -102,6 +102,14 @@ ui-promote: ui-check ui-test ui-ct ui-build
 	$(MAKE) test
 
 ######################################################################
+# PRICE RECORDS (ADR 0006, ADR 0050)
+# Curate a new dated record from LiteLLM's feed; writes only on a change (ADR 0051, ADR 0052).
+# Pass flags through ARGS, e.g. make prices ARGS="--dry-run" or ARGS="--date 2026-10-01".
+######################################################################
+prices: .venv/deps
+	uv run .github/scripts/curate_prices.py $(ARGS)
+
+######################################################################
 # DECISION RECORDS (ADR 0047)
 # Records are authored as docs/adrs/NNNN-slug.yml; every .md, index.md,
 # graph.md and graph.json beside them is generated. Edit the YAML.
@@ -117,6 +125,13 @@ adrs-check: adrs
 		echo "docs/adrs is stale or hand-edited; run 'make adrs' and commit the result"; \
 		git --no-pager diff --stat -- docs/adrs; exit 1; }
 	@echo "docs/adrs: generated files match their records"
+
+# CI gate (ADR 0054): every generated record passes the prose gates. The tool is pinned to
+# an exact version, and the markdown is regenerated first, so the check always reads what
+# the .yml records produce: a finding is fixed in the record's .yml, never in the .md.
+PROSE_GATES := @jpeakai/prose-gates@0.1.1
+adrs-prose: adrs
+	bunx $(PROSE_GATES) docs/adrs/*.md
 
 ######################################################################
 # BUILD AND PUBLISHING
@@ -145,4 +160,4 @@ clean:
 	rm -rf .mmdc_cache/
 	rm -rf node_modules/
 
-.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-ct ui-e2e ui-promote adrs adrs-check
+.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-ct ui-e2e ui-promote prices adrs adrs-check adrs-prose

@@ -180,7 +180,7 @@ class SubagentFields(TypedDict):
 
     Every key is a :class:`Subagent` field, with the same type, and the keys this
     declares are exactly the ones :meth:`Subagent.folded` does *not* derive —
-    ``tests/test_units.py`` asserts that partition, so the two cannot drift. Unpacked
+    ``tests/model/test_runresult.py`` asserts that partition, so the two cannot drift. Unpacked
     into ``folded``'s ``**fields`` (PEP 692) so that misnaming or mistyping one is a
     type error at the adapter, not a ``TypeError`` during a paid run (ADR 0036).
     """
@@ -304,7 +304,7 @@ class RunResultFields(TypedDict):
     and ``skill_coverage`` once the run is graded.
 
     Every key is a :class:`RunResult` field with the same type; the required ones are the
-    fields that have no default. ``tests/test_units.py`` asserts that the four groups
+    fields that have no default. ``tests/model/test_runresult.py`` asserts that the four groups
     partition the dataclass exactly, so this declaration cannot drift from it. Unpacked
     into ``folded``'s ``**fields`` (PEP 692), which is what makes a misspelled or
     mistyped field a type error at the adapter rather than a ``TypeError`` mid-run.
@@ -360,6 +360,8 @@ class RunResult:
     cost_status: CostStatus = CostStatus.UNPRICED
     cost_by_tier: dict[str, float] = field(default_factory=dict)
     rates_applied: AppliedRates | None = None
+    # How many calls were billed at the row's long-context tier, or None while unpriced (ADR 0051).
+    long_context_calls: int | None = None
     # The per-call ledger of the primary thread. ``turns`` is its length; ``usage`` is its
     # sum plus every subagent's, so pricing bills the whole run.
     calls: list[Call] = field(default_factory=list)
@@ -410,14 +412,15 @@ class RunResult:
         )
 
     def apply_cost(self, estimate: CostEstimate) -> None:
-        """Record a price-table estimate: the total, the tier split, the rates and the status.
+        """Record a price-table estimate: the total, the tier split, the rates, the long-context count and the status.
 
-        The four fields are written together and only here, so a result can never carry a
-        cost without the provenance that explains it (ADR 0007, ADR 0021).
+        The fields are written together and only here, so a result can never carry a cost
+        without the provenance that explains it (ADR 0007, ADR 0021, ADR 0051).
         """
         self.estimated_cost_usd = estimate.total_usd
         self.cost_by_tier = estimate.by_tier
         self.rates_applied = estimate.rates
+        self.long_context_calls = estimate.long_context_calls
         self.cost_status = CostStatus.PRICED
 
     @property

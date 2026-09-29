@@ -5,7 +5,7 @@
  */
 import { armLabel, compareEffort } from "./effort";
 import { short } from "./format";
-import { ratesPerMtok, type Tier } from "./rates";
+import { longContextPerMtok, ratesPerMtok, tierForCall, type Tier, type TierRates } from "./rates";
 import { armKey, groupKey } from "./summary";
 import type { Call, Cell, RunResult, Usage } from "./types";
 
@@ -174,8 +174,10 @@ export function waterfallByLine(result: RunResult, lines: string[] | null): { ro
 export function cumulativeCostByTurn(result: RunResult): number[] | null {
   const mtok = ratesPerMtok(result.rates_applied);
   if (mtok.input === undefined || mtok.output === undefined) return null;
-  const rate = (tier: Tier): number => (mtok[tier] ?? 0) / 1e6;
-  const usageCost = (u: Usage): number => {
+  const long = longContextPerMtok(result.rates_applied);
+  // Each call is billed at the tier its own prompt selects, exactly as `pricing.CostEstimate.of` does (ADR 0051).
+  const usageCost = (u: Usage, tier: TierRates): number => {
+    const rate = (t: Tier): number => (tier[t] ?? 0) / 1e6;
     const tagged = u.cache_write_1h_tokens + u.cache_write_5m_tokens;
     const untagged = Math.max(u.cache_write_tokens - tagged, 0);
     return (
@@ -186,16 +188,18 @@ export function cumulativeCostByTurn(result: RunResult): number[] | null {
       u.cache_write_1h_tokens * rate("cache_write_1h")
     );
   };
-  // A subagent's spend lands on the turn that spawned it, priced at the run's own rates
-  // (the plugin folds subagent usage into `usage` and prices it the same way).
+  const callCost = (u: Usage): number => usageCost(u, tierForCall(u, mtok, long));
+  // A subagent's spend lands on the turn that spawned it, each of its calls priced on its own
+  // prompt; a subagent with no ledger prices its summed usage at the base tier, as the plugin does.
   const subCost = new Map<number, number>();
   for (const sub of result.subagents ?? []) {
     const turn = sub.parent_turn ?? 1;
-    subCost.set(turn, (subCost.get(turn) ?? 0) + usageCost(sub.usage));
+    const cost = sub.calls?.length ? sub.calls.reduce((s, c) => s + callCost(c.usage), 0) : usageCost(sub.usage, mtok);
+    subCost.set(turn, (subCost.get(turn) ?? 0) + cost);
   }
   let run = 0;
   return result.calls.map((k) => {
-    run += usageCost(k.usage) + (subCost.get(k.n) ?? 0);
+    run += callCost(k.usage) + (subCost.get(k.n) ?? 0);
     return run;
   });
 }

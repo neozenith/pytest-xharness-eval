@@ -16,21 +16,17 @@ generated: { by: human:neozenith, at: 2026-08-31T00:00:00Z }
 
 # 0045: The verifiers ship with the plugin, and a rollout has one documented surface
 
-Status: accepted, 2026-08-31. Delivers the "primitives pending" of
-[0012](0012-grading-is-composable-not-prescribed.md) (grading is composable, not
-prescribed) and the "helper pending" of
-[0013](0013-verifiers-are-python-beside-the-case.md) (custom verifiers are Python
-beside the case). Refines
-[0039](0039-the-package-listing-is-the-architecture.md) (the package listing is
-the architecture) with a sixth layer. Breaking: a grader takes one `CaseOutput`
-in place of `(RunResult, Path)`.
+Status: accepted, 2026-08-31.
+Delivers the "primitives pending" of [0012](0012-grading-is-composable-not-prescribed.md) (grading is composable, not prescribed) and the "helper pending" of [0013](0013-verifiers-are-python-beside-the-case.md) (custom verifiers are Python beside the case).
+Refines [0039](0039-the-package-listing-is-the-architecture.md) (the package listing is the architecture) with a sixth layer.
+Breaking: a grader takes one `CaseOutput` in place of `(RunResult, Path)`.
 
 ## Context
 
-0012 declined to prescribe a grading DSL and 0013 kept verifiers as plain Python
-beside the case. Both were right, and both left a helper library pending for two
-years of records. What arrived instead was copy-paste. Four suites in one
-consuming repository, and all four opened with the same block:
+0012 declined to prescribe a grading DSL and 0013 kept verifiers as plain Python beside the case.
+Both were right, and both left a helper library pending for two years of records.
+What arrived instead was copy-paste.
+Four suites in one consuming repository, and all four opened with the same block:
 
 ```python
 def check_run_is_real(run: RunResult) -> None:
@@ -41,84 +37,68 @@ def check_run_is_real(run: RunResult) -> None:
     assert run.cost_status == "priced", ...
 ```
 
-Four copies drift, and these had. Two of the four had gone stale against the
-plugin's own types and were asserting nothing at all:
+Four copies drift, and these had.
+Two of the four had gone stale against the plugin's own types and were asserting nothing at all:
 
 | Written | Why it always passed |
 | --- | --- |
-| `run.skill_coverage.get("run")` | `SkillCoverage` has been a dataclass since 0035. On a dataclass this raises `AttributeError` — the cell errored rather than graded, and an error is not a red check. |
+| `run.skill_coverage.get("run")` | `SkillCoverage` has been a dataclass since 0035. On a dataclass this raises `AttributeError`. The cell errored rather than graded, and an error is not a red check. |
 | `run.rates_applied.get("source")` | Same: `AppliedRates` is a typed record. |
-| `run.cost_status == "priced"` | True by luck. `CostStatus` is a `StrEnum`, so this compares equal — but it is a comparison against a literal the vocabulary rule of 0041 forbids. |
+| `run.cost_status == "priced"` | True by luck. `CostStatus` is a `StrEnum`, so this compares equal: but it is a comparison against a literal the vocabulary rule of 0041 forbids. |
 
-The deeper cause is that nothing told a suite author what a rollout *is*. A
-grader is handed `(RunResult, Path)` and `RunResult` has 27 fields, five of them
-typed records with their own fields, two of them lists of further records. Every
-author reached for `.get()` because a mapping is what an undocumented payload
-looks like.
+The deeper cause is that nothing told a suite author what a rollout *is*.
+A grader is handed `(RunResult, Path)`.
+`RunResult` has 27 fields, five of them typed records with their own fields, two of them lists of further records.
+Every author reached for `.get()` because a mapping is what an undocumented payload looks like.
 
 ## Decision
 
-**`verify/` is a layer, between `derive/` and `emit/`.** It depends on `model/`
-and nothing else, and the ruff `TID251` rule of 0039 is extended to it in both
-directions: `verify/` may not name `emit/` or `runtime/`, and `derive/`,
-`harness/` and `model/` may not name `verify/`. A verifier reads a finished
-rollout; it never participates in producing one.
+**`verify/` is a layer, between `derive/` and `emit/`.** It depends on `model/` and nothing else.
+The ruff `TID251` rule of 0039 is extended to it in both directions.
+`verify/` may not name `emit/` or `runtime/`, and `derive/`, `harness/` and `model/` may not name `verify/`.
+A verifier reads a finished rollout; it never participates in producing one.
 
-**A verifier is a function that raises `AssertionError` or returns.** No
-registry, no result object, no DSL — 0012's decision stands. What ships is the
-vocabulary, not a framework: `check_run_is_real`, `check_run_is_priced`,
-`check_files_written`, `check_no_files_added`, `check_skill_was_loaded`,
-`check_skill_scripts_ran`, `check_subagents_spawned`, `check_tools_used`,
-`check_turns_within`, `check_no_tool_errors`. Each is importable alone, each says
-what went wrong in the agent's terms, and a suite that wants something else still
-writes a plain function beside the case, exactly as 0013 says.
+**A verifier is a function that raises `AssertionError` or returns.** No registry, no result object, no DSL: 0012's decision stands.
+What ships is the vocabulary, not a framework.
+The shipped checks are `check_run_is_real`, `check_run_is_priced`, `check_files_written`, `check_no_files_added`, `check_skill_was_loaded`, `check_skill_scripts_ran`, `check_subagents_spawned`, `check_tools_used`, `check_turns_within`, `check_no_tool_errors`.
+Each is importable alone, and each says what went wrong in the agent's terms.
+A suite that wants something else still writes a plain function beside the case, exactly as 0013 says.
 
-**`check_rollout` is the gate every case owes.** It is `check_run_is_real` plus
-`check_run_is_priced`, and it is the first line of every shipped case: a verdict
-untied to a session that happened and was billed is not a verdict. Making it one
-named call rather than five assertions is what stops the fifth from being dropped
-in the sixth copy.
+**`check_rollout` is the gate every case owes.** It is `check_run_is_real` plus `check_run_is_priced`, and it is the first line of every shipped case.
+A verdict untied to a session that happened and was billed is not a verdict.
+Making it one named call rather than five assertions is what stops the fifth from being dropped in the sixth copy.
 
-**The rollout has one named surface, and a grader takes it.** `CaseOutput` — in
-`model/output.py`, beside the other nouns — is the pair a grader has always been
-handed, given a name and the accessors the copy-paste kept re-deriving:
-`output.run` (the `RunResult`), `output.workspace`, `output.read(rel)`,
-`output.exists(rel)`, `output.wrote(rel)`, `output.added` and `output.changed`.
-A grader's signature becomes `def eval_x(output: CaseOutput) -> None`. Two
-positional arguments were never two things — they were one rollout that had no
-noun, which is why every suite re-opened the same file with the same four lines
-of `pathlib` around it.
+**The rollout has one named surface, and a grader takes it.** `CaseOutput` (in `model/output.py`, beside the other nouns) is the pair a grader has always been handed.
+It is given a name.
+It is also given the accessors the copy-paste kept re-deriving.
+They are `output.run` (the `RunResult`), `output.workspace`, `output.read(rel)`, `output.exists(rel)`, `output.wrote(rel)`, `output.added` and `output.changed`.
+A grader's signature becomes `def eval_x(output: CaseOutput) -> None`.
+Two positional arguments were never two things: they were one rollout that had no noun.
+That is why every suite re-opened the same file with the same four lines of `pathlib` around it.
 
-`docs/rollout.md` documents that surface field by field, against the dataclasses
-rather than beside them. It is the answer to "what can I assert", and it is what
-a suite author reads instead of guessing at `.get()`.
+`docs/rollout.md` documents that surface field by field, against the dataclasses rather than beside them.
+It is the answer to "what can I assert", and it is what a suite author reads instead of guessing at `.get()`.
 
 ## Consequences
 
-`pytest_xharness_eval.verify` is public API and versioned as such. A check whose
-assertion tightens is a breaking change for consuming suites, which is the
-correct pressure: a shared gate that can be silently loosened is worse than four
-copies.
+`pytest_xharness_eval.verify` is public API and versioned as such.
+A check whose assertion tightens is a breaking change for consuming suites, which is the correct pressure.
+A shared gate that can be silently loosened is worse than four copies.
 
-Every grader's signature changes. A two-parameter grader raises at collection
-with a message naming `CaseOutput`, rather than being adapted by arity sniffing:
-a suite that still expects `(run, workspace)` is a suite written against the
-undocumented surface this record replaces, and the four stale checks above are
-what silent adaptation would have carried forward.
+Every grader's signature changes.
+A two-parameter grader raises at collection with a message naming `CaseOutput`, rather than being adapted by arity sniffing.
+A suite that still expects `(run, workspace)` is a suite written against the undocumented surface this record replaces.
+The four stale checks above are what silent adaptation would have carried forward.
 
-The four stale suites fail loudly on upgrade rather than passing vacuously.
-`SkillCoverage` and `AppliedRates` are reached as attributes because
-`check_skill_scripts_ran` reaches them that way once, in typed code that
-`mypy --strict` checks.
+The four stale suites fail loudly on upgrade rather than passing vacuously. `SkillCoverage` and `AppliedRates` are reached as attributes because `check_skill_scripts_ran` reaches them that way once, in typed code that `mypy --strict` checks.
 
-Verifiers are unit-tested against captured logs in `tests/test_units.py` — real
-`result.json` files folded by the real adapters, never a fabricated `RunResult`,
-which 0002 forbids for the same reason it forbids a mocked CLI.
+Verifiers are unit-tested against captured logs in `tests/test_units.py`.
+They are real `result.json` files folded by the real adapters, never a fabricated `RunResult`.
+0002 forbids that for the same reason it forbids a mocked CLI.
 
 ## Lens
 
-"Composable, not prescribed" is a decision about the *shape* of grading, not a
-reason to ship nothing. The library that composition needs is a vocabulary of
-named checks with one documented noun beneath them; withhold it and every
-consuming repository writes the vocabulary anyway, four times, and two of the
-copies rot into assertions that cannot fail.
+"Composable, not prescribed" is a decision about the *shape* of grading, not a reason to ship nothing.
+The library that composition needs is a vocabulary of named checks with one documented noun beneath them.
+Withhold it and every consuming repository writes the vocabulary anyway, four times.
+Two of the copies rot into assertions that cannot fail.

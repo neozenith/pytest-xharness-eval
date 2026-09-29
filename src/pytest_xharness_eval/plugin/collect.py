@@ -170,7 +170,7 @@ class EvalItem(pytest.Item):
 
         Two statements, and everything under them is covered: each step of
         :class:`~pytest_xharness_eval.plugin.cell.CellRun` is exercised from captured logs
-        in ``tests/test_units.py``. What no test may reach is the CLI spawn inside
+        in ``tests/plugin/test_cell.py``. What no test may reach is the CLI spawn inside
         :meth:`~pytest_xharness_eval.plugin.cell.CellRun.invoke`, and faking it is what ADR
         0002 forbids -- so the pragma stops here rather than covering the sequence too.
         """

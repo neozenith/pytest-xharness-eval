@@ -15,17 +15,15 @@ generated: { by: human:neozenith, at: 2026-08-21T00:00:00Z }
 
 # 0018: Fixtures live under evals/fixtures/, and every live cell appends to a metrics history
 
-Status: accepted, 2026-08-21; revised the same day: `history.jsonl` lives under `captured/` and is not version-controlled. Refines [0004](0004-workspace-is-a-plain-copy.md)
-and [0016](0016-results-travel-on-the-test-report.md).
+Status: accepted, 2026-08-21; revised the same day: `history.jsonl` lives under `captured/` and is not version-controlled.
+Refines [0004](0004-workspace-is-a-plain-copy.md) and [0016](0016-results-travel-on-the-test-report.md).
 
 ## Context
 
-A fixture was addressed by a path relative to `evals/` and conventionally placed
-beside a `captured/` directory named for the case, which tied seed trees to single
-cases although several scenarios can start from one seed. Per-run metrics existed
-only inside each git-ignored `.result.json`, so there was no history of a skill's
-evals over time. The pre-run permutation summary added in 0015 was not needed and
-xdist's controller never printed it anyway.
+A fixture was addressed by a path relative to `evals/` and conventionally placed beside a `captured/` directory named for the case.
+That tied seed trees to single cases, although several scenarios can start from one seed.
+Per-run metrics existed only inside each git-ignored `.result.json`, so there was no history of a skill's evals over time.
+The pre-run permutation summary added in 0015 was not needed and xdist's controller never printed it anyway.
 
 ## Decision
 
@@ -38,24 +36,33 @@ captured/<case>/           # each run's session log and .result.json; git-ignore
 history.jsonl              # one metrics line per live cell; committed
 ```
 
-Each live cell appends one flat JSON record to `history.jsonl`: timestamp, node,
-harness, model, session id, verdict, turns, tool calls (total and by name), the
-agent-reported duration, the harness wall clock, USD, tokens by tier, and files
-written. The same record rides on `TestReport.user_properties`, with its scalars
-as individual `xharness_*` properties so `--junitxml` carries them, and feeds the
-verbose status word (`PASSED  $0.1261  573,213 tok  71.0s  12 turns  9 tools`).
+Each live cell appends one flat JSON record to `history.jsonl`:
 
-The pre-run permutation summary is removed. `--dist loadgroup` is an option, not
-a requirement: plain `-n N` is supported; `loadgroup` keeps one harness per
-worker.
+- timestamp
+- node
+- harness
+- model
+- session id
+- verdict
+- turns
+- tool calls (total and by name)
+- the agent-reported duration
+- the harness wall clock
+- USD
+- tokens by tier
+- files written
+
+The same record rides on `TestReport.user_properties`, with its scalars as individual `xharness_*` properties so `--junitxml` carries them.
+It also feeds the verbose status word (`PASSED  $0.1261  573,213 tok  71.0s  12 turns  9 tools`).
+
+The pre-run permutation summary is removed. `--dist loadgroup` is an option, not a requirement: plain `-n N` is supported; `loadgroup` keeps one harness per worker.
 
 ## Consequences
 
-A dry run touches neither `captured/` nor `history.jsonl`. `history.jsonl` grows
-by one line per paid cell and is the committed record of a skill's eval history;
-anything richer is derived from it or from the captured results.
+A dry run touches neither `captured/` nor `history.jsonl`.
+`history.jsonl` grows by one line per paid cell and is the committed record of a skill's eval history.
+Anything richer is derived from it or from the captured results.
 
 ## Lens
 
-Seed data is a pool, evidence is keyed by what produced it, and the metrics worth
-keeping are the ones small enough to commit.
+Seed data is a pool, evidence is keyed by what produced it, and the metrics worth keeping are the ones small enough to commit.

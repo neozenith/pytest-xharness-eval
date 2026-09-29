@@ -336,8 +336,8 @@
         "parent": "group-accounting",
         "colour": "#ea580c",
         "file": "0019-per-call-ledger-and-ttl-priced-cache-writes.md",
-        "title": "Every run carries a per-call ledger; tokens are reported as context and billed; cache writes price by TTL",
-        "description": "Every run carries a per-call ledger; tokens are reported as context and billed; cache writes price by TTL",
+        "title": "Every run carries a per-call ledger, tokens are reported as context and billed, and cache writes price by TTL",
+        "description": "Every run carries a per-call ledger, tokens are reported as context and billed, and cache writes price by TTL",
         "status": "accepted",
         "group": "accounting",
         "tags": "accounting, pricing"
@@ -392,8 +392,8 @@
         "parent": "group-evidence",
         "colour": "#0d9488",
         "file": "0023-turn-boundaries-skill-ignore-and-replay.md",
-        "title": "A turn owns its tools' results; skills declare what is not decision surface; captures replay without spend",
-        "description": "A turn owns its tools' results; skills declare what is not decision surface; captures replay without spend",
+        "title": "A turn owns its tools' results, skills declare what is not decision surface, and captures replay without spend",
+        "description": "A turn owns its tools' results, skills declare what is not decision surface, and captures replay without spend",
         "status": "accepted",
         "group": "evidence",
         "tags": "evidence"
@@ -406,8 +406,8 @@
         "parent": "group-accounting",
         "colour": "#ea580c",
         "file": "0024-context-window-metrics-injected-messages-and-design-tokens.md",
-        "title": "Context window consumption and timing are first-class metrics; injected messages are not prompts; the report is themed by design tokens and can be written standalone",
-        "description": "Context window consumption and timing are first-class metrics; injected messages are not prompts; the report is themed by design tokens and can be written standalone",
+        "title": "Context window consumption and timing are first-class metrics, injected messages are not prompts, and the report is design-token themed and can be written standalone",
+        "description": "Context window consumption and timing are first-class metrics, injected messages are not prompts, and the report is design-token themed and can be written standalone",
         "status": "accepted",
         "group": "accounting",
         "tags": "accounting, report"
@@ -779,6 +779,62 @@
     },
     {
       "data": {
+        "id": "ADR-0051",
+        "label": "0051",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0051-long-context-is-a-tier-priced-per-call-and-records-are-curated.md",
+        "title": "Long context is a price tier billed per call, and price records are curated from LiteLLM",
+        "description": "Long context is a price tier billed per call, and price records are curated from LiteLLM",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing, accounting"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0052",
+        "label": "0052",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0052-scope-is-a-boundary-not-a-roster.md",
+        "title": "Scope is a boundary, not a roster, so a new release arrives without an edit",
+        "description": "Scope is a boundary, not a roster, so a new release arrives without an edit",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing, collection"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0053",
+        "label": "0053",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0053-the-test-suite-mirrors-the-system-it-tests.md",
+        "title": "The test suite is concise and mirrors the structure of the system it tests",
+        "description": "The test suite is concise and mirrors the structure of the system it tests",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture, docs"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0054",
+        "label": "0054",
+        "parent": "group-docs",
+        "colour": "#059669",
+        "file": "0054-decision-records-pass-the-prose-gates.md",
+        "title": "Decision records pass the prose gates, and their shape may change while their argument does not",
+        "description": "Decision records pass the prose gates, and their shape may change while their argument does not",
+        "status": "accepted",
+        "group": "docs",
+        "tags": "docs"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -795,6 +851,16 @@
         "label": "extended by",
         "relation": "extended_by",
         "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0006-extended_by-ADR-0051",
+        "source": "ADR-0006",
+        "target": "ADR-0051",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"delivered by\""
       }
     },
     {
@@ -1889,6 +1955,16 @@
     },
     {
       "data": {
+        "id": "ADR-0047-extended_by-ADR-0054",
+        "source": "ADR-0047",
+        "target": "ADR-0054",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0047-extends-ADR-0032",
         "source": "ADR-0047",
         "target": "ADR-0032",
@@ -1969,6 +2045,16 @@
     },
     {
       "data": {
+        "id": "ADR-0050-extended_by-ADR-0051",
+        "source": "ADR-0050",
+        "target": "ADR-0051",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0050-extends-ADR-0006",
         "source": "ADR-0050",
         "target": "ADR-0006",
@@ -2005,6 +2091,136 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0051-extended_by-ADR-0052",
+        "source": "ADR-0051",
+        "target": "ADR-0052",
+        "label": "extended by",
+        "relation": "extended_by",
+        "note": "the record's status line says \"refined by\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0051-extends-ADR-0050",
+        "source": "ADR-0051",
+        "target": "ADR-0050",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0051-extends-ADR-0019",
+        "source": "ADR-0051",
+        "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0051-extends-ADR-0021",
+        "source": "ADR-0051",
+        "target": "ADR-0021",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0051-extends-ADR-0030",
+        "source": "ADR-0051",
+        "target": "ADR-0030",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0051-extends-ADR-0006",
+        "source": "ADR-0051",
+        "target": "ADR-0006",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"delivers\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0051-extends-ADR-0007",
+        "source": "ADR-0051",
+        "target": "ADR-0007",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0052-extends-ADR-0051",
+        "source": "ADR-0052",
+        "target": "ADR-0051",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0052-see_also-ADR-0007",
+        "source": "ADR-0052",
+        "target": "ADR-0007",
+        "label": "see also",
+        "relation": "see_also",
+        "note": "the record's status line says \"keeps\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0052-see_also-ADR-0049",
+        "source": "ADR-0052",
+        "target": "ADR-0049",
+        "label": "see also",
+        "relation": "see_also",
+        "note": "the record's status line says \"leaves ... closed\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0053-extends-ADR-0039",
+        "source": "ADR-0053",
+        "target": "ADR-0039",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0053-extends-ADR-0040",
+        "source": "ADR-0053",
+        "target": "ADR-0040",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0054-extends-ADR-0047",
+        "source": "ADR-0054",
+        "target": "ADR-0047",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
       }
     }
   ],

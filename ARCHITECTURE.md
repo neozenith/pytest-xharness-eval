@@ -176,6 +176,14 @@ by `(harness, model, day)`, where the day is the session's `{run}` stamp, so a l
 and a replay of it choose the same row and an old capture is never re-priced at today's
 rate (ADR 0050).
 
+A row may carry a `long_context` tier: a threshold in prompt tokens and five higher
+rates, billed for the whole call once that call's prompt (input plus both cache tiers)
+exceeds it. The threshold belongs to one request, so pricing walks the per-call ledgers,
+primary and subagent, and prices each call at the tier its own prompt selects; a run's
+summed usage is never compared with it. The records are curated by
+`.github/scripts/curate_prices.py` (`make prices`) from LiteLLM's feed, first-party rows
+only, with every published rate modelled or the run refused (ADR 0051).
+
 Keeping the cache tiers separate matters. In the reference Codex run, 174,336 of
 202,639 tokens were cache reads. Priced flat at the input rate the run would report
 about USD 0.25; priced by tier it reports USD 0.07. The `Usage` dataclass keeps the

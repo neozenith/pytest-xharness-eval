@@ -108,7 +108,7 @@ class FileCoverage:
     The two access lists are the whole difference between the catalogue and the answer,
     which is why this widens :class:`SkillFile` rather than nesting it: the wire format
     is one flat row per file. That widening is the type's one obligation, and
-    ``tests/test_units.py`` asserts the partition -- every :class:`SkillFile` field, plus
+    ``tests/derive/test_skillcov.py`` asserts the partition -- every :class:`SkillFile` field, plus
     exactly the two :class:`Access` lists.
     """
 

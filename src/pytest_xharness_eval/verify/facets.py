@@ -6,7 +6,7 @@ that is easy to get subtly wrong -- a node-id regex that also matches ``classDef
 fence matcher that stops at the first ``</details>``.
 
 Every extractor is pure and free, so a golden comparison is exercised against committed
-text in ``tests/test_units.py`` with no rollout and no spend.
+text in ``tests/verify/test_facets.py`` with no rollout and no spend.
 """
 
 from __future__ import annotations

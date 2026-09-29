@@ -1,0 +1,78 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0053
+slug: the-test-suite-mirrors-the-system-it-tests
+title: The test suite is concise and mirrors the structure of the system it tests
+status: accepted
+status_note: |-
+  accepted, 2026-09-29.
+  Refines [0039](0039-the-package-listing-is-the-architecture.md) (the package listing is the architecture) by making the test listing mirror it.
+  Refines [0040](0040-the-plugin-is-a-hook-manifest.md) (each job behind the manifest is a module), whose tests now sit beside the module they exercise.
+  Structural only: no test was added, removed or renamed in the move, and the collected test IDs are identical before and after.
+accepted_on: '2026-09-29'
+last_changed_on: '2026-09-29'
+group: architecture
+tags:
+- architecture
+- docs
+lens: |-
+  A test suite is documentation of the system's structure, so it should have the same structure.
+  When finding a module's tests means searching a file, the suite has stopped describing the system.
+  It has started describing the order its tests were written in.
+relates_to:
+- relation: extends
+  target: ADR-0039
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0040
+  note: the record's status line says "refines"
+body:
+  context: |-
+    ADR 0039 made the package listing the architecture: six layers, one folder each, each module one job.
+    The tests did not follow. `tests/test_units.py` had grown to 3,300 lines holding the unit tests of every layer, in the order they were written.
+    Its section headers were the only map, and they had drifted:
+
+    - the "effort" section held matrix, layout, metrics and cell tests
+    - the "normalise" section held both harnesses' folding
+    - the "pricing" section held the run stamp's day
+
+    Finding the tests for one module meant searching the file, and a new test went wherever the last related one happened to be.
+
+    A file that size also hides duplication.
+    Builders for a `RunResult`, a metrics record or a skill tree were defined once near their first user.
+    They were reached for from sections far away.
+    So no reader could see which tests shared which setup.
+  decision: |-
+    **The test listing mirrors the package listing.** The tests of `src/pytest_xharness_eval/<layer>/<module>.py` live in `tests/<layer>/test_<module>.py`; a package's `__init__.py` is tested by `test_init.py`.
+    Repository tooling under `.github/scripts/` is mirrored by `tests/scripts/`.
+    Each test directory is a package, so two modules of the same name in different layers never collide.
+
+    **Only whole-system suites sit at the top level,** and each is named with its reason:
+    - the pytester sessions that run the installed plugin end to end
+    - the characterization suite that pins the pipeline's output
+    - the shape gate itself
+
+    **Shared setup has one home.** A builder used by one test module lives in it.
+    A builder several modules share lives in `tests/support.py`, and a shared fixture in a `conftest.py`.
+    Helper modules are an explicit, short list.
+
+    **A test module has a budget.** No test module exceeds 500 lines.
+    A module that grows past it is testing more than one thing, or repeating a block that belongs in a builder or a `parametrize`.
+
+    **The shape is a test.** `tests/test_suite_shape.py` fails the build when:
+    - a test module mirrors no source module
+    - one outgrows the budget
+    - one has no docstring naming its subject
+    - an exception outlives its suite
+
+    The rules are data in that file, so an exception is a reviewed line with its reason beside it.
+  consequences: |-
+    `tests/test_units.py` and `tests/test_verify.py` are gone, split into the modules that mirror their subjects.
+    The split moved every definition verbatim and the collected test IDs did not change.
+    References in docstrings and `AGENTS.md` point at the mirrored modules.
+    Accepted ADRs that name `tests/test_units.py` describe the suite as it was when they were written.
+    The tests they cite are now beside the module each one names.
+
+    Adding a module to the package now implies where its tests go.
+    Adding a test somewhere else fails the build until it moves or its exception is written down.

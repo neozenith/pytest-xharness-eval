@@ -240,3 +240,4 @@ report-ui/playwright/.cache*/
 notes/
 reviewable-ui/
 node_modules/
+.DS_Store

@@ -16,20 +16,22 @@ generated: { by: human:neozenith, at: 2026-08-22T00:00:00Z }
 
 # 0021: Metric names carry their unit and their source; the report has a named vocabulary and addressable ids
 
-Status: accepted, 2026-08-22. Refines [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md)
-and [0020](0020-captured-report-is-a-static-microsite.md). The `total_tokens` row is
-superseded by [0029](0029-the-billed-sum-is-named-accumulative-billed-tokens.md):
-the billed sum is `accumulative_billed_tokens`.
+Status: accepted, 2026-08-22.
+Refines [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) and [0020](0020-captured-report-is-a-static-microsite.md).
+The `total_tokens` row is superseded by [0029](0029-the-billed-sum-is-named-accumulative-billed-tokens.md): the billed sum is `accumulative_billed_tokens`.
 
 ## Context
 
-The first report built on 0019 showed a `cost` and a `cli cost` column, a
-`baseline` and a `context` and a `billed` column. Read cold, `cost` did not say
-whose cost, `billed` did not say billed what, and `context` needed a paragraph to
-justify. When the two cost columns disagreed, nothing recorded which price row had
-produced the estimate, so a reader could not tell a stale table from a wrong
-formula without re-deriving both. Feedback on the report had no shared names for
-its parts, and no way to point at one turn of one session.
+The first report built on 0019 showed a `cost` and a `cli cost` column, a `baseline` and a `context` and a `billed` column.
+Read cold:
+
+- `cost` did not say whose cost
+- `billed` did not say billed what
+- `context` needed a paragraph to justify
+
+When the two cost columns disagreed, nothing recorded which price row had produced the estimate.
+So a reader could not tell a stale table from a wrong formula without re-deriving both.
+Feedback on the report had no shared names for its parts, and no way to point at one turn of one session.
 
 ## Decision
 
@@ -43,34 +45,34 @@ Metric names state the unit and, where two sources exist, the source:
 | `baseline` | `baseline_tokens` | the first turn's context |
 | `context_tokens` (headline) | removed | stays only per turn, inside the ledger |
 
-Every priced result records `rates_applied`: the per-tier USD-per-token rates, the
-`prices.toml` row key, the file the row came from, and when it was applied. The
-same block rides on the history line, so a decision made on a bad rate has a
-source to point at.
+Every priced result records `rates_applied`: the per-tier USD-per-token rates, the `prices.toml` row key, the file the row came from, and when it was applied.
+The same block rides on the history line, so a decision made on a bad rate has a source to point at.
 
-The ledger keeps everything: tool inputs, tool results and assistant text are
-stored whole, thinking text is captured, and each turn lists the 1-based line
-numbers of the captured session log it was built from. The report's detailed view
-renders all of it, including the raw records.
+The ledger keeps everything:
 
-The report's parts have CamelCase names, carried as element ids and listed in a
-glossary shipped beside the page (`XHARNESS-REPORT-GLOSSARY.md`). A session is
-addressed by its harness-minted `SessionId` (a unique prefix is accepted); a turn
-by `SessionTurnId` = `<SessionId>/t<N>`. Both are shown as click-to-copy badges and
-both appear in the URL fragment (`#session=…&turn=…&view=…`), which the page
-keeps current as the reader navigates.
+- tool inputs, tool results and assistant text are stored whole
+- thinking text is captured
+- each turn lists the 1-based line numbers of the captured session log it was built from
+
+The report's detailed view renders all of it, including the raw records.
+
+The report's parts have CamelCase names, carried as element ids and listed in a glossary shipped beside the page (`XHARNESS-REPORT-GLOSSARY.md`).
+A session is addressed by its harness-minted `SessionId` (a unique prefix is accepted); a turn by `SessionTurnId` = `<SessionId>/t<N>`.
+Both are shown as click-to-copy badges and both appear in the URL fragment (`#session=…&turn=…&view=…`), which the page keeps current as the reader navigates.
 
 ## Consequences
 
-`history.jsonl` lines written under 0019 carry the old keys; readers that merge
-histories treat `cost_usd` as `estimated_cost_usd`, `reported_cost_usd` as
-`harness_reported_cost_usd`, and `billed_tokens` (or `tokens`) as `total_tokens`.
-`RunResult.cost_usd` is gone: graders assert `run.estimated_cost_usd`. Result
-files grow to roughly the size of the session log they summarise; that is the
-price of a view that cuts nothing.
+`history.jsonl` lines written under 0019 carry the old keys.
+Readers that merge histories treat the old keys as the new ones:
+
+- `cost_usd` as `estimated_cost_usd`
+- `reported_cost_usd` as `harness_reported_cost_usd`
+- `billed_tokens` (or `tokens`) as `total_tokens`
+
+`RunResult.cost_usd` is gone: graders assert `run.estimated_cost_usd`.
+Result files grow to roughly the size of the session log they summarise; that is the price of a view that cuts nothing.
 
 ## Lens
 
-A metric name is read without its definition beside it, so the name must carry
-the unit and the source; and a number nobody can trace to its inputs is an
-opinion.
+A metric name is read without its definition beside it, so the name must carry the unit and the source.
+And a number nobody can trace to its inputs is an opinion.

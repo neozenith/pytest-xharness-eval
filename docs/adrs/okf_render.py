@@ -312,8 +312,29 @@ def environment(by_id: dict[str, Record]) -> Environment:
     env.filters["blockquote"] = lambda s: s.replace("\n", "\n> ")
     env.filters["relation_prose"] = lambda r: PROSE[r]
     env.filters["record_link"] = lambda i: f"{i.split('-')[-1]}-{by_id[i]['slug']}.md"
-    env.filters["oneline"] = lambda s: " ".join(str(s).split())
+    env.filters["oneline"] = _oneline
     return env
+
+
+def _oneline(text: object) -> str:
+    """A multi-line field as one table cell: lines joined by spaces, list items by "; ".
+
+    A status note may hold a bullet list (ADR 0054 lets prose become one); flattened with
+    plain spaces its items would read "Refines: - a - b" in the index.
+    """
+    out = ""
+    in_list = False
+    for raw in str(text).splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        item = line[2:] if line.startswith("- ") else None
+        if item is not None:
+            out += ("; " if in_list else " ") + item
+        else:
+            out += " " + line
+        in_list = item is not None
+    return " ".join(out.split())
 
 
 def render(
