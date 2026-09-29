@@ -430,7 +430,7 @@ def _result(model: str, usage: Usage, harness: str = "claude") -> RunResult:
 
 # The day every bundled-table test prices on: inside the one open record, so the tests
 # pin today's rates without depending on the wall clock (ADR 0050).
-DAY = date(2026, 9, 28)
+DAY = date(2026, 9, 29)
 
 
 def _applied_rates(model: str = "m", source: str = "/p/prices-20260820.toml") -> pricing.AppliedRates:
@@ -471,8 +471,8 @@ def test_bundled_table_prices_each_tier_separately() -> None:
     applied = r.rates_applied
     assert applied is not None
     assert (applied.harness, applied.model, applied.unit) == ("claude", "claude-opus-5", "usd_per_mtok")
-    assert applied.source.endswith("prices-20260820.toml")
-    assert (applied.effective_from, applied.effective_to) == ("2026-08-20", None)
+    assert applied.source.endswith("prices-20260929.toml")
+    assert (applied.effective_from, applied.effective_to) == ("2026-09-29", None)
     # Rates are USD per MTok on the wire, exactly as the record states them (ADR 0050).
     assert applied.cache_write_1h == 10.0 and applied.applied_at.endswith("+00:00")
     assert r.cost_by_tier == {
@@ -616,6 +616,22 @@ def test_overlapping_records_are_refused(tmp_path: Path) -> None:
         pricing.load_table(tmp_path)
 
 
+def test_the_bundled_records_hand_over_on_their_boundary_day() -> None:
+    """A curated price change: the closed record ends the day the next one opens (ADR 0050)."""
+    table = pricing.load_table()
+    before = table.resolve("claude", "claude-opus-5", date(2026, 9, 28))
+    after = table.resolve("claude", "claude-opus-5", date(2026, 9, 29))
+    assert before.source.endswith("prices-20260820.toml") and after.source.endswith("prices-20260929.toml")
+    assert before.applied("t").effective_to == after.applied("t").effective_from == "2026-09-29"
+
+
+def test_claude_sonnet_5_5_is_priced_from_the_record_that_opened_for_it() -> None:
+    """Verified 2026-09-29: $2 in, $10 out, $0.20 cache read, $2.50 / $4 cache writes per MTok."""
+    row = pricing.load_table().get("claude", "claude-sonnet-5-5", DAY)
+    assert row is not None and row.source.endswith("prices-20260929.toml")
+    assert (row.input, row.output, row.cache_read, row.cache_write, row.cache_write_1h) == (2.0, 10.0, 0.2, 2.5, 4.0)
+
+
 def test_every_bundled_record_loads_and_one_is_still_open() -> None:
     """The shipped records are well-formed, and today's sweep has rates to price from."""
     rows = pricing.load_records()
@@ -642,7 +658,7 @@ def test_price_lines_layer_on_top_of_the_bundled_records() -> None:
         interval=pricing.Interval(None, None),
     )
     sol = table.resolve("codex", "gpt-5.6-sol", DAY)
-    assert sol.source.endswith("prices-20260820.toml")  # bundled rows survive
+    assert sol.source.endswith("prices-20260929.toml")  # bundled rows survive
     assert table.resolve("codex", "new-model", DAY).output == 3.0
     assert pricing.load_table(rows=[]) == pricing.load_table()
 
