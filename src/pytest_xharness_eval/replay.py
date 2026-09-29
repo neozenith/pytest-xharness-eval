@@ -7,7 +7,7 @@ skill coverage) is derived, so it can be derived again after the plugin changes:
     uv run -m pytest_xharness_eval.replay .xharness_eval_cache
 
 rewrites every ``results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/result.json``
-from its ``log.jsonl``, re-prices it with the current price tables, re-annotates
+from its ``log.jsonl``, re-prices it from the price record in effect on its run's day, re-annotates
 skill coverage against the skill's current tree and ignore rules, rewrites each
 session's ``history.json`` (verdict, timestamps and wall clock are kept; metrics
 are recomputed), and runs the combine step (``report/``). No CLI is invoked and
@@ -47,6 +47,9 @@ from pytest_xharness_eval.runtime.settings import (
 )
 
 if TYPE_CHECKING:
+    # Standard Library
+    from datetime import date
+
     # Our Libraries
     from pytest_xharness_eval.model.runresult import RunResult
 
@@ -55,12 +58,18 @@ log = logging.getLogger(__name__)
 
 def rebuild_result(
     session_dir: Path,
-    table: dict[str, pricing.Rates],
+    table: pricing.PriceTable,
     files: list[skillcov.SkillFile],
     skill: str,
     settings: Settings | None = None,
+    *,
+    run_date: date | None,
 ) -> RunResult:
-    """Re-derive one session's result from its captured log and stored envelope."""
+    """Re-derive one session's result from its captured log and stored envelope.
+
+    ``run_date`` is the day the session's ``{run}`` stamp names, so the capture is priced
+    from the record in effect when it ran rather than from today's (ADR 0050).
+    """
     session = SessionDir(session_dir)
     old = json.loads(session.result.read_text(encoding="utf-8"))
     if not session.log.is_file():
@@ -86,6 +95,7 @@ def rebuild_result(
     return pipeline.derive(
         result,
         table=table,
+        run_date=run_date,
         skill=skill,
         skill_files=files,
         case=case,
@@ -146,7 +156,7 @@ def rebuild(
         if skill not in catalogs:
             skill_dir = settings.skill_dir(skill)
             catalogs[skill] = skillcov.catalog(skill_dir, ignore=settings.skill_ignore) if skill_dir.is_dir() else []
-        result = rebuild_result(session.path, table, catalogs[skill], skill, settings)
+        result = rebuild_result(session.path, table, catalogs[skill], skill, settings, run_date=session.run_date)
         result.write(session.result)
         rewritten.append(session.result)
 
@@ -188,7 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="LINE",
         help=(
-            "extra xharness_prices line, '<model>: input=<usd/MTok> output=<usd/MTok> ...' "
+            "extra xharness_prices line, '<harness>/<model>: input=<usd/MTok> output=<usd/MTok> ...' "
             "(repeatable; the project's pytest config lines apply as well)"
         ),
     )

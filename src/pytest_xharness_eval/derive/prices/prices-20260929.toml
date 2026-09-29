@@ -1,0 +1,111 @@
+# One dated price record (ADR 0050). Rates are USD per million tokens, the unit every
+# provider publishes; the arithmetic divides by 1e6 once, per tier, at pricing time.
+#
+# The interval is half-open: a run whose stamp falls on or after `effective_from` and
+# before `effective_to` prices from this file. `effective_to` is omitted on the one file
+# still in effect. When prices change, set `effective_to` here to the change date and add
+# a `prices-YYYYMMDD.toml` whose name and `effective_from` are that same date. A run date
+# no file covers stops the sweep; it never prices as zero (ADR 0007).
+#
+# Rows are grouped by the harness that runs the model: each top-level table is a
+# registered harness name, and a project's `xharness_prices` lines name the same pair as
+# `<harness>/<model>` (ADR 0050, refining ADR 0030).
+#
+# cache_write is the 5-minute TTL rate (1.25x input on Anthropic); cache_write_1h is
+# the 1-hour TTL rate (2x input). Claude Code writes 1-hour entries and the log says
+# which (ADR 0019). A row that omits cache_write_1h gets cache_write x 1.6.
+#
+# Opened for Claude Sonnet 5.5 (released 2026-09-28). Every Anthropic row was verified
+# 2026-09-29 against platform.claude.com/docs/en/about-claude/pricing (standard tier,
+# global routing). The OpenAI rows are carried forward unchanged from
+# prices-20260820.toml and were last verified 2026-09-24 against
+# developers.openai.com/api/docs/pricing. OpenAI publishes a cache-write rate (1.25x
+# input) but no 1-hour tier, so every OpenAI row's cache_write_1h repeats its
+# cache_write: an assumption, stated, never a zero. OpenAI bills prompts past its
+# long-context threshold (272K on gpt-6-sol) at a higher rate that this flat table does
+# not model.
+effective_from = 2026-09-29
+
+[claude."claude-sonnet-5-5"]
+# Released 2026-09-28. Dateless id: every Claude id from the 4.6 generation on is a
+# pinned snapshot and the alias repeats it. Same rates as Claude Sonnet 5, with the
+# standard 0.1x cache read.
+input          = 2.00
+output         = 10.00
+cache_read     = 0.20
+cache_write    = 2.50
+cache_write_1h = 4.00
+
+[claude."claude-opus-5-5"]
+# Released 2026-09-22. Dateless id; the alias is the same string. Cache read is 0.05x
+# input, not the usual 0.1x: stated on the pricing page, not derived.
+input          = 4.00
+output         = 20.00
+cache_read     = 0.20
+cache_write    = 5.00
+cache_write_1h = 8.00
+
+[claude."claude-opus-5"]
+input          = 5.00
+output         = 25.00
+cache_read     = 0.50
+cache_write    = 6.25
+cache_write_1h = 10.00
+
+[claude."claude-sonnet-5"]
+# $2 / $10: the introductory rate became standard and the planned 2026-09-01 move to
+# $3 / $15 was cancelled.
+input          = 2.00
+output         = 10.00
+cache_read     = 0.20
+cache_write    = 2.50
+cache_write_1h = 4.00
+
+[claude."claude-haiku-4-5-20251001"]
+# The id Claude logs for the `haiku` alias (verified 2026-08-21). Public Haiku 4.5 rates.
+input          = 1.00
+output         = 5.00
+cache_read     = 0.10
+cache_write    = 1.25
+cache_write_1h = 2.00
+
+[codex."gpt-6-sol"]
+# Released 2026-09-22; the Codex slug.
+input          = 2.00
+output         = 10.00
+cache_read     = 0.20
+cache_write    = 2.50
+cache_write_1h = 2.50
+
+[codex."gpt-6-luna"]
+# Released 2026-09-22; the Codex slug.
+input          = 0.10
+output         = 0.50
+cache_read     = 0.01
+cache_write    = 0.125
+cache_write_1h = 0.125
+
+[codex."gpt-5.6-sol"]
+# The published row. The page runs a Sol promotion "at least through November 21,
+# 2026" and does not say whether these figures are the promotional or regular rate.
+input          = 4.00
+output         = 20.00
+cache_read     = 0.40
+cache_write    = 5.00
+cache_write_1h = 5.00
+
+[codex."gpt-5.6-terra"]
+# Bundled because the plugin's default matrix names it, and an entry there with no row
+# would abort every default sweep at collection (ADR 0007).
+input          = 2.00
+output         = 12.00
+cache_read     = 0.20
+cache_write    = 2.50
+cache_write_1h = 2.50
+
+[codex."gpt-5.6-luna"]
+input          = 0.20
+output         = 1.20
+cache_read     = 0.02
+cache_write    = 0.25
+cache_write_1h = 0.25

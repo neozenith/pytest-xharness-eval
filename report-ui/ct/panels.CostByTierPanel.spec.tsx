@@ -98,11 +98,14 @@ test("an empty cost_by_tier is the same as none, and still shows the harness fig
 });
 
 test.describe("RatesApplied", () => {
-  test("every rate shown per million tokens, with the price row and its source", async ({ mount }) => {
+  test("every rate shown per million tokens, with the price row, its harness, source and interval", async ({ mount }) => {
     const c = await mount(<CostByTierPanel result={result()} />);
     expect(await texts(rateRows(c))).toEqual([
       ["price row", "claude-sonnet-5"],
-      ["source file", "prices.toml"],
+      ["harness", "claude"],
+      ["source file", "prices/prices-20260820.toml"],
+      ["in effect", "2026-08-20 → open"],
+      ["unit", "usd_per_mtok"],
       ["applied at", "2026-08-23T11:47:31+00:00"],
       ["input", "$2.000 /M"],
       ["output", "$10.000 /M"],
@@ -111,15 +114,38 @@ test.describe("RatesApplied", () => {
       ["cache_write_1h", "$4.000 /M"],
     ]);
     await expect(rateRows(c).nth(0).locator("code")).toHaveText("claude-sonnet-5");
-    await expect(c.getByText("rates applied (USD per token)")).toBeVisible();
+    await expect(c.getByText("rates applied (USD per million tokens)")).toBeVisible();
     await expect(c.locator('.el[data-el="RatesApplied"]')).toHaveText("RatesApplied");
   });
 
-  test("a partial rates row: a missing rate is the no-value glyph, a missing time is blank", async ({ mount }) => {
+  test("a bounded ini row: an undated start reads 'any date', a closed end its date", async ({ mount }) => {
+    const c = await mount(
+      <RatesApplied
+        rates={{
+          unit: "usd_per_mtok",
+          harness: "codex",
+          model: "gpt-house",
+          source: "xharness_prices",
+          effective_from: null,
+          effective_to: "2026-10-01",
+          input: 1,
+          output: 2,
+        }}
+      />,
+    );
+    const rows = await texts(rateRows(c));
+    expect(rows).toContainEqual(["in effect", "any date → 2026-10-01"]);
+    expect(rows).toContainEqual(["input", "$1.000 /M"]);
+  });
+
+  test("a partial per-token row from before ADR 0050: rates scaled to per MTok, a missing rate is the no-value glyph", async ({ mount }) => {
     const c = await mount(<RatesApplied rates={{ model: "gpt-5.6-sol", source: "pyproject.toml [xharness_prices]", input: 1.25e-6, output: 1e-5 }} />);
     expect(await texts(rateRows(c))).toEqual([
       ["price row", "gpt-5.6-sol"],
+      ["harness", ""],
       ["source file", "pyproject.toml [xharness_prices]"],
+      ["in effect", "–"],
+      ["unit", "usd_per_token (before ADR 0050; shown per MTok)"],
       ["applied at", ""],
       ["input", "$1.250 /M"],
       ["output", "$10.000 /M"],

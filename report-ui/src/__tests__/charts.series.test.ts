@@ -168,7 +168,7 @@ test("subagent bills land on the spawning turn: the waterfall, accumulation and 
   expect(accumulation(withSubs.calls, subagentsByTurn(withSubs)).at(-1)!.billed).toBe(530 + 960);
   expect(cumulativeByTurn(withSubs).map((c) => c.sub)).toEqual([10, 960, 960]);
   // cost: rates of $1/MTok everywhere makes each tier's cost its token count
-  const rates = { input: 1e-6, output: 1e-6, cache_read: 1e-6, cache_write: 1e-6, cache_write_1h: 1e-6 };
+  const rates = { input: 1, output: 1, cache_read: 1, cache_write: 1, cache_write_1h: 1, unit: "usd_per_mtok" };
   const { cumulativeCostByTurn } = await import("@/lib/series");
   const costs = cumulativeCostByTurn({ ...withSubs, rates_applied: rates })!;
   expect(Math.round(costs.at(-1)! * 1e6)).toBe(530 + 960);
@@ -217,17 +217,20 @@ test("cumulativeCostByTurn mirrors pricing.breakdown, including the untagged-cac
       ...usage,
     },
   });
-  const r = {
-    rates_applied: { input: 2e-6, output: 1e-5, cache_read: 2e-7, cache_write: 2.5e-6, cache_write_1h: 4e-6 },
-    calls: [
-      call({ input_tokens: 100, output_tokens: 10 }),
-      // 50 tagged 1h + 30 untagged (bills at the 5m rate) + 20 read
-      call({ cache_write_tokens: 80, cache_write_1h_tokens: 50, cache_read_tokens: 20 }),
-    ],
-  } as never;
-  const cost = cumulativeCostByTurn(r)!;
+  const calls = [
+    call({ input_tokens: 100, output_tokens: 10 }),
+    // 50 tagged 1h + 30 untagged (bills at the 5m rate) + 20 read
+    call({ cache_write_tokens: 80, cache_write_1h_tokens: 50, cache_read_tokens: 20 }),
+  ];
+  // Since ADR 0050 the record states USD per million tokens and says so in `unit`.
+  const perMtok = { input: 2, output: 10, cache_read: 0.2, cache_write: 2.5, cache_write_1h: 4, unit: "usd_per_mtok" };
+  const cost = cumulativeCostByTurn({ rates_applied: perMtok, calls } as never)!;
   expect(cost[0]).toBeCloseTo(100 * 2e-6 + 10 * 1e-5, 10);
   expect(cost[1]! - cost[0]!).toBeCloseTo(20 * 2e-7 + 30 * 2.5e-6 + 50 * 4e-6, 10);
+  // A record from before it has no `unit` and states USD per token: the same run costs the same.
+  const perToken = { input: 2e-6, output: 1e-5, cache_read: 2e-7, cache_write: 2.5e-6, cache_write_1h: 4e-6 };
+  const legacy = cumulativeCostByTurn({ rates_applied: perToken, calls } as never)!;
+  legacy.forEach((v, i) => expect(v).toBeCloseTo(cost[i]!, 10));
   expect(cumulativeCostByTurn({ rates_applied: {}, calls: [] } as never)).toBeNull();
 });
 

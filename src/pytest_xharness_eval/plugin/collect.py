@@ -21,11 +21,12 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval import harness
-from pytest_xharness_eval.derive import pricing, skillcov
+from pytest_xharness_eval.derive import skillcov
 from pytest_xharness_eval.emit.metrics import CellMetrics
 from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model.layout import run_date
 from pytest_xharness_eval.model.suite import EvalSuite
-from pytest_xharness_eval.plugin.cell import CellRun
+from pytest_xharness_eval.plugin.cell import CellRun, run_stamp
 from pytest_xharness_eval.plugin.results import RECORD_KEY
 from pytest_xharness_eval.runtime.settings import Settings
 
@@ -57,11 +58,14 @@ class EvalFile(pytest.File):
         cases = self._cases()
         settings = Settings.from_config(self.config)
         table = settings.price_table()
+        # ADR 0050: the rows that must exist are the ones in effect on the day this sweep's
+        # cells will be stamped with, which is the day every one of them is priced on.
+        today = run_date(run_stamp())
         opts = self.config.option
         for case in cases:
             models = settings.matrix_for(case)
             # ADR 0007: an unpriced model stops the sweep at collection, before any spend.
-            pricing.validate_matrix(models, table)
+            table.validate_matrix(models, today)
             # ADR 0022: the skill's file tree is catalogued here, before any cell runs, so every
             # cell of the sweep is measured against the same inventory.
             skill_dir = settings.skill_dir(case.skill)

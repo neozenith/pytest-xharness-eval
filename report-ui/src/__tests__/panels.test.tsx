@@ -93,13 +93,17 @@ const result: RunResult = {
   harness_reported_cost_usd: 1.0287836,
   rates_applied: {
     applied_at: "2026-08-23T11:47:31+00:00",
-    cache_read: 2e-7,
-    cache_write: 2.5e-6,
-    cache_write_1h: 4e-6,
-    input: 2e-6,
+    cache_read: 0.2,
+    cache_write: 2.5,
+    cache_write_1h: 4,
+    input: 2,
+    output: 10,
+    unit: "usd_per_mtok",
+    harness: "claude",
     model: "claude-sonnet-5",
-    output: 1e-5,
-    source: "prices.toml",
+    source: "prices/prices-20260820.toml",
+    effective_from: "2026-08-20",
+    effective_to: null,
   },
   final_text: "Both gates pass clean.",
   files_written: ["ARCHITECTURE.md"],
@@ -239,10 +243,30 @@ test("CostByTierPanel: tiers, the estimate, the harness per-model line, and the 
   expect(cost).toHaveTextContent("harness_reported_cost_usd");
   const rates = document.getElementById("RatesApplied")!;
   expect(rates).toHaveTextContent("claude-sonnet-5");
-  expect(rates).toHaveTextContent("prices.toml");
+  expect(rates).toHaveTextContent("prices-20260820.toml");
+  expect(rates).toHaveTextContent("2026-08-20 → open");
   expect(rates).toHaveTextContent("$2.000 /M");
   expect(rates).toHaveTextContent("$0.200 /M");
   expect(rates).toHaveTextContent("$4.000 /M");
+});
+
+test("RatesApplied reads a per-token record from before ADR 0050 at the same per-MTok figures", () => {
+  const legacy = {
+    applied_at: "t",
+    cache_read: 2e-7,
+    cache_write: 2.5e-6,
+    cache_write_1h: 4e-6,
+    input: 2e-6,
+    output: 1e-5,
+    model: "claude-sonnet-5",
+    source: "prices.toml",
+  };
+  mount(<CostByTierPanel result={{ ...result, rates_applied: legacy }} />);
+  const rates = document.getElementById("RatesApplied")!;
+  expect(rates).toHaveTextContent("$2.000 /M");
+  expect(rates).toHaveTextContent("$0.200 /M");
+  expect(rates).toHaveTextContent("$4.000 /M");
+  expect(rates).toHaveTextContent("usd_per_token (before ADR 0050");
 });
 
 test("CostByTierPanel on a result from before the ledger points at the replay", () => {

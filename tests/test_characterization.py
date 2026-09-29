@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 from characterization_fixtures import (
     PRICE_ROWS,
+    RUN_DATE,
     SKILL,
     claude_capture,
     codex_capture,
@@ -34,7 +35,7 @@ from pytest_xharness_eval import RunResult, harness, normalise, pricing, records
 GOLDEN_DIR = Path(__file__).parent / "golden"
 
 
-def _table() -> dict[str, pricing.Rates]:
+def _table() -> pricing.PriceTable:
     return pricing.load_table(rows=PRICE_ROWS)
 
 
@@ -51,7 +52,7 @@ def _case(name: str) -> dict[str, Any]:
 
 def _finish(result: RunResult, files: list[dict[str, Any]], name: str) -> RunResult:
     """The post-run steps plugin.EvalItem._run_live applies, in its order."""
-    pricing.price(result, _table())
+    pricing.price(result, _table(), RUN_DATE)
     result.skill_coverage = skillcov.annotate(SKILL, files, result)
     result.case = _case(name)
     return result
@@ -128,7 +129,7 @@ def test_replay_reproduces_the_live_result(tmp_path: Path, harness_name: str) ->
     live, session_dir, files = _built(tmp_path, harness_name)
     live.write(session_dir / "result.json")
 
-    rebuilt = replay.rebuild_result(session_dir, _table(), files, SKILL)
+    rebuilt = replay.rebuild_result(session_dir, _table(), files, SKILL, run_date=RUN_DATE)
 
     def comparable(d: dict[str, Any]) -> dict[str, Any]:
         out = {k: v for k, v in d.items() if k != "session_log"}

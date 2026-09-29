@@ -23,6 +23,9 @@ from pytest_xharness_eval.emit.metrics import CellMetrics
 from pytest_xharness_eval.model.layout import SUBAGENTS_DIR
 
 if TYPE_CHECKING:
+    # Standard Library
+    from datetime import date
+
     # Our Libraries
     from pytest_xharness_eval.derive.skillcov import SkillFile
     from pytest_xharness_eval.emit.metrics import Outcome
@@ -33,13 +36,18 @@ if TYPE_CHECKING:
 def derive(
     result: RunResult,
     *,
-    table: dict[str, pricing.Rates],
+    table: pricing.PriceTable,
+    run_date: date | None,
     skill: str,
     skill_files: list[SkillFile],
     case: CaseRef | None,
     effort: str | None = None,
 ) -> RunResult:
     """Price the run, annotate skill coverage, name its case and its effort -- in that order.
+
+    ``run_date`` is the day the run was stamped on, and chooses the price record in effect
+    then; both paths read it off the same ``{run}`` coordinate, so a replay prices a
+    capture exactly as its live run did (ADR 0050).
 
     Coverage is annotated after pricing and before the case is attached only because that
     is the order the live path has always used; what matters is that both paths use one
@@ -50,7 +58,7 @@ def derive(
     entry resolved to; a replay passes what the stored result carried, which is the same
     value written by the live run -- so the two paths still agree field for field.
     """
-    pricing.price(result, table)
+    pricing.price(result, table, run_date)
     result.skill_coverage = skillcov.annotate(skill, skill_files, result)
     result.case = case
     result.effort = effort

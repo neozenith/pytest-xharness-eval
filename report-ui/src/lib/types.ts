@@ -4,6 +4,27 @@
  * glossary, not with what reads nicely in TypeScript.
  */
 
+/**
+ * `rates_applied`: the price row one result was priced with (ADR 0021, ADR 0050). Every key
+ * is optional because `{}` is an unpriced result. Since ADR 0050 the tier rates are USD per
+ * million tokens and `unit` says so; a record without `unit` predates it and its rates are
+ * USD per token. Read the tiers through `ratesPerMtok` (`lib/rates.ts`), never directly.
+ */
+export interface RatesApplied {
+  input?: number;
+  output?: number;
+  cache_read?: number;
+  cache_write?: number;
+  cache_write_1h?: number;
+  unit?: string;
+  harness?: string;
+  model?: string;
+  source?: string;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  applied_at?: string;
+}
+
 export interface SkillCoverageSummary {
   files?: number;
   ignored?: number;
@@ -43,7 +64,7 @@ export interface Cell {
   log: string | null;
   estimated_cost_usd: number | null;
   harness_reported_cost_usd: number | null;
-  rates_applied: Record<string, unknown>;
+  rates_applied: RatesApplied;
   accumulative_billed_tokens: number | null;
   baseline_tokens: number | null;
   context_window: number | null;
@@ -159,7 +180,7 @@ export interface RunResult {
   baseline_tokens: number;
   estimated_cost_usd: number | null;
   harness_reported_cost_usd: number | null;
-  rates_applied: Record<string, unknown>;
+  rates_applied: RatesApplied;
   final_text: string;
   files_written: string[];
   tool_calls: Record<string, number>;

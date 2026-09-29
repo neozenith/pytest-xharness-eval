@@ -175,8 +175,8 @@ class Settings:
 
     # -- derived views -----------------------------------------------------------------
 
-    def price_table(self) -> dict[str, pricing.Rates]:
-        """The bundled table with this project's rows layered on top (ADR 0030)."""
+    def price_table(self) -> pricing.PriceTable:
+        """The bundled dated records with this project's rows layered on top (ADR 0030, ADR 0050)."""
         return pricing.load_table(rows=self.price_lines)
 
     def matrix_for(self, case: EvalCase) -> list[str]:

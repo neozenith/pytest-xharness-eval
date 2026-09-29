@@ -364,7 +364,7 @@ Every claim the report depends on, where it was checked, and what was found.
 | Thinking is billed as output and is a subset of it | *Context windows* | **Confirmed**, verbatim above |
 | Claude Code's context percentage is the latest call's three input tiers over the window | *Status line* | **Confirmed**, verbatim above; the plugin's per-call `context_pct` is the same formula |
 | Claude Code's percentage excludes output | *Status line* | **Confirmed**; the plugin's `final_context_pct` deliberately includes it (§4) |
-| Cache-read, cache-write prices | *Prompt caching* | **Confirmed**: 0.1×, 1.25× (5m), 2× (1h) of input; `prices.toml` rows follow them |
+| Cache-read, cache-write prices | *Prompt caching* | **Confirmed**: 0.1×, 1.25× (5m), 2× (1h) of input; the bundled price records follow them |
 | OpenAI `input_tokens` includes cached and written tokens | OpenAI *Prompt caching* example | **Confirmed**; the plugin subtracts both |
 | Codex subtracted `cache_write_input_tokens` from input | `normalise._codex_call_usage` | **Was wrong**: only cached was subtracted. Fixed 2026-08-23 with a unit test. No captured value was non-zero, so no stored result changed |
 | The ledger sum equals the harness's own total | Claude envelope `usage`; Codex `total_token_usage` | **Confirmed** on both harnesses, every field |

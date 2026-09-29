@@ -4,7 +4,7 @@
 
 Browse it interactively in [graph.html](graph.html): click a node to read its record.
 
-49 decision records, 117 typed edges, grouped into
+50 decision records, 123 typed edges, grouped into
 11 groups. Every edge comes from a record's `relates_to`
 block, so this view cannot drift from the records.
 
@@ -127,3 +127,5 @@ record set, not rendering artifacts.
 * `ADR-0049` declares `extends ADR-0034`, but `ADR-0034` has no `extended_by ADR-0049`
 * `ADR-0049` declares `extends ADR-0037`, but `ADR-0037` has no `extended_by ADR-0049`
 * `ADR-0049` declares `extends ADR-0007`, but `ADR-0007` has no `extended_by ADR-0049`
+* `ADR-0050` declares `extends ADR-0021`, but `ADR-0021` has no `extended_by ADR-0050`
+* `ADR-0050` declares `extends ADR-0007`, but `ADR-0007` has no `extended_by ADR-0050`

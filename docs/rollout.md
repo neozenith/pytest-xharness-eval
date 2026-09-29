@@ -74,7 +74,7 @@ that only checks `exists` passes for a run that did nothing at all.
 | `cost_status` | `CostStatus` | `PRICED` or `UNPRICED`. There is no third state. Compare to the enum member, not the string. |
 | `estimated_cost_usd` | `float \| None` | This plugin's estimate from its own price table. |
 | `cost_by_tier` | `dict[str, float]` | The estimate split by token tier. |
-| `rates_applied` | `AppliedRates \| None` | **A typed record, not a dict.** `rates_applied.source`, `.model`. `.get()` raises. |
+| `rates_applied` | `AppliedRates \| None` | **A typed record, not a dict.** `.source`, `.harness`, `.model`, `.unit` (`"usd_per_mtok"`), `.effective_from` / `.effective_to` (ISO dates, `None` when open); the tier rates are USD per MTok (ADR 0050). `.get()` raises. |
 | `harness_reported_cost_usd` | `float \| None` | What the CLI itself claimed (Claude only). Never used to price. |
 
 ### Tokens

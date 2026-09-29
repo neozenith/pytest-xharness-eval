@@ -154,13 +154,17 @@
   "peak_context_tokens": 2112,
   "rates_applied": {
     "applied_at": "<stamp>",
-    "cache_read": 1.5e-06,
-    "cache_write": 1.875e-05,
-    "cache_write_1h": 3e-05,
-    "input": 1.5e-05,
+    "cache_read": 1.5,
+    "cache_write": 18.75,
+    "cache_write_1h": 30.0,
+    "effective_from": null,
+    "effective_to": null,
+    "harness": "claude",
+    "input": 15.0,
     "model": "claude-opus-5",
-    "output": 7.5e-05,
-    "source": "xharness_prices"
+    "output": 75.0,
+    "source": "xharness_prices",
+    "unit": "usd_per_mtok"
   },
   "record_kinds": {
     "claude/assistant/text": 1,

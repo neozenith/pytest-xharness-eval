@@ -159,15 +159,16 @@ class CellRun:
         same order and through the same two calls, which is the invariant
         ``tests/test_characterization.py`` pins.
         """
+        session = self.session_dir(result.session_id)
         pipeline.derive(
             result,
             table=self.settings.price_table(),
+            run_date=session.run_date,
             skill=self.case.skill,
             skill_files=self.skill_files,
             case=CaseRef.of(self.case, self.suite, self.prompt),
             effort=self.cell.effort,
         )
-        session = self.session_dir(result.session_id)
         pipeline.capture(result, session)
         return session
 

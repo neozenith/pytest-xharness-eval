@@ -128,7 +128,7 @@
   "duration_ms": 10000,
   "effort": null,
   "envelope": {},
-  "estimated_cost_usd": 0.002333,
+  "estimated_cost_usd": 0.002332,
   "exit_code": 0,
   "files_written": [
     "out.md"
@@ -143,13 +143,17 @@
   "peak_context_tokens": 2600,
   "rates_applied": {
     "applied_at": "<stamp>",
-    "cache_read": 1.25e-07,
-    "cache_write": 1.25e-06,
-    "cache_write_1h": 2.0000000000000003e-06,
-    "input": 1.25e-06,
+    "cache_read": 0.125,
+    "cache_write": 1.25,
+    "cache_write_1h": 2.0,
+    "effective_from": null,
+    "effective_to": null,
+    "harness": "codex",
+    "input": 1.25,
     "model": "gpt-5.6-sol",
-    "output": 1e-05,
-    "source": "xharness_prices"
+    "output": 10.0,
+    "source": "xharness_prices",
+    "unit": "usd_per_mtok"
   },
   "record_kinds": {
     "codex/event_msg/item_completed/CommandExecution": 1,

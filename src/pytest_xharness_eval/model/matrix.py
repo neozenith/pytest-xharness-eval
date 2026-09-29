@@ -39,9 +39,10 @@ def known_harnesses() -> tuple[str, ...]:
 
 # The plugin-scope fallback sweep, used when neither the project nor the case sets one.
 #
-# Every model the bundled price table carries, which is the widest default that cannot
-# abort at collection: an entry here with no ``derive/prices.toml`` row would stop the
-# sweep before it spent anything (ADR 0007), so this list and that table move together.
+# Every model the bundled price records carry, which is the widest default that cannot
+# abort at collection: an entry here with no row under its harness in the open
+# ``derive/prices/`` record would stop the sweep before it spent anything (ADR 0007,
+# ADR 0050), so this list and that record move together.
 #
 # Naming every priced model rather than one per harness follows the axis convention: an
 # axis nobody narrowed means the whole axis. It is also the expensive reading, so a

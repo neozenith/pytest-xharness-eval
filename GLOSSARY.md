@@ -34,7 +34,10 @@ Two standing obligations, restated in [AGENTS.md](AGENTS.md):
 | verifier | A plain function over a `CaseOutput` that returns when its claim holds and raises `AssertionError` naming what went wrong when it does not. The shared ones ship in `verify/checks.py`; anything else is still Python beside the case (ADR 0012, ADR 0013, ADR 0045) |
 | golden | A committed, correct artifact at `evals/goldens/<name>/<path>`, mirroring `evals/fixtures/<name>/<path>`. A `GoldenCase` compares a candidate to it facet by facet, each `Facet` declaring a `Tolerance` -- `Exact`, `Superset`, `Jaccard`, `Ratio`, `Count`, `Within` -- and a mismatch reports the per-facet delta rather than a diff (`verify/golden.py`, ADR 0046) |
 | CaseRef | The case a result names -- suite, name, skill, fixture, task, prompt -- as one type for the live cell and both replay paths, which used to hand-build the record three times; the `case` block of `result.json` (ADR 0025, ADR 0035) |
-| CostEstimate, AppliedRates | What one run costs under one price row: `CostEstimate.of(usage, rates)` is the total, the per-tier split and the provenance, and `RunResult.apply_cost` writes all of it in one call, so the four cost fields are never written apart. `AppliedRates` is the `Rates` row plus the `applied_at` stamp, and is the `rates_applied` block of `result.json` (ADR 0021, ADR 0035) |
+| CostEstimate, AppliedRates | What one run costs under one price row: `CostEstimate.of(usage, rates)` is the total, the per-tier split and the provenance, and `RunResult.apply_cost` writes all of it in one call, so the four cost fields are never written apart. `AppliedRates` is the `Rates` row plus its `unit` (`usd_per_mtok`), its interval and the `applied_at` stamp, and is the `rates_applied` block of `result.json` (ADR 0021, ADR 0035, ADR 0050) |
+| price record | One bundled `derive/prices/prices-YYYYMMDD.toml`: the rows in effect over one *effective interval*, grouped by harness, in USD per million tokens. The name carries its `effective_from`; the one record still in effect has no `effective_to`. A price change adds a record rather than editing one, so the directory is the price history (ADR 0050) |
+| effective interval | When a price row held: `[effective_from, effective_to)`, half-open, so consecutive records meet on a boundary day that belongs to the newer one. A run is priced from the row whose interval covers the day its `{run}` stamp names; a day no row covers is unpriced, never zero (ADR 0007, ADR 0050) |
+| Rates, PriceTable | One price row keyed by `(harness, model)` with its effective interval, and every row a sweep may price from -- the project's `xharness_prices` lines first, then the bundled records -- looked up by `(harness, model, day)` (`derive/pricing.py`, ADR 0050) |
 | CostStatus | `priced` or `unpriced`, with no third state (ADR 0007); a `StrEnum`, so the wire format carries the same bare word it always has (ADR 0035) |
 | Verdict | How a cell graded: `pass`, `fail`, `error` or `dry-run`, and no fifth. A domain noun in `model/verdict.py`, so every layer that names one -- the cell that decides it, the record that stores it, the status word that prints it -- spells it from the same place; `Outcome.verdict` is declared as it, while the record keeps the `.value`, because that record crosses execnet, which serialises builtins only. `Verdict.stored` reads a word no version of this package wrote as *no* verdict rather than a fabricated grade (ADR 0016, ADR 0038, ADR 0041) |
 | pipeline | The single sequence run over a `RunResult` by both a live cell and a replay: derive (price, coverage, case), capture (log, subagents, result), record metrics; `runtime/pipeline.py` (ADR 0034, ADR 0039) |
@@ -78,7 +81,7 @@ flowchart TB
         SKILL["skill<br/>the directory under test"]:::declare
         CASE["case<br/>@evalcase in eval_*.py"]:::declare
         FIX["fixture<br/>committed seed tree"]:::declare
-        PRICES["price table<br/>bundled prices.toml + ini rows"]:::cfg
+        PRICES["price records<br/>dated prices-YYYYMMDD.toml + ini rows"]:::cfg
     end
 
     subgraph expanded["Expanded by the plugin at collection"]
@@ -117,7 +120,7 @@ flowchart TB
     HARNESS -->|"forks per subagent"| SUB
     LOG -->|"normalised into"| RR
     SUB -->|"folded into, billed by"| RR
-    PRICES -->|"prices"| RR
+    PRICES -->|"prices, from the record<br/>in effect on the run's day"| RR
     RR -.->|"graded by the case fn,<br/>with the workspace"| CASE
     LOG -->|"copied to"| CAP
     SUB -->|"copied to subagents/ in"| CAP

@@ -11,18 +11,22 @@ from __future__ import annotations
 
 # Standard Library
 import json
+from datetime import date
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     # Standard Library
     from pathlib import Path
 
-# Prices are pinned here rather than taken from the bundled prices.toml: a real price
-# update is not a behaviour change, and the golden must not move when one lands.
+# Prices are pinned here rather than taken from the bundled price records: a real price
+# update is not a behaviour change, and the golden must not move when one lands. The rows
+# are undated, so they cover RUN_DATE and any other (ADR 0050).
 PRICE_ROWS = [
-    "claude-opus-5: input=15.00 output=75.00 cache_read=1.50 cache_write=18.75 cache_write_1h=30.00",
-    "gpt-5.6-sol: input=1.25 output=10.00 cache_read=0.125",
+    "claude/claude-opus-5: input=15.00 output=75.00 cache_read=1.50 cache_write=18.75 cache_write_1h=30.00",
+    "codex/gpt-5.6-sol: input=1.25 output=10.00 cache_read=0.125",
 ]
+# The day both paths price the captured runs on: what a ``{run}`` stamp would name.
+RUN_DATE = date(2026, 8, 22)
 
 SKILL = "demo"
 

@@ -5,6 +5,7 @@
  */
 import { armLabel, compareEffort } from "./effort";
 import { short } from "./format";
+import { ratesPerMtok, type Tier } from "./rates";
 import { armKey, groupKey } from "./summary";
 import type { Call, Cell, RunResult, Usage } from "./types";
 
@@ -165,14 +166,15 @@ export function waterfallByLine(result: RunResult, lines: string[] | null): { ro
 
 /**
  * Cumulative estimated USD after each turn's call, priced with the result's own
- * `rates_applied` exactly as the plugin's `pricing.breakdown` does (per-token rates; an
- * untagged cache write bills at the 5-minute rate, ADR 0019). `null` when the result
- * carries no usable rates, so an unpriced run never draws a zero-cost line.
+ * `rates_applied` exactly as the plugin's `Rates.breakdown` does (USD per million tokens,
+ * divided per tier, ADR 0050; an untagged cache write bills at the 5-minute rate, ADR 0019).
+ * A record from before ADR 0050 is read per token through `ratesPerMtok`. `null` when the
+ * result carries no usable rates, so an unpriced run never draws a zero-cost line.
  */
 export function cumulativeCostByTurn(result: RunResult): number[] | null {
-  const rates = result.rates_applied as Record<string, unknown>;
-  const rate = (key: string): number => (typeof rates?.[key] === "number" ? (rates[key] as number) : 0);
-  if (!rates || typeof rates.input !== "number" || typeof rates.output !== "number") return null;
+  const mtok = ratesPerMtok(result.rates_applied);
+  if (mtok.input === undefined || mtok.output === undefined) return null;
+  const rate = (tier: Tier): number => (mtok[tier] ?? 0) / 1e6;
   const usageCost = (u: Usage): number => {
     const tagged = u.cache_write_1h_tokens + u.cache_write_5m_tokens;
     const untagged = Math.max(u.cache_write_tokens - tagged, 0);

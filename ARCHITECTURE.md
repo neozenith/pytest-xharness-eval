@@ -166,8 +166,15 @@ visible on the first line of output.
 
 Neither session log carries cost. Claude reports `total_cost_usd` on its stdout
 envelope; Codex reports nothing. The plugin therefore prices every run itself from
-its bundled `derive/prices.toml`, layered with the project's `xharness_prices` ini rows, using
+its bundled price records, layered with the project's `xharness_prices` ini rows, using
 four rates per model: input, output, cache read, and cache write.
+
+The records are `derive/prices/prices-YYYYMMDD.toml`, one per interval: each states
+`effective_from` (and `effective_to` once superseded), groups its rows by harness, and
+states every rate in USD per million tokens, the unit providers publish. A row is found
+by `(harness, model, day)`, where the day is the session's `{run}` stamp, so a live cell
+and a replay of it choose the same row and an old capture is never re-priced at today's
+rate (ADR 0050).
 
 Keeping the cache tiers separate matters. In the reference Codex run, 174,336 of
 202,639 tokens were cache reads. Priced flat at the input rate the run would report

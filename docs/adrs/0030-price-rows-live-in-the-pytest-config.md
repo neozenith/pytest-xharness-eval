@@ -11,6 +11,7 @@ relates_to:
   - { relation: extends, target: ADR-0006 }
   - { relation: extends, target: ADR-0014 }
   - { relation: extends, target: ADR-0026 }
+  - { relation: extended_by, target: ADR-0050 }
 generated: { by: human:neozenith, at: 2026-08-24T00:00:00Z }
 ---
 
@@ -19,7 +20,10 @@ generated: { by: human:neozenith, at: 2026-08-24T00:00:00Z }
 Status: accepted, 2026-08-24. Refines [0006](0006-local-price-table-is-authoritative.md),
 [0014](0014-register-through-the-pytest11-entry-point.md) and
 [0026](0026-skill-ignore-lives-in-the-pytest-config.md); ADR 0007's
-stop-before-spend rule is unchanged.
+stop-before-spend rule is unchanged. Refined by
+[0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md): a line's
+selector is `<harness>/<model>` and may carry `from=`/`to=` bounds, and the bundled
+table is now dated records in USD per MTok.
 
 ## Context
 
