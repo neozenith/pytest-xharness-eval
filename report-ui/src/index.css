@@ -1853,6 +1853,40 @@ button.filter-chip[data-on="true"] > .muted {
 }
 
 /*
+ * `treatment` (ADR 0055) is the third free-text identity column, and a treatment is named by
+ * whoever wrote the directory (`cheap_eval_subagents` alone was 150px). It is also the narrowest
+ * claim on the row: a filter facet with its own chips, collapsing out of the table the moment one
+ * is selected. So it takes the tightest cap; the full name is on the cell's `title`.
+ */
+#SessionTable td[data-k="treatment"] > * {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+  max-width: 7ch;
+}
+
+/*
+ * A treated sweep's table carries one column more than the budget above was drawn for, and on a
+ * real two-harness capture it ran ~30px past a 1440px card even with the cap. The width comes
+ * back from the gutters, one pixel a side per cell, and only on a table that actually shows the
+ * column (`data-treated`), so every untreated sweep keeps its exact layout.
+ */
+#SessionTable[data-treated] :is(th, td) {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+#SessionTable[data-treated] thead th button {
+  width: calc(100% + 0.5rem);
+  margin-left: -0.25rem;
+  margin-right: -0.25rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+/*
  * A column whose value is the same on every visible row is not telling the reader anything: it
  * is a fact about the whole table, so it is stated once above the table and the column is gone.
  * With the overview's filters this is the common case — filter to one harness and the harness

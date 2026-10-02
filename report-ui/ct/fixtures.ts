@@ -22,6 +22,7 @@ export const cell = (over: Partial<Cell> = {}): Cell => ({
   harness: "claude",
   model: "claude-opus-5",
   effort: null,
+  treatment: null,
   session_id: SID,
   verdict: "pass",
   at: "2026-09-23T07:18:05.537Z",
@@ -87,6 +88,7 @@ export const result = (over: Partial<RunResult> = {}): RunResult => ({
   harness: "claude",
   model: "claude-opus-5",
   effort: null,
+  treatment: null,
   session_id: SID,
   turns: 3,
   reported_turns: 23,
@@ -149,12 +151,28 @@ export const sweep = (): Cell[] => [
   cell({ session_id: "cccccccc-0002", harness: "codex", model: "gpt-5.6-luna", effort: "low", skill: "discovery", case: "eval_map" }),
 ];
 
+/**
+ * The sweep with the treatment axis switched on (ADR 0055): the `high` rung's control
+ * (`aaaaaaaa-0003`, untreated as every `sweep()` cell is) gains a treated twin, run twice, and a
+ * second treatment run once — so a control and its twins sit side by side in every view, and the
+ * control-first, then-alphabetical order shows. `sweep()` itself stays untreated, which is the
+ * shape of every capture made before the axis.
+ */
+export const treatedSweep = (): Cell[] => [
+  ...sweep(),
+  cell({ session_id: "dddddddd-0001", effort: "high", treatment: "lean-ci", estimated_cost_usd: 0.8, verdict: "pass" }),
+  cell({ session_id: "dddddddd-0002", effort: "high", treatment: "lean-ci", estimated_cost_usd: 0.6, verdict: "pass" }),
+  cell({ session_id: "dddddddd-0003", effort: "high", treatment: "agents-md", estimated_cost_usd: 1.4, verdict: "fail" }),
+];
+
 export const index = (cells: Cell[] = sweep()): Index => ({ generated_at: "2026-09-24T01:00:00Z", captured: ".xharness_eval_cache", inline: true, cells });
 
 /** The inline payload: every cell served the same result (its identity overridden) and log. */
 export const inline = (cells: Cell[] = sweep()): InlineData => ({
   index: index(cells),
-  results: Object.fromEntries(cells.map((c) => [c.session_id, result({ session_id: c.session_id, harness: c.harness, model: c.model, effort: c.effort })])),
+  results: Object.fromEntries(
+    cells.map((c) => [c.session_id, result({ session_id: c.session_id, harness: c.harness, model: c.model, effort: c.effort, treatment: c.treatment })]),
+  ),
   logs: Object.fromEntries(cells.map((c) => [c.session_id, log().join("\n")])),
   tokens: tokens as unknown as DesignTokens,
 });

@@ -47,8 +47,14 @@ export const effortSortValue = (effort: string | null): string | null => (effort
  */
 export const rungOf = (effort: unknown): string | null => (typeof effort === "string" && effort !== "" ? effort : null);
 
-/** `claude/claude-opus-5 · high`, or `claude/claude-opus-5` for a cell that named no rung. */
-export const armLabel = (harness: string, model: string, effort: string | null): string => `${harness}/${model}${effort ? ` · ${effort}` : ""}`;
+/**
+ * `claude/claude-opus-5 · high`, or `claude/claude-opus-5` for a cell that named no rung; a treated
+ * cell appends `+<treatment>` (ADR 0055), the same `+` the cache's model level and the cell id use,
+ * so a treated arm and its control never share an aria label or a chart series name. A control
+ * appends nothing, so every label written before the treatment axis is unchanged.
+ */
+export const armLabel = (harness: string, model: string, effort: string | null, treatment: string | null): string =>
+  `${harness}/${model}${effort ? ` · ${effort}` : ""}${treatment ? ` +${treatment}` : ""}`;
 
 /** The rung as prose, for the places that must say something when there is none. */
 export const EFFORT_DEFAULT = "not named: the CLI's default";

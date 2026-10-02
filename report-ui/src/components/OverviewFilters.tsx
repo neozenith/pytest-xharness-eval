@@ -1,6 +1,6 @@
 /**
- * The one global filter on the overview (glossary: `OverviewFilters`, ADR 0042): four facets —
- * skill, harness, model, effort — held in the URL and rippling through the `TokenAccumulationChart`, the
+ * The one global filter on the overview (glossary: `OverviewFilters`, ADR 0042): five facets —
+ * skill, harness, model, effort, treatment — held in the URL and rippling through the `TokenAccumulationChart`, the
  * `SessionSummaryTable` and the `SessionTable`.
  *
  * It is the *producer* of the filter state, not a consumer, so unlike those three it reads

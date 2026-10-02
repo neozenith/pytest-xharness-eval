@@ -11,7 +11,7 @@ import { expect, test } from "./test";
 import type { Locator, Page } from "@playwright/test";
 import type { HooksConfig } from "../playwright/index";
 import { OverviewFilters } from "../src/components/OverviewFilters";
-import { cell, sweep } from "./fixtures";
+import { cell, sweep, treatedSweep } from "./fixtures";
 
 const search = (page: Page) => page.evaluate(() => location.search);
 const row = (c: Locator, facet: string) => c.locator(`[role="group"][data-facet="${facet}"]`);
@@ -405,5 +405,38 @@ test.describe("no reflow (the documented four rules)", () => {
     expect(new Set(ys).size).toBeGreaterThan(1); // it did wrap
     const firstOfEachLine = xs.filter((_, i) => i === 0 || ys[i] !== ys[i - 1]);
     expect(new Set(firstOfEachLine).size).toBe(1);
+  });
+});
+
+test.describe("the treatment facet (ADR 0055)", () => {
+  test("an untreated sweep has no treatment row", async ({ mount }) => {
+    const c = await mount(<OverviewFilters cells={sweep()} />);
+    await expect(row(c, "treatment")).toHaveCount(0);
+  });
+
+  test("a treated sweep offers control first, then the treatments alphabetically", async ({ mount }) => {
+    const c = await mount(<OverviewFilters cells={treatedSweep()} />);
+    const facets = await c.locator('[role="group"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-facet")));
+    expect(facets).toEqual(["skill", "harness", "model", "effort", "treatment"]);
+    expect(await values(c, "treatment")).toEqual(["control", "agents-md", "lean-ci"]);
+    await expect(countOf(c, "treatment", "control")).toHaveText("7");
+    await expect(countOf(c, "treatment", "lean-ci")).toHaveText("2");
+  });
+
+  test("clicking control selects the untreated arm by name, and a twin joins it with a comma", async ({ mount, page }) => {
+    const c = await mount(<OverviewFilters cells={treatedSweep()} />);
+    await chip(c, "treatment", "control").click();
+    expect(await search(page)).toBe("?treatment=control");
+    await expect(c.locator("#OverviewFilterCount > span:not(.sizer)")).toHaveText("7 of 10 sessions");
+    await chip(c, "treatment", "lean-ci").click();
+    expect(await search(page)).toBe("?treatment=control,lean-ci");
+    await expect(c.locator("#OverviewFilterCount > span:not(.sizer)")).toHaveText("9 of 10 sessions");
+  });
+
+  test("the facet key fits its fixed column", async ({ mount }) => {
+    const c = await mount(<OverviewFilters cells={treatedSweep()} />);
+    const key = row(c, "treatment").locator("> *").first();
+    const fits = await key.evaluate((el) => el.scrollWidth <= el.clientWidth);
+    expect(fits).toBe(true);
   });
 });

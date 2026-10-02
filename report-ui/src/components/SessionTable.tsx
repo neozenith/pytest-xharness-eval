@@ -5,6 +5,7 @@ import { VerdictBadge } from "@/components/VerdictBadge";
 import { caseShort, compact, coverageShare, coverageText, dec, fmt, modelShort, NONE, pct, secs, usd, usd3, when, windowLabel } from "@/lib/format";
 import { armLabel, effortSortValue } from "@/lib/effort";
 import { NO_MATCH } from "@/lib/facets";
+import { anyTreated, treatmentLabel, treatmentSortValue } from "@/lib/treatment";
 import { overviewWith, pushRoute, replaceRoute, useRoute, type SortDir } from "@/lib/route";
 import type { Cell } from "@/lib/types";
 
@@ -147,6 +148,14 @@ const COLUMNS: Column[] = [
     render: (c) => orNil(c.effort, c.effort ?? ""),
   },
   {
+    key: "treatment",
+    name: "treatment",
+    label: "treat.",
+    title: "the named treatment layered over the case's fixture (ADR 0055); control is the untreated arm every treated case also sweeps",
+    // A control is a measured arm, not a missing value, so it is named rather than a muted glyph.
+    render: (c) => <span title={treatmentLabel(c.treatment)}>{treatmentLabel(c.treatment)}</span>,
+  },
+  {
     key: "estimated_cost_usd",
     name: "estimated_cost_usd",
     label: "cost",
@@ -226,18 +235,20 @@ const COLUMNS: Column[] = [
 ];
 
 /**
- * The identity columns a constant value may collapse out of. Only these five: a *measure* that
+ * The identity columns a constant value may collapse out of. Only these six: a *measure* that
  * happens to be equal on every row is a finding the reader wants to see repeated down the
  * column, while an identity that is equal on every row is the table's subject, not its data.
  */
-const COLLAPSIBLE: readonly SortKey[] = ["skill", "case", "harness", "model", "effort"] as const;
+const COLLAPSIBLE: readonly SortKey[] = ["skill", "case", "harness", "model", "effort", "treatment"] as const;
 
 /**
  * The identity columns whose value is the same on every visible row, and that value.
  *
  * Empty below two rows: one row is not "every row agrees", it is one row, and collapsing four
  * columns out of it would leave a caption where the data should be. A null (an ungraded skill)
- * never collapses — "they are all null" is not a fact worth a caption.
+ * never collapses — "they are all null" is not a fact worth a caption. The one exception is
+ * `treatment`, whose null is the named `control` arm: every row a control is a fact like any
+ * other, but it is handled before this (`hiddenColumns`) because it is not worth a caption either.
  */
 function constantColumns(rows: Cell[], ctx: RowContext): { key: SortKey; name: string; text: string }[] {
   if (rows.length < 2) return [];
@@ -252,9 +263,25 @@ function constantColumns(rows: Cell[], ctx: RowContext): { key: SortKey; name: s
   return out;
 }
 
-/** What a column ranks by. Effort ranks by rung position, never by spelling (`lib/effort.ts`). */
+/**
+ * Columns dropped without a caption: `treatment` when no visible row ran under one. An untreated
+ * sweep (every sweep before ADR 0055) is all control, and a column, or a caption, reading
+ * `control` on every row would print an axis the sweep never used.
+ */
+const hiddenColumns = (rows: Cell[]): SortKey[] => (anyTreated(rows) ? [] : ["treatment"]);
+
+/**
+ * What a column ranks by. Effort ranks by rung position, never by spelling (`lib/effort.ts`);
+ * treatment puts the control first, then treatments alphabetically (`lib/treatment.ts`).
+ */
 const sortValue = (c: Cell, key: SortKey): string | number | null =>
-  key === "coverage" ? coverageShare(c) : key === "effort" ? effortSortValue(c.effort) : (c[key] as string | number | null);
+  key === "coverage"
+    ? coverageShare(c)
+    : key === "effort"
+      ? effortSortValue(c.effort)
+      : key === "treatment"
+        ? treatmentSortValue(c.treatment)
+        : (c[key] as string | number | null);
 
 /**
  * One row per captured session; click a header to sort (recorded as `sort=`/`dir=`), a row to
@@ -316,9 +343,9 @@ export function SessionTable({ cells, shortModel = modelShort }: { cells: Cell[]
 
   const constants = useMemo(() => constantColumns(rows, ctx), [rows, shortModel]);
   const columns = useMemo(() => {
-    const collapsed = new Set(constants.map((c) => c.key));
+    const collapsed = new Set([...constants.map((c) => c.key), ...hiddenColumns(rows)]);
     return COLUMNS.filter((col) => !collapsed.has(col.key));
-  }, [constants]);
+  }, [constants, rows]);
 
   /** What a click on this header would sort by — the direction the hint arrow promises. */
   const nextDir = (key: SortKey): SortDir => (key === sortKey ? (dir === 1 ? "desc" : "asc") : key === "at" ? "desc" : "asc");
@@ -326,7 +353,7 @@ export function SessionTable({ cells, shortModel = modelShort }: { cells: Cell[]
   const open = (c: Cell) => pushRoute({ view: "session", sessionId: c.session_id, turn: null, turnView: null, axis: null, rec: null, line: null, theme });
 
   return (
-    <Table id="SessionTable">
+    <Table id="SessionTable" data-treated={columns.some((col) => col.key === "treatment") ? "true" : undefined}>
       {constants.length ? (
         /*
          * Announced before the table, which is what a `<caption>` is for — a screen reader reads
@@ -387,7 +414,7 @@ export function SessionTable({ cells, shortModel = modelShort }: { cells: Cell[]
             // A row is the only way into a SessionView, so it has to be reachable without a
             // mouse; the implicit `row` role stays, so the table still reads as a table.
             tabIndex={0}
-            aria-label={`${c.case} · ${armLabel(c.harness, c.model, c.effort)} · ${c.verdict ?? "no history"}`}
+            aria-label={`${c.case} · ${armLabel(c.harness, c.model, c.effort, c.treatment)} · ${c.verdict ?? "no history"}`}
             // A click always targets a cell rather than the row, so the row cannot ask whether
             // the event is its own — it asks instead whether it started on a control of its
             // own. The chip's `stopPropagation` already covers today's one control; this is

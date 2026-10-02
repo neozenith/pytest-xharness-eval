@@ -7,6 +7,7 @@ import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { SessionView } from "../src/views/SessionView";
 import { EFFORT_DEFAULT } from "../src/lib/effort";
+import { TREATMENT_CONTROL } from "../src/lib/treatment";
 import type { SessionRoute } from "../src/lib/route";
 import type { Cell } from "../src/lib/types";
 import { cell, inline, SID } from "./fixtures";
@@ -73,6 +74,7 @@ test("title and metadata name the arm, with the rung on its own row", async ({ m
     "prompt sent",
     "harness / model",
     "effort",
+    "treatment",
     "started",
     "wall",
     "estimated_cost_usd",
@@ -95,6 +97,7 @@ test("title and metadata name the arm, with the rung on its own row", async ({ m
     "prompt sent": "/mermaidjs-diagrams draw the architecture",
     "harness / model": "claude / claude-opus-5",
     effort: "high",
+    treatment: TREATMENT_CONTROL,
     wall: "83.0s",
     estimated_cost_usd: "$1.0276",
     harness_reported_cost_usd: "$1.0288",
@@ -107,6 +110,16 @@ test("title and metadata name the arm, with the rung on its own row", async ({ m
     "files written": "ARCHITECTURE.md",
   });
   await expect(page.locator("#SessionMetaTable code", { hasText: /^high$/ })).toHaveCount(1);
+});
+
+// ADR 0055: a treated session names its treatment in the title and on its own metadata row.
+test("a treated session's title and metadata name its treatment", async ({ mount, page }) => {
+  const c1 = cell({ effort: "high", treatment: "lean-ci" });
+  await mount(<SessionView cell={c1} route={route()} />, { hooksConfig: { search: `?session=${SID}`, inline: inline([c1]) } });
+  await expect(page.locator("#SessionTitle")).toContainText("eval_dual_density · claude/claude-opus-5 · high +lean-ci");
+  const m = await meta(page);
+  expect(m.treatment).toBe("lean-ci");
+  await expect(page.locator("#SessionMetaTable code", { hasText: /^lean-ci$/ })).toHaveCount(1);
 });
 
 test("a rung-less session omits the rung from the title and says the CLI default in muted prose", async ({ mount, page }) => {

@@ -14,6 +14,7 @@ const cell = (over: Partial<Cell>): Cell => ({
   prompt: "/mermaidjs-diagrams go",
   harness: "claude",
   effort: null,
+  treatment: null,
   model: "claude-sonnet-5",
   session_id: "1feb573f-ba51-4e77-845f-12c4bcb08252",
   verdict: "pass",
@@ -177,4 +178,39 @@ test("one row is not 'every row agrees': nothing collapses out of a single-row t
   mount([cell({})]);
   expect(document.querySelector("#SessionTable caption")).toBeNull();
   expect([...document.querySelectorAll("#SessionTable thead th")].map((th) => th.getAttribute("data-k"))).toContain("harness");
+});
+
+test("an untreated sweep shows no treatment column; a treated one names the control and sorts it first (ADR 0055)", () => {
+  const cols = () => [...document.querySelectorAll("#SessionTable thead th")].map((th) => th.getAttribute("data-k"));
+  // every sweep before the axis is all control: no column, and no caption saying so either
+  mount([cell({ session_id: "1" }), cell({ session_id: "2", harness: "codex" })]);
+  expect(cols()).not.toContain("treatment");
+  expect(document.querySelector("#SessionTable caption")).not.toHaveTextContent("treatment");
+  cleanup();
+
+  history.replaceState(null, "", "/?sort=treatment&dir=asc");
+  try {
+    mount([
+      cell({ session_id: "zeta", treatment: "zeta", at: "2026-08-23T09:00:00Z" }),
+      cell({ session_id: "ctrl", treatment: null, at: "2026-08-23T08:00:00Z" }),
+      cell({ session_id: "alpha", treatment: "alpha", at: "2026-08-23T07:00:00Z" }),
+    ]);
+    expect(cols()).toContain("treatment");
+    // beside effort, where the arm's other qualifier sits
+    expect(cols().indexOf("treatment")).toBe(cols().indexOf("effort") + 1);
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.getAttribute("data-sid"))).toEqual(["ctrl", "alpha", "zeta"]);
+    expect(rows[0]!.querySelector("td[data-k='treatment']")).toHaveTextContent("control");
+    // the aria label tells a treated arm from its control
+    expect(rows[1]).toHaveAttribute("aria-label", expect.stringContaining("+alpha"));
+    expect(rows[0]!.getAttribute("aria-label")).not.toContain("+");
+  } finally {
+    history.replaceState(null, "", "/");
+  }
+});
+
+test("every row under one treatment collapses that column into the caption", () => {
+  mount([cell({ session_id: "1", treatment: "lean-ci" }), cell({ session_id: "2", treatment: "lean-ci" })]);
+  expect([...document.querySelectorAll("#SessionTable thead th")].map((th) => th.getAttribute("data-k"))).not.toContain("treatment");
+  expect(document.querySelector("#SessionTable caption")).toHaveTextContent("treatment lean-ci");
 });

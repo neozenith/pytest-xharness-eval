@@ -15,6 +15,7 @@
  *   &harness=<a>[,<b>]                         overview, only those harnesses
  *   &model=<a>[,<b>]                           overview, only those models
  *   &effort=<a>[,<b>]                          overview, only those effort rungs (ADR 0049)
+ *   &treatment=<a>[,<b>]                       overview, only those treatments; `control` selects the untreated arm (ADR 0055)
  *   &theme=light|dark                          forced theme (any route; otherwise remembered)
  *
  * Query strings — not path segments — because the shipped page is one static file copied
@@ -44,13 +45,15 @@ export interface FacetSelection {
   harness: string[] | null;
   model: string[] | null;
   effort: string[] | null;
+  /** Treatment names, and the reserved `control` for the untreated arm (`lib/treatment.ts`). */
+  treatment: string[] | null;
 }
 
 /** Nothing selected: the unfiltered overview, and what a non-overview route reports. */
-export const NO_FACETS: FacetSelection = Object.freeze({ skill: null, harness: null, model: null, effort: null });
+export const NO_FACETS: FacetSelection = Object.freeze({ skill: null, harness: null, model: null, effort: null, treatment: null });
 
-/** The four params, in the order they serialise; `lib/facets.ts` re-declares them as its vocabulary. */
-const FACET_PARAMS = ["skill", "harness", "model", "effort"] as const;
+/** The five params, in the order they serialise; `lib/facets.ts` re-declares them as its vocabulary. */
+const FACET_PARAMS = ["skill", "harness", "model", "effort", "treatment"] as const;
 
 export interface SortState {
   key: string;
@@ -66,7 +69,7 @@ export interface OverviewRoute {
    * independently — one is the other rolled up, and a reader ranks groups by mean cost while
    * ranking sessions by when they ran — so a shared pair would have made every summary click
    * silently reorder the table below it, and no single URL could express the pair of orders
-   * the reader is actually looking at. Null is the fixed skill|case|harness|model|effort key order,
+   * the reader is actually looking at. Null is the fixed skill|case|harness|model|effort|treatment key order,
    * which is the only order in which the table's banding and repeat-muting tell the truth.
    */
   summarySort: SortState | null;
@@ -122,6 +125,7 @@ export function parseSearch(search: string): Route {
       harness: list(params.get("harness")),
       model: list(params.get("model")),
       effort: list(params.get("effort")),
+      treatment: list(params.get("treatment")),
     };
     return {
       view: "overview",

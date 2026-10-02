@@ -77,6 +77,17 @@ test("inline page boots over file:// and binds the captured data", async ({ page
   );
   await expect(page.locator("#ReportTitleEffort")).toHaveCount(effort ? 1 : 0);
   if (effort) await expect(page.locator("#ReportTitleEffort")).toHaveText(effort);
+  // `ReportTitleTreatment` likewise: present exactly when the open cell ran under a treatment
+  // (ADR 0055). A control, and every session captured before the axis, carries none.
+  const treatment = await page.evaluate(
+    (id) =>
+      (window as unknown as { __XH_DATA__?: { index: { cells: { session_id: string; treatment?: string | null }[] } } }).__XH_DATA__?.index.cells.find(
+        (c) => c.session_id === id,
+      )?.treatment || null,
+    sid,
+  );
+  await expect(page.locator("#ReportTitleTreatment")).toHaveCount(treatment && treatment !== "control" ? 1 : 0);
+  if (treatment && treatment !== "control") await expect(page.locator("#ReportTitleTreatment")).toHaveText(`+${treatment}`);
 
   // A turn opened in the detailed view renders its records.
   await page.goto(`${url}?session=${sid}&turn=1&view=detailed`, { waitUntil: "load" });

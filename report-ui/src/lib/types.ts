@@ -67,6 +67,13 @@ export interface Cell {
    * never a filter the page applies on its own.
    */
   effort: string | null;
+  /**
+   * The named treatment layered over the case's fixture (ADR 0055), or null for its control —
+   * the untreated arm every treated case also sweeps — and on every session captured before the
+   * axis existed. Unlike a null rung, a control is a measured arm: it is labelled and selectable
+   * as `control` (`lib/treatment.ts`).
+   */
+  treatment: string | null;
   session_id: string;
   verdict: string | null;
   at: string | null;
@@ -179,6 +186,8 @@ export interface RunResult {
   harness: string;
   model: string;
   effort: string | null;
+  /** The treatment (ADR 0055); null for a control, absent on a result written before the axis. */
+  treatment?: string | null;
   session_id: string;
   turns: number;
   reported_turns: number | null;

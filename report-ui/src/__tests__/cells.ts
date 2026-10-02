@@ -11,6 +11,7 @@ export const cell = (over: Partial<Cell>): Cell => ({
   harness: "claude",
   model: "claude-opus-5",
   effort: null,
+  treatment: null,
   session_id: "s1",
   verdict: "pass",
   at: "2026-08-23T07:18:05.537Z",

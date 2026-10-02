@@ -26,6 +26,7 @@ const cell: Cell = {
   prompt: null,
   harness: "claude",
   effort: null,
+  treatment: null,
   model: "m",
   session_id: "s",
   verdict: "pass",

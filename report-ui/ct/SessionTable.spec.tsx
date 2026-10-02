@@ -7,7 +7,7 @@
 import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { SessionTable } from "../src/components/SessionTable";
-import { cell, sweep } from "./fixtures";
+import { cell, sweep, treatedSweep } from "./fixtures";
 
 // The `when` column prints local time; pin the zone so `07:18` is `07:18` on every machine.
 test.use({ timezoneId: "UTC" });
@@ -616,4 +616,35 @@ test.describe("SessionTable: opening a session", () => {
     await page.keyboard.press("Tab");
     await expect(page.locator('#SessionTable tr[data-sid="t-3"]')).toBeFocused();
   });
+});
+
+test.describe("the treatment axis (ADR 0055)", () => {
+  test("an untreated sweep has no treatment column", async ({ mount, page }) => {
+    await mount(<SessionTable cells={sweep()} />);
+    expect(await heads(page)).not.toContain("treatment");
+  });
+
+  test("a treated sweep shows treatment beside effort, names the control, and sorts it first", async ({ mount, page }) => {
+    await mount(<SessionTable cells={treatedSweep()} />, { hooksConfig: { search: "?sort=treatment&dir=asc" } });
+    const h = await heads(page);
+    expect(h.indexOf("treatment")).toBe(h.indexOf("effort") + 1);
+    const values = await column(page, "treatment");
+    const firstTreated = values.findIndex((v) => v !== "control");
+    expect(values.slice(0, firstTreated).every((v) => v === "control")).toBe(true);
+    expect(values.slice(firstTreated)).toEqual(["agents-md", "lean-ci", "lean-ci"]);
+    // a treated row's accessible name tells it from its control
+    await expect(rows(page).filter({ has: page.locator('td[data-k="treatment"]', { hasText: "agents-md" }) })).toHaveAttribute("aria-label", /\+agents-md/);
+  });
+});
+
+test("a long treatment name elides in its cell and keeps the whole of it on the title", async ({ mount, page }) => {
+  const cells = [cell({ session_id: "c" }), cell({ session_id: "t", treatment: "cheap_eval_subagents" })];
+  await mount(<SessionTable cells={cells} />);
+  const td = page.locator('#SessionTable tbody tr[data-sid="t"] td[data-k="treatment"] > span');
+  await expect(td).toHaveAttribute("title", "cheap_eval_subagents");
+  expect(await td.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  // the control's own word fits whole
+  const control = page.locator('#SessionTable tbody tr[data-sid="c"] td[data-k="treatment"] > span');
+  expect(await control.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await expect(page.locator("#SessionTable")).toHaveAttribute("data-treated", "true");
 });

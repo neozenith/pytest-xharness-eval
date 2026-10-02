@@ -80,7 +80,7 @@ test.describe("TokenWaterfallAggregateChart", () => {
   test("pooling several arms is named in the note; one arm is not called a pool", async ({ mount }) => {
     const cells = sweep();
     const c = await mount(<TokenWaterfallAggregateChart cells={cells} results={resultsFor(cells)} />);
-    await expect(c.locator("#TokenWaterfallAggregateChart")).toContainText("pools 7 arms (harness × model × effort rung)");
+    await expect(c.locator("#TokenWaterfallAggregateChart")).toContainText("pools 7 arms (harness × model × effort rung × treatment)");
     const one = [cell({ session_id: "a", effort: "high" }), cell({ session_id: "b", effort: "high" })];
     await c.update(<TokenWaterfallAggregateChart cells={one} results={resultsFor(one)} />);
     await expect(c.locator("#TokenWaterfallAggregateChart")).toContainText("averaged over 2 runs");

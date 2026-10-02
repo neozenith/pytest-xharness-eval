@@ -22,7 +22,7 @@ const Sep = () => (
 
 /**
  * The page header. On the sweep the title is the report's; inside a SessionView it is the
- * eval · session · harness · model [· effort] tuple, so the tab and the top line say where you are.
+ * eval · session · harness · model [· effort] [· +treatment] tuple, so the tab and the top line say where you are.
  */
 export function ReportHeader({ index, cell, mode, onToggleMode }: Props) {
   const total = index ? index.cells.reduce((s, c) => s + (c.estimated_cost_usd ?? 0), 0) : 0;
@@ -84,6 +84,23 @@ export function ReportHeader({ index, cell, mode, onToggleMode }: Props) {
                 <Sep />
                 <Text render={<span id="ReportTitleEffort" title="effort: the reasoning rung the CLI was sent" />} fontFamily="$mono" fontSize={16}>
                   {cell.effort}
+                </Text>
+              </>
+            ) : null}
+            {/*
+             * The treatment rides the tuple the same way, and only when the cell ran under one
+             * (ADR 0055): a control is the arm the header has always described, so it adds
+             * nothing, and every pre-axis title is unchanged.
+             */}
+            {cell.treatment ? (
+              <>
+                <Sep />
+                <Text
+                  render={<span id="ReportTitleTreatment" title="treatment: the named directory layered over the case's fixture" />}
+                  fontFamily="$mono"
+                  fontSize={16}
+                >
+                  +{cell.treatment}
                 </Text>
               </>
             ) : null}

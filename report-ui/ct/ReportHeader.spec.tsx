@@ -7,7 +7,7 @@ import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import type { HooksConfig } from "../playwright/index";
 import { ReportHeader } from "../src/components/ReportHeader";
-import { cell, index, sweep } from "./fixtures";
+import { cell, index, sweep, treatedSweep } from "./fixtures";
 
 const search = (page: Page) => page.evaluate(() => location.search);
 const noop = () => {};
@@ -172,5 +172,21 @@ test.describe("dark mode", () => {
   test("light mode paints the white panel", async ({ mount, page }) => {
     await mount(<ReportHeader index={index()} cell={undefined} mode="light" onToggleMode={noop} />);
     await expect(page.locator("#ReportHeader")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  });
+});
+
+test.describe("the treatment (ADR 0055)", () => {
+  const of = (sid: string) => treatedSweep().find((c) => c.session_id === sid)!;
+
+  test("a treated session's tuple ends in +treatment, after its rung", async ({ mount, page }) => {
+    await mount(<ReportHeader index={index(treatedSweep())} cell={of("dddddddd-0001")} mode="light" onToggleMode={noop} />);
+    await expect(page.locator("#ReportTitleTreatment")).toHaveText("+lean-ci");
+    await expect(page.locator("#ReportTitle")).toContainText(/high.*\+lean-ci/);
+  });
+
+  test("a control's tuple carries no treatment", async ({ mount, page }) => {
+    await mount(<ReportHeader index={index(treatedSweep())} cell={of("aaaaaaaa-0003")} mode="light" onToggleMode={noop} />);
+    await expect(page.locator("#ReportTitleEffort")).toHaveText("high");
+    await expect(page.locator("#ReportTitleTreatment")).toHaveCount(0);
   });
 });

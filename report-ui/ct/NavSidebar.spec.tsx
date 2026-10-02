@@ -12,9 +12,15 @@ import type { Locator, Page } from "@playwright/test";
 import type { HooksConfig } from "../playwright/index";
 import { NavSidebar } from "../src/components/NavSidebar";
 import type { Route } from "../src/lib/route";
-import { cell, index, sweep } from "./fixtures";
+import { cell, index, sweep, treatedSweep } from "./fixtures";
 
-const OVERVIEW: Route = { view: "overview", sort: null, summarySort: null, facets: { skill: null, harness: null, model: null, effort: null }, theme: null };
+const OVERVIEW: Route = {
+  view: "overview",
+  sort: null,
+  summarySort: null,
+  facets: { skill: null, harness: null, model: null, effort: null, treatment: null },
+  theme: null,
+};
 const session = (sessionId: string, theme: "light" | "dark" | null = null): Route => ({
   view: "session",
   sessionId,
@@ -356,5 +362,27 @@ test.describe("collapse (a remembered viewer preference)", () => {
     await page.locator("#NavToggle").focus();
     await page.keyboard.press("Enter");
     await expect(sidebar(page)).toHaveAttribute("data-state", "collapsed");
+  });
+});
+
+test.describe("the treatment arm (ADR 0055)", () => {
+  test("a treated twin is its own branch, directly after its rung's control", async ({ mount, page }) => {
+    await mount(<NavSidebar index={index(treatedSweep())} route={OVERVIEW} />);
+    await openToHarness(page);
+    expect(await armLabels(page)).toEqual([
+      "claude-opus-5 · low",
+      "claude-opus-5 · high",
+      "claude-opus-5 · high +agents-md",
+      "claude-opus-5 · high +lean-ci",
+      "claude-opus-5 · max",
+      "claude-opus-5",
+      "claude-sonnet-5 · medium",
+    ]);
+  });
+
+  test("an active treated session opens its own branch, not its control's", async ({ mount, page }) => {
+    await mount(<NavSidebar index={index(treatedSweep())} route={session("dddddddd-0003")} />);
+    await expect(sidebar(page).locator('a.nav-link[data-active="true"]')).toHaveAttribute("title", /\+agents-md/);
+    await expect(sidebar(page).locator('a.nav-link[href*="aaaaaaaa-0003"]')).toBeHidden();
   });
 });

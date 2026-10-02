@@ -7,7 +7,7 @@
 import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { SessionSummaryTable } from "../src/components/SessionSummaryTable";
-import { cell, sweep } from "./fixtures";
+import { cell, sweep, treatedSweep } from "./fixtures";
 
 const MUTED = { light: "rgb(91, 96, 112)", dark: "rgb(154, 160, 176)" };
 const BAD = { light: "rgb(185, 28, 28)", dark: "rgb(248, 113, 113)" };
@@ -459,5 +459,27 @@ test.describe("SessionSummaryTable: keyboard access to a clipped table", () => {
     expect(focusable).toBe(0);
     await rows(page).first().click();
     expect(await search(page)).toBe("");
+  });
+});
+
+test.describe("SessionSummaryTable: the treatment axis (ADR 0055)", () => {
+  test("an untreated sweep shows no treatment column", async ({ mount, page }) => {
+    await mount(<SessionSummaryTable cells={sweep()} />);
+    await expect(head(page, "treatment")).toHaveCount(0);
+  });
+
+  test("a control and its treated twins are adjacent rows, the control first, named, never blended", async ({ mount, page }) => {
+    await mount(<SessionSummaryTable cells={treatedSweep()} />);
+    const heads = await page.locator("#SessionSummaryTable thead th").evaluateAll((ths) => ths.map((th) => th.getAttribute("data-k")));
+    expect(heads.indexOf("treatment")).toBe(heads.indexOf("effort") + 1);
+    const all = await keys(page);
+    const at = all.indexOf(`${OPUS}|high`);
+    expect(all.slice(at, at + 3)).toEqual([`${OPUS}|high`, `${OPUS}|high+agents-md`, `${OPUS}|high+lean-ci`]);
+    const cell = (key: string, k: string) => row(page, key).locator("td").nth(heads.indexOf(k));
+    await expect(cell(`${OPUS}|high`, "treatment")).toHaveText("control");
+    await expect(cell(`${OPUS}|high+lean-ci`, "treatment")).toHaveText("lean-ci");
+    // the twin's two runs are their own mean, not pooled with the control's
+    await expect(cell(`${OPUS}|high+lean-ci`, "runs")).toHaveText("2");
+    await expect(cell(`${OPUS}|high`, "runs")).toHaveText("1");
   });
 });
