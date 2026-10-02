@@ -71,6 +71,7 @@ FEED = {
             cache_read_input_token_cost_above_272k_tokens=2,
             cache_creation_input_token_cost_above_272k_tokens=25,
             input_cost_per_token_above_272k_tokens_priority=40,
+            input_cost_per_token_above_272k_tokens_ultrafast=60,
         ),
     },
     # Out of the watched families, or not first-party: ignored without a word.

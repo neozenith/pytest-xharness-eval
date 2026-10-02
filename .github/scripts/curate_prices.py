@@ -74,9 +74,9 @@ LITELLM_FIELD = {
 }
 LONG_FIELD = re.compile(rf"(?P<field>{'|'.join(LITELLM_FIELD.values())})_above_(?P<k>\d+)k_tokens")
 # Cost fields deliberately not modelled, and why. The service-tier suffixes are rates the
-# harness CLIs never request (batch, flex and priority processing); the search fee is billed
+# harness CLIs never request (batch, flex, priority and ultrafast processing); the search fee is billed
 # per web-search query by a tool, not per token.
-IGNORED_SUFFIXES = ("_batches", "_flex", "_priority")
+IGNORED_SUFFIXES = ("_batches", "_flex", "_priority", "_ultrafast")
 IGNORED_FIELDS = frozenset({"search_context_cost_per_query"})
 
 
