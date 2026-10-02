@@ -32,7 +32,9 @@ def test_bundled_table_prices_each_tier_separately() -> None:
     assert applied is not None
     assert (applied.harness, applied.model, applied.unit) == ("claude", "claude-opus-5", "usd_per_mtok")
     assert applied.source.endswith("prices-20260929.toml")
-    assert (applied.effective_from, applied.effective_to) == ("2026-09-29", None)
+    # The record covering DAY; a later `make prices` closes it, so its end is not pinned (ADR 0050).
+    assert applied.effective_from == "2026-09-29"
+    assert applied.effective_to is None or applied.effective_to > DAY.isoformat()
     # Rates are USD per MTok on the wire, exactly as the record states them (ADR 0050).
     assert applied.cache_write_1h == 10.0 and applied.applied_at.endswith("+00:00")
     assert r.cost_by_tier == {

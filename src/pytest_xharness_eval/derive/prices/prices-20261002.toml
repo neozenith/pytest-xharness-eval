@@ -9,14 +9,12 @@
 # plus cached input) exceeds `above_prompt_tokens`. Each call is priced on its own prompt.
 #
 # Curated by .github/scripts/curate_prices.py from
-# https://github.com/BerriAI/litellm/blob/7b2cbf6e7f6c22d8d057858187e88c73e5025883/model_prices_and_context_window.json
-# (fetched 2026-09-29). First-party rows only: anthropic under [claude], openai under [codex].
+# https://github.com/BerriAI/litellm/blob/086d76ab54ed3a326a0d9286de94a5058de2ffc9/model_prices_and_context_window.json
+# (fetched 2026-10-02). First-party rows only: anthropic under [claude], openai under [codex].
 # OpenAI publishes no 1-hour cache-write tier, so each [codex] cache_write_1h repeats its
 # cache_write: an assumption, stated, never a zero.
 # A row with a comment line starting `# curate: keep` is a local override never re-priced.
-effective_from = 2026-09-29
-# Closed when prices-20261002.toml opened; this record is never edited again.
-effective_to = 2026-10-02
+effective_from = 2026-10-02
 
 [claude."claude-fable-5"]
 input          = 10.00
@@ -298,5 +296,20 @@ above_prompt_tokens = 272000
 input          = 4.00
 output         = 15.00
 cache_read     = 0.40
+cache_write    = 5.00
+cache_write_1h = 5.00
+
+[codex."gpt-6.1-sol"]
+input          = 2.00
+output         = 10.00
+cache_read     = 0.10
+cache_write    = 2.50
+cache_write_1h = 2.50
+
+[codex."gpt-6.1-sol".long_context]
+above_prompt_tokens = 272000
+input          = 4.00
+output         = 15.00
+cache_read     = 0.20
 cache_write    = 5.00
 cache_write_1h = 5.00
