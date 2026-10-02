@@ -71,6 +71,7 @@ Edit the YAML; never the markdown.
 | [0052](0052-scope-is-a-boundary-not-a-roster.md) | Scope is a boundary, not a roster, so a new release arrives without an edit | accepted, 2026-09-29. Refines [0051](0051-long-context-is-a-tier-priced-per-call-and-records-are-curated.md) (records are curated): the watched families become a shape and a generation floor. A Claude tier becomes any word in the tier position. Keeps [0007](0007-unpriced-model-aborts-before-spend.md)'s refusal for an ID whose shape is new. It leaves [0049](0049-effort-is-the-third-matrix-axis.md)'s closed effort vocabulary closed. The rule here is for what a provider will add, not for what a CLI accepts. |
 | [0053](0053-the-test-suite-mirrors-the-system-it-tests.md) | The test suite is concise and mirrors the structure of the system it tests | accepted, 2026-09-29. Refines [0039](0039-the-package-listing-is-the-architecture.md) (the package listing is the architecture) by making the test listing mirror it. Refines [0040](0040-the-plugin-is-a-hook-manifest.md) (each job behind the manifest is a module), whose tests now sit beside the module they exercise. Structural only: no test was added, removed or renamed in the move, and the collected test IDs are identical before and after. |
 | [0054](0054-decision-records-pass-the-prose-gates.md) | Decision records pass the prose gates, and their shape may change while their argument does not | accepted, 2026-09-29. Refines [0047](0047-adrs-are-authored-as-data-and-their-markdown-is-generated.md) (ADRs are authored as data), whose argument still travels verbatim in substance. The words of an accepted record may now be reshaped to pass the prose gates, with every claim unchanged. Enforced by `make adrs-prose` in CI. |
+| [0055](0055-treatment-is-an-opt-in-axis-layered-over-the-fixture.md) | Treatment is an opt-in axis layered over the fixture, and every treatment is swept beside its control | accepted, 2026-10-02. Refines: [0004](0004-workspace-is-a-plain-copy.md) (a workspace is a plain copy of the fixture tree) with overlays copied over the copy; [0018](0018-fixtures-directory-and-metrics-history.md) (fixtures live under `evals/fixtures/`) with a sibling `evals/treatments/`; [0049](0049-effort-is-the-third-matrix-axis.md) (effort is the third matrix axis) with a fourth axis that rides the same directory level Extends [0007](0007-unpriced-model-aborts-before-spend.md)'s stop-before-spend rule to the new axis. Additive: `result.json` gains `treatment`; `history.json` gains `treatment`; `report/index.json` gains `treatment` Every existing capture still walks, links and replays unchanged. |
 ## The typed relation graph
 
 Open [graph.html](graph.html) to browse it: records cluster by domain, selecting one renders it beside the graph, and a link inside a record navigates to it.
@@ -219,3 +220,7 @@ The same edge set is [graph.md](graph.md) and, as raw data, [graph.json](graph.j
 - ADR-0053 --extends--> ADR-0039
 - ADR-0053 --extends--> ADR-0040
 - ADR-0054 --extends--> ADR-0047
+- ADR-0055 --extends--> ADR-0004
+- ADR-0055 --extends--> ADR-0018
+- ADR-0055 --extends--> ADR-0049
+- ADR-0055 --extends--> ADR-0007

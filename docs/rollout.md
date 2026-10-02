@@ -43,8 +43,8 @@ itself; the artifact is the directory it worked in.
 | `output.filenames` | `list[str]` | Every file in the workspace, relative and sorted. |
 | `output.wrote(rel)` | `bool` | Whether *this run's diff* names the path. Not the same as `exists`. |
 | `output.written` | `list[str]` | Every path the run created or modified. |
-| `output.added` | `list[str]` | Written paths the fixture did **not** seed: what this rollout brought into being. |
-| `output.changed` | `list[str]` | Written paths the fixture did seed: what it edited in place. |
+| `output.added` | `list[str]` | Written paths the fixture did **not** seed: what this rollout brought into being. A treatment's files count as seeded (ADR 0055). |
+| `output.changed` | `list[str]` | Written paths the fixture or treatment did seed: what it edited in place. |
 
 The `exists` / `wrote` distinction is the one worth internalising. A fixture file the
 agent never touched **exists**; it was not **written**. A case about editing something
@@ -59,6 +59,7 @@ that only checks `exists` passes for a run that did nothing at all.
 | `harness` | `str` | `claude` or `codex`, the first matrix axis. |
 | `model` | `str` | The model id the harness was told to use. |
 | `effort` | `str \| None` | The reasoning rung the CLI was asked for, resolved to that harness's own ladder; `None` when the cell named none and inherited the CLI's default. The third matrix axis (ADR 0049). |
+| `treatment` | `str \| None` | The treatment copied over the fixture; `None` for the control. The opt-in fourth matrix axis (ADR 0055). |
 | `session_id` | `str` | The session this verdict is tied to. |
 | `session_log` | `str` | Path to the captured JSONL. Exists on disk during grading. |
 | `workspace` | `str` | The same directory as `output.workspace`, as the run recorded it. |

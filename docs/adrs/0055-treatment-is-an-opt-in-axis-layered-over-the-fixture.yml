@@ -1,0 +1,123 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0055
+slug: treatment-is-an-opt-in-axis-layered-over-the-fixture
+title: Treatment is an opt-in axis layered over the fixture, and every treatment is swept beside its control
+status: accepted
+status_note: |-
+  accepted, 2026-10-02.
+  Refines:
+
+  - [0004](0004-workspace-is-a-plain-copy.md) (a workspace is a plain copy of the fixture tree) with overlays copied over the copy
+  - [0018](0018-fixtures-directory-and-metrics-history.md) (fixtures live under `evals/fixtures/`) with a sibling `evals/treatments/`
+  - [0049](0049-effort-is-the-third-matrix-axis.md) (effort is the third matrix axis) with a fourth axis that rides the same directory level
+
+  Extends [0007](0007-unpriced-model-aborts-before-spend.md)'s stop-before-spend rule to the new axis.
+  Additive:
+
+  - `result.json` gains `treatment`
+  - `history.json` gains `treatment`
+  - `report/index.json` gains `treatment`
+
+  Every existing capture still walks, links and replays unchanged.
+accepted_on: '2026-10-02'
+last_changed_on: '2026-10-02'
+group: collection
+tags:
+- collection
+- harness
+lens: |-
+  A change to an agent's instructions is only measured when the same cell runs without it.
+  So the untreated cell is never optional: it is swept every time a treatment is.
+  A treatment that copies nothing onto some harness is that harness's control billed twice under a second name.
+  So the overlay must exist for every harness it is swept on, and collection refuses it otherwise.
+  An overlay the CLI never reads is the same failure arriving later.
+  So the lever that makes a harness read it is verified before it is trusted.
+relates_to:
+- relation: extends
+  target: ADR-0004
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0018
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0049
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0007
+  note: the record's status line says "extends"
+body:
+  context: |-
+    A fixture is all or nothing.
+    It is the seed workspace a case starts from.
+    A case that wanted to try one change to the agent's standing instructions had to copy the whole fixture under a new name.
+    It then became a second case, graded and reported apart from the first.
+    The question a team actually asks is narrower.
+    Does adding this `AGENTS.md`, or this hook, change what the same cell costs and how well it does?
+    That is a comparison, and the matrix had no axis to make it on.
+
+    The obstacle is that neither CLI reads an instruction file the same way, and one of them reads none under the plugin's isolation.
+    Verified against the installed versions (claude 2.1.287, codex-cli 0.160.0), with a workspace holding a `CLAUDE.md` and an `AGENTS.md` that each named a different codeword:
+
+    - `claude --setting-sources ""`, the plugin's lever since ADR 0002, loads no `CLAUDE.md` at all, the workspace's included.
+    - `claude --setting-sources project` loads the workspace's, and also the user's `~/.claude/CLAUDE.md` and every ancestor directory's.
+      A workspace under a consuming repository therefore inherits that repository's instructions and its owner's.
+    - `claude --add-dir <workspace>` with `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` loads the workspace's `CLAUDE.md` alone, and follows its `@AGENTS.md` import.
+    - `codex exec` reads `AGENTS.md` from its working directory, and under a private `CODEX_HOME` reads no user-level file.
+
+    So an overlay that only drops an `AGENTS.md` into the workspace would change codex and silently change nothing on claude.
+    That is a full-priced run reporting a treatment it never had, which is ADR 0049's failure arriving through a different door.
+  decision: |-
+    **A treatment is a named directory copied over the fixture, and it lives beside the fixtures.** `evals/treatments/<name>/` holds the files every harness gets.
+    `evals/treatments/<name>__<harness>/` holds files that harness also gets, copied last, so a dialect file wins at a shared path.
+    A portable instruction treatment is therefore an `AGENTS.md` in the first, and a one-line `CLAUDE.md` reading `@AGENTS.md` in `<name>__claude/`.
+    The treatments live in their own directory rather than under `evals/fixtures/` so that no treatment name can collide with a fixture name.
+
+    **The axis is opt-in, and its default is empty.** A case names its treatments with `@evalcase(treatments=[...])`, and a project may name them for every case with the `xharness_treatments` ini key.
+    The case wins, as it does for the matrix (ADR 0015).
+    Unlike the matrix there is no plugin default, because a treatment is a directory a project writes.
+    A case that names none sweeps exactly the cells it swept before this record.
+
+    **The untreated cell is the *control*, and it is always swept beside its treatments.** `matrix.treat` crosses every expanded cell with `(None, *treatments)`, control first.
+    A treatment measured alone is a number with nothing to compare it to.
+    So the control is not something a case can forget to ask for.
+    `control` is a reserved word: it names the untreated cell in `--treatment` and on the report, and no treatment directory may take it.
+
+    **A bad treatment stops collection before anything is spent.** A name must be lowercase words joined by a single `_` or `-`, so it reads like the fixture beside it.
+    It carries no separator that a node id, a directory level or a URL already uses.
+    A treatment with no directory for some harness the case is about to sweep is refused, with the case and the harness named.
+    Its cell on that harness would be the control under a second name.
+
+    **A treatment's files are seeded, not written.** The workspace is the fixture, then each overlay in order (ADR 0004 stays a plain copy, now of a stack).
+    `CaseOutput.seeded` counts every layer, so a grader asserting that no file was added does not mistake the agent's instructions for its output.
+
+    **Claude reads the workspace's own `CLAUDE.md`, and nothing above it.** The claude harness adds the workspace with `--add-dir` and sets `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` on every cell, treated or not.
+    `--setting-sources ""` stays, so the user's and the ancestors' files remain excluded.
+    That makes the two harnesses symmetric for the first time: codex already read its workspace's `AGENTS.md`, and claude now reads its workspace's `CLAUDE.md`.
+
+    **Treatment is a coordinate but not a level.** It rides the model's directory level after the rung, as `{model}[--{effort}][+{treatment}]`, owned by `model/layout.py` (ADR 0037).
+    The cell id gains the same suffix, `harness/model[/effort][+treatment]`.
+    A level or an id with no `+` is the control, which is what every capture written before this record holds.
+
+    **The treatment is attached by the derivation pipeline, not folded by a harness.** A session log shows what the agent read, never which overlay put it there.
+    `RunResult.treatment` is set by `runtime/pipeline.py` from the cell, and carried forward from the stored result on a replay, exactly as `effort` is (ADR 0049).
+  consequences: |-
+    Three emitted documents gain one key each: `result.json`, `history.json` and `report/index.json` all carry `treatment` (null or empty for the control).
+    It is mirrored in `report-ui/src/lib/types.ts` and the shipped glossary.
+    The characterization goldens move by that key alone, `"treatment": null`, and no measured value in them changes.
+    That is the evidence that this adds a coordinate rather than redistributing one.
+
+    The report groups a control and its treated twin as two rows of the same case and model.
+    The comparison the axis exists for is then one glance.
+    `--treatment` narrows a sweep the way `--effort` does, and `--treatment control` selects the untreated arm alone.
+
+    Two cells of one case may now differ in nothing but their treatment, so the build workspace name includes it.
+
+    The claude lever changes the control arm in one case: a fixture that already shipped a `CLAUDE.md` is now read, where before it was ignored.
+    That is a correction rather than a regression.
+    A user running claude in that repository would have read it, and codex always did.
+
+    Hooks are not given a lever here.
+    A treatment may carry a `.claude/settings.json`, but `--setting-sources ""` still excludes it.
+    Admitting it is a separate decision with its own contamination question, and this record does not make it.

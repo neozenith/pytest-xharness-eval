@@ -98,6 +98,9 @@ class CellMetrics:
     # The reasoning-effort rung this cell ran at; empty when it ran at the CLI's own
     # default, which is what every record written before ADR 0049 holds.
     effort: str = ""
+    # The treatment this cell ran under; empty for the control, which is what every record
+    # written before ADR 0055 holds.
+    treatment: str = ""
     session_id: str = ""
     verdict: str = ""
     # What it did.
@@ -160,6 +163,7 @@ class CellMetrics:
             harness=result.harness,
             model=result.model,
             effort=result.effort or "",
+            treatment=result.treatment or "",
             session_id=result.session_id,
             # The word, never the member: this record is shipped by execnet (ADR 0041).
             verdict=outcome.verdict.value if outcome.verdict else "",
@@ -214,6 +218,7 @@ class CellMetrics:
             harness=cell.harness,
             model=cell.model,
             effort=cell.effort or "",
+            treatment=cell.treatment or "",
             verdict=Verdict.DRY_RUN.value,
         )
 

@@ -835,6 +835,20 @@
     },
     {
       "data": {
+        "id": "ADR-0055",
+        "label": "0055",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0055-treatment-is-an-opt-in-axis-layered-over-the-fixture.md",
+        "title": "Treatment is an opt-in axis layered over the fixture, and every treatment is swept beside its control",
+        "description": "Treatment is an opt-in axis layered over the fixture, and every treatment is swept beside its control",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection, harness"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2221,6 +2235,46 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0055-extends-ADR-0004",
+        "source": "ADR-0055",
+        "target": "ADR-0004",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0055-extends-ADR-0018",
+        "source": "ADR-0055",
+        "target": "ADR-0018",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0055-extends-ADR-0049",
+        "source": "ADR-0055",
+        "target": "ADR-0049",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0055-extends-ADR-0007",
+        "source": "ADR-0055",
+        "target": "ADR-0007",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
       }
     }
   ],

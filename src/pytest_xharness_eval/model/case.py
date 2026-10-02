@@ -33,6 +33,9 @@ class EvalCase:
     fixture: str
     # None means inherit: the project's ``xharness_matrix`` ini key, else the plugin default.
     models: list[str] | None = None
+    # None means inherit: the project's ``xharness_treatments`` ini key, else none at all.
+    # The control is never listed here; it is always swept (ADR 0055).
+    treatments: list[str] | None = None
 
     @property
     def name(self) -> str:
@@ -46,6 +49,7 @@ def evalcase(
     skill: str,
     fixture: str,
     models: list[str] | None = None,
+    treatments: list[str] | None = None,
     **removed: Any,
 ) -> Callable[[Grader], EvalCase]:
     """Wrap a grader function with its declarative case definition.
@@ -58,6 +62,9 @@ def evalcase(
         fixture: The seed workspace's name under ``evals/fixtures/`` (ADR 0018).
         models: ``harness/model`` entries to sweep. Omit to inherit the project matrix
             (``xharness_matrix`` in the pytest config) or, failing that, the plugin default.
+        treatments: Names under ``evals/treatments/`` to sweep beside the untreated control
+            (ADR 0055). Omit to inherit ``xharness_treatments``; with neither, the case
+            sweeps its control alone, exactly as it did before treatments existed.
 
     Raises:
         TypeError: if ``prompt=`` is passed. It is not accepted as an alias for ``task``,
@@ -75,6 +82,13 @@ def evalcase(
         raise TypeError(f"@evalcase got unexpected keyword argument(s): {', '.join(sorted(removed))}")
 
     def wrap(fn: Grader) -> EvalCase:
-        return EvalCase(fn=fn, task=task, skill=skill, fixture=fixture, models=list(models) if models else None)
+        return EvalCase(
+            fn=fn,
+            task=task,
+            skill=skill,
+            fixture=fixture,
+            models=list(models) if models else None,
+            treatments=list(treatments) if treatments else None,
+        )
 
     return wrap

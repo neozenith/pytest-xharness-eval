@@ -334,3 +334,9 @@ def test_from_claude_folds_subagent_transcripts_and_bills_them(tmp_path: Path) -
     # The run's usage is primary (12, 13, 220) plus the subagent: the whole bill.
     assert r.usage == Usage(input_tokens=42, output_tokens=33, cache_read_tokens=620)
     assert r.turns == 2  # turns stay the primary thread's own
+
+
+def test_the_workspace_is_added_so_its_own_claude_md_is_read_and_nothing_above_it(tmp_path: Path) -> None:
+    """``--setting-sources ""`` drops every CLAUDE.md; this re-admits the workspace's alone (ADR 0055)."""
+    assert claude_harness.workspace_memory_argv(tmp_path) == ["--add-dir", str(tmp_path)]
+    assert claude_harness._WORKSPACE_MEMORY_ENV == {"CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1"}

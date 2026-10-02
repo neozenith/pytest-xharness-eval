@@ -207,6 +207,7 @@ HISTORY_KEYS = [
     "suite",
     "tool_calls",
     "tool_calls_by_name",
+    "treatment",
     "ttft_ms",
     "turns",
     "verdict",

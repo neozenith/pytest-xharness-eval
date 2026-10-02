@@ -300,6 +300,7 @@
   "tool_calls": {
     "CommandExecution": 1
   },
+  "treatment": null,
   "ttft_ms": 1100,
   "turns": 2,
   "usage": {

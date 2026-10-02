@@ -92,6 +92,9 @@ def rebuild_result(
     # forward, so a rebuild reports the effort the run actually had rather than the effort
     # today's matrix would give it (ADR 0049).
     effort = old.get("effort")
+    # The treatment the same way, for the same reason: the case's treatments may have moved
+    # since, and the run had the overlay it had (ADR 0055).
+    treatment = old.get("treatment")
     return pipeline.derive(
         result,
         table=table,
@@ -100,6 +103,7 @@ def rebuild_result(
         skill_files=files,
         case=case,
         effort=str(effort) if effort else None,
+        treatment=str(treatment) if treatment else None,
     )
 
 

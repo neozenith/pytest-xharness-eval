@@ -13,14 +13,17 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Standard Library
+    from collections.abc import Sequence
     from pathlib import Path
 
 
-def materialise(fixture: Path, cell_id: str, workdir: Path) -> Path:
-    """Copy ``fixture`` to a pristine per-cell workspace under ``workdir``.
+def materialise(fixture: Path, cell_id: str, workdir: Path, overlays: Sequence[Path] = ()) -> Path:
+    """Copy ``fixture`` to a pristine per-cell workspace under ``workdir``, then each overlay over it.
 
     An existing workspace for the same cell is removed first, so every run starts
-    from the committed fixture and never from a previous agent's leftovers.
+    from the committed fixture and never from a previous agent's leftovers. An overlay is a
+    treatment's directory (ADR 0055): its files are copied in order on top of the fixture,
+    and a file at a path the fixture already has replaces it.
     """
     if not fixture.is_dir():
         raise FileNotFoundError(f"fixture directory does not exist: {fixture}")
@@ -30,6 +33,8 @@ def materialise(fixture: Path, cell_id: str, workdir: Path) -> Path:
         shutil.rmtree(ws)
     ws.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(fixture, ws)
+    for overlay in overlays:
+        shutil.copytree(overlay, ws, dirs_exist_ok=True)
     return ws
 
 

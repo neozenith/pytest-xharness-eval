@@ -181,3 +181,18 @@ def test_a_cells_record_carries_a_plain_string_verdict_beside_its_evidence(
     assert (record.node, record.wall_ms, record.at) == (run.node, 4321, "2026-08-28T00:00:00+00:00")
     assert record.cache == str(tmp_path / "cache")
     assert CellMetrics.stored(session.history) == record
+
+
+def test_a_treated_cell_stacks_its_overlay_and_counts_it_as_seeded(tmp_path: Path) -> None:
+    """The agent found the treatment's files there, so a grader must not see them as written (ADR 0055)."""
+    run = _cell_run(tmp_path)
+    overlay = tmp_path / "skills" / "demo" / "evals" / "treatments" / "lean-ci"
+    overlay.mkdir(parents=True)
+    (overlay / "AGENTS.md").write_text("use cheap subagents\n", encoding="utf-8")
+    run.cell = Cell(harness="claude", model="claude-opus-5", treatment="lean-ci")
+    run.overlays = [overlay]
+    workspace = run.materialise()
+    assert workspace.name == "eval_ok-claude-claude-opus-5-lean-ci"
+    assert (workspace / "AGENTS.md").is_file()
+    assert run.output(_captured_run(tmp_path), workspace).seeded == {"README.md", "AGENTS.md"}
+    assert run.session_dir("sid").rel.split("/")[2] == "claude-opus-5+lean-ci"

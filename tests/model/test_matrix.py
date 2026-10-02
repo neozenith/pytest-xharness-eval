@@ -95,3 +95,27 @@ def test_narrow_by_effort_matches_the_resolved_rung() -> None:
         Cell("claude", "claude-opus-5"),
     ]
     assert mx.narrow(cells, None, None, None) == cells
+
+
+def test_treat_keeps_the_control_first_and_crosses_every_cell() -> None:
+    """The control is always swept beside a treatment: it is what the treatment is compared to (ADR 0055)."""
+    cells = mx.expand(["claude/claude-haiku-4-5", "codex/gpt-5.6-luna"])
+    assert [c.id for c in mx.treat(cells, ["lean-ci"])] == [
+        "claude/claude-haiku-4-5",
+        "codex/gpt-5.6-luna",
+        "claude/claude-haiku-4-5+lean-ci",
+        "codex/gpt-5.6-luna+lean-ci",
+    ]
+    # No treatments is exactly the matrix it was before ADR 0055.
+    assert mx.treat(cells, []) == cells
+
+
+def test_a_treated_cell_id_puts_the_treatment_after_the_rung() -> None:
+    assert Cell("claude", "claude-opus-5", "high", "lean-ci").id == "claude/claude-opus-5/high+lean-ci"
+
+
+def test_narrow_by_treatment_names_the_control_by_its_reserved_word() -> None:
+    cells = mx.treat(mx.expand(["claude/claude-haiku-4-5"]), ["lean-ci", "terse"])
+    assert [c.treatment for c in mx.narrow(cells, None, None, None, ["control"])] == [None]
+    assert [c.treatment for c in mx.narrow(cells, None, None, None, ["lean-ci", "control"])] == [None, "lean-ci"]
+    assert mx.narrow(cells, None, None, None, None) == cells

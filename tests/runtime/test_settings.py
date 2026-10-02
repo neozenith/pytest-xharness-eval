@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 # Our Libraries
+from pytest_xharness_eval.model.case import evalcase
+from pytest_xharness_eval.model.layout import CacheLayout
 from pytest_xharness_eval.runtime import settings
 
 
@@ -40,3 +42,27 @@ def test_settings_ignore_a_pyproject_without_pytest_options_and_a_missing_config
     assert settings.ini_lines(captured, "xharness_skill_ignore") == [
         "assets/"
     ]  # the nearer pyproject is not pytest's config file
+
+
+def test_treatments_resolve_case_then_project_then_none(tmp_path: Path) -> None:
+    """Unlike the matrix, the plugin default is empty: a treatment is a directory a project writes (ADR 0055)."""
+
+    def grader(output: object) -> None:
+        pass
+
+    plain = evalcase(task="t", skill="s", fixture="f")(grader)
+    treated = evalcase(task="t", skill="s", fixture="f", treatments=["terse"])(grader)
+    bare = settings.Settings(rootpath=tmp_path, skills_root=tmp_path, cache=CacheLayout(tmp_path))
+    project = settings.Settings(
+        rootpath=tmp_path, skills_root=tmp_path, cache=CacheLayout(tmp_path), treatment_lines=["lean-ci"]
+    )
+    assert bare.treatments_for(plain) == []
+    assert project.treatments_for(plain) == ["lean-ci"]
+    assert project.treatments_for(treated) == ["terse"]
+
+
+def test_a_replay_reads_the_projects_treatment_lines(tmp_path: Path) -> None:
+    cache = tmp_path / ".xharness_eval_cache"
+    cache.mkdir()
+    (tmp_path / "pytest.ini").write_text("[pytest]\nxharness_treatments =\n    lean-ci\n", encoding="utf-8")
+    assert settings.Settings.from_cache(cache).treatment_lines == ["lean-ci"]

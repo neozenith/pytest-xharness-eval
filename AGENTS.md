@@ -32,7 +32,7 @@ In a consuming repository with the plugin installed:
 | Preview cells and validate pricing | `pytest skills/<skill>/evals --dry-run` | free |
 | Run one skill's evals, or all | `pytest skills/<skill>/evals -v`, `pytest skills/*/evals -v` | paid |
 | Run cells in parallel | `pytest skills/*/evals -v -n 4`; add `--dist loadgroup` to keep each harness serial | paid |
-| Run one harness, model or effort only | `pytest skills/<skill>/evals --harness codex`, `--model opus`, `--effort max`, `-k "opus or sol"` | paid |
+| Run one harness, model, effort or treatment only | `pytest skills/<skill>/evals --harness codex`, `--model opus`, `--effort max`, `--treatment control`, `-k "opus or sol"` | paid |
 | Read the last report | `cat .xharness_eval_cache/report/report.json` | free |
 | Rebuild results, history and `report.html` from captured logs after a plugin change | `uv run -m pytest_xharness_eval.replay .xharness_eval_cache` (a legacy `<skill>/evals/captured` dir migrates into the cache, ADR 0032) | free |
 
@@ -51,7 +51,7 @@ this list:
 
 | Layer | What lives there |
 |-------|------------------|
-| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
+| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `treatment.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
 | `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, and the record-kind catalogue `records.py` |
 | `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, and the bundled `prices/prices-YYYYMMDD.toml` records |
 | `verify/` | what a *grader* is written with: `checks.py` (the shared `check_*` verifiers), `tolerance.py` (`Facet` and the six tolerances), `facets.py` (markdown/mermaid extractors), `golden.py` (`GoldenCase`) |
@@ -71,6 +71,7 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | A new field on the run record | `model/runresult.py`, then `harness/claude.py` and `harness/codex.py` for both dialects |
 | A bundled model price | `derive/prices/` only, USD per MTok, rows under their harness's table. A price *change* never edits a closed record: set `effective_to` on the open one and add `prices-<date>.toml` whose `effective_from` is that date. `make prices` does both from LiteLLM's feed; the watched families are `WATCHES` in `.github/scripts/curate_prices.py`, and a row with a comment line starting `# curate: keep` is a local override it never re-prices. A long-context rate is a row's `long_context` sub-table, never a comment. A project overrides with `<harness>/<model>: ...` `xharness_prices` lines, optionally `from=`/`to=` bounded and with `long_context_above` / `long_*` keys (ADR 0030, ADR 0050, ADR 0051) |
 | The plugin-default matrix or narrowing | `model/matrix.py`; the *known* harnesses are the registry, reached through `model/registry.py` and never a second list (ADR 0034, ADR 0039) |
+| How a treatment is named, found under `evals/treatments/`, or refused at collection | `model/treatment.py`; the crossing with the control is `matrix.treat`, the overlay copy is `model/workspace.py`'s `materialise`, and how each CLI reads the overlaid instructions file is its harness's isolation lever (ADR 0055) |
 | The effort vocabulary, or a portable alias's meaning | `model/effort.py` (`Effort`, `resolve`); a harness's own ladder is `Harness.efforts` in `harness/<provider>.py` and the rendering is its `effort_args`, reached from beneath through `model/registry.py` (ADR 0049) |
 | A plugin option or ini key's registration | `plugin/options.py` (which also validates the price and ignore lines at configure time, and prints the header) |
 | The collection rule, the cell item, or how one cell runs | `plugin/collect.py` (`EvalFile`, `EvalItem`), `plugin/cell.py` (`CellRun`: materialise, invoke, store, grade, record; only `invoke` spends, ADR 0002) |
@@ -186,10 +187,12 @@ in `emit/metrics.py`.
 ## Vocabulary
 
 Use the terms in [GLOSSARY.md](GLOSSARY.md) for identifiers, docs, and conversation:
-*case*, *cell*, *harness*, *matrix*, *effort*, *rung*, *alias*, *fixture*, *workspace*,
-*session log*, *RunResult*, *captured*, *skills root*. The first matrix axis is *harness*,
-never *cli* (ADR 0015); the third is *effort*, and one level of a harness's ladder is a
-*rung*, never a "level" or a "thinking budget" (ADR 0049). When a new domain term enters
+*case*, *cell*, *harness*, *matrix*, *effort*, *rung*, *alias*, *fixture*, *treatment*,
+*control*, *workspace*, *session log*, *RunResult*, *captured*, *skills root*. The first
+matrix axis is *harness*, never *cli* (ADR 0015); the third is *effort*, and one level of a
+harness's ladder is a *rung*, never a "level" or a "thinking budget" (ADR 0049); the fourth
+is *treatment*, and the untreated cell is the *control*, never a "baseline" or a "null
+treatment" (ADR 0055). When a new domain term enters
 the code, add it to the glossary in the same change.
 
 ## When you change one thing, update the other

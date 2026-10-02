@@ -1,4 +1,4 @@
-"""The harness x model x effort matrix: the spend dial (ADR 0010, ADR 0015, ADR 0049).
+"""The harness x model x effort x treatment matrix: the spend dial (ADR 0010, ADR 0015, ADR 0049, ADR 0055).
 
 A matrix entry is ``harness/model`` or ``harness/model/effort``. Three scopes supply the
 list, highest precedence first: a case's ``models=``, the project's ``xharness_matrix``
@@ -15,16 +15,22 @@ node id, the evidence directory, the report row) carries the rung that was actua
 An unknown or unavailable rung stops the sweep at collection, before spend, for the same
 reason an unpriced model does (ADR 0007): both CLIs accept a bad effort word, warn at
 most, and bill a full run of the wrong experiment.
+
+The fourth axis, *treatment*, is opt-in and comes from a different list: a matrix entry
+never names one. :func:`treat` crosses the expanded cells with a case's treatments and
+always keeps the untreated *control* cell first, so a sweep that names no treatment is
+exactly the sweep it was before ADR 0055.
 """
 
 from __future__ import annotations
 
 # Standard Library
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 # Our Libraries
 from pytest_xharness_eval.model import registry
 from pytest_xharness_eval.model.effort import UnknownEffort
+from pytest_xharness_eval.model.treatment import CONTROL, TREATMENT_SEP
 
 
 def known_harnesses() -> tuple[str, ...]:
@@ -60,26 +66,31 @@ DEFAULT_MATRIX: list[str] = [
 
 @dataclass(frozen=True)
 class Cell:
-    """One (harness, model, effort) point of a case: the unit pytest collects, runs, reports.
+    """One (harness, model, effort, treatment) point of a case: the unit pytest collects, runs, reports.
 
     ``effort`` is None when the entry named none, and otherwise a *native* rung of this
     harness's ladder: :func:`expand` resolves any portable alias before the cell exists,
     so nothing downstream ever holds a word the CLI would not understand.
+
+    ``treatment`` is None for the control cell, and otherwise a treatment that collection
+    has already checked copies something onto this harness's workspace (ADR 0055).
     """
 
     harness: str
     model: str
     effort: str | None = None
+    treatment: str | None = None
 
     @property
     def id(self) -> str:
-        """The ``harness/model[/effort]`` form used in node ids and on the command line.
+        """The ``harness/model[/effort][+treatment]`` form used in node ids and on the command line.
 
-        The effort component is omitted when there is none, so a matrix that names no
-        effort produces exactly the node ids it produced before ADR 0049 and a project's
-        stored history keys still line up.
+        Each optional component is omitted when there is none, so a matrix that names no
+        effort and a case that names no treatment produce exactly the node ids they did
+        before ADR 0049 and ADR 0055, and a project's stored history keys still line up.
         """
-        return f"{self.harness}/{self.model}/{self.effort}" if self.effort else f"{self.harness}/{self.model}"
+        base = f"{self.harness}/{self.model}/{self.effort}" if self.effort else f"{self.harness}/{self.model}"
+        return f"{base}{TREATMENT_SEP}{self.treatment}" if self.treatment else base
 
 
 def expand(models: list[str]) -> list[Cell]:
@@ -116,13 +127,24 @@ def _rung(harness: str, effort: str, entry: str) -> str | None:
         raise ValueError(f"matrix entry {entry!r}: {exc}") from exc
 
 
+def treat(cells: list[Cell], treatments: list[str]) -> list[Cell]:
+    """Every cell once untreated, then once per treatment: control first, in matrix order.
+
+    The control is not optional. A treatment exists to be compared with the same cell
+    without it, so the cross product always carries the cell that comparison needs, and
+    ``--treatment`` is how a reader who wants one arm narrows the other away (ADR 0055).
+    """
+    return [replace(c, treatment=t) for t in (None, *treatments) for c in cells]
+
+
 def narrow(
     cells: list[Cell],
     models: list[str] | None,
     harnesses: list[str] | None,
     efforts: list[str] | None = None,
+    treatments: list[str] | None = None,
 ) -> list[Cell]:
-    """Apply the ``--harness``, ``--model`` and ``--effort`` filters, in that order.
+    """Apply the ``--harness``, ``--model``, ``--effort`` and ``--treatment`` filters, in that order.
 
     ``--harness`` is exact and ``--model`` is a substring of the model, or a full cell id.
     ``--effort`` is matched against the cell's *resolved* rung, and the filter word is
@@ -133,6 +155,8 @@ def narrow(
     A cell that named no rung matches only the empty filter: there is no rung to compare a
     CLI's own default against, so it stays selectable explicitly and is never swept up by
     a rung filter.
+
+    ``--treatment`` is exact, and the reserved word ``control`` names the untreated cell.
     """
     out = cells
     if harnesses:
@@ -141,6 +165,8 @@ def narrow(
         out = [c for c in out if any(m in c.model or m == c.id for m in models)]
     if efforts:
         out = [c for c in out if _matches_effort(c, efforts)]
+    if treatments:
+        out = [c for c in out if (c.treatment or CONTROL) in treatments]
     return out
 
 

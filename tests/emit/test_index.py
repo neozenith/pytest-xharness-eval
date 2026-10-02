@@ -47,6 +47,7 @@ INDEX_ROW_KEYS = [
     "suite",
     "task",
     "tool_calls",
+    "treatment",
     "ttft_ms",
     "turns",
     "verdict",

@@ -314,6 +314,7 @@
     "Bash": 1,
     "Read": 1
   },
+  "treatment": null,
   "ttft_ms": 950,
   "turns": 2,
   "usage": {

@@ -8,7 +8,8 @@ Within a matched suite the rule repeats itself for functions -- the ``eval_`` pr
 this plugin what ``test_`` is to pytest -- and every way of getting it slightly wrong is a
 loud :class:`pytest.UsageError` at collection rather than a session that quietly grades
 nothing: no ``@evalcase`` in the file, a case whose grader is misnamed, a model nobody
-has a price for (ADR 0007), or an effort rung the named harness does not have (ADR 0049).
+has a price for (ADR 0007), an effort rung the named harness does not have (ADR 0049),
+or a treatment with no files for a harness it is about to be swept on (ADR 0055).
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from pytest_xharness_eval import harness
 from pytest_xharness_eval.derive import skillcov
 from pytest_xharness_eval.emit.metrics import CellMetrics
 from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model import treatment
 from pytest_xharness_eval.model.layout import run_date
 from pytest_xharness_eval.model.suite import EvalSuite
 from pytest_xharness_eval.plugin.cell import CellRun, run_stamp
@@ -70,7 +72,15 @@ class EvalFile(pytest.File):
             # cell of the sweep is measured against the same inventory.
             skill_dir = settings.skill_dir(case.skill)
             files = skillcov.catalog(skill_dir, ignore=settings.skill_ignore) if skill_dir.is_dir() else []
-            for cell in mx.narrow(mx.expand(models), opts.model, opts.harness, opts.effort):
+            cells = mx.expand(models)
+            # ADR 0055: a treatment that copies nothing onto some harness's workspace would bill
+            # that harness's control twice under two names, so it stops collection here.
+            treatments = settings.treatments_for(case)
+            try:
+                treatment.validate(self.path.parent, treatments, (c.harness for c in cells))
+            except treatment.UnknownTreatment as exc:
+                raise pytest.UsageError(f"{self.path}: {case.name}: {exc}") from exc
+            for cell in mx.narrow(mx.treat(cells, treatments), opts.model, opts.harness, opts.effort, opts.treatment):
                 yield EvalItem.from_parent(
                     self, name=f"{case.name}[{cell.id}]", case=case, cell=cell, skill_files=files
                 )
@@ -135,6 +145,13 @@ class EvalItem(pytest.Item):
         return self.evals_dir / "fixtures" / self.case.fixture
 
     @property
+    def overlays(self) -> list[Path]:
+        """This cell's treatment directories, copied over the fixture in order; none for the control (ADR 0055)."""
+        if self.cell.treatment is None:
+            return []
+        return treatment.layers(self.evals_dir, self.cell.treatment, self.cell.harness)
+
+    @property
     def suite(self) -> str:
         """This suite file, relative to the project root when it is under one (ADR 0025)."""
         try:
@@ -180,6 +197,7 @@ class EvalItem(pytest.Item):
             settings=settings,
             skill_dir=skill_dir,
             fixture_dir=self.fixture_dir,
+            overlays=self.overlays,
             node=self.node,
             suite=self.suite,
             skill_files=self.skill_files,

@@ -23,6 +23,7 @@ from pytest_xharness_eval.derive import pricing
 from pytest_xharness_eval.derive.ignorerules import IgnoreRules
 from pytest_xharness_eval.model import matrix as mx
 from pytest_xharness_eval.model.effort import Effort
+from pytest_xharness_eval.model.treatment import CONTROL, check_name
 from pytest_xharness_eval.plugin.cell import run_stamp
 from pytest_xharness_eval.plugin.results import RESULTS_KEY, ResultCollector
 from pytest_xharness_eval.runtime.settings import (
@@ -34,6 +35,7 @@ from pytest_xharness_eval.runtime.settings import (
     INI_SKILL_IGNORE,
     INI_SKILLS_DIR,
     INI_TIMEOUT,
+    INI_TREATMENTS,
     Settings,
 )
 
@@ -66,6 +68,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help=(
             "narrow the matrix to cells at this reasoning-effort rung (repeatable); "
             "the portable aliases min/mid/max match whatever rung they resolved to per harness"
+        ),
+    )
+    g.addoption(
+        "--treatment",
+        action="append",
+        default=None,
+        metavar="NAME",
+        help=(
+            "narrow the sweep to cells under this treatment (repeatable); "
+            f"'{CONTROL}' names the untreated cell every treated case also sweeps (ADR 0055)"
         ),
     )
     g.addoption(
@@ -105,6 +117,15 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help=(
             "project matrix: 'harness/model' or 'harness/model/effort' entries, one per line; "
             "a case's models= overrides it"
+        ),
+    )
+    parser.addini(
+        INI_TREATMENTS,
+        type="linelist",
+        default=[],
+        help=(
+            "project treatments: names under each suite's evals/treatments/, one per line, swept beside "
+            "the untreated control; a case's treatments= overrides it (ADR 0055)"
         ),
     )
     g.addoption(
@@ -154,11 +175,13 @@ def pytest_configure(config: pytest.Config) -> None:
     # Minted here, before any xdist worker is forked, so the workers inherit it through the
     # environment and a run's cells share one results/{...}/{run}/ level (ADR 0032).
     run_stamp()
-    # ADR 0026 / ADR 0030: a malformed ignore or price line stops the session here,
+    # ADR 0026 / ADR 0030 / ADR 0055: a malformed ignore, price or treatment line stops the session here,
     # before any cell is collected.
     try:
         IgnoreRules.for_skill("", [str(p) for p in config.getini(INI_SKILL_IGNORE)])
         pricing.parse_price_lines([str(line) for line in config.getini(INI_PRICES)])
+        for name in Settings.from_config(config).treatment_lines:
+            check_name(name)
     except (ValueError, pricing.PricingError) as exc:
         raise pytest.UsageError(str(exc)) from exc
     config.pluginmanager.register(ResultCollector(config), COLLECTOR_NAME)
@@ -177,7 +200,10 @@ def pytest_report_header(config: pytest.Config) -> list[str]:
     source = (
         f"{INI_MATRIX} ({len(project)} entries)" if project else f"plugin default ({len(mx.DEFAULT_MATRIX)} entries)"
     )
+    treatments = settings.treatment_lines
+    treated = f"{INI_TREATMENTS} ({len(treatments)} entries)" if treatments else "none"
     return [
         f"xharness-eval: skills root = {root}{state}, cache = {settings.cache.root}",
         f"xharness-eval: matrix = {source}; a case's models= overrides it",
+        f"xharness-eval: treatments = {treated}; a case's treatments= overrides it",
     ]

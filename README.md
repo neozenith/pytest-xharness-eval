@@ -79,9 +79,10 @@ with `--dry-run` before a sweep. The design rationale lives in
        eval_<suite>.py
        fixtures/<name>/
        goldens/<name>/                                  # optional known-good output (ADR 0046)
+       treatments/<name>[__<harness>]/                  # optional overlays swept beside the control (ADR 0055)
    .xharness_eval_cache/
      build/                                             # per-cell workspaces
-     results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/  # log.jsonl, result.json, history.json
+     results/{skill}/{harness}/{model}[--{effort}][+{treatment}]/{run}/{session}/  # log.jsonl, result.json, history.json
      report/                                            # report.json + the aggregated microsite
    ```
 
@@ -171,6 +172,7 @@ stock pytest (`-k`, `-x`, `-m eval`, node ids).
 | `--harness <name>` | Only cells for that harness (`claude` or `codex`), repeatable | `pytest skills/x/evals --harness codex` |
 | `--model <substring>` | Only cells whose model id contains the string, or one exact `harness/model`, repeatable | `pytest skills/x/evals --model opus` |
 | `--effort <rung>` | Only cells at that reasoning rung, repeatable. Matches the *resolved* rung, so `--effort max` selects claude's `max` and codex's `xhigh` alike | `pytest skills/x/evals --effort max` |
+| `--treatment <name>` | Only cells under that treatment, repeatable. `control` names the untreated cell (ADR 0055) | `pytest skills/x/evals --treatment control` |
 | `-k <expr>` | Boolean slices over cell ids and case names (stock pytest) | `-k "opus or sol"`, `-k "codex and not sol"` |
 | `--xharness-timeout <s>` | Seconds one cell's CLI may run before it is killed (default 600). Raise it for the top effort rungs, which think for longer by design | `pytest skills/x/evals --xharness-timeout 1800` |
 | `--dry-run` | Enumerate cells and validate pricing, invoke nothing | `pytest skills/x/evals --dry-run` |
@@ -219,6 +221,33 @@ That check is not theoretical: `minimal` appears in codex-cli's own local enum, 
 sweep found that no gpt-5.6 model accepts it — the CLI forwards it, the API answers 400,
 and the run exits having produced nothing (ADR 0049).
 
+### The treatment axis
+
+A treatment is a directory of files copied over a case's fixture: an `AGENTS.md`, a
+`CLAUDE.md`, anything the agent should find in its workspace. It answers "does this change
+to the agent's standing instructions change what the same cell costs and how well it does?"
+
+```text
+evals/treatments/cheap_eval_subagents/AGENTS.md          # every harness gets this
+evals/treatments/cheap_eval_subagents__claude/CLAUDE.md  # claude also gets this: "@AGENTS.md"
+```
+
+Name it on the case, or for every case with the `xharness_treatments` ini key:
+
+```python
+@evalcase(task=TASK, skill=SKILL, fixture=FIXTURE, treatments=["cheap_eval_subagents"])
+```
+
+The axis is opt-in, and every treatment is swept beside its *control*, the same cell with
+no treatment. So the case above collects `claude/claude-sonnet-5` and
+`claude/claude-sonnet-5+cheap_eval_subagents` as two separately graded cells.
+`--treatment control` or `--treatment cheap_eval_subagents` narrows to one arm.
+
+The `__<harness>` directory exists because the CLIs read different files: codex reads
+`AGENTS.md`, claude reads `CLAUDE.md`. Each cell reads its workspace's own file and nothing
+above it. A treatment with no files for a harness the case sweeps stops collection, because
+that cell would be its control billed twice under a second name (ADR 0055).
+
 ----
 
 ## Configuration
@@ -234,11 +263,12 @@ whole axis, so this is deliberately the widest default that cannot abort at coll
 a model with no price row would stop the sweep before it spent anything (ADR 0007).
 Preview it with `--dry-run` and narrow it with `xharness_matrix` before a first paid run.
 
-Four ini keys, paths relative to pytest's rootdir:
+The ini keys, paths relative to pytest's rootdir:
 
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `xharness_matrix` | (plugin default) | Project matrix: `harness/model` or `harness/model/effort` entries every case sweeps unless it sets `models=` |
+| `xharness_treatments` | (none) | Treatment names under each suite's `evals/treatments/`, swept beside the untreated control unless a case sets `treatments=` (ADR 0055) |
 | `xharness_skills_dir` | `skills` | Directory holding `<skill>/evals/` trees |
 | `xharness_cache_dir` | `.xharness_eval_cache` | The git-ignored root for build workspaces, results and the report (ADR 0032) |
 | `xharness_skill_ignore` | (none) | gitignore-style patterns for skill files that are not decision surface; a bare pattern applies to every skill, `<skill>: <pattern>` to the skills matching the selector (ADR 0026) |

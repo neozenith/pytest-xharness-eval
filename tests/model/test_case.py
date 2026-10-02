@@ -32,3 +32,19 @@ def test_evalcase_override_is_copied() -> None:
 
     assert eval_thing.models == models
     assert eval_thing.models is not models
+
+
+def test_evalcase_treatments_default_to_inherit_and_are_copied() -> None:
+    treatments = ["lean-ci"]
+
+    @evalcase(task="p", skill="s", fixture="f", treatments=treatments)
+    def eval_treated(output: CaseOutput) -> None:
+        pass
+
+    @evalcase(task="p", skill="s", fixture="f")
+    def eval_plain(output: CaseOutput) -> None:
+        pass
+
+    assert eval_treated.treatments == treatments
+    assert eval_treated.treatments is not treatments
+    assert eval_plain.treatments is None

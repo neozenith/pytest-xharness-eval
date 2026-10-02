@@ -51,6 +51,18 @@ if TYPE_CHECKING:
 # Isolation levers verified against the installed CLI (claude 2.1.237).
 _ISOLATION = ["--setting-sources", ""]
 
+# The workspace's own instruction file, and nothing above it (ADR 0055; claude 2.1.287).
+# ``--setting-sources ""`` drops every CLAUDE.md, the workspace's included, while
+# ``project`` loads the user's and every ancestor directory's as well. ``--add-dir`` on the
+# workspace with this variable set loads the workspace's CLAUDE.md, and its ``@`` imports,
+# alone -- the same file codex already reads as ``AGENTS.md`` from its cwd.
+_WORKSPACE_MEMORY_ENV = {"CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1"}
+
+
+def workspace_memory_argv(workspace: Path) -> list[str]:
+    """``--add-dir <workspace>``: with :data:`_WORKSPACE_MEMORY_ENV`, its CLAUDE.md is read."""
+    return ["--add-dir", str(workspace)]
+
 
 # -- invocation ------------------------------------------------------------------------
 
@@ -132,13 +144,14 @@ def run_claude(
         "bypassPermissions",
         *effort_argv(effort),
         *_ISOLATION,
+        *workspace_memory_argv(workspace),
     ]
     if skill_dir is not None:
         run_dir = workspace.parent / f"{workspace.name}.claude"
         cmd += ["--plugin-dir", str(skill_plugin(skill_dir, run_dir))]
 
     before = ws.snapshot(workspace)
-    proc = spawn(cmd, cwd=workspace, env=dict(os.environ), timeout_s=timeout_s)
+    proc = spawn(cmd, cwd=workspace, env={**os.environ, **_WORKSPACE_MEMORY_ENV}, timeout_s=timeout_s)
     after = ws.snapshot(workspace)
 
     if proc.returncode != 0 and not proc.stdout.strip():

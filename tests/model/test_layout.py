@@ -12,13 +12,20 @@ from pytest_xharness_eval.model.layout import CacheLayout, SessionDir, model_lev
 
 
 @pytest.mark.parametrize(
-    ("model", "rung", "level"),
-    [("claude-opus-5", "high", "claude-opus-5--high"), ("claude-opus-5", None, "claude-opus-5")],
+    ("model", "rung", "treatment", "level"),
+    [
+        ("claude-opus-5", "high", None, "claude-opus-5--high"),
+        ("claude-opus-5", None, None, "claude-opus-5"),
+        ("claude-opus-5", "high", "lean-ci", "claude-opus-5--high+lean-ci"),
+        ("gpt-5.6-luna", None, "lean-ci", "gpt-5.6-luna+lean-ci"),
+    ],
 )
-def test_the_effort_rides_the_model_level_and_splits_back_off_it(model: str, rung: str | None, level: str) -> None:
-    """The evidence tree stays five levels deep, so the page's fetch contract is unchanged."""
-    assert model_level(model, rung) == level
-    assert split_model_level(level) == (model, rung)
+def test_effort_and_treatment_ride_the_model_level_and_split_back_off_it(
+    model: str, rung: str | None, treatment: str | None, level: str
+) -> None:
+    """The evidence tree stays five levels deep, so the page's fetch contract is unchanged (ADR 0049, ADR 0055)."""
+    assert model_level(model, rung, treatment) == level
+    assert split_model_level(level) == (model, rung, treatment)
 
 
 def test_a_session_directory_carries_the_rung_without_gaining_a_level(tmp_path: Path) -> None:
@@ -35,6 +42,18 @@ def test_a_session_directory_carries_the_rung_without_gaining_a_level(tmp_path: 
     plain.mkdir()
     walked = {(s.model, s.effort) for s in cache.sessions()}
     assert walked == {("opus", "high"), ("sol", None)}
+
+
+def test_a_session_directory_carries_the_treatment_without_gaining_a_level(tmp_path: Path) -> None:
+    cache = CacheLayout(tmp_path)
+    located = cache.session(
+        skill="demo", harness="codex", model="luna", treatment="lean-ci", run="20260101T000000Z", session="sid"
+    )
+    assert located.rel == "demo/codex/luna+lean-ci/20260101T000000Z/sid"
+    located.mkdir()
+    # A level written before ADR 0055 reads back as the control, not as a parse failure.
+    cache.session(skill="demo", harness="codex", model="luna", run="20260101T000000Z", session="sid2").mkdir()
+    assert {(s.model, s.treatment) for s in cache.sessions()} == {("luna", "lean-ci"), ("luna", None)}
 
 
 def test_a_run_stamp_names_the_day_it_is_priced_on() -> None:

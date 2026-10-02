@@ -39,6 +39,7 @@ INI_SKILLS_DIR = "xharness_skills_dir"
 INI_CACHE_DIR = "xharness_cache_dir"
 INI_PRICES = "xharness_prices"
 INI_MATRIX = "xharness_matrix"
+INI_TREATMENTS = "xharness_treatments"
 INI_SKILL_IGNORE = "xharness_skill_ignore"
 INI_REPORT_TOKENS = "xharness_report_design_tokens"
 INI_REPORT_INLINE = "xharness_report_inline"
@@ -115,6 +116,7 @@ class Settings:
     cache: CacheLayout
     price_lines: list[str] = field(default_factory=list)
     matrix_lines: list[str] = field(default_factory=list)
+    treatment_lines: list[str] = field(default_factory=list)
     skill_ignore: list[str] = field(default_factory=list)
     report_tokens: Path | None = None
     report_inline: bool = False
@@ -136,6 +138,7 @@ class Settings:
             cache=CacheLayout(config.rootpath / str(config.getini(INI_CACHE_DIR))),
             price_lines=[str(line) for line in config.getini(INI_PRICES)],
             matrix_lines=[str(e).strip() for e in config.getini(INI_MATRIX) if str(e).strip()],
+            treatment_lines=[str(t).strip() for t in config.getini(INI_TREATMENTS) if str(t).strip()],
             skill_ignore=[str(p) for p in config.getini(INI_SKILL_IGNORE)],
             report_tokens=(config.rootpath / tokens) if tokens else None,
             report_inline=bool(config.getoption("xharness_report_inline", False) or config.getini(INI_REPORT_INLINE)),
@@ -168,6 +171,7 @@ class Settings:
             cache=CacheLayout(cache),
             price_lines=ini_lines(cache, INI_PRICES) + list(prices or []),
             matrix_lines=ini_lines(cache, INI_MATRIX),
+            treatment_lines=ini_lines(cache, INI_TREATMENTS),
             skill_ignore=ini_lines(cache, INI_SKILL_IGNORE) + list(ignore or []),
             report_tokens=report_tokens,
             report_inline=report_inline,
@@ -182,6 +186,14 @@ class Settings:
     def matrix_for(self, case: EvalCase) -> list[str]:
         """Case > project ini > plugin default (ADR 0015)."""
         return case.models or self.matrix_lines or list(mx.DEFAULT_MATRIX)
+
+    def treatments_for(self, case: EvalCase) -> list[str]:
+        """Case > project ini > none (ADR 0055).
+
+        The plugin default is the empty list, unlike the matrix's: a treatment is a
+        directory a project writes, so there is nothing the plugin could sweep by default.
+        """
+        return case.treatments or self.treatment_lines
 
     def skill_dir(self, skill: str) -> Path:
         """Where the skill under test lives."""

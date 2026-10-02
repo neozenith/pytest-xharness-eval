@@ -110,7 +110,8 @@ scopes ambient configuration out and the skill under test in.
 |-------|--------|-------|
 | Ambient settings off | `--setting-sources ""` | `--ignore-user-config` |
 | Working directory | process cwd, plus `--add-dir` | `-C <workspace>` |
-| Skill under test in | `--add-dir <skill dir>` | copied to `$CODEX_HOME/skills/<skill>` |
+| Skill under test in | `--plugin-dir <wrapper of skill dir>` | copied to `$CODEX_HOME/skills/<skill>` |
+| Workspace instructions in, ancestors out | `--add-dir <workspace>` with `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`: reads the workspace's `CLAUDE.md` alone | reads the workspace's `AGENTS.md` from its cwd |
 | Permissions | `--permission-mode bypassPermissions` | `--sandbox workspace-write` |
 | Reasoning budget | `--effort <rung>` | `-c model_reasoning_effort=<rung>` |
 
@@ -121,7 +122,10 @@ anyway, so the rung is validated at collection rather than trusted at the flag (
 
 The workspace itself is a plain copy of the fixture tree under the work directory,
 discarded and rebuilt for every cell. No git repository is created, which puts
-git-dependent skills out of scope for now (ADR 0004).
+git-dependent skills out of scope for now (ADR 0004). A treated cell then has its
+treatment's directories copied over that copy, and the instructions lever above is what
+makes each CLI actually read the overlaid file: `--setting-sources ""` alone reads no
+`CLAUDE.md` at all, and `project` would also read the user's and every ancestor's (ADR 0055).
 
 ## The package listing is the architecture
 

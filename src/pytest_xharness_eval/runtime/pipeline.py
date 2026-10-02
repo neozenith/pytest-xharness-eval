@@ -42,8 +42,9 @@ def derive(
     skill_files: list[SkillFile],
     case: CaseRef | None,
     effort: str | None = None,
+    treatment: str | None = None,
 ) -> RunResult:
-    """Price the run, annotate skill coverage, name its case and its effort -- in that order.
+    """Price the run, annotate skill coverage, name its case, effort and treatment -- in that order.
 
     ``run_date`` is the day the run was stamped on, and chooses the price record in effect
     then; both paths read it off the same ``{run}`` coordinate, so a replay prices a
@@ -57,11 +58,13 @@ def derive(
     records the rung the CLI was *asked* for (ADR 0049). A live cell passes what its matrix
     entry resolved to; a replay passes what the stored result carried, which is the same
     value written by the live run -- so the two paths still agree field for field.
+    ``treatment`` is attached the same way and for the same reason (ADR 0055).
     """
     pricing.price(result, table, run_date)
     result.skill_coverage = skillcov.annotate(skill, skill_files, result)
     result.case = case
     result.effort = effort
+    result.treatment = treatment
     return result
 
 
