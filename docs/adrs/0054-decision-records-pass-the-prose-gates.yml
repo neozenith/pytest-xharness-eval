@@ -1,0 +1,60 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0054
+slug: decision-records-pass-the-prose-gates
+title: Decision records pass the prose gates, and their shape may change while their argument does not
+status: accepted
+status_note: |-
+  accepted, 2026-09-29.
+  Refines [0047](0047-adrs-are-authored-as-data-and-their-markdown-is-generated.md) (ADRs are authored as data), whose argument still travels verbatim in substance.
+  The words of an accepted record may now be reshaped to pass the prose gates, with every claim unchanged.
+  Enforced by `make adrs-prose` in CI.
+accepted_on: '2026-09-29'
+last_changed_on: '2026-09-29'
+group: docs
+tags:
+- docs
+lens: |-
+  A record is kept for its argument, not its line breaks.
+  Hold the claims fixed and let the shape meet the standard every other document meets.
+relates_to:
+- relation: extends
+  target: ADR-0047
+  note: the record's status line says "refines"
+body:
+  context: |-
+    The prose gates (`@jpeakai/prose-gates`) check the mechanical subset of the repository's writing standard.
+    They flag mid-sentence line wraps, sentences over 25 words, em-dashes and lists disguised as prose.
+    The decision records had never been checked.
+    Their generated markdown carried 2,408 findings across 54 files.
+
+    Two rules stood in the way of fixing them.
+    `AGENTS.md` said an accepted record is never edited.
+    ADR 0047 said a record's argument travels verbatim from its authored `.yml` to its generated `.md`.
+    Both rules exist so a decision cannot be quietly rewritten after it was taken.
+    Neither was written to protect a line break or a 40-word sentence.
+  decision: |-
+    **Every generated record passes the prose gates.** `make adrs-prose` regenerates the markdown and runs the gate, pinned to an exact version, over `docs/adrs/*.md`.
+    CI runs it beside `make adrs-check`, so a record that fails either gate fails the build.
+
+    **A finding is fixed in the `.yml`, never the `.md`.** The markdown is generated, so a fix made there is overwritten on the next `make adrs`.
+    The renderer's templates are fixed the same way, in `docs/adrs/templates/`.
+
+    **Shape may change; the argument may not.** An accepted record's words may be reflowed to one sentence per line.
+    A long sentence may be split into shorter ones.
+    An em-dash may become a comma, colon, parenthesis or full stop.
+    A list written as prose may become a bullet list.
+    No claim, number, date, name, code span, link or ADR reference changes.
+    A verbatim quotation of an outside source is split around, never inside.
+
+    **Anything beyond shape is still a new record.** Changing what a decision says, why, or with what consequence remains a superseding ADR.
+    The status-line cross-link remains the only other edit an accepted record takes.
+  consequences: |-
+    The first pass reshaped every record.
+    The pinned gate's own safe fixes handled the line wraps and most em-dashes.
+    The long sentences were split by hand, shape only, and checked field by field.
+
+    A record now reads the way the rest of the documentation does.
+    A reviewer of a shape-only change checks one thing: that no claim moved.
+    `AGENTS.md` now forbids changing an accepted record's argument, instead of forbidding any edit.

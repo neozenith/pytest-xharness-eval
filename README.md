@@ -245,7 +245,7 @@ Four ini keys, paths relative to pytest's rootdir:
 | `xharness_report_design_tokens` | bundled | design tokens JSON that themes `report/report.html` (flag: `--xharness-report-design-tokens FILE`) |
 | `xharness_report_inline` | `false` | embed every result, log and the tokens into `report/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
 | `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`) |
-| `xharness_prices` | (none) | Price rows that add to or override the bundled price records: `<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..] [from=YYYY-MM-DD] [to=YYYY-MM-DD]` (ADR 0030, ADR 0050) |
+| `xharness_prices` | (none) | Price rows that add to or override the bundled price records: `<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..] [long_context_above=<prompt tokens> long_input=.. long_output=.. [long_cache_read=..] [long_cache_write=..] [long_cache_write_1h=..]] [from=YYYY-MM-DD] [to=YYYY-MM-DD]` (ADR 0030, ADR 0050, ADR 0051) |
 
 ```toml
 [tool.pytest.ini_options]
@@ -266,15 +266,22 @@ inside `[from, to)`:
 
 ```toml
 xharness_prices = [
-    "codex/gpt-5.6-luna: input=1.25 output=10.00 cache_read=0.125 cache_write=1.25",
+    "codex/gpt-5.6-luna: input=0.20 output=1.20 cache_read=0.02 long_context_above=272000 long_input=0.40 long_output=1.80",
     "claude/claude-sonnet-5: input=3.00 output=15.00 from=2026-10-01",
 ]
 ```
 
+Some providers bill a long prompt at higher rates: OpenAI prices a call whose prompt
+exceeds 272K tokens (cached input included) at the long-context rates for the whole
+call. State that tier with `long_context_above` and the `long_*` keys. Every call is
+priced on its own prompt, from the per-call ledger, so one long call in a run is billed
+correctly beside many short ones (ADR 0051).
+
 The bundled rates are dated records, one `derive/prices/prices-YYYYMMDD.toml` per
-interval, and every run is priced from the record in effect on the day it ran, so a
-replay of an old capture reproduces the bill it had then. Each estimate's
-`rates_applied` names the record and its `effective_from` / `effective_to`.
+interval, curated from LiteLLM's feed with `make prices`. Every run is priced from the
+record in effect on the day it ran, so a replay reproduces the bill it had then. Each
+estimate's `rates_applied` names the record, its interval and any long-context tier,
+and `long_context_calls` counts the calls billed at that tier.
 
 ----
 

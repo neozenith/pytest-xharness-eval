@@ -99,6 +99,7 @@ export const result = (over: Partial<RunResult> = {}): RunResult => ({
   final_context_pct: 12.06,
   baseline_tokens: 35_599,
   estimated_cost_usd: 1.027646,
+  long_context_calls: 0,
   harness_reported_cost_usd: 1.0287836,
   rates_applied: {
     input: 5,
@@ -112,6 +113,7 @@ export const result = (over: Partial<RunResult> = {}): RunResult => ({
     source: "prices/prices-20260820.toml",
     effective_from: "2026-08-20",
     effective_to: null,
+    long_context: null,
   },
   final_text: "Both gates pass clean.",
   files_written: ["ARCHITECTURE.md"],

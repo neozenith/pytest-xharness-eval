@@ -234,6 +234,71 @@ test("cumulativeCostByTurn mirrors pricing.breakdown, including the untagged-cac
   expect(cumulativeCostByTurn({ rates_applied: {}, calls: [] } as never)).toBeNull();
 });
 
+describe("cumulativeCostByTurn prices each call at the tier its own prompt selects (ADR 0051)", () => {
+  const usage = (u: object) => ({
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
+    cache_write_1h_tokens: 0,
+    cache_write_5m_tokens: 0,
+    reasoning_tokens: 0,
+    ...u,
+  });
+  // gpt-6-sol: 2x input and cache rates, 1.5x output, for the full call, once the prompt exceeds 272K.
+  const long_context = { above_prompt_tokens: 272_000, input: 4, output: 15, cache_read: 0.4, cache_write: 5, cache_write_1h: 5 };
+  const sol = { input: 2, output: 10, cache_read: 0.2, cache_write: 2.5, cache_write_1h: 2.5, unit: "usd_per_mtok", long_context };
+  const base = (u: { input_tokens: number; output_tokens: number; cache_read_tokens: number }) =>
+    u.input_tokens * 2e-6 + u.output_tokens * 1e-5 + u.cache_read_tokens * 2e-7;
+  const long = (u: { input_tokens: number; output_tokens: number; cache_read_tokens: number }) =>
+    u.input_tokens * 4e-6 + u.output_tokens * 1.5e-5 + u.cache_read_tokens * 4e-7;
+
+  test("a call one token over the threshold bills every tier at the long-context rates", async () => {
+    const { cumulativeCostByTurn } = await import("@/lib/series");
+    // 1 uncached + 272,000 cached = 272,001 prompt tokens: the cached input counts toward the threshold.
+    const u = usage({ input_tokens: 1, cache_read_tokens: 272_000, output_tokens: 500 });
+    const [cost] = cumulativeCostByTurn({ rates_applied: sol, calls: [{ n: 1, at: "t", usage: u }] } as never)!;
+    expect(cost).toBeCloseTo(long(u), 12);
+  });
+
+  test("a call exactly at the threshold bills at the base rates", async () => {
+    const { cumulativeCostByTurn } = await import("@/lib/series");
+    const u = usage({ input_tokens: 0, cache_read_tokens: 272_000, output_tokens: 500 });
+    const [cost] = cumulativeCostByTurn({ rates_applied: sol, calls: [{ n: 1, at: "t", usage: u }] } as never)!;
+    expect(cost).toBeCloseTo(base(u), 12);
+  });
+
+  test("the threshold is judged per call, never on the run's summed prompt", async () => {
+    const { cumulativeCostByTurn } = await import("@/lib/series");
+    // Two 200K calls sum to 400K, but neither crosses 272K alone; a subagent call over it does.
+    const small = usage({ input_tokens: 200_000, output_tokens: 10 });
+    const big = usage({ input_tokens: 300_000, output_tokens: 10 });
+    const result = {
+      rates_applied: sol,
+      calls: [
+        { n: 1, at: "t", usage: small },
+        { n: 2, at: "t", usage: small },
+      ],
+      subagents: [{ parent_turn: 2, usage: big, calls: [{ n: 1, at: "t", usage: big }] }],
+    };
+    const costs = cumulativeCostByTurn(result as never)!;
+    expect(costs[0]).toBeCloseTo(base(small), 12);
+    expect(costs[1]! - costs[0]!).toBeCloseTo(base(small) + long(big), 12);
+  });
+
+  test("a record without long_context prices as before, however large the prompt", async () => {
+    const { cumulativeCostByTurn } = await import("@/lib/series");
+    const u = usage({ input_tokens: 900_000, output_tokens: 10 });
+    const flat = { ...sol, long_context: undefined };
+    const [cost] = cumulativeCostByTurn({ rates_applied: flat, calls: [{ n: 1, at: "t", usage: u }] } as never)!;
+    expect(cost).toBeCloseTo(base(u), 12);
+    // A legacy per-token record (no unit, no long_context) is unchanged too.
+    const perToken = { input: 2e-6, output: 1e-5, cache_read: 2e-7, cache_write: 2.5e-6, cache_write_1h: 2.5e-6 };
+    const [legacy] = cumulativeCostByTurn({ rates_applied: perToken, calls: [{ n: 1, at: "t", usage: u }] } as never)!;
+    expect(legacy).toBeCloseTo(base(u), 12);
+  });
+});
+
 test("aggregateWaterfall averages the decomposition over the runs that reached each turn", async () => {
   const { aggregateWaterfall } = await import("@/lib/series");
   const cell = (session_id: string) => ({ session_id, has_ledger: true }) as never;

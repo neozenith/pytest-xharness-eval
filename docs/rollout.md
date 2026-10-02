@@ -74,7 +74,8 @@ that only checks `exists` passes for a run that did nothing at all.
 | `cost_status` | `CostStatus` | `PRICED` or `UNPRICED`. There is no third state. Compare to the enum member, not the string. |
 | `estimated_cost_usd` | `float \| None` | This plugin's estimate from its own price table. |
 | `cost_by_tier` | `dict[str, float]` | The estimate split by token tier. |
-| `rates_applied` | `AppliedRates \| None` | **A typed record, not a dict.** `.source`, `.harness`, `.model`, `.unit` (`"usd_per_mtok"`), `.effective_from` / `.effective_to` (ISO dates, `None` when open); the tier rates are USD per MTok (ADR 0050). `.get()` raises. |
+| `rates_applied` | `AppliedRates \| None` | **A typed record, not a dict.** `.source`, `.harness`, `.model`, `.unit` (`"usd_per_mtok"`), `.effective_from` / `.effective_to` (ISO dates, `None` when open), `.long_context` (a `LongContext` with `.above_prompt_tokens` and the five tier rates, or `None`); the tier rates are USD per MTok (ADR 0050, ADR 0051). `.get()` raises. |
+| `long_context_calls` | `int \| None` | How many calls were billed at the row's long-context tier; `None` while unpriced (ADR 0051). |
 | `harness_reported_cost_usd` | `float \| None` | What the CLI itself claimed (Claude only). Never used to price. |
 
 ### Tokens

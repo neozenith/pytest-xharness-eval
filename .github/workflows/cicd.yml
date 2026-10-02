@@ -32,6 +32,23 @@ jobs:
       - name: Run tests
         run: make test
 
+  adrs:
+    # Decision records (ADR 0047, ADR 0054): the generated markdown matches the authored
+    # .yml, and every record passes the pinned prose gates. A finding is fixed in the .yml.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Generated records match their .yml
+        run: make adrs-check
+      - name: Records pass the prose gates
+        run: make adrs-prose
+
   report-ui:
     # The captured/report.html SPA (ADR 0028): types, lint, format, component tests, and a
     # single-file build. bun is build-time only; the Python package never needs it.

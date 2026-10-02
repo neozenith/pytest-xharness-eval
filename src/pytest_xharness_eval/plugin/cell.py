@@ -9,7 +9,7 @@ replay is pinned against could not be exercised at all without spending (ADR 003
 
 Here each step is a method. :meth:`CellRun.invoke` is the paid one and is the only method
 that carries the pragma; the rest are exercised directly from captured logs in
-``tests/test_units.py``. Nothing is mocked to achieve that: the workspace is really
+``tests/plugin/test_cell.py``. Nothing is mocked to achieve that: the workspace is really
 copied, the grader really runs, and the record is really written -- what the tests do not
 do is spawn a CLI, which is what ADR 0002 forbids faking.
 """

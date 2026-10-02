@@ -1,0 +1,121 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0051
+slug: long-context-is-a-tier-priced-per-call-and-records-are-curated
+title: Long context is a price tier billed per call, and price records are curated from LiteLLM
+status: accepted
+status_note: |-
+  accepted, 2026-09-29.
+  Refines [0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md) (prices are dated records) with a long-context tier and a reset of the bundled records.
+  Refines [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) (the per-call ledger) by making it the unit of pricing.
+  Refines [0021](0021-metric-names-carry-unit-and-provenance.md) (rates travel with the estimate) and [0030](0030-price-rows-live-in-the-pytest-config.md) (project price rows) with the tier's keys.
+  Delivers the upstream seed command of [0006](0006-local-price-table-is-authoritative.md).
+  Extends [0007](0007-unpriced-model-aborts-before-spend.md) to pricing dimensions: an unmodelled one stops curation.
+  Breaking: the bundled records were replaced, `rates_applied` gains `long_context`, and `result.json` gains `long_context_calls`.
+  Refined by [0052](0052-scope-is-a-boundary-not-a-roster.md).
+  The watched families shown below as an enumerated generation set and tier list are now a shape, a generation floor and a tier pattern.
+accepted_on: '2026-09-29'
+last_changed_on: '2026-09-29'
+group: pricing
+tags:
+- pricing
+- accounting
+lens: |-
+  Model every rate a provider publishes, at the grain the provider bills it.
+  A rate that becomes a comment is a rate that is not charged.
+  A threshold applied to a sum is a threshold applied to nothing the provider ever measured.
+relates_to:
+- relation: extended_by
+  target: ADR-0052
+  note: the record's status line says "refined by"
+- relation: extends
+  target: ADR-0050
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0019
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0021
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0030
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0006
+  note: the record's status line says "delivers"
+- relation: extends
+  target: ADR-0007
+  note: the record's status line says "extends"
+body:
+  context: |-
+    OpenAI bills long prompts at higher rates.
+    Its model page states:
+
+    > "Prompts with more than 272K input tokens are priced at 2x input and cache rates and 1.5x output for the full request."
+
+    LiteLLM's feed carries the same tier as `*_above_272k_tokens` fields on every `gpt-5.6` and `gpt-6` row.
+    Its cost calculator applies them exactly so:
+    - the threshold is 272,000 (`k` is ×1000)
+    - the count compared is the whole prompt including cached input
+    - the comparison is strict
+    - crossing it re-prices every tier of that request
+
+    Claude Sonnet 4.5 carries the same shape at 200K.
+
+    The bundled records had no place for this tier, and the first curator turned it into a comment.
+    Worse, pricing ran on a run's summed usage: a threshold that is a property of one request was unanswerable from a total.
+    A run whose calls each stayed under 272K could sum past it.
+    A run with one long call among many short ones could not be told apart from a run of uniformly medium calls.
+    Either way the estimate was wrong on exactly the calls that cost most.
+
+    The per-call ledger already exists (ADR 0019): one `Call` per API request, from Claude's message ids and Codex's `token_count` events, with subagent ledgers beside it.
+    It was not the unit of pricing.
+  decision: |-
+    **A long-context tier is part of a row.** A record row may carry a `long_context` sub-table: `above_prompt_tokens` (a whole number) and the five tiers, defaulted by the same rules as the base tier.
+    An `xharness_prices` line states the same tier with `long_context_above=<n>` and `long_<tier>=<n>` keys; `long_input` and `long_output` are required once the threshold is stated.
+    A row without the tier bills every call at its base rates, which is how Anthropic bills its current models' whole window.
+
+    **Pricing is per call.** `price` walks the primary ledger and every subagent ledger.
+    A call whose prompt (uncached input plus cache read plus cache write) is strictly greater than the threshold is billed entirely at the long-context tier.
+    Every other call is billed at the base tier.
+    Usage the ledgers do not account for is priced at the base tier, because no call can be blamed for crossing a threshold with it.
+    It is never dropped.
+
+    - `cost_by_tier` sums each tier across both regimes.
+    - `long_context_calls` says how many calls were billed at the long-context tier.
+    - `rates_applied.long_context` carries the tier so the report page re-prices each turn with the same rule.
+
+    **The bundled records were reset.** Both earlier records priced OpenAI rows without the tier.
+    Rather than amend history, they were removed, and the first record was bootstrapped from LiteLLM by the curator, effective 2026-09-29.
+    A run stamped before that date is unpriced and stops (ADR 0007).
+
+    **Records are curated.** `.github/scripts/curate_prices.py`, run as `make prices`, is the upstream seed ADR 0006 decided on.
+    It reads LiteLLM's feed at a pinned commit and keeps only first-party rows (`litellm_provider` `anthropic` under `[claude]`, `openai` under `[codex]`).
+    It keeps them because those are the IDs the harness session logs report.
+    It keeps only the watched families, each parsed with its vendor's grammar rather than a prefix:
+
+    ```text
+    claude:  claude-<tier>-<major>[-<minor>][-<YYYYMMDD>]  |  claude-<tier>-preview
+             tier = opus | sonnet | haiku | fable | mythos
+    codex:   gpt-<generation>[-<tier>]      generation in { 5.6, 6 }
+    ```
+
+    A first-party ID a watched family owns but no grammar fits stops the run.
+    So does a cost field the curator neither models nor deliberately ignores.
+    The ignored set is the `_batches`, `_flex` and `_priority` service tiers the CLIs never request, and `search_context_cost_per_query`, a per-query tool fee.
+
+    - A row with a comment line starting `# curate: keep` is a local override the curator never re-prices.
+    - A row the feed no longer has is carried forward.
+    - A record is written only on a change.
+    - The staged record set must load through `pricing.load_records` and price the default matrix before anything reaches the package.
+  consequences: |-
+    A call over 272K prompt tokens on `gpt-5.6-sol` is billed at $8 / $30 per MTok instead of $4 / $20, as OpenAI bills it.
+    Captures from before 2026-09-29 no longer replay into a price; that is the cost of not carrying forward records that priced those runs wrongly.
+    Code that read `rates_applied` must allow the new `long_context` key.
+    A project whose `xharness_prices` line overrides an OpenAI row must state the long-context keys too, or its override bills every call at base.
+
+    The grammars above were derived from a survey of every Claude and OpenAI ID in the feed.
+    Hosted spellings disagree on word order, version separators, date formats and where a region or vendor sits.
+    Only the first-party IDs follow one grammar per vendor.
+    The watched families are a scope decision, recorded in the script's `WATCHES`; widening them is a reviewed edit there.

@@ -97,6 +97,16 @@ test("an empty cost_by_tier is the same as none, and still shows the harness fig
   expect(rows.map(([k]) => k)).toContain("harness_reported_cost_usd");
 });
 
+test("long_context_calls is listed after the estimate only when the row has a long-context tier (ADR 0051)", async ({ mount }) => {
+  const long_context = { above_prompt_tokens: 272_000, input: 4, output: 15, cache_read: 0.4, cache_write: 5, cache_write_1h: 5 };
+  const withTier = await mount(<CostByTierPanel result={result({ rates_applied: { ...result().rates_applied, long_context }, long_context_calls: 2 })} />);
+  const rows = await texts(costRows(withTier));
+  expect(rows[6]).toEqual(["long_context_calls", "2"]);
+  await withTier.unmount();
+  const flat = await mount(<CostByTierPanel result={result({ long_context_calls: 0 })} />);
+  expect((await texts(costRows(flat))).map(([k]) => k)).not.toContain("long_context_calls");
+});
+
 test.describe("RatesApplied", () => {
   test("every rate shown per million tokens, with the price row, its harness, source and interval", async ({ mount }) => {
     const c = await mount(<CostByTierPanel result={result()} />);
@@ -153,6 +163,40 @@ test.describe("RatesApplied", () => {
       ["cache_write (5m)", "–"],
       ["cache_write_1h", "–"],
     ]);
+  });
+
+  test("a long-context tier adds its threshold and five rates after the base tiers (ADR 0051)", async ({ mount }) => {
+    const c = await mount(
+      <RatesApplied
+        rates={{
+          unit: "usd_per_mtok",
+          harness: "codex",
+          model: "gpt-6-sol",
+          source: "prices/prices-20260929.toml",
+          effective_from: "2026-09-29",
+          effective_to: null,
+          input: 2,
+          output: 10,
+          cache_read: 0.2,
+          cache_write: 2.5,
+          cache_write_1h: 2.5,
+          long_context: { above_prompt_tokens: 272_000, input: 4, output: 15, cache_read: 0.4, cache_write: 5, cache_write_1h: 5 },
+        }}
+      />,
+    );
+    expect((await texts(rateRows(c))).slice(-6)).toEqual([
+      ["long context above", "272,000 prompt tokens"],
+      ["long input", "$4.000 /M"],
+      ["long output", "$15.000 /M"],
+      ["long cache_read", "$0.400 /M"],
+      ["long cache_write (5m)", "$5.000 /M"],
+      ["long cache_write_1h", "$5.000 /M"],
+    ]);
+  });
+
+  test("a row with long_context null shows no long-context rows", async ({ mount }) => {
+    const c = await mount(<RatesApplied rates={{ unit: "usd_per_mtok", model: "claude-opus-5", input: 5, output: 25, long_context: null }} />);
+    expect((await texts(rateRows(c))).map(([k]) => k).filter((k) => k?.startsWith("long"))).toEqual([]);
   });
 
   for (const [name, rates] of [

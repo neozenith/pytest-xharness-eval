@@ -5,9 +5,8 @@
 
 Browse it interactively in [graph.html](graph.html): click a node to read its record.
 
-{{ node_count }} decision records, {{ edge_count }} typed edges, grouped into
-{{ group_count }} groups. Every edge comes from a record's `relates_to`
-block, so this view cannot drift from the records.
+{{ node_count }} decision records, {{ edge_count }} typed edges, grouped into {{ group_count }} groups.
+Every edge comes from a record's `relates_to` block, so this view cannot drift from the records.
 
 ```cytoscape
 { "data": "graph.json", "height": 620 }
@@ -26,8 +25,8 @@ block, so this view cannot drift from the records.
 
 ## Asymmetries
 
-An edge whose inverse is missing on the far record. These are gaps in the
-record set, not rendering artifacts.
+An edge whose inverse is missing on the far record.
+These are gaps in the record set, not rendering artifacts.
 
 {% if asymmetries %}
 {% for a in asymmetries -%}

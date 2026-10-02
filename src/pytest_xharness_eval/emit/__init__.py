@@ -2,7 +2,7 @@
 
 Everything a run says to the outside world is written here, and every field name in this
 layer is a wire format: ``report-ui/src/lib/types.ts`` mirrors them and
-``tests/test_units.py`` pins the key sets, so a rename in this package is a contract
+``tests/emit/`` pins the key sets, so a rename in this package is a contract
 change (ADR 0021, ADR 0039).
 
 * :mod:`.metrics` -- ``history.json``: one :class:`CellMetrics` per graded cell, the

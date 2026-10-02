@@ -78,6 +78,7 @@ export const result = (over: Partial<RunResult> = {}): RunResult =>
       source: "prices/prices-20260820.toml",
       effective_from: "2026-08-20",
       effective_to: null,
+      long_context: null,
     },
     tool_calls: { Bash: 10, Edit: 4 },
     record_kinds: { "claude/assistant/tool_use": 22, "claude/user/tool_result": 22, "codex/event_msg/token_count": 3, "claude/made-up": 1 },

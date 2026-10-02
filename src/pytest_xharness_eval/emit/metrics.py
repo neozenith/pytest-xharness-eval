@@ -4,7 +4,7 @@ Every graded cell -- live or replayed -- emits exactly one :class:`CellMetrics`.
 written beside the cell's evidence, shown in the verbose status word, carried to the xdist
 controller, flattened into ``--junitxml``, and combined into ``report/history.jsonl``. Its
 field names *are* that wire format, which ``report-ui/src/lib/types.ts`` mirrors, so a
-rename here is a wire-format change and ``tests/test_units.py`` pins the key set.
+rename here is a wire-format change and ``tests/emit/test_metrics.py`` pins the key set.
 
 The record crosses one boundary as a plain mapping and only one: ``TestReport.user_properties``
 is serialised by execnet, which handles builtins only (ADR 0016), so :meth:`CellMetrics.to_dict`

@@ -1,0 +1,74 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0052
+slug: scope-is-a-boundary-not-a-roster
+title: Scope is a boundary, not a roster, so a new release arrives without an edit
+status: accepted
+status_note: |-
+  accepted, 2026-09-29.
+  Refines [0051](0051-long-context-is-a-tier-priced-per-call-and-records-are-curated.md) (records are curated): the watched families become a shape and a generation floor.
+  A Claude tier becomes any word in the tier position.
+  Keeps [0007](0007-unpriced-model-aborts-before-spend.md)'s refusal for an ID whose shape is new.
+  It leaves [0049](0049-effort-is-the-third-matrix-axis.md)'s closed effort vocabulary closed.
+  The rule here is for what a provider will add, not for what a CLI accepts.
+accepted_on: '2026-09-29'
+last_changed_on: '2026-09-29'
+group: pricing
+tags:
+- pricing
+- collection
+lens: |-
+  Name the boundary, not today's members.
+  A list of what exists now is correct on the day it is written and silently wrong on the next release.
+  A rule for what belongs keeps being right.
+  The only thing that should stop it is a shape nobody has seen.
+relates_to:
+- relation: extends
+  target: ADR-0051
+  note: the record's status line says "refines"
+- relation: see_also
+  target: ADR-0007
+  note: the record's status line says "keeps"
+- relation: see_also
+  target: ADR-0049
+  note: the record's status line says "leaves ... closed"
+body:
+  context: |-
+    The first curator scoped OpenAI with an enumerated set, `families={"gpt-5.6", "gpt-6"}`, and matched only IDs that began with one of those names.
+    The day OpenAI ships `gpt-7`, the curator would not see it.
+    There would be not an error, not a report, just a model absent from every record from then on.
+    A sweep that names it stops at collection as unpriced.
+    The Claude grammar had the same flaw in a louder form.
+    Its tier alternation (`opus|sonnet|haiku|fable|mythos`) would make a new tier an unparsable ID, stopping every curation until someone edited the list.
+
+    Both lists described the releases that existed when they were written.
+    Neither described what the scope was for: every current generation of OpenAI's `gpt-` line, and every Claude tier.
+  decision: |-
+    **A scope is a shape plus a floor.** A watch owns every first-party ID of its provider that matches its shape and whose generation is at or above its floor.
+    For OpenAI the shape is `gpt-<number>...` and the floor is `5.6`.
+    The generation is compared numerically (`5.10` is above `5.6`, and `10` is above `6`).
+    So `gpt-6`, `gpt-7` and `gpt-7.1` are in scope as they appear.
+    A word after `gpt-` is a sub-line (`gpt-image`, `gpt-realtime`) and is outside the shape.
+    A generation below the floor is outside the boundary.
+    Neither is an error: they were never in scope.
+
+    **A vocabulary slot is a pattern, not a list.** Where a grammar has a slot providers fill with new names, the slot accepts any word of the right form.
+    A Claude tier is any lowercase word in the tier position, so a new tier is curated with no edit.
+
+    **A new shape still stops.** Inside the boundary, an ID the grammar cannot parse stops the run and names the ID (ADR 0007).
+    Examples are a dated first-party snapshot the grammar does not describe, or a suffix nobody has seen.
+    The boundary decides what is in scope; the grammar decides whether we understand it.
+    Only the second may block curation.
+
+    **Closed vocabularies stay closed where an open one is the bug.** ADR 0049 closes the effort vocabulary because a CLI accepts any rung and silently bills its default.
+    That is a vocabulary the plugin sends; this record is about names the plugin receives.
+    The test for which applies:
+    - if an unknown value would be silently misused, close the list
+    - if a new value would be silently ignored, name the boundary
+  consequences: |-
+    `gpt-7` appears in the next curated record on the day LiteLLM lists it.
+    A changed report names it under `added`, so a reviewer sees the scope grow rather than discovering it did not.
+    Narrowing scope is now an explicit edit of a floor or a shape, not the omission of a name.
+    The curator's tests pin the boundary with releases that do not exist yet (`gpt-7`, `gpt-10-sol`, `claude-nova-6`).
+    So a regression to a roster fails a test.

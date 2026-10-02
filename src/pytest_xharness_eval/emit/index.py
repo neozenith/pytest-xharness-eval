@@ -40,7 +40,7 @@ class IndexRow:
     ``history.json`` -- which is why the values coming off the result are read defensively:
     the combine step indexes whatever a cache holds, including captures written before a
     field existed. The field names are the row's wire format, mirrored by
-    ``report-ui/src/lib/types.ts`` and pinned by ``tests/test_units.py``.
+    ``report-ui/src/lib/types.ts`` and pinned by ``tests/emit/test_index.py``.
     """
 
     # Which case, run and cell this was.

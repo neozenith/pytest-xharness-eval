@@ -17,29 +17,26 @@ generated: { by: human:neozenith, at: 2026-08-24T00:00:00Z }
 
 # 0030: Project price rows live in the pytest config, not in a prices.toml beside it
 
-Status: accepted, 2026-08-24. Refines [0006](0006-local-price-table-is-authoritative.md),
-[0014](0014-register-through-the-pytest11-entry-point.md) and
-[0026](0026-skill-ignore-lives-in-the-pytest-config.md); ADR 0007's
-stop-before-spend rule is unchanged. Refined by
-[0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md): a line's
-selector is `<harness>/<model>` and may carry `from=`/`to=` bounds, and the bundled
-table is now dated records in USD per MTok.
+Status: accepted, 2026-08-24.
+Refines [0006](0006-local-price-table-is-authoritative.md), [0014](0014-register-through-the-pytest11-entry-point.md) and [0026](0026-skill-ignore-lives-in-the-pytest-config.md); ADR 0007's stop-before-spend rule is unchanged.
+Refined by [0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md): a line's selector is `<harness>/<model>` and may carry `from=`/`to=` bounds.
+The bundled table is now dated records in USD per MTok.
 
 ## Context
 
-0026 moved skill-ignore rules out of a dotfile beside the skill and into the
-`xharness_skill_ignore` ini key, on the grounds that a pytest plugin's permanent,
-file-based configuration belongs where pytest keeps its own. Price overrides had the
-same shape left over: the `xharness_prices` ini key named a *file* (`prices.toml` at
-the rootdir) whose TOML rows layered over the bundled table. Same objection: a
-second configuration file in a second format that nothing in `pytest --help` reveals
-the contents of, one more thing to discover, and a unit trap inside it — rows were
-USD **per token** (`5.0e-6`), while every provider publishes USD per million tokens.
+0026 moved skill-ignore rules out of a dotfile beside the skill and into the `xharness_skill_ignore` ini key.
+It did so on the grounds that a pytest plugin's permanent, file-based configuration belongs where pytest keeps its own.
+Price overrides had the same shape left over.
+The `xharness_prices` ini key named a *file* (`prices.toml` at the rootdir) whose TOML rows layered over the bundled table.
+Same objection:
+
+- a second configuration file in a second format that nothing in `pytest --help` reveals the contents of
+- one more thing to discover
+- a unit trap inside it: rows were USD **per token** (`5.0e-6`), while every provider publishes USD per million tokens
 
 ## Decision
 
-`xharness_prices` becomes a linelist of price rows, in the way pytest's own
-`markers` lines pair a name with its text:
+`xharness_prices` becomes a linelist of price rows, in the way pytest's own `markers` lines pair a name with its text:
 
 ```toml
 [tool.pytest.ini_options]
@@ -49,38 +46,37 @@ xharness_prices = [
 ]
 ```
 
-Values are **USD per million tokens**, the unit providers publish; the plugin divides
-by 1e6. `input` and `output` are required; `cache_read` and `cache_write` default to
-`input`; `cache_write_1h` defaults to `cache_write` × 1.6 (Anthropic's 2.0/1.25 TTL
-ratio), the same defaulting the bundled table has always had. The selector before the
-colon is the model key, prefix-matched by `resolve` like any bundled row.
+Values are **USD per million tokens**, the unit providers publish; the plugin divides by 1e6.
 
-Because the bundled table stays per-token, a row pasted from it into the ini would
-under-price by a factor of a million; a value below $0.001/MTok is therefore rejected
-as "looks like a per-token rate". A malformed line, an unknown tier, or a missing
-required tier stops the session at configure time, before any cell is collected —
-the same never-price-as-zero posture as 0007.
+- `input` and `output` are required.
+- `cache_read` and `cache_write` default to `input`.
+- `cache_write_1h` defaults to `cache_write` × 1.6 (Anthropic's 2.0/1.25 TTL ratio).
 
-The bundled `prices.toml` inside the package is unchanged: it is the plugin's own
-versioned data file, not project configuration, and remains the one `__file__`
-exception of 0014. The replay command resolves `xharness_prices` from the project's
-pytest config the way it already resolves `xharness_skill_ignore` (the reader is now
-`config_lines_of(captured, key)`), and its `--prices FILE` flag becomes `--price LINE`
-(repeatable, same grammar). `rates_applied.source` records `xharness_prices` for ini
-rows and the bundled file's path for bundled rows.
+This is the same defaulting the bundled table has always had.
+The selector before the colon is the model key, prefix-matched by `resolve` like any bundled row.
+
+Because the bundled table stays per-token, a row pasted from it into the ini would under-price by a factor of a million.
+A value below $0.001/MTok is therefore rejected as "looks like a per-token rate".
+A malformed line, an unknown tier, or a missing required tier stops the session at configure time, before any cell is collected.
+It is the same never-price-as-zero posture as 0007.
+
+The bundled `prices.toml` inside the package is unchanged.
+It is the plugin's own versioned data file, not project configuration, and remains the one `__file__` exception of 0014.
+The replay command resolves `xharness_prices` from the project's pytest config the way it already resolves `xharness_skill_ignore`.
+The reader is now `config_lines_of(captured, key)`.
+Its `--prices FILE` flag becomes `--price LINE` (repeatable, same grammar).
+`rates_applied.source` records `xharness_prices` for ini rows and the bundled file's path for bundled rows.
 
 ## Consequences
 
-A project that had a rootdir `prices.toml` moves each row onto one line, multiplying
-by 1e6, and deletes the file; until it does, its overrides are silently gone and a
-model priced only there stops the sweep at collection — loudly, per 0007. A project
-whose ini still says `xharness_prices = "prices.toml"` now fails at configure time
-with the line-grammar error, which is the migration signal. Dated overrides (an
-introductory price) become one commented line in the pytest config instead of a
-block in a side file, so their expiry note sits where the reviewer of the config
-change will see it.
+A project that had a rootdir `prices.toml` moves each row onto one line, multiplying by 1e6, and deletes the file.
+Until it does, its overrides are silently gone.
+A model priced only there stops the sweep at collection: loudly, per 0007.
+A project whose ini still says `xharness_prices = "prices.toml"` now fails at configure time with the line-grammar error, which is the migration signal.
+Dated overrides (an introductory price) become one commented line in the pytest config instead of a block in a side file.
+So their expiry note sits where the reviewer of the config change will see it.
 
 ## Lens
 
-The second file a tool asks a project to maintain should have to argue for itself
-harder than the first; and state prices in the unit the price tag uses.
+The second file a tool asks a project to maintain should have to argue for itself harder than the first.
+And state prices in the unit the price tag uses.

@@ -1,0 +1,59 @@
+name: Curate prices
+# ADR 0051, ADR 0052: a weekly `make prices` against LiteLLM's latest feed. A changed
+# record opens (or refreshes) one PR for review; CI gates it like any other change. A
+# cost field the curator neither models nor ignores fails this job, by design.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    env:
+      BRANCH: chore/curate-prices
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups
+
+      - name: Curate a new price record
+        shell: bash  # -o pipefail, so a refused feed fails through the tee
+        run: make prices | tee tmp-curate.log
+
+      - name: Test against the new record
+        run: make test
+
+      - name: Open or refresh the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- src/pytest_xharness_eval/derive/prices \
+             && [ -z "$(git ls-files --others --exclude-standard src/pytest_xharness_eval/derive/prices)" ]; then
+            echo "prices unchanged"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$BRANCH"
+          git add src/pytest_xharness_eval/derive/prices
+          git commit -m "Curate price record $(date -u +%Y-%m-%d) from LiteLLM"
+          git push --force origin "$BRANCH"
+          body="$(printf 'Automated by `make prices` (ADR 0051).\n\n```\n%s\n```\n' "$(grep -vE '^uv ' tmp-curate.log)")"
+          gh pr view "$BRANCH" >/dev/null 2>&1 \
+            && gh pr edit "$BRANCH" --body "$body" \
+            || gh pr create --head "$BRANCH" --title "Curate price record from LiteLLM" --body "$body"

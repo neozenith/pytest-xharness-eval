@@ -291,7 +291,7 @@ def test_dry_run_writes_report_and_summary(pytester: pytest.Pytester) -> None:
     assert [c["verdict"] for c in report["cells"]] == ["dry-run", "dry-run"]
     assert {c["harness"] for c in report["cells"]} == {"claude", "codex"}
     # A dry-run cell is the same record as a live one, not a shape of its own: the whole
-    # metrics vocabulary is present, unmeasured (tests/test_units.py pins the key set).
+    # metrics vocabulary is present, unmeasured (tests/emit/test_metrics.py pins the key set).
     assert all(c["accumulative_billed_tokens"] == 0 and c["estimated_cost_usd"] is None for c in report["cells"])
 
 

@@ -19,6 +19,8 @@ Run everything from the repository root.
 | Lint and type-check (`ruff`, `isort`, `mypy --strict`) | `make check` | free |
 | Run the plugin's own tests with coverage | `make test` | free |
 | Build a wheel | `make build` | free |
+| Check the decision records: generated markdown matches its `.yml`, and every record passes the pinned prose gates (fix findings in the `.yml`) | `make adrs-check`, `make adrs-prose` | free |
+| Curate a new dated price record from LiteLLM's feed (first-party rows of the watched families; writes only on a change; `ARGS="--dry-run"` stages under `tmp/curate-prices/`) | `make prices` | free |
 | Work on the report page (`report-ui/`, ADR 0028, ADR 0031) | `make ui-dev CAPTURED=<project>/.xharness_eval_cache`, then `make ui-check`, `make ui-test`, `make ui-ct` (Playwright Component Testing: each component mounted alone in Chromium from `report-ui/ct/fixtures.ts`, no capture needed), `make ui-e2e CAPTURED=… TIER=small|medium|large` (Playwright permutation sweep; `small` is the inner loop, `large` the full matrix), `make ui-smoke CAPTURED=…`, and `make ui-promote` to ship the build (CI fails if the asset is stale) | free |
 | Release to PyPI | bump `version` and `__version__` together, `make test`, then publish a GitHub Release tagged `vX.Y.Z`; `publish.yml` does the rest (ADR 0017) | free |
 
@@ -67,7 +69,7 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | How subagent transcripts are found, attributed and billed | `harness/claude.py` and `harness/codex.py` (`subagents_of` per dialect), `runtime/pipeline.py`'s `capture_subagents` (capture into `subagents/`) (ADR 0033) |
 | How a session log maps to `RunResult` fields | the harness's `SessionLog.to_result` in `harness/<provider>.py`; the primitives both dialects fold with are `harness/normalise.py` |
 | A new field on the run record | `model/runresult.py`, then `harness/claude.py` and `harness/codex.py` for both dialects |
-| A bundled model price | `derive/prices/` only, USD per MTok, rows under their harness's table. A price *change* never edits a closed record: set `effective_to` on the open one and add `prices-<date>.toml` whose `effective_from` is that date. A project overrides with `<harness>/<model>: ...` `xharness_prices` lines, optionally `from=`/`to=` bounded (ADR 0030, ADR 0050) |
+| A bundled model price | `derive/prices/` only, USD per MTok, rows under their harness's table. A price *change* never edits a closed record: set `effective_to` on the open one and add `prices-<date>.toml` whose `effective_from` is that date. `make prices` does both from LiteLLM's feed; the watched families are `WATCHES` in `.github/scripts/curate_prices.py`, and a row with a comment line starting `# curate: keep` is a local override it never re-prices. A long-context rate is a row's `long_context` sub-table, never a comment. A project overrides with `<harness>/<model>: ...` `xharness_prices` lines, optionally `from=`/`to=` bounded and with `long_context_above` / `long_*` keys (ADR 0030, ADR 0050, ADR 0051) |
 | The plugin-default matrix or narrowing | `model/matrix.py`; the *known* harnesses are the registry, reached through `model/registry.py` and never a second list (ADR 0034, ADR 0039) |
 | The effort vocabulary, or a portable alias's meaning | `model/effort.py` (`Effort`, `resolve`); a harness's own ladder is `Harness.efforts` in `harness/<provider>.py` and the rendering is its `effort_args`, reached from beneath through `model/registry.py` (ADR 0049) |
 | A plugin option or ini key's registration | `plugin/options.py` (which also validates the price and ignore lines at configure time, and prints the header) |
@@ -78,7 +80,7 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | How an `eval_*.py` suite is imported, or a case found in one | `model/suite.py` (`EvalSuite`, `find_case`) -- one loader for collection and replay alike (ADR 0040) |
 | An ini key, or how a location is resolved for a sweep *and* a replay | `runtime/settings.py` (`Settings.from_config` / `from_cache`); `Settings.cache` is the `CacheLayout`, never a bare path (ADR 0034, ADR 0037) |
 | What happens to a `RunResult` after the CLI returns (price, coverage, case, evidence, metrics) | `runtime/pipeline.py` -- one sequence, run by both the live cell and a replay (ADR 0034) |
-| The per-cell metrics record or the verbose status word | `emit/metrics.py` (`CellMetrics`; its keys are a wire format, pinned in `tests/test_units.py`, ADR 0037) |
+| The per-cell metrics record or the verbose status word | `emit/metrics.py` (`CellMetrics`; its keys are a wire format, pinned in `tests/emit/test_metrics.py`, ADR 0037) |
 | A directory or file name under the cache root, or the `{skill}/{harness}/{model}[--{effort}]/{run}/{session}` shape | `model/layout.py` (`CacheLayout`, `SessionDir`, `LocatedSession`, `model_level`) and nowhere else (ADR 0037, ADR 0038, ADR 0049) |
 | `report/index.json` or the aggregated `report/history.jsonl` | `emit/index.py` (`IndexRow`); the combine step that writes the microsite is `emit/page.py`, the design tokens `emit/tokens.py` (ADR 0032, ADR 0039) |
 | The browsable `report/report.html` | `report-ui/src/` (the SPA, ADR 0028, ADR 0031: Tamagui base, Plotly charts), then `make ui-promote`; `assets/report.html` is the built artifact, never edited by hand |
@@ -94,9 +96,9 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | How a workspace is built or diffed | `model/workspace.py` |
 | The `@evalcase` contract, or what a case declares | `model/case.py` (`task=`, never `prompt=`, ADR 0044) |
 | What a grader is handed, or an accessor over the workspace | `model/output.py` (`CaseOutput`), then the surface table in `docs/rollout.md` (ADR 0045) |
-| A shared `check_*` verifier | `verify/checks.py`, then `docs/rollout.md`'s verifier table and `tests/test_verify.py` (ADR 0045) |
+| A shared `check_*` verifier | `verify/checks.py`, then `docs/rollout.md`'s verifier table and `tests/verify/test_checks.py` (ADR 0045) |
 | A golden tolerance, or a markdown/mermaid facet extractor | `verify/tolerance.py` or `verify/facets.py`, then `docs/rollout.md` (ADR 0046) |
-| A behaviour of the plugin | `tests/test_plugin.py` (pytester), `tests/test_units.py` (pure modules) |
+| A behaviour of the plugin | `tests/<layer>/test_<module>.py`, mirroring `src/pytest_xharness_eval/<layer>/<module>.py` (shared builders in `tests/support.py`); whole-plugin sessions in `tests/test_plugin.py` (pytester). `tests/test_suite_shape.py` fails the build on a module that mirrors nothing or outgrows its budget (ADR 0053) |
 
 Evals themselves do not live here. They live beside the skill they grade, in the
 consuming repository: `skills/<skill>/evals/eval_<suite>.py`, seed trees under
@@ -134,6 +136,10 @@ in `emit/metrics.py`.
 - Never edit the rates in a closed price record, or re-price a run at a rate other than
   the one in effect on its `{run}` day. A price change is a new
   `derive/prices/prices-YYYYMMDD.toml`, and history stays reproducible (ADR 0050).
+- Never reduce a published rate to a comment, and never price a threshold against a run's
+  summed usage. A provider's long-context tier is data on the row, applied call by call
+  from the per-call ledgers; a cost field the curator does not model stops curation
+  rather than being dropped (ADR 0051).
 - Never write a prompt that explains the harness to the agent. A case declares a `task`;
   the invocation (`/<skill> ...`, `$<skill> ...`) is `Harness.invoke`'s to render, and a
   `prompt=` reaching `@evalcase` is a `TypeError`, never an alias (ADR 0044).
@@ -172,7 +178,10 @@ in `emit/metrics.py`.
   -> `runtime/` -> the two entry points, one direction only; a lookup the domain genuinely
   needs from the registry goes through `model/registry.py`, the one declared exception. A
   ruff `TID251` rule fails the build on the rest (ADR 0039).
-- Never edit an accepted ADR. Write a new one that supersedes it and update the index.
+- Never change an accepted ADR's argument. Write a new one that supersedes it and update the
+  index. Its shape may change to pass `make adrs-prose` (reflow, split a sentence, replace an
+  em-dash, promote a disguised list), with every claim unchanged, and always in the `.yml`,
+  never the generated `.md` (ADR 0054).
 
 ## Vocabulary
 
@@ -193,9 +202,10 @@ the code, add it to the glossary in the same change.
 | A plugin option or ini key | `README.md` tables and `tests/test_plugin.py` |
 | A `RunResult` field, a `CaseOutput` accessor, or a bundled verifier | `docs/rollout.md` -- it is the published grader surface, so a field a suite may assert on and cannot find there does not exist |
 | The default matrix | `README.md` Quickstart expected output, `tests/test_plugin.py` |
-| A harness's `efforts` ladder, or a word in `model/effort.py` | `README.md`'s alias table, `GLOSSARY.md`, `ARCHITECTURE.md`'s isolation-levers table, and `tests/test_units.py` -- the ladder is ordered, so adding a rung moves what `mid` resolves to |
-| A decision recorded in an ADR | Write a new ADR that supersedes it; do not edit the old one |
-| A key `emit/index.py` or `emit/metrics.py` writes | `report-ui/src/lib/types.ts`, the glossary's metric table, the frozen key lists in `tests/test_units.py`, and the `SessionTable` column definitions if it is shown |
+| A harness's `efforts` ladder, or a word in `model/effort.py` | `README.md`'s alias table, `GLOSSARY.md`, `ARCHITECTURE.md`'s isolation-levers table, and `tests/model/test_effort.py` -- the ladder is ordered, so adding a rung moves what `mid` resolves to |
+| A decision recorded in an ADR | Write a new ADR that supersedes it; do not change the old one's argument (shape-only prose fixes to its `.yml` are allowed, ADR 0054) |
+| Any ADR `.yml`, or `docs/adrs/templates/` | `make adrs`, then `make adrs-check` and `make adrs-prose` (both run in CI) |
+| A key `emit/index.py` or `emit/metrics.py` writes | `report-ui/src/lib/types.ts`, the glossary's metric table, the frozen key lists in `tests/emit/test_metrics.py` and `tests/emit/test_index.py`, and the `SessionTable` column definitions if it is shown |
 | `report-ui/src/` | `make ui-check`, `make ui-test`, `make ui-ct` (and the component's `report-ui/ct/<Component>.spec.tsx`); a `TIER=small` sweep while iterating, `TIER=medium` before shipping, `large` when the change ripples wide |
 | A route param in `report-ui/src/lib/route.ts` | `report-ui/src/lib/permutations.ts` in the same change, or the e2e matrix silently stops covering it |
 

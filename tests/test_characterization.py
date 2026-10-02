@@ -20,7 +20,10 @@ from typing import Any
 
 # Third Party
 import pytest
-from characterization_fixtures import (
+
+# Our Libraries
+from pytest_xharness_eval import RunResult, harness, normalise, pricing, records, replay, skillcov
+from tests.characterization_fixtures import (
     PRICE_ROWS,
     RUN_DATE,
     SKILL,
@@ -28,9 +31,6 @@ from characterization_fixtures import (
     codex_capture,
     skill_tree,
 )
-
-# Our Libraries
-from pytest_xharness_eval import RunResult, harness, normalise, pricing, records, replay, skillcov
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 
