@@ -1,0 +1,57 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0056
+slug: a-run-is-credited-with-its-subagents-work
+title: A run is credited with its subagents' work, at the turn that spawned them
+status: accepted
+status_note: |-
+  accepted, 2026-10-04.
+  Refines:
+
+  - [0022](0022-record-kind-catalogue-and-skill-coverage.md) (skill coverage) with the subagents' ledgers walked beside the primary's
+  - [0033](0033-subagent-transcripts-are-captured-and-billed.md) (subagent transcripts are captured and billed) with the same scope for credit as for cost
+accepted_on: '2026-10-04'
+last_changed_on: '2026-10-04'
+group: accounting
+tags:
+- accounting
+- grading
+lens: |-
+  What a run is billed for and what it is credited with must cover the same work.
+  A measure that charges for a delegated step and then reports the step as never done punishes delegation twice.
+  It also makes any comparison of a delegating arm against a non-delegating one meaningless.
+relates_to:
+- relation: extends
+  target: ADR-0022
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0033
+  note: the record's status line says "refines"
+body:
+  context: |-
+    Skill coverage walked the primary session's ledger and nothing else.
+    Since ADR 0033 every subagent transcript is captured, folded into a ledger of its own, and billed into the run's usage.
+    So a subagent's tokens were the run's, while its file reads and script runs were not.
+
+    The first sweep across the treatment axis (ADR 0055) made the gap a verdict.
+    Its treatment told the agent to delegate the skill's mandatory gate scripts to a cheaper subagent.
+    Every treated cell did so, and the subagent transcripts show `mermaid_contrast.ts` and `mermaid_complexity.ts` running.
+    Two of those cells still failed with "the run never executed the gate scripts".
+    The grader asked coverage, and coverage had not looked where the scripts ran.
+  decision: |-
+    **`skillcov.annotate` walks every subagent's ledger after the primary's.** It uses the same vocabulary, the same command resolution (ADR 0048) and the same rows.
+    A file a subagent loaded or ran therefore counts exactly as if the primary had.
+
+    **A subagent's access is credited to the primary turn that spawned it.** Coverage turns are primary turns, and `Subagent.parent_turn` already names the one whose tool call spawned the thread (ADR 0033).
+    A subagent whose spawn could not be matched keeps its own call's turn number, rather than being dropped.
+
+    **Each subagent's shell starts back in the workspace.** A subagent is a separate process with a shell of its own.
+    The persistent working directory the primary's walk tracks does not carry into it.
+  consequences: |-
+    A run that delegates a skill's scripts is now graded on whether they ran, not on who ran them.
+    The control and treated arms of a delegation treatment are comparable for the first time.
+
+    No coverage key changes shape, and the characterization goldens do not move, because their captures spawn no subagent that touches a skill file.
+    A replay re-derives coverage for every existing capture under the new rule.
+    It does not re-grade, so a stored verdict that the old rule failed stays failed until the cell is run again.

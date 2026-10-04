@@ -849,6 +849,20 @@
     },
     {
       "data": {
+        "id": "ADR-0056",
+        "label": "0056",
+        "parent": "group-accounting",
+        "colour": "#ea580c",
+        "file": "0056-a-run-is-credited-with-its-subagents-work.md",
+        "title": "A run is credited with its subagents' work, at the turn that spawned them",
+        "description": "A run is credited with its subagents' work, at the turn that spawned them",
+        "status": "accepted",
+        "group": "accounting",
+        "tags": "accounting, grading"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2275,6 +2289,26 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0056-extends-ADR-0022",
+        "source": "ADR-0056",
+        "target": "ADR-0022",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0056-extends-ADR-0033",
+        "source": "ADR-0056",
+        "target": "ADR-0033",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
       }
     }
   ],

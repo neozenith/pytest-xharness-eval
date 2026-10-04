@@ -49,8 +49,11 @@ from pytest_xharness_eval.derive.ignorerules import IgnoreRules
 from pytest_xharness_eval.model.registry import Shells
 
 if TYPE_CHECKING:
+    # Standard Library
+    from collections.abc import Callable
+
     # Our Libraries
-    from pytest_xharness_eval.model.runresult import RunResult, ToolCall
+    from pytest_xharness_eval.model.runresult import Call, RunResult, ToolCall
 
 # Directories that are never part of a skill's own surface, whatever the ignore rules say.
 EXCLUDED_DIRS = {"evals", "captured", "node_modules", "__pycache__", ".git", ".mmdc_cache", "tmp", ".venv"}
@@ -455,9 +458,6 @@ def annotate(skill: str, files: list[SkillFile], result: RunResult, shells: Shel
     vocab = shells if shells is not None else Shells.of(result.harness)
     rows = [FileCoverage.of(f) for f in files]
     workspace = str(result.workspace) or None if result.workspace else None
-    # The persistent shell's working directory, per result: it starts in the workspace
-    # and follows every ``cd`` of a persistent shell tool until the harness resets it.
-    cwd: str | None = workspace
 
     def touch(tool: str, text: str, turn: int) -> None:
         for row in rows:
@@ -465,18 +465,47 @@ def annotate(skill: str, files: list[SkillFile], result: RunResult, shells: Shel
             if access is not None:
                 row.touch(access, turn)
 
-    for call in result.calls:
+    _walk(result.calls, lambda call: call.n, touch, skill, vocab, workspace)
+    # A subagent's file reads and script runs are the run's too: the run is billed for its
+    # tokens, so it is credited with its work, at the primary turn that spawned it (ADR 0056).
+    # Each subagent has a shell of its own, so its walk starts back in the workspace.
+    for sub in result.subagents:
+        _walk(sub.calls, _spawned_at(sub.parent_turn), touch, skill, vocab, workspace)
+    return SkillCoverage.over(skill, rows)
+
+
+def _spawned_at(parent_turn: int | None) -> Callable[[Call], int]:
+    """A subagent's calls credit the primary turn that spawned it, or their own turn when no match was found."""
+
+    def turn_of(call: Call) -> int:
+        return parent_turn if parent_turn is not None else call.n
+
+    return turn_of
+
+
+def _walk(
+    calls: list[Call],
+    turn_of: Callable[[Call], int],
+    touch: Callable[[str, str, int], None],
+    skill: str,
+    vocab: Shells,
+    workspace: str | None,
+) -> None:
+    """Touch every file one ledger reaches, crediting each access to ``turn_of`` its call."""
+    # The persistent shell's working directory, per ledger: it starts in the workspace
+    # and follows every ``cd`` of a persistent shell tool until the harness resets it.
+    cwd: str | None = workspace
+    for call in calls:
         for tool in call.tools:
             text, cwd = _tool_text(tool, skill, vocab, cwd, workspace)
-            touch(tool.name, text, call.n)
+            touch(tool.name, text, turn_of(call))
         for ran in call.executed:
             # What the harness reports its shell as having actually run, already expanded:
             # no variable, template literal or wrapper language stands between it and the
             # path (ADR 0048). Its own ``cwd`` resolves what is still relative in it.
             resolved, _after = resolve_command(ran.command, skill, ran.cwd or workspace)
-            touch(ran.tool, f"{ran.command}\n{resolved}", call.n)
+            touch(ran.tool, f"{ran.command}\n{resolved}", turn_of(call))
         for res in call.results_in:
             m = _CWD_RESET.search(res.content or "")
             if m:
                 cwd = m.group(1)
-    return SkillCoverage.over(skill, rows)
