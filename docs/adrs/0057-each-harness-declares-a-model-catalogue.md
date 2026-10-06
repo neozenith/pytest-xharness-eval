@@ -8,6 +8,7 @@ status: accepted
 accepted_on: 2026-10-06
 last_changed_on: 2026-10-06
 relates_to:
+  - { relation: superseded_by, target: ADR-0059 }
   - { relation: extends, target: ADR-0034 }
   - { relation: extends, target: ADR-0007 }
 generated: { by: human:neozenith, at: 2026-10-06T00:00:00Z }
@@ -16,6 +17,8 @@ generated: { by: human:neozenith, at: 2026-10-06T00:00:00Z }
 # 0057: Each harness declares a model catalogue, with a hand-curated family tier frozen at release
 
 Status: accepted, 2026-10-06.
+Where the catalogue lives is superseded by [0059](0059-the-model-catalogue-is-one-config-file-beside-the-prices.md): one config file, not a list on each harness class.
+The tier, line and release-date decisions stand.
 Refines:
 
 - [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) (a harness is a class) with a fifth question asked of a harness

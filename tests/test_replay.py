@@ -10,7 +10,7 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval import replay
-from pytest_xharness_eval.model import registry
+from pytest_xharness_eval.derive.catalogue import load_catalogue
 from tests.support import _jsonl, _skill
 
 
@@ -202,7 +202,7 @@ def test_replay_refuses_a_result_without_its_log(tmp_path: Path) -> None:
 
 def test_a_rebuild_carries_the_archived_catalogue_facts_forward_or_looks_them_up() -> None:
     """A stored tier wins, so an archived run says what it was; an older capture is looked up (ADR 0057)."""
-    catalogue = registry.catalogue()
+    catalogue = load_catalogue()
     stored = {"harness": "claude", "model": "claude-opus-5", "line": "opus", "family_tier": 9, "released": "2026-07-24"}
     spec = replay.stored_spec(stored, catalogue)
     assert spec is not None and spec.family_tier == 9 and spec.released == date(2026, 7, 24)

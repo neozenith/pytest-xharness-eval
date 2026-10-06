@@ -154,9 +154,17 @@ def make_tree(
     ini: str = "",
     matrix: str | None = PINNED_MATRIX,
 ) -> Path:
-    """Lay out ``<skills_dir>/demo/evals/eval_demo.py`` with ``fixtures/seed/`` and return the evals dir."""
+    """Lay out ``<skills_dir>/demo/evals/eval_demo.py`` with ``fixtures/seed/`` and return the evals dir.
+
+    Live pricing reads a local, empty feed unless a test names its own, so no session in
+    the suite ever reaches the network (ADR 0060).
+    """
     if matrix and "xharness_matrix" not in ini:
         ini = f"{ini}\n{matrix}" if ini else matrix
+    if "xharness_price_feed" not in ini:
+        empty = pytester.path / "empty-feed.json"
+        empty.write_text("{}", encoding="utf-8")
+        ini = f"{ini}\nxharness_price_feed = {empty}"
     pytester.makeini(f"[pytest]\n{ini}\n")
     skill = pytester.path / skills_dir / "demo"
     (skill / "evals" / "fixtures" / "seed").mkdir(parents=True)

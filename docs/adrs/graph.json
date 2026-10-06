@@ -891,6 +891,34 @@
     },
     {
       "data": {
+        "id": "ADR-0059",
+        "label": "0059",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0059-the-model-catalogue-is-one-config-file-beside-the-prices.md",
+        "title": "The model catalogue is one config file beside the price records, not a list on each harness class",
+        "description": "The model catalogue is one config file beside the price records, not a list on each harness class",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection, pricing"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0060",
+        "label": "0060",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0060-an-unpriced-model-is-priced-live-into-the-cache.md",
+        "title": "An unpriced model is priced live from LiteLLM's feed into a cached dated record, and only then refused",
+        "description": "An unpriced model is priced live from LiteLLM's feed into a cached dated record, and only then refused",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing, collection"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2341,6 +2369,16 @@
     },
     {
       "data": {
+        "id": "ADR-0057-superseded_by-ADR-0059",
+        "source": "ADR-0057",
+        "target": "ADR-0059",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the record's status line says \"superseded by\", on where the catalogue lives"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0057-extends-ADR-0034",
         "source": "ADR-0057",
         "target": "ADR-0034",
@@ -2377,6 +2415,56 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0059-supersedes-ADR-0057",
+        "source": "ADR-0059",
+        "target": "ADR-0057",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "where the catalogue lives"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0059-extends-ADR-0050",
+        "source": "ADR-0059",
+        "target": "ADR-0050",
+        "label": "extends",
+        "relation": "extends",
+        "note": "a second bundled data file beside the dated price records"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0060-extends-ADR-0007",
+        "source": "ADR-0060",
+        "target": "ADR-0007",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0060-extends-ADR-0050",
+        "source": "ADR-0060",
+        "target": "ADR-0050",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0060-extends-ADR-0051",
+        "source": "ADR-0060",
+        "target": "ADR-0051",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
       }
     }
   ],

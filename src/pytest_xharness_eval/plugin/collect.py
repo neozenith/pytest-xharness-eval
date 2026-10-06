@@ -61,7 +61,6 @@ class EvalFile(pytest.File):
     def collect(self) -> Iterator[pytest.Item]:
         cases = self._cases()
         settings = Settings.from_config(self.config)
-        table = settings.price_table()
         # ADR 0050: the rows that must exist are the ones in effect on the day this sweep's
         # cells will be stamped with, which is the day every one of them is priced on.
         today = run_date(run_stamp())
@@ -69,8 +68,9 @@ class EvalFile(pytest.File):
         catalogue = settings.catalogue()
         for case in cases:
             models = settings.matrix_for(case, today)
-            # ADR 0007: an unpriced model stops the sweep at collection, before any spend.
-            table.validate_matrix(models, today)
+            # ADR 0060: a gap is priced live from LiteLLM's feed into <cache>/pricing/ first;
+            # ADR 0007: whatever is still unpriced stops the sweep here, before any spend.
+            settings.ensure_priced(models, today).validate_matrix(models, today)
             # ADR 0057: so does one the catalogue cannot say what kind of model it is.
             self._require_catalogued(catalogue, case, mx.expand(models))
             # ADR 0022: the skill's file tree is catalogued here, before any cell runs, so every

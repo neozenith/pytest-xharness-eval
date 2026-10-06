@@ -23,7 +23,7 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval import RunResult, harness, normalise, pricing, records, replay, skillcov
-from pytest_xharness_eval.model import registry
+from pytest_xharness_eval.derive.catalogue import load_catalogue
 from pytest_xharness_eval.runtime import pipeline
 from tests.characterization_fixtures import (
     PRICE_ROWS,
@@ -61,7 +61,7 @@ def _finish(result: RunResult, files: list[dict[str, Any]], name: str) -> RunRes
         skill=SKILL,
         skill_files=files,
         case=_case(name),
-        spec=registry.catalogue().get(result.harness, result.model),
+        spec=load_catalogue().get(result.harness, result.model),
     )
 
 

@@ -8,8 +8,8 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval import Cell
+from pytest_xharness_eval.derive.catalogue import load_catalogue
 from pytest_xharness_eval.model import matrix as mx
-from pytest_xharness_eval.model import registry
 
 #: A fixed six-entry matrix to expand and narrow; what the plugin default is lives in the
 #: catalogue and is pinned by ``tests/test_plugin.py`` (ADR 0058).
@@ -24,7 +24,7 @@ SIX = [
 
 
 def test_catalogued_lists_every_harness_model_in_declared_order() -> None:
-    entries = mx.catalogued(registry.catalogue())
+    entries = mx.catalogued(load_catalogue())
     assert entries[0] == "claude/claude-haiku-4-5-20251001"
     assert entries.index("claude/claude-fable-5-1") < entries.index("codex/gpt-5.6-luna")
     assert set(SIX) <= set(entries)

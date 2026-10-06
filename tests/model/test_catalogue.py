@@ -8,6 +8,7 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval.derive import pricing
+from pytest_xharness_eval.derive.catalogue import load_catalogue
 from pytest_xharness_eval.model import registry
 from pytest_xharness_eval.model.catalogue import Catalogue, CatalogueError, ModelSpec, parse_model_line
 
@@ -75,7 +76,7 @@ def test_iteration_keeps_harness_order_with_project_models_after_the_bundled_one
 def test_every_bundled_model_is_priced_today_and_tiers_are_contiguous_per_harness() -> None:
     """The catalogue and the open price record move together, and no harness skips a tier."""
     table = pricing.load_table()
-    catalogue = registry.catalogue()
+    catalogue = load_catalogue()
     table.validate_matrix([f"{h}/{s.id}" for h, s in catalogue], None)
     for harness_name in registry.names():
         tiers = {s.family_tier for h, s in catalogue if h == harness_name}

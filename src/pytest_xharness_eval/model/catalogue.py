@@ -93,8 +93,8 @@ class Catalogue:
     def of(cls, bundled: Iterable[tuple[str, ModelSpec]], lines: Iterable[str] = ()) -> Catalogue:
         """``bundled`` (harness, spec) pairs, in order, with ``xharness_models`` lines layered on top.
 
-        :func:`~pytest_xharness_eval.model.registry.catalogue` is the caller that supplies
-        every registered harness's own specs; this module names no harness itself, which is
+        :func:`~pytest_xharness_eval.derive.catalogue.load_catalogue` is the caller that supplies
+        the bundled specs from ``models.toml``; this module names no harness itself, which is
         what lets a harness class import :class:`ModelSpec` without a cycle.
         """
         specs = {(h, s.id): s for h, s in bundled}

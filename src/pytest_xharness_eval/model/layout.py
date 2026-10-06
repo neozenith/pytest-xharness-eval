@@ -46,6 +46,7 @@ MODEL_EFFORT_SEP = "--"
 BUILD_DIR = "build"
 RESULTS_DIR = "results"
 REPORT_DIR = "report"
+PRICING_DIR = "pricing"
 
 # One session's evidence (ADR 0032). ``HISTORY_NAME`` is *one* session's metrics record;
 # the aggregate of all of them is ``AGGREGATED_HISTORY_NAME`` below, and the two names are
@@ -216,6 +217,11 @@ class CacheLayout:
     def build(self) -> Path:
         """``<cache>/build/``: one materialised workspace per cell."""
         return self.root / BUILD_DIR
+
+    @property
+    def pricing(self) -> Path:
+        """``<cache>/pricing/``: dated price records written by live pricing, read by every later replay (ADR 0060)."""
+        return self.root / PRICING_DIR
 
     @property
     def results(self) -> Path:

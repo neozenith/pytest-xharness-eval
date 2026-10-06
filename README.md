@@ -82,6 +82,7 @@ with `--dry-run` before a sweep. The design rationale lives in
        treatments/<name>[__<harness>]/                  # optional overlays swept beside the control (ADR 0055)
    .xharness_eval_cache/
      build/                                             # per-cell workspaces
+     pricing/prices-YYYYMMDD.toml                       # rates priced live at collection (ADR 0060)
      results/{skill}/{harness}/{model}[--{effort}][+{treatment}]/{run}/{session}/  # log.jsonl, result.json, history.json
      report/                                            # report.json + the aggregated microsite
    ```
@@ -262,8 +263,10 @@ cost, or name them in `xharness_matrix` or a case's `models=`, which the limit n
 
 ### The model catalogue
 
-Each harness class declares the models it supports, and each model carries three facts
-that every record stores:
+Every supported model is listed in one config file,
+[`src/pytest_xharness_eval/derive/prices/models.toml`](src/pytest_xharness_eval/derive/prices/models.toml),
+beside the dated price records. Each model carries three facts that every record stores
+(ADR 0057, ADR 0059):
 
 | Fact | Example | Meaning |
 |------|---------|---------|
@@ -276,15 +279,23 @@ and Astra. A tier is a role, never a price, which is what lets a report compare 
 model across providers.
 
 A matrix entry naming a model the catalogue does not list stops collection before anything
-is spent. Add a new model before a plugin release with two ini lines, one for its price and
-one for the catalogue (ADR 0057):
+is spent. Add a new model before a plugin release with one ini line:
 
 ```ini
-xharness_prices =
-    codex/gpt-6.2-sol: input=2.00 output=10.00
 xharness_models =
     codex/gpt-6.2-sol: line=sol tier=3 released=2026-10-20
 ```
+
+### Live pricing
+
+A catalogued model with no bundled price row is **priced live** at collection. Its rates are
+looked up in LiteLLM's price feed by exact first-party id, and saved as a dated record under
+`.xharness_eval_cache/pricing/`. The sweep and every later replay read that record, so a run
+priced live is re-priced identically. A model the feed does not price either still stops
+collection, and nothing is guessed (ADR 0060). With every model priced, nothing is fetched.
+
+The bundled records are the offline default. In this repository, `make test` first curates a
+new bundled snapshot (`make prices`) whenever `models.toml` lists a model they do not price.
 
 The ini keys, paths relative to pytest's rootdir:
 
@@ -292,6 +303,7 @@ The ini keys, paths relative to pytest's rootdir:
 |-----|---------|---------|
 | `xharness_matrix` | (plugin default) | Project matrix: `harness/model` or `harness/model/effort` entries every case sweeps unless it sets `models=` |
 | `xharness_output_rate_limit` | `50` | The plugin default matrix sweeps only catalogued models whose output rate, in USD per million tokens, is below this. Raise it to opt in to apex models (ADR 0058) |
+| `xharness_price_feed` | LiteLLM's feed | Where a model with no price row is priced live from at collection: a URL or a local path (ADR 0060) |
 | `xharness_models` | (none) | Model catalogue rows that add or correct a model before a plugin release: `<harness>/<model>: line=<line> tier=<n> released=YYYY-MM-DD` (ADR 0057) |
 | `xharness_treatments` | (none) | Treatment names under each suite's `evals/treatments/`, swept beside the untreated control unless a case sets `treatments=` (ADR 0055) |
 | `xharness_skills_dir` | `skills` | Directory holding `<skill>/evals/` trees |

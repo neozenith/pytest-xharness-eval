@@ -19,7 +19,8 @@ Two standing obligations, restated in [AGENTS.md](AGENTS.md):
 | cell | One (harness, model, effort, treatment) point of a case; the unit pytest collects, runs, and reports. Its id is `harness/model[/effort][+treatment]` |
 | harness | The agent CLI a cell runs on, `claude` or `codex`; the first half of a cell id |
 | matrix | The list of `harness/model` or `harness/model/effort` entries a case expands into cells; three scopes, case over project over plugin; `--harness`, `--model`, `--effort`, `--treatment` and `-k` narrow it. The plugin default is every catalogued model whose output rate is below `xharness_output_rate_limit` (ADR 0058) |
-| model catalogue | The models each harness supports, declared on its class as `ModelSpec`s beside its effort ladder and gathered by `model/registry.py`. A matrix entry naming an uncatalogued model is a collection error; `xharness_models` ini lines add or correct one before a plugin release (ADR 0057) |
+| model catalogue | Every supported model, in one config file: `derive/prices/models.toml`, beside the price records. One table per harness names its LiteLLM `feed_provider` and lists its models with `line`, `tier` and `released`; `derive/catalogue.py` reads it into `ModelSpec`s. A matrix entry naming an uncatalogued model is a collection error; `xharness_models` ini lines add or correct one before a plugin release (ADR 0057, ADR 0059) |
+| live pricing | Pricing a matrix entry that no price row covers by looking it up in LiteLLM's feed (`xharness_price_feed`) at collection, by exact first-party id. What it finds is saved as a dated record under `<cache>/pricing/`, which the sweep and every later replay read; an entry the feed cannot price either still stops the sweep (ADR 0060) |
 | line | A model's product line in its provider's lineup: `haiku`, `sonnet`, `opus`, `fable`, `luna`, `terra`, `sol`, `astra`. Stored on every record (ADR 0057) |
 | family tier | A hand-curated integer for a model's role in its provider's lineup, 1 the smallest; today 1 is Haiku and Luna, 4 is Fable and Astra. A number rather than a name, so it survives a lineup change; a role, never a price; frozen at release, so history stays comparable. The cross-provider bucket: "every tier 3 model" (ADR 0057) |
 | released | A model's release date, `YYYY-MM-DD`, stored on every record. A generation format derived from it is not yet decided (ADR 0057) |
@@ -90,6 +91,7 @@ flowchart TB
         FIX["fixture<br/>committed seed tree"]:::declare
         TREAT["treatment<br/>overlay swept beside the control"]:::declare
         PRICES["price records<br/>dated prices-YYYYMMDD.toml + ini rows"]:::cfg
+        CATALOG["model catalogue<br/>models.toml: line, tier, released"]:::cfg
     end
 
     subgraph expanded["Expanded by the plugin at collection"]
@@ -97,7 +99,6 @@ flowchart TB
         CELL["cell<br/>one (harness, model, effort, treatment) of a case"]:::plan
         HARNESS["harness<br/>claude or codex"]:::plan
         MODEL["model"]:::plan
-        CATALOG["model catalogue<br/>line, family tier, released"]:::plan
         EFFORT["effort<br/>a rung of the harness ladder"]:::plan
     end
 
@@ -123,7 +124,6 @@ flowchart TB
     CELL -->|"with"| MODEL
     CELL -->|"at"| EFFORT
     HARNESS -->|"declares the ladder<br/>a rung resolves on"| EFFORT
-    HARNESS -->|"declares"| CATALOG
     CATALOG -->|"describes"| MODEL
     CATALOG -->|"defaults under<br/>the rate limit"| MATRIX
     FIX -->|"copied per cell into"| WS

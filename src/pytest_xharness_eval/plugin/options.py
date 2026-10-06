@@ -33,6 +33,7 @@ from pytest_xharness_eval.runtime.settings import (
     INI_MATRIX,
     INI_MODELS,
     INI_OUTPUT_RATE_LIMIT,
+    INI_PRICE_FEED,
     INI_PRICES,
     INI_REPORT_INLINE,
     INI_REPORT_TOKENS,
@@ -121,6 +122,14 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help=(
             "model catalogue rows that add or correct a model before a plugin release: "
             "'<harness>/<model>: line=<line> tier=<n> released=YYYY-MM-DD' (ADR 0057)"
+        ),
+    )
+    parser.addini(
+        INI_PRICE_FEED,
+        default="",
+        help=(
+            "where a model with no price row is priced live from at collection: LiteLLM's feed by default, "
+            "or another URL or a local path; what it finds is saved under <cache>/pricing/ (ADR 0060)"
         ),
     )
     parser.addini(

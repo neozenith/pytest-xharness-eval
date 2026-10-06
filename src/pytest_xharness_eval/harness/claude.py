@@ -19,7 +19,6 @@ import json
 import os
 import shutil
 import uuid
-from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -42,7 +41,6 @@ from pytest_xharness_eval.harness.normalise import (
     text_of,
 )
 from pytest_xharness_eval.model import workspace as ws
-from pytest_xharness_eval.model.catalogue import ModelSpec
 from pytest_xharness_eval.model.clock import ms_between
 from pytest_xharness_eval.model.runresult import Call, RunResult, Subagent, ToolCall, ToolResult, Usage
 
@@ -108,20 +106,6 @@ def skill_plugin(skill_dir: Path, run_dir: Path) -> Path:
 
 #: claude's reasoning-effort ladder, lowest rung first (``claude --help``, 2.1.278).
 CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
-
-#: The Anthropic models this plugin supports (ADR 0057). Tier is the model's role in the
-#: lineup it shipped into, frozen at release: 1 haiku, 2 sonnet, 3 opus, 4 fable. Gated
-#: models (the Mythos line) and retired ones are left out. Release dates: Anthropic's
-#: announcements, as collected for ADR 0057.
-CLAUDE_MODELS = (
-    ModelSpec(id="claude-haiku-4-5-20251001", line="haiku", family_tier=1, released=date(2025, 10, 15)),
-    ModelSpec(id="claude-sonnet-5", line="sonnet", family_tier=2, released=date(2026, 6, 30)),
-    ModelSpec(id="claude-sonnet-5-5", line="sonnet", family_tier=2, released=date(2026, 9, 28)),
-    ModelSpec(id="claude-opus-5", line="opus", family_tier=3, released=date(2026, 7, 24)),
-    ModelSpec(id="claude-opus-5-5", line="opus", family_tier=3, released=date(2026, 9, 22)),
-    ModelSpec(id="claude-fable-5", line="fable", family_tier=4, released=date(2026, 6, 9)),
-    ModelSpec(id="claude-fable-5-1", line="fable", family_tier=4, released=date(2026, 9, 1)),
-)
 
 
 def effort_argv(effort: str | None) -> list[str]:
@@ -475,7 +459,6 @@ class ClaudeHarness(Harness):
     shell_tools = frozenset({"Bash"})
     persistent_shells = frozenset({"Bash"})  # one shell process spans the session, so ``cd`` sticks
     efforts = CLAUDE_EFFORTS
-    models = CLAUDE_MODELS
 
     def invoke(self, *, skill: str, task: str) -> str:
         """``/<skill> <task>``: the slash command a Claude Code user types (ADR 0044).

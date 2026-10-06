@@ -24,7 +24,12 @@ check: .venv/deps
 	uvx isort src/ tests/ --check-only
 	uv run mypy src/
 
-test: check .venv/deps
+# A model added to derive/prices/models.toml with no bundled price is curated into a new
+# snapshot before the suite runs; with none missing this exits at once, offline (ADR 0060).
+prices-sync: .venv/deps
+	uv run .github/scripts/curate_prices.py --when-catalogue-unpriced
+
+test: check .venv/deps prices-sync
 	uv run pytest
 	uv run .github/scripts/update_coverage.py
 
@@ -160,4 +165,4 @@ clean:
 	rm -rf .mmdc_cache/
 	rm -rf node_modules/
 
-.PHONY: format check test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-ct ui-e2e ui-promote prices adrs adrs-check adrs-prose
+.PHONY: format check prices-sync test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-ct ui-e2e ui-promote prices adrs adrs-check adrs-prose

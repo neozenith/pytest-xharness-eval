@@ -1,0 +1,97 @@
+# The model catalogue: every model this plugin supports, in one place (ADR 0057, ADR 0059).
+#
+# One table per registered harness. `feed_provider` is the `litellm_provider` its first-party
+# rows carry in LiteLLM's price feed, which live pricing (ADR 0060) and `make prices` read.
+# `one_hour_cache_write_is_five_minute` is true where the provider publishes no 1-hour
+# cache-write tier, so the 5-minute rate is repeated rather than written as zero.
+#
+# Each model states three curated facts, stored on every record a run of it writes:
+#
+#   line      the provider's own product line
+#   tier      a hand-curated integer for the model's role in its lineup, 1 the smallest.
+#             A role, never a price; frozen at release, so a later lineup change renumbers
+#             only the models that follow.
+#   released  the release date
+#
+# Today's tiers: 1 haiku / luna, 2 sonnet / terra, 3 opus / sol, 4 fable / astra.
+# Gated models (the Mythos line, gpt-5.6-cyber) and retired ones are left out.
+# A project adds or corrects a model before a release with an `xharness_models` ini line.
+# Every model here must have a row in the open price record: `make test` curates one when not.
+
+[claude]
+feed_provider = "anthropic"
+one_hour_cache_write_is_five_minute = false
+
+[claude.models."claude-haiku-4-5-20251001"]
+line = "haiku"
+tier = 1
+released = 2025-10-15
+
+[claude.models."claude-sonnet-5"]
+line = "sonnet"
+tier = 2
+released = 2026-06-30
+
+[claude.models."claude-sonnet-5-5"]
+line = "sonnet"
+tier = 2
+released = 2026-09-28
+
+[claude.models."claude-opus-5"]
+line = "opus"
+tier = 3
+released = 2026-07-24
+
+[claude.models."claude-opus-5-5"]
+line = "opus"
+tier = 3
+released = 2026-09-22
+
+[claude.models."claude-fable-5"]
+line = "fable"
+tier = 4
+released = 2026-06-09
+
+[claude.models."claude-fable-5-1"]
+line = "fable"
+tier = 4
+released = 2026-09-01
+
+[codex]
+feed_provider = "openai"
+one_hour_cache_write_is_five_minute = true
+
+[codex.models."gpt-5.6-luna"]
+line = "luna"
+tier = 1
+released = 2026-07-09
+
+[codex.models."gpt-6-luna"]
+line = "luna"
+tier = 1
+released = 2026-09-22
+
+[codex.models."gpt-5.6-terra"]
+line = "terra"
+tier = 2
+released = 2026-07-09
+
+[codex.models."gpt-5.6-sol"]
+line = "sol"
+tier = 3
+released = 2026-07-09
+
+[codex.models."gpt-6-sol"]
+line = "sol"
+tier = 3
+released = 2026-09-22
+
+[codex.models."gpt-6.1-sol"]
+line = "sol"
+tier = 3
+released = 2026-09-29
+
+[codex.models."gpt-6-astra"]
+line = "astra"
+tier = 4
+released = 2026-09-03

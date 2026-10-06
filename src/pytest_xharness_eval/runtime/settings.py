@@ -16,18 +16,19 @@ from __future__ import annotations
 import configparser
 import tomllib
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 # Our Libraries
-from pytest_xharness_eval.derive import pricing
+from pytest_xharness_eval.derive import catalogue, feed, pricing
+from pytest_xharness_eval.derive.catalogue import load_catalogue
 from pytest_xharness_eval.harness.base import DEFAULT_TIMEOUT_S
 from pytest_xharness_eval.model import matrix as mx
-from pytest_xharness_eval.model import registry
 from pytest_xharness_eval.model.layout import CacheLayout
 
 if TYPE_CHECKING:
     # Standard Library
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
     from datetime import date
     from pathlib import Path
 
@@ -45,6 +46,7 @@ INI_MATRIX = "xharness_matrix"
 INI_TREATMENTS = "xharness_treatments"
 INI_MODELS = "xharness_models"
 INI_OUTPUT_RATE_LIMIT = "xharness_output_rate_limit"
+INI_PRICE_FEED = "xharness_price_feed"
 INI_SKILL_IGNORE = "xharness_skill_ignore"
 INI_REPORT_TOKENS = "xharness_report_design_tokens"
 INI_REPORT_INLINE = "xharness_report_inline"
@@ -129,6 +131,9 @@ class Settings:
     treatment_lines: list[str] = field(default_factory=list)
     model_lines: list[str] = field(default_factory=list)
     output_rate_limit: float = DEFAULT_OUTPUT_RATE_LIMIT
+    # Where live pricing reads LiteLLM's feed when a model has no price row (ADR 0060): a URL
+    # or a local path, so a project behind a proxy, or a test, can point it elsewhere.
+    price_feed: str = feed.FEED_URL
     skill_ignore: list[str] = field(default_factory=list)
     report_tokens: Path | None = None
     report_inline: bool = False
@@ -153,6 +158,7 @@ class Settings:
             treatment_lines=[str(t).strip() for t in config.getini(INI_TREATMENTS) if str(t).strip()],
             model_lines=[str(m).strip() for m in config.getini(INI_MODELS) if str(m).strip()],
             output_rate_limit=float(config.getini(INI_OUTPUT_RATE_LIMIT) or DEFAULT_OUTPUT_RATE_LIMIT),
+            price_feed=str(config.getini(INI_PRICE_FEED) or feed.FEED_URL),
             skill_ignore=[str(p) for p in config.getini(INI_SKILL_IGNORE)],
             report_tokens=(config.rootpath / tokens) if tokens else None,
             report_inline=bool(config.getoption("xharness_report_inline", False) or config.getini(INI_REPORT_INLINE)),
@@ -188,6 +194,7 @@ class Settings:
             treatment_lines=ini_lines(cache, INI_TREATMENTS),
             model_lines=ini_lines(cache, INI_MODELS),
             output_rate_limit=float(ini_value(cache, INI_OUTPUT_RATE_LIMIT) or DEFAULT_OUTPUT_RATE_LIMIT),
+            price_feed=str(ini_value(cache, INI_PRICE_FEED) or feed.FEED_URL),
             skill_ignore=ini_lines(cache, INI_SKILL_IGNORE) + list(ignore or []),
             report_tokens=report_tokens,
             report_inline=report_inline,
@@ -196,12 +203,31 @@ class Settings:
     # -- derived views -----------------------------------------------------------------
 
     def price_table(self) -> pricing.PriceTable:
-        """The bundled dated records with this project's rows layered on top (ADR 0030, ADR 0050)."""
-        return pricing.load_table(rows=self.price_lines)
+        """The bundled records, this project's rows on top, and its live-priced records beneath (ADR 0030, ADR 0060)."""
+        return pricing.load_table(rows=self.price_lines, cached=self.cache.pricing)
+
+    def ensure_priced(self, entries: Iterable[str], day: date | None) -> pricing.PriceTable:
+        """The price table, after pricing live any entry it cannot price on ``day`` (ADR 0060).
+
+        A gap is looked up in LiteLLM's feed by exact first-party id, and what is found is
+        written as a dated record under ``<cache>/pricing/``, which the sweep and every later
+        replay read back. Nothing is guessed: an entry the feed does not price either is left
+        for the caller's price check to refuse by name (ADR 0007). With no gap, nothing is
+        fetched, so a sweep of priced models never touches the network.
+        """
+        table = self.price_table()
+        missing = table.unpriced(entries, day)
+        if not missing:
+            return table
+        rows = feed.live_rows(missing, feed.load_feed(self.price_feed), catalogue.feeds())
+        if rows:
+            on = day or datetime.now(UTC).date()
+            feed.write_live_record(self.cache.pricing, rows, on, self.price_feed, mx.known_harnesses())
+        return self.price_table()
 
     def catalogue(self) -> Catalogue:
         """Every registered harness's models, patched by this project's ``xharness_models`` lines (ADR 0057)."""
-        return registry.catalogue(self.model_lines)
+        return load_catalogue(self.model_lines)
 
     def default_matrix(self, day: date | None) -> list[str]:
         """Every catalogued model whose output rate on ``day`` is below the project's limit (ADR 0058).

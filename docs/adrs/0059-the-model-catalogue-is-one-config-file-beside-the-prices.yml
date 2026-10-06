@@ -1,0 +1,55 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0059
+slug: the-model-catalogue-is-one-config-file-beside-the-prices
+title: The model catalogue is one config file beside the price records, not a list on each harness class
+status: accepted
+status_note: |-
+  accepted, 2026-10-07.
+  Supersedes [0057](0057-each-harness-declares-a-model-catalogue.md) on where the catalogue lives.
+  Its tier, line and release-date decisions stand.
+accepted_on: '2026-10-07'
+last_changed_on: '2026-10-07'
+group: collection
+tags:
+- collection
+- pricing
+lens: |-
+  Configuration that a person edits by hand belongs in one file they can find without reading code.
+  Behaviour belongs on a class; facts about the world belong in data.
+relates_to:
+- relation: supersedes
+  target: ADR-0057
+  note: where the catalogue lives
+- relation: extends
+  target: ADR-0050
+  note: a second bundled data file beside the dated price records
+body:
+  context: |-
+    ADR 0057 put each harness's models on its class, beside its effort ladder, because ADR 0034 keeps a provider's differences on its class.
+    In use, that split one list of supported models across two adapter modules.
+    The person maintaining it could not find "the spot" where models and their tiers are configured.
+
+    The effort ladder is behaviour: it decides which flag the CLI is passed.
+    A model's line, tier and release date are facts about the world, curated by hand.
+    The matrix, the price curator and the report all read them.
+    The price records are already exactly that kind of data, bundled as TOML and grouped by harness (ADR 0050).
+  decision: |-
+    **The catalogue is `derive/prices/models.toml`, beside the dated price records.** One table per registered harness holds `feed_provider`, the 1-hour cache-write flag, and its models.
+    Each model states `line`, `tier` and `released`.
+
+    **`derive/catalogue.py` reads it into the domain's `Catalogue`.** It refuses an unknown harness, an unknown key, or a model missing one of its three facts.
+    The harness classes no longer declare models, and `model/registry.py` no longer gathers them.
+
+    **It is located the way the price records are.** `derive/prices/` is the one directory the plugin may find from `__file__` (ADR 0014, ADR 0050).
+    The catalogue joins it rather than adding a second exception.
+    The price loader now reads only `prices-*.toml` there.
+
+    **The harness-level keys say how each harness appears in LiteLLM's feed.** `feed_provider` is the `litellm_provider` on its first-party rows, read by live pricing (ADR 0060) and by the curator.
+  consequences: |-
+    Adding a model is one TOML table in one file, and every reader follows: the default matrix, the collection check, the curator and the records.
+    `make test` curates its price automatically when the bundled records lack one (ADR 0060).
+
+    A table keyed by harness name now exists in data, as it already did for prices.
+    ADR 0034's rule is about dispatching behaviour on a name in code, and no code branches on these keys.

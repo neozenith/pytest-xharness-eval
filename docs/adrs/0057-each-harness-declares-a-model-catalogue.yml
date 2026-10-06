@@ -7,6 +7,8 @@ title: Each harness declares a model catalogue, with a hand-curated family tier 
 status: accepted
 status_note: |-
   accepted, 2026-10-06.
+  Where the catalogue lives is superseded by [0059](0059-the-model-catalogue-is-one-config-file-beside-the-prices.md): one config file, not a list on each harness class.
+  The tier, line and release-date decisions stand.
   Refines:
 
   - [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) (a harness is a class) with a fifth question asked of a harness
@@ -29,6 +31,9 @@ lens: |-
   Numbers can keep sliding, and a number frozen at release keeps history comparable.
   Curate the few facts a measurement cannot supply, and compute everything else.
 relates_to:
+- relation: superseded_by
+  target: ADR-0059
+  note: the record's status line says "superseded by", on where the catalogue lives
 - relation: extends
   target: ADR-0034
   note: the record's status line says "refines"

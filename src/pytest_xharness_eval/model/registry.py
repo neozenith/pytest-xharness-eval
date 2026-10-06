@@ -31,18 +31,10 @@ from __future__ import annotations
 
 # Standard Library
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self
+from typing import Self
 
 # Our Libraries
 from pytest_xharness_eval import harness
-from pytest_xharness_eval.model.catalogue import Catalogue
-
-if TYPE_CHECKING:
-    # Standard Library
-    from collections.abc import Iterable
-
-    # Our Libraries
-    from pytest_xharness_eval.model.catalogue import ModelSpec
 
 
 def names() -> tuple[str, ...]:
@@ -90,20 +82,6 @@ def resolve_effort(harness_name: str, effort: str) -> str:
     name and the report row -- so nothing downstream has to resolve it a second time.
     """
     return harness.get(harness_name).resolve_effort(effort)
-
-
-def models(harness_name: str) -> tuple[ModelSpec, ...]:
-    """The registered harness ``harness_name``'s own model catalogue, in declared order (ADR 0057)."""
-    return harness.get(harness_name).models
-
-
-def catalogue(lines: Iterable[str] = ()) -> Catalogue:
-    """Every registered harness's models, patched by a project's ``xharness_models`` lines (ADR 0057).
-
-    The fifth lookup, and the same shape as the other four: data declared on each harness
-    class, gathered here so ``model/`` never holds a second list keyed by harness name.
-    """
-    return Catalogue.of(((name, spec) for name in names() for spec in models(name)), lines)
 
 
 def invocation(harness_name: str, *, skill: str, task: str) -> str:

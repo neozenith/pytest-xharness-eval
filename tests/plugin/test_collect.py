@@ -135,3 +135,40 @@ def test_a_treated_cell_keeps_its_treatment_through_the_dry_run_record(pytester:
     result.stdout.fnmatch_lines(["xharness-eval: treatments = xharness_treatments (1 entries)*"])
     report = json.loads((pytester.path / ".xharness_eval_cache" / "report" / "report.json").read_text("utf-8"))
     assert sorted(c["treatment"] for c in report["cells"]) == ["", "lean-ci"]
+
+
+# -- live pricing: a gap is priced from the feed into <cache>/pricing/ (ADR 0060) -------
+
+NEW_MODEL = "xharness_models =\n    codex/gpt-7-terra: line=terra tier=2 released=2026-10-06\n"
+
+
+def test_a_catalogued_model_with_no_price_is_priced_live_and_saved_in_the_cache(pytester: pytest.Pytester) -> None:
+    source = pytester.path / "feed.json"
+    source.write_text(
+        json.dumps(
+            {
+                "gpt-7-terra": {
+                    "litellm_provider": "openai",
+                    "input_cost_per_token": 2e-06,
+                    "output_cost_per_token": 1e-05,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    make_tree(
+        pytester,
+        models=', models=["codex/gpt-7-terra"]',
+        ini=f"{NEW_MODEL}xharness_price_feed = {source}\n",
+    )
+    pytester.runpytest("--dry-run").assert_outcomes(skipped=1)
+    (record,) = (pytester.path / ".xharness_eval_cache" / "pricing").glob("prices-*.toml")
+    assert 'codex."gpt-7-terra"' in record.read_text(encoding="utf-8")
+
+
+def test_a_model_the_feed_does_not_price_either_still_stops_collection(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, models=', models=["codex/gpt-7-terra"]', ini=NEW_MODEL)
+    result = pytester.runpytest("--dry-run")
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(["*PricingError*unpriced models in matrix*codex/gpt-7-terra*"])
+    assert not (pytester.path / ".xharness_eval_cache" / "pricing").exists()

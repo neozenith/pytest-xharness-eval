@@ -372,16 +372,24 @@ class PriceTable:
             f"add an xharness_prices line '{harness}/{model}: input=<usd/MTok> output=<usd/MTok>' (ADR 0030, ADR 0050)."
         )
 
-    def validate_matrix(self, entries: Iterable[str], day: date | None) -> None:
-        """Every ``harness/model[/effort]`` entry must resolve before a sweep spends anything (ADR 0007)."""
-        missing = []
+    def unpriced(self, entries: Iterable[str], day: date | None) -> list[tuple[str, str]]:
+        """The ``(harness, model)`` of every ``harness/model[/effort]`` entry no row prices on ``day``."""
+        out = []
         for entry in entries:
             harness, _, rest = entry.partition("/")
             model = rest.partition("/")[0]
             try:
                 self.resolve(harness, model, day)
             except PricingError:
-                missing.append(entry)
+                if (harness, model) not in out:
+                    out.append((harness, model))
+        return out
+
+    def validate_matrix(self, entries: Iterable[str], day: date | None) -> None:
+        """Every ``harness/model[/effort]`` entry must resolve before a sweep spends anything (ADR 0007)."""
+        entries = list(entries)
+        unpriced = set(self.unpriced(entries, day))
+        missing = [e for e in entries if tuple(e.split("/")[:2]) in unpriced]
         if missing:
             raise PricingError(
                 f"unpriced models in matrix: {missing}. Add xharness_prices lines to your pytest config (ADR 0030)."
@@ -487,7 +495,7 @@ def load_records(directory: Path = PRICES_DIR) -> list[Rates]:
     file, and the rows are returned newest record first.
     """
     records = []
-    for path in sorted(directory.glob("*.toml")):
+    for path in sorted(directory.glob("prices-*.toml")):
         rows = parse_record(path)
         if rows:
             records.append((path, rows[0].interval, rows))
@@ -598,9 +606,15 @@ def parse_price_lines(lines: Iterable[str]) -> list[Rates]:
     return rows
 
 
-def load_table(directory: Path = PRICES_DIR, rows: Iterable[str] = ()) -> PriceTable:
-    """The bundled records, with ``xharness_prices`` ini rows layered on top (ADR 0030, ADR 0050)."""
-    return PriceTable(tuple(parse_price_lines(rows)) + tuple(load_records(directory)))
+def load_table(directory: Path = PRICES_DIR, rows: Iterable[str] = (), cached: Path | None = None) -> PriceTable:
+    """The bundled records, with ``xharness_prices`` ini rows layered on top (ADR 0030, ADR 0050).
+
+    ``cached`` is a project's ``<cache>/pricing/`` directory of live-priced records. They come
+    after the bundled ones, so a live row only ever fills a gap the bundled records leave
+    (ADR 0060).
+    """
+    live = tuple(load_records(cached)) if cached is not None and cached.is_dir() else ()
+    return PriceTable(tuple(parse_price_lines(rows)) + tuple(load_records(directory)) + live)
 
 
 def price(result: RunResult, table: PriceTable, day: date | None) -> RunResult:
