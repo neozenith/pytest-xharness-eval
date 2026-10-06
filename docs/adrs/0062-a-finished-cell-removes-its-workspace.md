@@ -16,7 +16,8 @@ generated: { by: human:neozenith, at: 2026-10-07T00:00:00Z }
 # 0062: A finished cell removes its workspace, and a project can keep them for inspection
 
 Status: accepted, 2026-10-07.
-Refines [0004](0004-workspace-is-a-plain-copy.md) (a workspace is a plain copy of the fixture tree) and [0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (all run output consolidates under a cache dir) with when a workspace is removed.
+Refines [0004](0004-workspace-is-a-plain-copy.md) (a workspace is a plain copy of the fixture tree) with when a workspace is removed.
+Refines [0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (all run output consolidates under a cache dir) the same way.
 
 ## Context
 
