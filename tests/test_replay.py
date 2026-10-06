@@ -2,6 +2,7 @@
 
 # Standard Library
 import json
+from datetime import date
 from pathlib import Path
 
 # Third Party
@@ -9,6 +10,7 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval import replay
+from pytest_xharness_eval.model import registry
 from tests.support import _jsonl, _skill
 
 
@@ -196,3 +198,15 @@ def test_replay_refuses_a_result_without_its_log(tmp_path: Path) -> None:
     (session_dir / "result.json").write_text('{"harness": "claude", "session_id": "x"}', encoding="utf-8")
     with pytest.raises(FileNotFoundError, match="no captured session log"):
         replay.rebuild(cache)
+
+
+def test_a_rebuild_carries_the_archived_catalogue_facts_forward_or_looks_them_up() -> None:
+    """A stored tier wins, so an archived run says what it was; an older capture is looked up (ADR 0057)."""
+    catalogue = registry.catalogue()
+    stored = {"harness": "claude", "model": "claude-opus-5", "line": "opus", "family_tier": 9, "released": "2026-07-24"}
+    spec = replay.stored_spec(stored, catalogue)
+    assert spec is not None and spec.family_tier == 9 and spec.released == date(2026, 7, 24)
+    older = replay.stored_spec({"harness": "claude", "model": "claude-opus-5"}, catalogue)
+    assert older is not None and (older.line, older.family_tier) == ("opus", 3)
+    # A capture of a model the catalogue never described replays rather than failing history.
+    assert replay.stored_spec({"harness": "claude", "model": "claude-opus-4-5"}, catalogue) is None

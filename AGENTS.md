@@ -51,7 +51,7 @@ this list:
 
 | Layer | What lives there |
 |-------|------------------|
-| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `treatment.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
+| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `treatment.py`, `catalogue.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
 | `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, and the record-kind catalogue `records.py` |
 | `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, and the bundled `prices/prices-YYYYMMDD.toml` records |
 | `verify/` | what a *grader* is written with: `checks.py` (the shared `check_*` verifiers), `tolerance.py` (`Facet` and the six tolerances), `facets.py` (markdown/mermaid extractors), `golden.py` (`GoldenCase`) |
@@ -70,7 +70,8 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | How a session log maps to `RunResult` fields | the harness's `SessionLog.to_result` in `harness/<provider>.py`; the primitives both dialects fold with are `harness/normalise.py` |
 | A new field on the run record | `model/runresult.py`, then `harness/claude.py` and `harness/codex.py` for both dialects |
 | A bundled model price | `derive/prices/` only, USD per MTok, rows under their harness's table. A price *change* never edits a closed record: set `effective_to` on the open one and add `prices-<date>.toml` whose `effective_from` is that date. `make prices` does both from LiteLLM's feed; the watched families are `WATCHES` in `.github/scripts/curate_prices.py`, and a row with a comment line starting `# curate: keep` is a local override it never re-prices. A long-context rate is a row's `long_context` sub-table, never a comment. A project overrides with `<harness>/<model>: ...` `xharness_prices` lines, optionally `from=`/`to=` bounded and with `long_context_above` / `long_*` keys (ADR 0030, ADR 0050, ADR 0051) |
-| The plugin-default matrix or narrowing | `model/matrix.py`; the *known* harnesses are the registry, reached through `model/registry.py` and never a second list (ADR 0034, ADR 0039) |
+| The plugin-default matrix or narrowing | `model/matrix.py` (`catalogued`, `narrow`) and `Settings.default_matrix` in `runtime/settings.py`, which applies the `xharness_output_rate_limit` cost filter; the *known* harnesses are the registry, reached through `model/registry.py` and never a second list (ADR 0034, ADR 0039, ADR 0058) |
+| The models a harness supports, or a model's line, family tier or release date | the harness's `models` tuple of `ModelSpec`s in `harness/<provider>.py`; the noun and the `xharness_models` line parser are `model/catalogue.py`, gathered by `model/registry.catalogue`. A tier is a hand-curated role, frozen at release, never derived from price (ADR 0057) |
 | How a treatment is named, found under `evals/treatments/`, or refused at collection | `model/treatment.py`; the crossing with the control is `matrix.treat`, the overlay copy is `model/workspace.py`'s `materialise`, and how each CLI reads the overlaid instructions file is its harness's isolation lever (ADR 0055) |
 | The effort vocabulary, or a portable alias's meaning | `model/effort.py` (`Effort`, `resolve`); a harness's own ladder is `Harness.efforts` in `harness/<provider>.py` and the rendering is its `effort_args`, reached from beneath through `model/registry.py` (ADR 0049) |
 | A plugin option or ini key's registration | `plugin/options.py` (which also validates the price and ignore lines at configure time, and prints the header) |
@@ -204,7 +205,7 @@ the code, add it to the glossary in the same change.
 | A term in [GLOSSARY.md](GLOSSARY.md) | The "How the terms relate" diagram beneath it; re-run the mermaid contrast and complexity gates |
 | A plugin option or ini key | `README.md` tables and `tests/test_plugin.py` |
 | A `RunResult` field, a `CaseOutput` accessor, or a bundled verifier | `docs/rollout.md` -- it is the published grader surface, so a field a suite may assert on and cannot find there does not exist |
-| The default matrix | `README.md` Quickstart expected output, `tests/test_plugin.py` |
+| The default matrix, or a harness's `models` catalogue | `README.md` Quickstart expected output and its catalogue table, `GLOSSARY.md`'s family tier row, `tests/test_plugin.py`'s `DEFAULT_CELLS`, and a price row for every catalogued model (`tests/model/test_catalogue.py` fails the build without one) |
 | A harness's `efforts` ladder, or a word in `model/effort.py` | `README.md`'s alias table, `GLOSSARY.md`, `ARCHITECTURE.md`'s isolation-levers table, and `tests/model/test_effort.py` -- the ladder is ordered, so adding a rung moves what `mid` resolves to |
 | A decision recorded in an ADR | Write a new ADR that supersedes it; do not change the old one's argument (shape-only prose fixes to its `.yml` are allowed, ADR 0054) |
 | Any ADR `.yml`, or `docs/adrs/templates/` | `make adrs`, then `make adrs-check` and `make adrs-prose` (both run in CI) |

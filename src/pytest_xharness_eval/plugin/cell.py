@@ -176,6 +176,7 @@ class CellRun:
             case=CaseRef.of(self.case, self.suite, self.prompt),
             effort=self.cell.effort,
             treatment=self.cell.treatment,
+            spec=self.settings.catalogue().get(self.cell.harness, self.cell.model),
         )
         pipeline.capture(result, session)
         return session

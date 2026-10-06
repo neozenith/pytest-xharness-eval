@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     # Our Libraries
     from pytest_xharness_eval.derive.skillcov import SkillFile
     from pytest_xharness_eval.emit.metrics import Outcome
+    from pytest_xharness_eval.model.catalogue import ModelSpec
     from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
     from pytest_xharness_eval.model.runresult import CaseRef, RunResult
 
@@ -43,8 +44,9 @@ def derive(
     case: CaseRef | None,
     effort: str | None = None,
     treatment: str | None = None,
+    spec: ModelSpec | None = None,
 ) -> RunResult:
-    """Price the run, annotate skill coverage, name its case, effort and treatment -- in that order.
+    """Price the run, annotate skill coverage, name its case, effort, treatment and model kind -- in that order.
 
     ``run_date`` is the day the run was stamped on, and chooses the price record in effect
     then; both paths read it off the same ``{run}`` coordinate, so a replay prices a
@@ -59,12 +61,18 @@ def derive(
     entry resolved to; a replay passes what the stored result carried, which is the same
     value written by the live run -- so the two paths still agree field for field.
     ``treatment`` is attached the same way and for the same reason (ADR 0055).
+
+    ``spec`` is the model's catalogue entry, and its line, frozen tier and release date
+    are copied onto the record so the archived run stands alone (ADR 0057).
     """
     pricing.price(result, table, run_date)
     result.skill_coverage = skillcov.annotate(skill, skill_files, result)
     result.case = case
     result.effort = effort
     result.treatment = treatment
+    result.line = spec.line if spec else None
+    result.family_tier = spec.family_tier if spec else None
+    result.released = spec.released.isoformat() if spec else None
     return result
 
 

@@ -130,6 +130,7 @@
   "envelope": {},
   "estimated_cost_usd": 0.002332,
   "exit_code": 0,
+  "family_tier": 3,
   "files_written": [
     "out.md"
   ],
@@ -138,6 +139,7 @@
   "final_text": "done",
   "harness": "codex",
   "harness_reported_cost_usd": null,
+  "line": "sol",
   "long_context_calls": 0,
   "model": "gpt-5.6-sol",
   "output_tokens_per_sec": 8.7,
@@ -170,6 +172,7 @@
     "codex/session_meta": 1,
     "codex/turn_context": 1
   },
+  "released": "2026-07-09",
   "reported_model_usage": {},
   "reported_turns": 1,
   "reported_usage": {

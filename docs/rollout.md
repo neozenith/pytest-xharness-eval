@@ -60,6 +60,9 @@ that only checks `exists` passes for a run that did nothing at all.
 | `model` | `str` | The model id the harness was told to use. |
 | `effort` | `str \| None` | The reasoning rung the CLI was asked for, resolved to that harness's own ladder; `None` when the cell named none and inherited the CLI's default. The third matrix axis (ADR 0049). |
 | `treatment` | `str \| None` | The treatment copied over the fixture; `None` for the control. The opt-in fourth matrix axis (ADR 0055). |
+| `line` | `str \| None` | The model's product line from the catalogue, such as `opus` or `sol` (ADR 0057). |
+| `family_tier` | `int \| None` | The model's hand-curated role in its lineup, 1 the smallest, frozen at release (ADR 0057). |
+| `released` | `str \| None` | The model's release date, `YYYY-MM-DD` (ADR 0057). |
 | `session_id` | `str` | The session this verdict is tied to. |
 | `session_log` | `str` | Path to the captured JSONL. Exists on disk during grading. |
 | `workspace` | `str` | The same directory as `output.workspace`, as the run recorded it. |

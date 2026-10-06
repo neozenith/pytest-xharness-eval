@@ -22,11 +22,13 @@ from typing import TYPE_CHECKING, Any
 from pytest_xharness_eval.derive import pricing
 from pytest_xharness_eval.harness.base import DEFAULT_TIMEOUT_S
 from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model import registry
 from pytest_xharness_eval.model.layout import CacheLayout
 
 if TYPE_CHECKING:
     # Standard Library
     from collections.abc import Iterator
+    from datetime import date
     from pathlib import Path
 
     # Third Party
@@ -34,12 +36,15 @@ if TYPE_CHECKING:
 
     # Our Libraries
     from pytest_xharness_eval.model.case import EvalCase
+    from pytest_xharness_eval.model.catalogue import Catalogue
 
 INI_SKILLS_DIR = "xharness_skills_dir"
 INI_CACHE_DIR = "xharness_cache_dir"
 INI_PRICES = "xharness_prices"
 INI_MATRIX = "xharness_matrix"
 INI_TREATMENTS = "xharness_treatments"
+INI_MODELS = "xharness_models"
+INI_OUTPUT_RATE_LIMIT = "xharness_output_rate_limit"
 INI_SKILL_IGNORE = "xharness_skill_ignore"
 INI_REPORT_TOKENS = "xharness_report_design_tokens"
 INI_REPORT_INLINE = "xharness_report_inline"
@@ -47,6 +52,11 @@ INI_TIMEOUT = "xharness_timeout_s"
 
 DEFAULT_SKILLS_DIR = "skills"
 DEFAULT_CACHE_DIR = ".xharness_eval_cache"
+
+#: The plugin default matrix sweeps only models whose output rate is below this, in USD per
+#: million tokens (ADR 0058). At 50 it leaves out today's apex models (Fable, Astra) and
+#: keeps every other catalogued one; a project raises it to opt in to the cost.
+DEFAULT_OUTPUT_RATE_LIMIT = 50.0
 
 # pytest's own config files, in the order it consults them (rootdir discovery).
 _CONFIG_FILES = ("pytest.ini", ".pytest.ini", "pyproject.toml", "tox.ini", "setup.cfg")
@@ -117,6 +127,8 @@ class Settings:
     price_lines: list[str] = field(default_factory=list)
     matrix_lines: list[str] = field(default_factory=list)
     treatment_lines: list[str] = field(default_factory=list)
+    model_lines: list[str] = field(default_factory=list)
+    output_rate_limit: float = DEFAULT_OUTPUT_RATE_LIMIT
     skill_ignore: list[str] = field(default_factory=list)
     report_tokens: Path | None = None
     report_inline: bool = False
@@ -139,6 +151,8 @@ class Settings:
             price_lines=[str(line) for line in config.getini(INI_PRICES)],
             matrix_lines=[str(e).strip() for e in config.getini(INI_MATRIX) if str(e).strip()],
             treatment_lines=[str(t).strip() for t in config.getini(INI_TREATMENTS) if str(t).strip()],
+            model_lines=[str(m).strip() for m in config.getini(INI_MODELS) if str(m).strip()],
+            output_rate_limit=float(config.getini(INI_OUTPUT_RATE_LIMIT) or DEFAULT_OUTPUT_RATE_LIMIT),
             skill_ignore=[str(p) for p in config.getini(INI_SKILL_IGNORE)],
             report_tokens=(config.rootpath / tokens) if tokens else None,
             report_inline=bool(config.getoption("xharness_report_inline", False) or config.getini(INI_REPORT_INLINE)),
@@ -172,6 +186,8 @@ class Settings:
             price_lines=ini_lines(cache, INI_PRICES) + list(prices or []),
             matrix_lines=ini_lines(cache, INI_MATRIX),
             treatment_lines=ini_lines(cache, INI_TREATMENTS),
+            model_lines=ini_lines(cache, INI_MODELS),
+            output_rate_limit=float(ini_value(cache, INI_OUTPUT_RATE_LIMIT) or DEFAULT_OUTPUT_RATE_LIMIT),
             skill_ignore=ini_lines(cache, INI_SKILL_IGNORE) + list(ignore or []),
             report_tokens=report_tokens,
             report_inline=report_inline,
@@ -183,9 +199,33 @@ class Settings:
         """The bundled dated records with this project's rows layered on top (ADR 0030, ADR 0050)."""
         return pricing.load_table(rows=self.price_lines)
 
-    def matrix_for(self, case: EvalCase) -> list[str]:
-        """Case > project ini > plugin default (ADR 0015)."""
-        return case.models or self.matrix_lines or list(mx.DEFAULT_MATRIX)
+    def catalogue(self) -> Catalogue:
+        """Every registered harness's models, patched by this project's ``xharness_models`` lines (ADR 0057)."""
+        return registry.catalogue(self.model_lines)
+
+    def default_matrix(self, day: date | None) -> list[str]:
+        """Every catalogued model whose output rate on ``day`` is below the project's limit (ADR 0058).
+
+        A catalogued model with no price row for ``day`` is kept rather than dropped, so the
+        price check that follows refuses it by name (ADR 0007): leaving it out here would
+        quietly shrink the sweep instead of saying why.
+        """
+        table = self.price_table()
+        out = []
+        for entry in mx.catalogued(self.catalogue()):
+            harness_name, _, model = entry.partition("/")
+            rates = table.get(harness_name, model, day)
+            if rates is None or rates.output < self.output_rate_limit:
+                out.append(entry)
+        return out
+
+    def matrix_for(self, case: EvalCase, day: date | None) -> list[str]:
+        """Case > project ini > plugin default (ADR 0015, ADR 0058).
+
+        The output-rate limit shapes only the plugin default. A case's ``models=`` or a
+        project's ``xharness_matrix`` that names an apex model has opted in to its cost.
+        """
+        return case.models or self.matrix_lines or self.default_matrix(day)
 
     def treatments_for(self, case: EvalCase) -> list[str]:
         """Case > project ini > none (ADR 0055).

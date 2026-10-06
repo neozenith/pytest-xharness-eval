@@ -18,7 +18,11 @@ Two standing obligations, restated in [AGENTS.md](AGENTS.md):
 | EvalSuite | One imported `eval_*.py` module and the cases it declares. A suite belongs to no package, so it is imported by path under a name derived from that path; `EvalSuite.load` and `find_case` are the one loader collection and a replay share, where each used to keep its own (`model/suite.py`, ADR 0040) |
 | cell | One (harness, model, effort, treatment) point of a case; the unit pytest collects, runs, and reports. Its id is `harness/model[/effort][+treatment]` |
 | harness | The agent CLI a cell runs on, `claude` or `codex`; the first half of a cell id |
-| matrix | The list of `harness/model` or `harness/model/effort` entries a case expands into cells; three scopes, case over project over plugin; `--harness`, `--model`, `--effort`, `--treatment` and `-k` narrow it |
+| matrix | The list of `harness/model` or `harness/model/effort` entries a case expands into cells; three scopes, case over project over plugin; `--harness`, `--model`, `--effort`, `--treatment` and `-k` narrow it. The plugin default is every catalogued model whose output rate is below `xharness_output_rate_limit` (ADR 0058) |
+| model catalogue | The models each harness supports, declared on its class as `ModelSpec`s beside its effort ladder and gathered by `model/registry.py`. A matrix entry naming an uncatalogued model is a collection error; `xharness_models` ini lines add or correct one before a plugin release (ADR 0057) |
+| line | A model's product line in its provider's lineup: `haiku`, `sonnet`, `opus`, `fable`, `luna`, `terra`, `sol`, `astra`. Stored on every record (ADR 0057) |
+| family tier | A hand-curated integer for a model's role in its provider's lineup, 1 the smallest; today 1 is Haiku and Luna, 4 is Fable and Astra. A number rather than a name, so it survives a lineup change; a role, never a price; frozen at release, so history stays comparable. The cross-provider bucket: "every tier 3 model" (ADR 0057) |
+| released | A model's release date, `YYYY-MM-DD`, stored on every record. A generation format derived from it is not yet decided (ADR 0057) |
 | effort | The reasoning budget a cell asks its CLI for: the third matrix axis, and the optional third component of an entry. An entry that names none leaves the CLI on its own default (ADR 0049) |
 | rung | One level of a harness's own effort ladder (`Harness.efforts`, lowest first). Both shipped harnesses declare `low, medium, high, xhigh, max`; the ladder is per-harness, not shared. A matrix entry may name a rung exactly, and a rung the named harness lacks is a collection error, never the nearest one (ADR 0049) |
 | alias | A portable effort word naming a *position* rather than a level: `min`, `mid`, `max`. It resolves against whichever ladder the harness has, once, at matrix expansion -- so one line sweeps both arms at comparable intensity and nothing downstream ever holds a word the CLI would not understand (ADR 0049) |
@@ -93,6 +97,7 @@ flowchart TB
         CELL["cell<br/>one (harness, model, effort, treatment) of a case"]:::plan
         HARNESS["harness<br/>claude or codex"]:::plan
         MODEL["model"]:::plan
+        CATALOG["model catalogue<br/>line, family tier, released"]:::plan
         EFFORT["effort<br/>a rung of the harness ladder"]:::plan
     end
 
@@ -118,6 +123,9 @@ flowchart TB
     CELL -->|"with"| MODEL
     CELL -->|"at"| EFFORT
     HARNESS -->|"declares the ladder<br/>a rung resolves on"| EFFORT
+    HARNESS -->|"declares"| CATALOG
+    CATALOG -->|"describes"| MODEL
+    CATALOG -->|"defaults under<br/>the rate limit"| MATRIX
     FIX -->|"copied per cell into"| WS
     CASE -->|"may add with treatments="| TREAT
     TREAT -->|"copied over the fixture in"| WS

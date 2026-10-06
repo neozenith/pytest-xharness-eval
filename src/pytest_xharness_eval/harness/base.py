@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     # Our Libraries
+    from pytest_xharness_eval.model.catalogue import ModelSpec
     from pytest_xharness_eval.model.layout import SessionDir
     from pytest_xharness_eval.model.runresult import RunResult
 
@@ -116,6 +117,11 @@ class Harness(ABC):
     #: effort control, and a matrix entry that names one for it is a collection error rather
     #: than a flag quietly dropped.
     efforts: ClassVar[tuple[str, ...]] = ()
+    #: The models this CLI supports, each with its line, frozen family tier and release
+    #: date (ADR 0057). The plugin-default matrix is derived from it, and a matrix entry
+    #: naming a model it does not list is a collection error unless a project's
+    #: ``xharness_models`` line adds it.
+    models: ClassVar[tuple[ModelSpec, ...]] = ()
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.name}>"

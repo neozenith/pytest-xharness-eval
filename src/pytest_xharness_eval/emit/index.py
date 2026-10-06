@@ -59,6 +59,10 @@ class IndexRow:
     # The treatment the workspace was given; None for the control, and on every session
     # captured before ADR 0055.
     treatment: str | None
+    # What kind of model ran, from the catalogue (ADR 0057); None before it existed.
+    line: str | None
+    family_tier: int | None
+    released: str | None
     session_id: str | None
     # How it graded, from the metrics record; None when the session has none.
     verdict: str | None
@@ -114,6 +118,9 @@ class IndexRow:
             model=result.get("model"),
             effort=result.get("effort") or session.effort,
             treatment=result.get("treatment") or session.treatment,
+            line=result.get("line"),
+            family_tier=result.get("family_tier"),
+            released=result.get("released"),
             session_id=result.get("session_id"),
             verdict=hist.verdict if hist else None,
             at=hist.at if hist else None,

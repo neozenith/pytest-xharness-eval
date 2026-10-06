@@ -26,6 +26,7 @@ from pytest_xharness_eval.derive import skillcov
 from pytest_xharness_eval.emit.metrics import CellMetrics
 from pytest_xharness_eval.model import matrix as mx
 from pytest_xharness_eval.model import treatment
+from pytest_xharness_eval.model.catalogue import CatalogueError
 from pytest_xharness_eval.model.layout import run_date
 from pytest_xharness_eval.model.suite import EvalSuite
 from pytest_xharness_eval.plugin.cell import CellRun, run_stamp
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
 
     # Our Libraries
     from pytest_xharness_eval.model.case import EvalCase
+    from pytest_xharness_eval.model.catalogue import Catalogue
 
 
 def pytest_collect_file(file_path: Path, parent: pytest.Collector) -> pytest.Collector | None:
@@ -64,10 +66,13 @@ class EvalFile(pytest.File):
         # cells will be stamped with, which is the day every one of them is priced on.
         today = run_date(run_stamp())
         opts = self.config.option
+        catalogue = settings.catalogue()
         for case in cases:
-            models = settings.matrix_for(case)
+            models = settings.matrix_for(case, today)
             # ADR 0007: an unpriced model stops the sweep at collection, before any spend.
             table.validate_matrix(models, today)
+            # ADR 0057: so does one the catalogue cannot say what kind of model it is.
+            self._require_catalogued(catalogue, case, mx.expand(models))
             # ADR 0022: the skill's file tree is catalogued here, before any cell runs, so every
             # cell of the sweep is measured against the same inventory.
             skill_dir = settings.skill_dir(case.skill)
@@ -84,6 +89,18 @@ class EvalFile(pytest.File):
                 yield EvalItem.from_parent(
                     self, name=f"{case.name}[{cell.id}]", case=case, cell=cell, skill_files=files
                 )
+
+    def _require_catalogued(self, catalogue: Catalogue, case: EvalCase, cells: list[mx.Cell]) -> None:
+        """Every cell's model is in the catalogue, or a usage error naming the line that would add it (ADR 0057).
+
+        A record states the model's line, tier and release date so it stands alone once
+        archived; a model the catalogue does not describe would ship records that cannot.
+        """
+        try:
+            for cell in cells:
+                catalogue.require(cell.harness, cell.model)
+        except CatalogueError as exc:
+            raise pytest.UsageError(f"{self.path}: {case.name}: {exc}") from exc
 
     def _cases(self) -> list[EvalCase]:
         """Every case this suite declares, or a usage error naming what is wrong with it.

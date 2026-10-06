@@ -25,14 +25,16 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 # Our Libraries
 from pytest_xharness_eval import harness
 from pytest_xharness_eval.derive import pricing, skillcov
 from pytest_xharness_eval.emit import page
 from pytest_xharness_eval.emit.metrics import CellMetrics
+from pytest_xharness_eval.model.catalogue import ModelSpec
 from pytest_xharness_eval.model.layout import SessionDir
 from pytest_xharness_eval.model.runresult import CaseRef
 from pytest_xharness_eval.model.suite import find_case
@@ -47,10 +49,8 @@ from pytest_xharness_eval.runtime.settings import (
 )
 
 if TYPE_CHECKING:
-    # Standard Library
-    from datetime import date
-
     # Our Libraries
+    from pytest_xharness_eval.model.catalogue import Catalogue
     from pytest_xharness_eval.model.runresult import RunResult
 
 log = logging.getLogger(__name__)
@@ -84,9 +84,8 @@ def rebuild_result(
     # The same derivations the live cell runs, in the same order (ADR 0034). The case that
     # produced the run is not in the log: carry it forward, or derive it from the suite
     # that defines a case with the recorded name (ADR 0025).
-    case = CaseRef.stored(old.get("case")) or case_meta(
-        session, skill, agent, settings or Settings.from_cache(session_dir)
-    )
+    settings = settings or Settings.from_cache(session_dir)
+    case = CaseRef.stored(old.get("case")) or case_meta(session, skill, agent, settings)
     # The rung the CLI was asked for is not in the log either, and unlike the case it cannot
     # be recovered from the suite: the matrix may have moved since. Carry the stored value
     # forward, so a rebuild reports the effort the run actually had rather than the effort
@@ -104,7 +103,24 @@ def rebuild_result(
         case=case,
         effort=str(effort) if effort else None,
         treatment=str(treatment) if treatment else None,
+        spec=stored_spec(old, settings.catalogue()),
     )
+
+
+def stored_spec(old: dict[str, Any], catalogue: Catalogue) -> ModelSpec | None:
+    """The catalogue facts a stored result carried, or the catalogue's own for a capture that predates them.
+
+    Carried forward first, so a rebuild reports what the run was archived as (ADR 0057).
+    A capture written before the catalogue existed gets today's entry, which is the same
+    answer because a family tier is frozen at release; a model the catalogue never
+    described stays None rather than failing a replay of history.
+    """
+    line, tier, released = old.get("line"), old.get("family_tier"), old.get("released")
+    if isinstance(line, str) and isinstance(tier, int) and isinstance(released, str):
+        return ModelSpec(
+            id=str(old.get("model") or ""), line=line, family_tier=tier, released=date.fromisoformat(released)
+        )
+    return catalogue.get(str(old.get("harness") or ""), str(old.get("model") or ""))
 
 
 def case_meta(session: SessionDir, skill: str, agent: harness.Harness, settings: Settings) -> CaseRef | None:

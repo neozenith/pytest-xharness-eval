@@ -71,7 +71,7 @@ def test_each_runresult_field_has_exactly_one_owner() -> None:
     """
     derived = {"turns", "usage", "calls", "subagents"}
     priced = {"estimated_cost_usd", "cost_status", "cost_by_tier", "rates_applied", "long_context_calls"}
-    attached = {"case", "effort", "treatment", "skill_coverage"}
+    attached = {"case", "effort", "treatment", "line", "family_tier", "released", "skill_coverage"}
     supplied = _typed_dict_keys(runresult.RunResultFields)
     assert not supplied & (derived | priced | attached)
     assert supplied | derived | priced | attached == {f.name for f in dataclasses.fields(RunResult)}

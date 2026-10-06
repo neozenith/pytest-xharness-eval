@@ -28,10 +28,11 @@ from __future__ import annotations
 
 # Our Libraries
 from pytest_xharness_eval.model.case import EvalCase, evalcase
+from pytest_xharness_eval.model.catalogue import Catalogue, ModelSpec
 from pytest_xharness_eval.model.clock import ms_between, now_iso
 from pytest_xharness_eval.model.documents import read_json_object
 from pytest_xharness_eval.model.layout import CacheLayout, LocatedSession, SessionDir
-from pytest_xharness_eval.model.matrix import DEFAULT_MATRIX, Cell, expand, known_harnesses, narrow
+from pytest_xharness_eval.model.matrix import Cell, catalogued, expand, known_harnesses, narrow
 from pytest_xharness_eval.model.registry import Shells
 from pytest_xharness_eval.model.runresult import (
     Call,
@@ -48,15 +49,16 @@ from pytest_xharness_eval.model.verdict import Verdict
 from pytest_xharness_eval.model.workspace import diff, materialise, snapshot
 
 __all__ = [
-    "DEFAULT_MATRIX",
     "CacheLayout",
     "Call",
     "CaseRef",
+    "Catalogue",
     "Cell",
     "CostStatus",
     "EvalCase",
     "EvalSuite",
     "LocatedSession",
+    "ModelSpec",
     "RunResult",
     "SessionDir",
     "Shells",
@@ -65,6 +67,7 @@ __all__ = [
     "ToolResult",
     "Usage",
     "Verdict",
+    "catalogued",
     "diff",
     "evalcase",
     "expand",

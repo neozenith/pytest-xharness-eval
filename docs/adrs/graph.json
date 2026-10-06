@@ -863,6 +863,34 @@
     },
     {
       "data": {
+        "id": "ADR-0057",
+        "label": "0057",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0057-each-harness-declares-a-model-catalogue.md",
+        "title": "Each harness declares a model catalogue, with a hand-curated family tier frozen at release",
+        "description": "Each harness declares a model catalogue, with a hand-curated family tier frozen at release",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection, harness"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0058",
+        "label": "0058",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0058-the-default-matrix-is-the-catalogue-under-a-cost-limit.md",
+        "title": "The default matrix is the catalogue under an output-rate limit that a project raises to opt in",
+        "description": "The default matrix is the catalogue under an output-rate limit that a project raises to opt in",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection, pricing"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2306,6 +2334,46 @@
         "id": "ADR-0056-extends-ADR-0033",
         "source": "ADR-0056",
         "target": "ADR-0033",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0057-extends-ADR-0034",
+        "source": "ADR-0057",
+        "target": "ADR-0034",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0057-extends-ADR-0007",
+        "source": "ADR-0057",
+        "target": "ADR-0007",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0058-extends-ADR-0015",
+        "source": "ADR-0058",
+        "target": "ADR-0015",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0058-extends-ADR-0010",
+        "source": "ADR-0058",
+        "target": "ADR-0010",
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"refines\""

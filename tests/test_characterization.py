@@ -23,6 +23,8 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval import RunResult, harness, normalise, pricing, records, replay, skillcov
+from pytest_xharness_eval.model import registry
+from pytest_xharness_eval.runtime import pipeline
 from tests.characterization_fixtures import (
     PRICE_ROWS,
     RUN_DATE,
@@ -51,11 +53,16 @@ def _case(name: str) -> dict[str, Any]:
 
 
 def _finish(result: RunResult, files: list[dict[str, Any]], name: str) -> RunResult:
-    """The post-run steps plugin.EvalItem._run_live applies, in its order."""
-    pricing.price(result, _table(), RUN_DATE)
-    result.skill_coverage = skillcov.annotate(SKILL, files, result)
-    result.case = _case(name)
-    return result
+    """The post-run steps a live cell applies: the shared pipeline, with the model's catalogue entry (ADR 0057)."""
+    return pipeline.derive(
+        result,
+        table=_table(),
+        run_date=RUN_DATE,
+        skill=SKILL,
+        skill_files=files,
+        case=_case(name),
+        spec=registry.catalogue().get(result.harness, result.model),
+    )
 
 
 # Values that move on every run without any behaviour changing: the tmp_path prefix and

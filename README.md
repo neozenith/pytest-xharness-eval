@@ -5,7 +5,7 @@
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml/badge.svg" alt="CICD Checks"></a>
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml/badge.svg" alt="Build Status"></a>
     <!-- coverage-badge -->
-    <img src="https://img.shields.io/badge/coverage-96%25-brightgreen.svg" alt="Coverage">
+    <img src="https://img.shields.io/badge/coverage-97%25-brightgreen.svg" alt="Coverage">
     <!-- coverage-badge -->
 </p>
 <p align="center">
@@ -111,18 +111,16 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    ```text
    xharness-eval: skills root = /repo/skills, cache = /repo/.xharness_eval_cache
-   xharness-eval: matrix = plugin default (2 entries); a case's models= overrides it
-   collected 2 items
-   skills/<skill>/evals/eval_<case>.py ss
+   xharness-eval: matrix = plugin default (11 of 14 catalogued models, output rate below $50/MTok); a case's models= overrides it
+   collected 11 items
+   skills/<skill>/evals/eval_<case>.py sssssssssss
 
    ============================ agent eval report ============================
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-opus-5]
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-sonnet-5]
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-haiku-4-5-20251001]
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-sol]
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-luna]
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-terra]
-     total spend: $0.0000 across 6 cell(s)
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-sonnet-5]
+     ...
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-6.1-sol]
+     total spend: $0.0000 across 11 cell(s)
      report: /repo/.xharness_eval_cache/report/report.json
    ```
 
@@ -256,18 +254,45 @@ The matrix has three scopes, highest precedence first: a case's `models=`, the
 project's `xharness_matrix` ini key, and the plugin's bundled default. The report
 header names which one applied.
 
-The bundled default is every model the bundled price table carries: three per harness,
-`claude/{claude-opus-5, claude-sonnet-5, claude-haiku-4-5-20251001}` and
-`codex/{gpt-5.6-sol, gpt-5.6-luna, gpt-5.6-terra}`. An axis nobody narrowed means the
-whole axis, so this is deliberately the widest default that cannot abort at collection —
-a model with no price row would stop the sweep before it spent anything (ADR 0007).
-Preview it with `--dry-run` and narrow it with `xharness_matrix` before a first paid run.
+The bundled default is every model in the **model catalogue** whose output rate is below
+`xharness_output_rate_limit` (default `50` USD per million tokens). Today that keeps every
+catalogued model except the apex ones, Fable and Astra. Raise the limit to opt in to their
+cost, or name them in `xharness_matrix` or a case's `models=`, which the limit never filters
+(ADR 0058). Preview the default with `--dry-run` before a first paid run.
+
+### The model catalogue
+
+Each harness class declares the models it supports, and each model carries three facts
+that every record stores:
+
+| Fact | Example | Meaning |
+|------|---------|---------|
+| `line` | `opus`, `sol` | The provider's own product line |
+| `family_tier` | `3` | The model's role in its lineup, 1 the smallest, curated by hand. A number rather than a name, so it survives a lineup change, and frozen at release, so history stays comparable |
+| `released` | `2026-07-24` | The release date |
+
+Today's tiers: 1 is Haiku and Luna, 2 is Sonnet and Terra, 3 is Opus and Sol, 4 is Fable
+and Astra. A tier is a role, never a price, which is what lets a report compare every tier 3
+model across providers.
+
+A matrix entry naming a model the catalogue does not list stops collection before anything
+is spent. Add a new model before a plugin release with two ini lines, one for its price and
+one for the catalogue (ADR 0057):
+
+```ini
+xharness_prices =
+    codex/gpt-6.2-sol: input=2.00 output=10.00
+xharness_models =
+    codex/gpt-6.2-sol: line=sol tier=3 released=2026-10-20
+```
 
 The ini keys, paths relative to pytest's rootdir:
 
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `xharness_matrix` | (plugin default) | Project matrix: `harness/model` or `harness/model/effort` entries every case sweeps unless it sets `models=` |
+| `xharness_output_rate_limit` | `50` | The plugin default matrix sweeps only catalogued models whose output rate, in USD per million tokens, is below this. Raise it to opt in to apex models (ADR 0058) |
+| `xharness_models` | (none) | Model catalogue rows that add or correct a model before a plugin release: `<harness>/<model>: line=<line> tier=<n> released=YYYY-MM-DD` (ADR 0057) |
 | `xharness_treatments` | (none) | Treatment names under each suite's `evals/treatments/`, swept beside the untreated control unless a case sets `treatments=` (ADR 0055) |
 | `xharness_skills_dir` | `skills` | Directory holding `<skill>/evals/` trees |
 | `xharness_cache_dir` | `.xharness_eval_cache` | The git-ignored root for build workspaces, results and the report (ADR 0032) |

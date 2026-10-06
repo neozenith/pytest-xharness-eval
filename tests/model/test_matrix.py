@@ -7,15 +7,31 @@
 import pytest
 
 # Our Libraries
-from pytest_xharness_eval import (
-    DEFAULT_MATRIX,
-    Cell,
-)
+from pytest_xharness_eval import Cell
 from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model import registry
+
+#: A fixed six-entry matrix to expand and narrow; what the plugin default is lives in the
+#: catalogue and is pinned by ``tests/test_plugin.py`` (ADR 0058).
+SIX = [
+    "claude/claude-opus-5",
+    "claude/claude-sonnet-5",
+    "claude/claude-haiku-4-5-20251001",
+    "codex/gpt-5.6-sol",
+    "codex/gpt-5.6-luna",
+    "codex/gpt-5.6-terra",
+]
 
 
-def test_expand_default_matrix() -> None:
-    cells = mx.expand(DEFAULT_MATRIX)
+def test_catalogued_lists_every_harness_model_in_declared_order() -> None:
+    entries = mx.catalogued(registry.catalogue())
+    assert entries[0] == "claude/claude-haiku-4-5-20251001"
+    assert entries.index("claude/claude-fable-5-1") < entries.index("codex/gpt-5.6-luna")
+    assert set(SIX) <= set(entries)
+
+
+def test_expand_a_matrix() -> None:
+    cells = mx.expand(SIX)
     assert [c.id for c in cells] == [
         "claude/claude-opus-5",
         "claude/claude-sonnet-5",
@@ -35,7 +51,7 @@ def test_expand_rejects_malformed_entries(entry: str) -> None:
 
 
 def test_narrow_by_harness_and_model() -> None:
-    cells = mx.expand(DEFAULT_MATRIX)
+    cells = mx.expand(SIX)
     assert [c.id for c in mx.narrow(cells, None, ["codex"])] == [
         "codex/gpt-5.6-sol",
         "codex/gpt-5.6-luna",

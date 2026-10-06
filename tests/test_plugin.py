@@ -80,7 +80,7 @@ def test_header_names_the_skills_root_and_matrix_source(pytester: pytest.Pyteste
     result.stdout.fnmatch_lines(
         [
             "xharness-eval: skills root = *skills, cache = *.xharness_eval_cache",
-            "xharness-eval: matrix = plugin default (6 entries)*",
+            "xharness-eval: matrix = plugin default (11 of 14 catalogued models, output rate below $50/MTok)*",
         ]
     )
 
@@ -96,17 +96,48 @@ def test_missing_skills_root_is_named_in_the_header_without_warning(pytester: py
 # -- matrix scopes: case > project ini > plugin default (ADR 0015) ---------------
 
 
-def test_plugin_default_matrix_when_nothing_else_is_set(pytester: pytest.Pytester) -> None:
+DEFAULT_CELLS = [
+    "claude/claude-haiku-4-5-20251001",
+    "claude/claude-sonnet-5",
+    "claude/claude-sonnet-5-5",
+    "claude/claude-opus-5",
+    "claude/claude-opus-5-5",
+    "codex/gpt-5.6-luna",
+    "codex/gpt-6-luna",
+    "codex/gpt-5.6-terra",
+    "codex/gpt-5.6-sol",
+    "codex/gpt-6-sol",
+    "codex/gpt-6.1-sol",
+]
+
+
+def test_plugin_default_matrix_is_the_catalogue_under_the_output_rate_limit(pytester: pytest.Pytester) -> None:
+    """Fable and Astra bill $50/MTok output, so the default limit of 50 leaves them out (ADR 0058)."""
     make_tree(pytester, matrix=None)
-    result = pytester.runpytest("--collect-only", "-q")
-    assert cell_ids(result) == [
-        "claude/claude-opus-5",
-        "claude/claude-sonnet-5",
-        "claude/claude-haiku-4-5-20251001",
-        "codex/gpt-5.6-sol",
-        "codex/gpt-5.6-luna",
-        "codex/gpt-5.6-terra",
-    ]
+    assert cell_ids(pytester.runpytest("--collect-only", "-q")) == DEFAULT_CELLS
+
+
+def test_raising_the_output_rate_limit_opts_in_to_apex_models(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, matrix=None, ini="xharness_output_rate_limit = 51\n")
+    ids = cell_ids(pytester.runpytest("--collect-only", "-q"))
+    assert {"claude/claude-fable-5", "claude/claude-fable-5-1", "codex/gpt-6-astra"} <= set(ids)
+    assert len(ids) == 14
+
+
+def test_an_uncatalogued_model_stops_collection_naming_the_line_that_adds_it(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, ini="xharness_matrix =\n    claude/claude-opus-4-5\n")
+    result = pytester.runpytest("--collect-only")
+    assert result.ret != 0
+    result.stdout.fnmatch_lines(
+        ["*claude/claude-opus-4-5 is not in the model catalogue; add it with an xharness_models*"]
+    )
+
+
+def test_a_malformed_model_line_stops_the_session_before_collection(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, ini="xharness_models =\n    codex/gpt-7: line=sol tier=three released=2027-01-01\n")
+    result = pytester.runpytest("--collect-only")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*xharness_models*gpt-7*"])
 
 
 def test_project_matrix_ini_replaces_the_plugin_default(pytester: pytest.Pytester) -> None:
@@ -297,11 +328,15 @@ def test_unpriced_model_aborts_at_collection_before_any_spend(pytester: pytest.P
     result.stdout.fnmatch_lines(["*PricingError*unpriced models in matrix*claude/claude-unknown-99*"])
 
 
-def test_price_lines_in_the_ini_add_rows_to_the_bundled_table(pytester: pytest.Pytester) -> None:
+HOUSE_BLEND_MODEL = "xharness_models =\n    codex/gpt-house-blend: line=blend tier=2 released=2026-10-01\n"
+
+
+def test_price_and_model_lines_in_the_ini_add_a_model_before_a_plugin_release(pytester: pytest.Pytester) -> None:
+    """A new model needs a price row (ADR 0007) and a catalogue row (ADR 0057); both are ini lines."""
     make_tree(
         pytester,
         models=', models=["codex/gpt-house-blend"]',
-        ini="xharness_prices =\n    codex/gpt-house-blend: input=1.00 output=2.00\n",
+        ini=f"xharness_prices =\n    codex/gpt-house-blend: input=1.00 output=2.00\n{HOUSE_BLEND_MODEL}",
     )
     result = pytester.runpytest("--dry-run")
     result.assert_outcomes(skipped=1)
@@ -312,7 +347,7 @@ def test_a_price_line_that_expired_does_not_price_todays_sweep(pytester: pytest.
     make_tree(
         pytester,
         models=', models=["codex/gpt-house-blend"]',
-        ini="xharness_prices =\n    codex/gpt-house-blend: input=1.00 output=2.00 to=2020-01-01\n",
+        ini=f"xharness_prices =\n    codex/gpt-house-blend: input=1.00 output=2.00 to=2020-01-01\n{HOUSE_BLEND_MODEL}",
     )
     result = pytester.runpytest("--dry-run")
     result.assert_outcomes(errors=1)

@@ -301,7 +301,7 @@ class RunResultFields(TypedDict):
     through the constructor: :meth:`RunResult.folded` derives ``turns``, ``usage``,
     ``calls`` and ``subagents`` from the ledgers, :meth:`RunResult.apply_cost` writes the
     four cost fields together, and the derivation pipeline attaches ``case``, ``effort``,
-    ``treatment`` and ``skill_coverage`` once the run is graded.
+    ``treatment``, the model's catalogue facts and ``skill_coverage`` once the run is graded.
 
     Every key is a :class:`RunResult` field with the same type; the required ones are the
     fields that have no default. ``tests/model/test_runresult.py`` asserts that the four groups
@@ -392,6 +392,13 @@ class RunResult:
     # (ADR 0055). Attached by the derivation pipeline for the same reason as ``effort``: the
     # log shows what the agent read, never which overlay put it there.
     treatment: str | None = None
+    # What kind of model ran, from the catalogue (ADR 0057): its product line, its frozen
+    # family tier and its release date as ``YYYY-MM-DD``. Stored rather than looked up at
+    # report time, so an archived run says what it was even after the catalogue moves on.
+    # None on a capture of a model the catalogue never described.
+    line: str | None = None
+    family_tier: int | None = None
+    released: str | None = None
     # Parallel threads the session spawned, each with its own ledger. Their usage is folded
     # into ``usage`` (the run's billed total); ``turns`` and ``calls`` stay the primary's.
     subagents: list[Subagent] = field(default_factory=list)

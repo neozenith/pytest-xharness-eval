@@ -32,7 +32,8 @@ from pytest_xharness_eval.derive import skillcov as skillcov
 from pytest_xharness_eval.harness import normalise as normalise
 from pytest_xharness_eval.harness import records as records
 from pytest_xharness_eval.model.case import EvalCase, evalcase
-from pytest_xharness_eval.model.matrix import DEFAULT_MATRIX, Cell
+from pytest_xharness_eval.model.catalogue import ModelSpec
+from pytest_xharness_eval.model.matrix import Cell
 from pytest_xharness_eval.model.output import CaseOutput
 from pytest_xharness_eval.model.runresult import (
     Call,
@@ -47,7 +48,6 @@ from pytest_xharness_eval.model.runresult import (
 )
 
 __all__ = [
-    "DEFAULT_MATRIX",
     "Call",
     "CaseOutput",
     "CaseRef",
@@ -55,6 +55,7 @@ __all__ = [
     "CostStatus",
     "EvalCase",
     "ExecutedCommand",
+    "ModelSpec",
     "RunResult",
     "Subagent",
     "ToolCall",

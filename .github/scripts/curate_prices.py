@@ -418,13 +418,13 @@ def stage(directory: Path, closes: tuple[Path, str] | None, new_name: str, new_t
 
 
 def validate(staged: Path, on: date) -> None:
-    """The staged set must load exactly as the plugin loads it, and price the default matrix."""
+    """The staged set must load exactly as the plugin loads it, and price every catalogued model (ADR 0057)."""
     # Our Libraries
     from pytest_xharness_eval.derive import pricing
-    from pytest_xharness_eval.model.matrix import DEFAULT_MATRIX
+    from pytest_xharness_eval.model import matrix, registry
 
     table = pricing.PriceTable(tuple(pricing.load_records(staged)))
-    table.validate_matrix(DEFAULT_MATRIX, on)
+    table.validate_matrix(matrix.catalogued(registry.catalogue()), on)
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:

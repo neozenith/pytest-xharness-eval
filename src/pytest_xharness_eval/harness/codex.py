@@ -21,6 +21,7 @@ import json
 import os
 import shutil
 import time
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -43,6 +44,7 @@ from pytest_xharness_eval.harness.normalise import (
     text_of,
 )
 from pytest_xharness_eval.model import workspace as ws
+from pytest_xharness_eval.model.catalogue import ModelSpec
 from pytest_xharness_eval.model.clock import ms_between
 from pytest_xharness_eval.model.runresult import (
     Call,
@@ -145,6 +147,21 @@ def primary_rollout(rollouts: list[Path]) -> Path:
 #:
 #: The order is the ladder, not a set: ``mid`` resolves by index.
 CODEX_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+
+#: The OpenAI models this plugin supports through Codex (ADR 0057): the ``list``-visible
+#: entries of ``codex debug models`` (codex-cli 0.160.0). Tier is the model's role in the
+#: lineup it shipped into, frozen at release: 1 luna, 2 terra, 3 sol, 4 astra. GPT-6 Sol is
+#: tier 3 by role though its rates sit with tier-2 models elsewhere: a tier is a role, never
+#: a price. Gated models (``gpt-5.6-cyber``) and ones the catalogue hides are left out.
+CODEX_MODELS = (
+    ModelSpec(id="gpt-5.6-luna", line="luna", family_tier=1, released=date(2026, 7, 9)),
+    ModelSpec(id="gpt-6-luna", line="luna", family_tier=1, released=date(2026, 9, 22)),
+    ModelSpec(id="gpt-5.6-terra", line="terra", family_tier=2, released=date(2026, 7, 9)),
+    ModelSpec(id="gpt-5.6-sol", line="sol", family_tier=3, released=date(2026, 7, 9)),
+    ModelSpec(id="gpt-6-sol", line="sol", family_tier=3, released=date(2026, 9, 22)),
+    ModelSpec(id="gpt-6.1-sol", line="sol", family_tier=3, released=date(2026, 9, 29)),
+    ModelSpec(id="gpt-6-astra", line="astra", family_tier=4, released=date(2026, 9, 3)),
+)
 
 #: The config key codex reads its reasoning budget from. ``run_codex`` passes
 #: ``--ignore-user-config``, so this ``-c`` override is the only thing that sets it and a
@@ -517,6 +534,7 @@ class CodexHarness(Harness):
     shell_tools = frozenset({"exec", "shell", "CommandExecution", "bash", "exec_command"})
     persistent_shells = frozenset()  # every exec runs in its own process at ``workdir``
     efforts = CODEX_EFFORTS
+    models = CODEX_MODELS
 
     def invoke(self, *, skill: str, task: str) -> str:
         """``$<skill> <task>``: the mention Codex's own instructions name as the trigger.

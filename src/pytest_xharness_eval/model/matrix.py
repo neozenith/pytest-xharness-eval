@@ -2,7 +2,8 @@
 
 A matrix entry is ``harness/model`` or ``harness/model/effort``. Three scopes supply the
 list, highest precedence first: a case's ``models=``, the project's ``xharness_matrix``
-ini key, and :data:`DEFAULT_MATRIX` bundled here.
+ini key, and the plugin default, which is every model in the catalogue whose output rate
+is under the project's cost limit (ADR 0057, ADR 0058).
 
 The third component is optional and its absence is meaningful: an entry that names no
 effort leaves the CLI on whatever default its own configuration gives it, which is the
@@ -26,11 +27,16 @@ from __future__ import annotations
 
 # Standard Library
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
 # Our Libraries
 from pytest_xharness_eval.model import registry
 from pytest_xharness_eval.model.effort import UnknownEffort
 from pytest_xharness_eval.model.treatment import CONTROL, TREATMENT_SEP
+
+if TYPE_CHECKING:
+    # Our Libraries
+    from pytest_xharness_eval.model.catalogue import Catalogue
 
 
 def known_harnesses() -> tuple[str, ...]:
@@ -43,25 +49,16 @@ def known_harnesses() -> tuple[str, ...]:
     return registry.names()
 
 
-# The plugin-scope fallback sweep, used when neither the project nor the case sets one.
-#
-# Every model the bundled price records carry, which is the widest default that cannot
-# abort at collection: an entry here with no row under its harness in the open
-# ``derive/prices/`` record would stop the sweep before it spent anything (ADR 0007,
-# ADR 0050), so this list and that record move together.
-#
-# Naming every priced model rather than one per harness follows the axis convention: an
-# axis nobody narrowed means the whole axis. It is also the expensive reading, so a
-# project that wants less says so with ``xharness_matrix``, and a first run is previewed
-# with ``--dry-run`` before it spends (ADR 0010).
-DEFAULT_MATRIX: list[str] = [
-    "claude/claude-opus-5",
-    "claude/claude-sonnet-5",
-    "claude/claude-haiku-4-5-20251001",
-    "codex/gpt-5.6-sol",
-    "codex/gpt-5.6-luna",
-    "codex/gpt-5.6-terra",
-]
+def catalogued(catalogue: Catalogue) -> list[str]:
+    """Every catalogued model as a ``harness/model`` entry, in declared order (ADR 0057).
+
+    The plugin default used to be a hand-kept list here that had to move with the price
+    records. It is now read off the catalogue the harness classes declare, so a new model is
+    one ``ModelSpec`` line. Which of these a default sweep may spend on is a cost decision,
+    and :meth:`~pytest_xharness_eval.runtime.settings.Settings.default_matrix` makes it with
+    the price table this layer cannot see (ADR 0058).
+    """
+    return [f"{harness}/{spec.id}" for harness, spec in catalogue]
 
 
 @dataclass(frozen=True)

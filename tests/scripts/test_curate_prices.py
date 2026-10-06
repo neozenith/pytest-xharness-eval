@@ -20,6 +20,7 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval.derive import pricing
+from pytest_xharness_eval.model import registry
 
 if TYPE_CHECKING:
     # Standard Library
@@ -304,11 +305,13 @@ def test_an_empty_prices_directory_bootstraps_the_first_record(tmp_path: Path, m
     monkeypatch.setattr(cp, "STAGING", tmp_path / "staging")
     feed = tmp_path / "feed.json"
     source = json.loads(json.dumps(FEED))
-    # The default matrix must price, so the bootstrap feed carries its rows too.
-    for model in ("claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"):
-        source[model] = {"litellm_provider": "anthropic", **_per_token(input_cost_per_token=1, output_cost_per_token=2)}
-    for model in ("gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra"):
-        source[model] = {"litellm_provider": "openai", **_per_token(input_cost_per_token=1, output_cost_per_token=2)}
+    # Every catalogued model must price (ADR 0057), so the bootstrap feed carries their rows too.
+    provider = {"claude": "anthropic", "codex": "openai"}
+    for harness_name, spec in registry.catalogue():
+        source[spec.id] = {
+            "litellm_provider": provider[harness_name],
+            **_per_token(input_cost_per_token=1, output_cost_per_token=2),
+        }
     feed.write_text(json.dumps(source), encoding="utf-8")
     assert cp.main(["--feed", str(feed), "--date", "2026-09-29"]) == 0
     assert [p.name for p in empty.iterdir()] == ["prices-20260929.toml"]

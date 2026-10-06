@@ -101,6 +101,11 @@ class CellMetrics:
     # The treatment this cell ran under; empty for the control, which is what every record
     # written before ADR 0055 holds.
     treatment: str = ""
+    # What kind of model this was, from the catalogue (ADR 0057). None on a record of a
+    # model the catalogue never described, and on every record written before it.
+    line: str | None = None
+    family_tier: int | None = None
+    released: str | None = None
     session_id: str = ""
     verdict: str = ""
     # What it did.
@@ -164,6 +169,9 @@ class CellMetrics:
             model=result.model,
             effort=result.effort or "",
             treatment=result.treatment or "",
+            line=result.line,
+            family_tier=result.family_tier,
+            released=result.released,
             session_id=result.session_id,
             # The word, never the member: this record is shipped by execnet (ADR 0041).
             verdict=outcome.verdict.value if outcome.verdict else "",
