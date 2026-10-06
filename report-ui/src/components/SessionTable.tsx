@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ColumnPicker } from "@/components/ColumnPicker";
+import { loadHidden, saveHidden } from "@/lib/columnPrefs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ColumnHead } from "@/components/ColumnHead";
 import { TierBadge } from "@/components/TierBadge";
@@ -353,11 +355,18 @@ export function SessionTable({ cells, shortModel = modelShort }: { cells: Cell[]
     box.scrollTo({ left: box.scrollLeft + delta, behavior: still ? "auto" : "smooth" });
   }, [sortKey]);
 
+  // The reader's own column choice (ADR 0061), remembered in this browser between visits.
+  const [deselected, setDeselected] = useState<Set<string>>(() => loadHidden());
+  const choose = (next: Set<string>) => {
+    setDeselected(next);
+    saveHidden(next);
+  };
+
   const constants = useMemo(() => constantColumns(rows, ctx), [rows, shortModel]);
   const columns = useMemo(() => {
-    const collapsed = new Set([...constants.map((c) => c.key), ...hiddenColumns(rows)]);
+    const collapsed = new Set<string>([...constants.map((c) => c.key), ...hiddenColumns(rows), ...deselected]);
     return COLUMNS.filter((col) => !collapsed.has(col.key));
-  }, [constants, rows]);
+  }, [constants, rows, deselected]);
 
   /** What a click on this header would sort by — the direction the hint arrow promises. */
   const nextDir = (key: SortKey): SortDir => (key === sortKey ? (dir === 1 ? "desc" : "asc") : key === "at" ? "desc" : "asc");
@@ -365,97 +374,100 @@ export function SessionTable({ cells, shortModel = modelShort }: { cells: Cell[]
   const open = (c: Cell) => pushRoute({ view: "session", sessionId: c.session_id, turn: null, turnView: null, axis: null, rec: null, line: null, theme });
 
   return (
-    <Table id="SessionTable" data-treated={columns.some((col) => col.key === "treatment") ? "true" : undefined}>
-      {constants.length ? (
-        /*
-         * Announced before the table, which is what a `<caption>` is for — a screen reader reads
-         * "every row: harness claude" and then the rows, instead of hearing the same cell twelve
-         * times. `caption-side` is flipped to `top` for this one table in index.css.
-         */
-        <caption>
-          every row:{" "}
-          {constants.map((c, i) => (
-            <span key={c.key}>
-              {i ? " · " : ""}
-              {c.name} <span className="const">{c.text}</span>
-            </span>
-          ))}
-        </caption>
-      ) : null}
-      <TableHeader>
-        <TableRow>
-          {columns.map((col) => {
-            const active = sortKey === col.key;
-            return (
-              <TableHead
-                key={col.key}
-                ref={active ? activeHead : undefined}
-                className={col.numeric ? "num" : undefined}
-                data-k={col.key}
-                data-group={col.group ? "metrics" : undefined}
-                aria-sort={active ? (dir === 1 ? "ascending" : "descending") : "none"}
-              >
-                <ColumnHead
-                  defId={`SessionTable-def-${col.key}`}
-                  name={col.name}
-                  label={col.label}
-                  title={col.title}
-                  active={active}
-                  ascending={active ? dir === 1 : nextDir(col.key) === "asc"}
-                  onSort={() => sortBy(col.key)}
-                />
-              </TableHead>
-            );
-          })}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.length === 0 ? (
-          <TableRow>
-            {/* The head stays, so the reader sees what would be there; the body says why it is not. */}
-            <TableCell className="empty" colSpan={columns.length}>
-              {NO_MATCH}
-            </TableCell>
-          </TableRow>
-        ) : null}
-        {rows.map((c) => (
-          <TableRow
-            key={c.session_id}
-            className="SessionRow"
-            data-sid={c.session_id}
-            // A row is the only way into a SessionView, so it has to be reachable without a
-            // mouse; the implicit `row` role stays, so the table still reads as a table.
-            tabIndex={0}
-            aria-label={`${c.case} · ${armLabel(c.harness, c.model, c.effort, c.treatment)} · ${c.verdict ?? "no history"}`}
-            // A click always targets a cell rather than the row, so the row cannot ask whether
-            // the event is its own — it asks instead whether it started on a control of its
-            // own. The chip's `stopPropagation` already covers today's one control; this is
-            // the guard that keeps holding when a second one is added.
-            onClick={(e) => {
-              if (e.target instanceof Element && e.target.closest("button, a[href], input, [role='button']")) return;
-              open(c);
-            }}
-            // A keydown, unlike a click, targets whatever holds focus — so when the target is
-            // not the row itself, focus is on a child and the key belongs to the child. Without
-            // this the row matched Enter/Space on a keydown bubbling up from the copy chip,
-            // called `preventDefault()` (killing the click the browser was about to synthesise
-            // on that button) and navigated: the chip promised "Copy <id>" and opened a
-            // SessionView with the clipboard untouched.
-            onKeyDown={(e) => {
-              if (e.target !== e.currentTarget) return;
-              if (e.key !== "Enter" && e.key !== " ") return;
-              e.preventDefault();
-              open(c);
-            }}
-          >
-            {columns.map((col) => (
-              <TableCell key={col.key} className={col.numeric ? "num" : undefined} data-k={col.key} data-group={col.group ? "metrics" : undefined}>
-                {col.render(c, ctx)}
-              </TableCell>
+    <>
+      <ColumnPicker columns={COLUMNS} hidden={deselected} onChange={choose} />
+      <Table id="SessionTable" data-treated={columns.some((col) => col.key === "treatment") ? "true" : undefined}>
+        {constants.length ? (
+          /*
+           * Announced before the table, which is what a `<caption>` is for — a screen reader reads
+           * "every row: harness claude" and then the rows, instead of hearing the same cell twelve
+           * times. `caption-side` is flipped to `top` for this one table in index.css.
+           */
+          <caption>
+            every row:{" "}
+            {constants.map((c, i) => (
+              <span key={c.key}>
+                {i ? " · " : ""}
+                {c.name} <span className="const">{c.text}</span>
+              </span>
             ))}
+          </caption>
+        ) : null}
+        <TableHeader>
+          <TableRow>
+            {columns.map((col) => {
+              const active = sortKey === col.key;
+              return (
+                <TableHead
+                  key={col.key}
+                  ref={active ? activeHead : undefined}
+                  className={col.numeric ? "num" : undefined}
+                  data-k={col.key}
+                  data-group={col.group ? "metrics" : undefined}
+                  aria-sort={active ? (dir === 1 ? "ascending" : "descending") : "none"}
+                >
+                  <ColumnHead
+                    defId={`SessionTable-def-${col.key}`}
+                    name={col.name}
+                    label={col.label}
+                    title={col.title}
+                    active={active}
+                    ascending={active ? dir === 1 : nextDir(col.key) === "asc"}
+                    onSort={() => sortBy(col.key)}
+                  />
+                </TableHead>
+              );
+            })}
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {rows.length === 0 ? (
+            <TableRow>
+              {/* The head stays, so the reader sees what would be there; the body says why it is not. */}
+              <TableCell className="empty" colSpan={columns.length}>
+                {NO_MATCH}
+              </TableCell>
+            </TableRow>
+          ) : null}
+          {rows.map((c) => (
+            <TableRow
+              key={c.session_id}
+              className="SessionRow"
+              data-sid={c.session_id}
+              // A row is the only way into a SessionView, so it has to be reachable without a
+              // mouse; the implicit `row` role stays, so the table still reads as a table.
+              tabIndex={0}
+              aria-label={`${c.case} · ${armLabel(c.harness, c.model, c.effort, c.treatment)} · ${c.verdict ?? "no history"}`}
+              // A click always targets a cell rather than the row, so the row cannot ask whether
+              // the event is its own — it asks instead whether it started on a control of its
+              // own. The chip's `stopPropagation` already covers today's one control; this is
+              // the guard that keeps holding when a second one is added.
+              onClick={(e) => {
+                if (e.target instanceof Element && e.target.closest("button, a[href], input, [role='button']")) return;
+                open(c);
+              }}
+              // A keydown, unlike a click, targets whatever holds focus — so when the target is
+              // not the row itself, focus is on a child and the key belongs to the child. Without
+              // this the row matched Enter/Space on a keydown bubbling up from the copy chip,
+              // called `preventDefault()` (killing the click the browser was about to synthesise
+              // on that button) and navigated: the chip promised "Copy <id>" and opened a
+              // SessionView with the clipboard untouched.
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                open(c);
+              }}
+            >
+              {columns.map((col) => (
+                <TableCell key={col.key} className={col.numeric ? "num" : undefined} data-k={col.key} data-group={col.group ? "metrics" : undefined}>
+                  {col.render(c, ctx)}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </>
   );
 }

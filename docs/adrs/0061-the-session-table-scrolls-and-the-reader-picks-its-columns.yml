@@ -1,0 +1,49 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0061
+slug: the-session-table-scrolls-and-the-reader-picks-its-columns
+title: The session table scrolls sideways, and the reader picks which columns it shows
+status: accepted
+status_note: |-
+  accepted, 2026-10-07.
+  Supersedes part 3 of [0043](0043-the-overview-tables-are-budgeted-to-one-screen.md) (`SessionTable` is budgeted to one screen).
+  The rest of 0043 stands.
+accepted_on: '2026-10-07'
+last_changed_on: '2026-10-07'
+group: report
+tags:
+- report
+lens: |-
+  A fixed width budget makes every new column a fight over pixels, and the losing column gets truncated into noise.
+  Let the table be as wide as its data, and give the reader the control to make it as narrow as their question.
+relates_to:
+- relation: supersedes
+  target: ADR-0043
+  note: part 3, the one-screen budget for SessionTable
+body:
+  context: |-
+    ADR 0043 budgeted `SessionTable` to one 1440px screen, taking width back from how values were spelled.
+    The treatment axis (ADR 0055) and the family tier (ADR 0057) each added to the row.
+    To stay inside the budget the treatment was capped at 7 characters, so `cheap_eval_subagents` read as `cheap_...`.
+    Even so, a real two-skill, two-arm capture overflowed by 128px.
+
+    Screenshots of five layouts were measured on that capture before deciding.
+    Trimming the identity columns, merging effort with treatment, or dropping the harness column still left 98px to 165px of overflow.
+    The width goes to the metric columns, and which of those matter depends on the question a reader is asking.
+  decision: |-
+    **The session table scrolls sideways inside its card, with no pinned column.** The one-screen budget and its 1px smoke assertion are gone.
+
+    **A column picker sits above the table.** It is a checkbox per column, with "Select all" and "Deselect all".
+    `verdict` and `case` are always shown and their boxes are locked, because without them a row cannot be read.
+
+    **The choice is a per-reader preference, kept in the browser.** It is stored in `localStorage` under a versioned key, and is not part of a shared link.
+    Blocked storage, or a stored value of the wrong shape, falls back to showing every column.
+
+    **Width hacks that existed only for the budget are removed.** The treatment prints its full name again.
+  consequences: |-
+    A new column no longer has to be paid for out of another column's width.
+
+    The smoke test now asserts the contract that replaced the budget: the box scrolls horizontally, and deselecting every optional column makes it fit any card.
+
+    A reader who hides columns sees the same table on their next visit, and a link they share opens with every column for its recipient.

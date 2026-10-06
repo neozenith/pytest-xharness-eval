@@ -63,7 +63,9 @@ test("an unbroken token (a hash, a URL) never pushes the page sideways", async (
 test("a long message is capped at 480px and scrolls inside the block", async ({ mount }) => {
   const c = await mount(<FinalMessagePanel text={Array.from({ length: 200 }, (_, i) => `line ${i + 1}`).join("\n")} />);
   const box = await pre(c).boundingBox();
-  expect(box!.height).toBeLessThanOrEqual(480);
+  // Half a pixel of sub-pixel layout rounding, as the width check above allows: the box has
+  // measured 480.0000038px on some runs, which is the cap, not a breach of it.
+  expect(box!.height).toBeLessThanOrEqual(480 + 0.5);
   expect(await pre(c).evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
   await expect(pre(c)).toHaveCSS("overflow-y", "auto");
 });

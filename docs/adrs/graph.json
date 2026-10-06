@@ -919,6 +919,20 @@
     },
     {
       "data": {
+        "id": "ADR-0061",
+        "label": "0061",
+        "parent": "group-report",
+        "colour": "#db2777",
+        "file": "0061-the-session-table-scrolls-and-the-reader-picks-its-columns.md",
+        "title": "The session table scrolls sideways, and the reader picks which columns it shows",
+        "description": "The session table scrolls sideways, and the reader picks which columns it shows",
+        "status": "accepted",
+        "group": "report",
+        "tags": "report"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -1899,6 +1913,16 @@
     },
     {
       "data": {
+        "id": "ADR-0043-superseded_by-ADR-0061",
+        "source": "ADR-0043",
+        "target": "ADR-0061",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the record's status line says \"superseded by\", for part 3"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0043-extends-ADR-0020",
         "source": "ADR-0043",
         "target": "ADR-0020",
@@ -2465,6 +2489,16 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0061-supersedes-ADR-0043",
+        "source": "ADR-0061",
+        "target": "ADR-0043",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "part 3, the one-screen budget for SessionTable"
       }
     }
   ],

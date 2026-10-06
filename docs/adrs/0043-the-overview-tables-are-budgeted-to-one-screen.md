@@ -8,6 +8,7 @@ status: accepted
 accepted_on: 2026-08-30
 last_changed_on: 2026-08-30
 relates_to:
+  - { relation: superseded_by, target: ADR-0061 }
   - { relation: extends, target: ADR-0020 }
   - { relation: extends, target: ADR-0021 }
   - { relation: extends, target: ADR-0025 }
@@ -19,6 +20,7 @@ generated: { by: human:neozenith, at: 2026-08-30T00:00:00Z }
 # 0043: The overview's tables are budgeted to one screen, and the aggregate has a decomposition as well as an accumulation
 
 Status: accepted, 2026-08-30.
+Part 3, the one-screen budget for `SessionTable`, is superseded by [0061](0061-the-session-table-scrolls-and-the-reader-picks-its-columns.md): the table scrolls and the reader picks its columns.
 Refines [0020](0020-captured-report-is-a-static-microsite.md) (the captured report is a static microsite) and [0021](0021-metric-names-carry-unit-and-provenance.md) (a metric name carries its unit and its source).
 It also refines [0025](0025-results-name-their-case-and-charts-have-a-log-line-axis.md) (a result names its case).
 It also refines [0031](0031-plotly-tamagui-and-a-deeplink-permutation-matrix.md) (every state deeplinks, and a Playwright matrix sweeps them all) and [0042](0042-the-overview-is-filtered-by-the-url.md) (the overview is filtered by the URL).

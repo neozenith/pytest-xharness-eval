@@ -4,7 +4,7 @@
 
 Browse it interactively in [graph.html](graph.html): click a node to read its record.
 
-60 decision records, 155 typed edges, grouped into 11 groups.
+61 decision records, 157 typed edges, grouped into 11 groups.
 Every edge comes from a record's `relates_to` block, so this view cannot drift from the records.
 
 ```cytoscape

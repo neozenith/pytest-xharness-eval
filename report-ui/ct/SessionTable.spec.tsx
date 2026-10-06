@@ -412,8 +412,11 @@ test.describe("SessionTable: sorting", () => {
     await expect.poll(() => search(page)).toBe("?sort=turns&dir=desc");
   });
 
-  test("the first Tab stop is the first head, and heads come before rows", async ({ mount, page }) => {
+  test("the column picker is the first Tab stop, then the heads in order, then the rows", async ({ mount, page }) => {
     await mount(<SessionTable cells={timeline()} />);
+    // ADR 0061: the picker sits above the table, so it is reached before the first head.
+    await page.keyboard.press("Tab");
+    await expect(page.locator("#SessionTableColumns > summary")).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "verdict", exact: true })).toBeFocused();
     const shown = (await heads(page)).length;
@@ -637,15 +640,12 @@ test.describe("the treatment axis (ADR 0055)", () => {
   });
 });
 
-test("a long treatment name elides in its cell and keeps the whole of it on the title", async ({ mount, page }) => {
+test("a long treatment name prints whole, now that the table scrolls rather than truncates (ADR 0061)", async ({ mount, page }) => {
   const cells = [cell({ session_id: "c" }), cell({ session_id: "t", treatment: "cheap_eval_subagents" })];
   await mount(<SessionTable cells={cells} />);
   const td = page.locator('#SessionTable tbody tr[data-sid="t"] td[data-k="treatment"] > span');
-  await expect(td).toHaveAttribute("title", "cheap_eval_subagents");
-  expect(await td.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
-  // the control's own word fits whole
-  const control = page.locator('#SessionTable tbody tr[data-sid="c"] td[data-k="treatment"] > span');
-  expect(await control.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await expect(td).toHaveText("cheap_eval_subagents");
+  expect(await td.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   await expect(page.locator("#SessionTable")).toHaveAttribute("data-treated", "true");
 });
 
@@ -669,4 +669,41 @@ test.describe("the family tier (ADR 0057)", () => {
     await mount(<SessionTable cells={cells} />);
     await expect(page.locator("#SessionTable caption")).toContainText("model opus-5 (tier 3)");
   });
+});
+
+// -- the column picker (ADR 0061) ------------------------------------------------
+
+const headKeys = (page: Page) => page.locator("#SessionTable thead th").evaluateAll((ths) => ths.map((th) => th.getAttribute("data-k")));
+
+test("the column picker hides a column, remembers it, and select all brings it back", async ({ mount, page }) => {
+  await page.evaluate(() => localStorage.clear());
+  const table = await mount(<SessionTable cells={sweep()} />);
+  await page.locator("#SessionTableColumns > summary").click();
+  await page.locator("#SessionTableColumns input[data-k='turns']").uncheck();
+  expect(await headKeys(page)).not.toContain("turns");
+  expect(await page.evaluate(() => localStorage.getItem("xharness.sessionTable.hiddenColumns.v1"))).toBe('["turns"]');
+  await page.locator("#SessionTableColumns [data-action='select-all']").click();
+  expect(await headKeys(page)).toContain("turns");
+  await table.unmount();
+});
+
+test("deselect all leaves only the always-shown verdict and case columns", async ({ mount, page }) => {
+  await page.evaluate(() => localStorage.clear());
+  await mount(<SessionTable cells={sweep()} />);
+  await page.locator("#SessionTableColumns > summary").click();
+  await page.locator("#SessionTableColumns [data-action='deselect-all']").click();
+  expect(await headKeys(page)).toEqual(["verdict", "case"]);
+  await expect(page.locator("#SessionTableColumns input[data-k='verdict']")).toBeDisabled();
+  await expect(rows(page).first()).toBeVisible();
+});
+
+test("a stored preference applies on the next mount", async ({ mount, page }) => {
+  await page.evaluate(() => localStorage.setItem("xharness.sessionTable.hiddenColumns.v1", '["wall_ms","coverage"]'));
+  await mount(<SessionTable cells={sweep()} />);
+  const keys = await headKeys(page);
+  expect(keys).not.toContain("wall_ms");
+  expect(keys).not.toContain("coverage");
+  await page.locator("#SessionTableColumns > summary").click();
+  await expect(page.locator("#SessionTableColumns input[data-k='wall_ms']")).not.toBeChecked();
+  await expect(page.locator("#SessionTableColumns input[data-k='turns']")).toBeChecked();
 });

@@ -1853,18 +1853,12 @@ button.filter-chip[data-on="true"] > .muted {
 }
 
 /*
- * `treatment` (ADR 0055) is the third free-text identity column, and a treatment is named by
- * whoever wrote the directory (`cheap_eval_subagents` alone was 150px). It is also the narrowest
- * claim on the row: a filter facet with its own chips, collapsing out of the table the moment one
- * is selected. So it takes the tightest cap; the full name is on the cell's `title`.
+ * `treatment` (ADR 0055) prints its whole name. It used to be capped at 7ch to fit a one-screen
+ * budget, which made `cheap_eval_subagents` read as `cheap_...`; since ADR 0061 the table scrolls
+ * sideways and the reader trims columns with the picker instead, so the name is legible again.
  */
 #SessionTable td[data-k="treatment"] > * {
-  display: inline-block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: bottom;
   white-space: nowrap;
-  max-width: 7ch;
 }
 
 /*
@@ -1897,22 +1891,72 @@ button.filter-chip[data-on="true"] > .muted {
 }
 
 /*
- * A treated sweep's table carries one column more than the budget above was drawn for, and on a
- * real two-harness capture it ran ~30px past a 1440px card even with the cap. The width comes
- * back from the gutters, one pixel a side per cell, and only on a table that actually shows the
- * column (`data-treated`), so every untreated sweep keeps its exact layout.
+ * The SessionTable column picker (ADR 0061): a disclosure above the table's top-right corner.
+ * It is a preference, not a filter, so it sits apart from the overview's filter chips.
  */
-#SessionTable[data-treated] :is(th, td) {
-  padding-left: 0.25rem;
-  padding-right: 0.25rem;
+.column-picker {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.375rem;
+  font-size: 0.75rem;
 }
 
-#SessionTable[data-treated] thead th button {
-  width: calc(100% + 0.5rem);
-  margin-left: -0.25rem;
-  margin-right: -0.25rem;
-  padding-left: 0.25rem;
-  padding-right: 0.25rem;
+.column-picker > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--xh-line);
+  border-radius: 999px;
+  color: var(--xh-ink);
+}
+
+.column-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.column-picker[open] > summary {
+  border-color: var(--xh-accent);
+}
+
+.column-picker-panel {
+  position: absolute;
+  z-index: 5;
+  margin-top: 1.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--xh-panel);
+  border: 1px solid var(--xh-line);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+}
+
+.column-picker-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+}
+
+.column-picker-actions button {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--xh-line);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--xh-ink);
+  cursor: pointer;
+}
+
+.column-picker ul {
+  columns: 2;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.column-picker li label {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  white-space: nowrap;
+  padding: 0.0625rem 0;
 }
 
 /*

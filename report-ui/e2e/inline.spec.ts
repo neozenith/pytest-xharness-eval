@@ -135,17 +135,27 @@ test("inline page boots over file:// and binds the captured data", async ({ page
     await expect(page.locator("#SessionTable .tier-badge")).toHaveCount(0);
   }
 
-  // The column budget: the sessions table has to fit its card without a horizontal scrollbar,
-  // which is the whole point of dropping the id column, merging the two cost columns and
-  // abbreviating the token counts. Measured, not asserted from the column count.
-  const overflow = await page.evaluate(() => {
+  // The width contract (ADR 0061, superseding ADR 0043's one-screen budget): the sessions table
+  // may be wider than its card, and then it scrolls sideways inside it; the reader trims it with
+  // the column picker. So the box must scroll horizontally, and trimming must be able to make it
+  // fit: with every optional column deselected, the two always-shown ones fit any card.
+  const overflowX = await page.evaluate(() => {
+    const box = document.querySelector("#SessionTable")?.closest("[data-slot='table-container']");
+    return box ? getComputedStyle(box).overflowX : "missing";
+  });
+  expect(["auto", "scroll"]).toContain(overflowX);
+  await page.locator("#SessionTableColumns > summary").click();
+  await page.locator("#SessionTableColumns [data-action='deselect-all']").click();
+  const trimmed = await page.evaluate(() => {
     const box = document.querySelector("#SessionTable")?.closest("[data-slot='table-container']");
     return box ? box.scrollWidth - box.clientWidth : -1;
   });
   // `>= 0` as well as `<= 1`: the probe returns -1 when it cannot find the box at all, and a
   // one-sided assertion would have passed on a renamed id rather than failing on it.
-  expect(overflow).toBeGreaterThanOrEqual(0);
-  expect(overflow).toBeLessThanOrEqual(1);
+  expect(trimmed).toBeGreaterThanOrEqual(0);
+  expect(trimmed).toBeLessThanOrEqual(1);
+  await page.locator("#SessionTableColumns [data-action='select-all']").click();
+  await page.locator("#SessionTableColumns > summary").click();
 
   const errors = consoleEntries.filter((e) => e.type === "error" || e.type === "pageerror");
   writeArtifacts(path.join(OUT_ROOT, "inline"), { "console.json": consoleEntries.slice() });
