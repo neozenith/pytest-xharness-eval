@@ -1,0 +1,50 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0062
+slug: a-finished-cell-removes-its-workspace
+title: A finished cell removes its workspace, and a project can keep them for inspection
+status: accepted
+status_note: |-
+  accepted, 2026-10-07.
+  Refines [0004](0004-workspace-is-a-plain-copy.md) (a workspace is a plain copy of the fixture tree) and [0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (all run output consolidates under a cache dir) with when a workspace is removed.
+accepted_on: '2026-10-07'
+last_changed_on: '2026-10-07'
+group: storage
+tags:
+- storage
+lens: |-
+  Scratch that outlives its purpose is not free.
+  Clean up by default once the evidence is safe.
+  Make keeping the scratch an explicit choice for the reader who needs it.
+relates_to:
+- relation: extends
+  target: ADR-0004
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0032
+  note: the record's status line says "refines"
+body:
+  context: |-
+    A cell's workspace was removed only when the same cell ran again, so every cell of every sweep stayed on disk.
+    The mermaid skill's render step downloads its own browser into a task-local npm cache, about 675MB per cell.
+    By the first effort sweep the build tree held 19GB, the disk filled, and the sweep died at 16% mid-cell.
+
+    Nothing a later step reads lives in the workspace.
+    The session log, any subagent transcripts, the result and the metrics record are all copied under `results/`.
+    That happens before the cell is graded (ADR 0032, ADR 0033).
+    Each harness also keeps a run directory beside the workspace: claude's plugin wrapper, and codex's private home, which holds a copy of its credentials.
+  decision: |-
+    **A finished cell removes its workspace and its harness run directories.** It happens after the cell's record is written, in a `finally`.
+    A cell whose CLI or grader failed is cleaned up too.
+
+    **Only the exact sibling names are removed.** They are `<workspace>.<harness>` for each registered harness, never a `<workspace>.*` pattern.
+    That pattern would also match a neighbouring cell's workspace, as `…-gpt-5` matches `…-gpt-5.6-sol`.
+
+    **A project keeps them for inspection with `xharness_keep_workspaces`, or `--xharness-keep-workspaces` for one run.** Both default to off.
+  consequences: |-
+    A sweep's disk use stays at roughly one workspace per worker, however many cells it runs.
+    Codex's copied credentials no longer outlive the cell that needed them.
+
+    The files an agent wrote are no longer inspectable after the run unless the project keeps workspaces.
+    The written paths are still listed on every record, and the evidence a replay needs is unaffected.

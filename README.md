@@ -174,6 +174,7 @@ stock pytest (`-k`, `-x`, `-m eval`, node ids).
 | `--treatment <name>` | Only cells under that treatment, repeatable. `control` names the untreated cell (ADR 0055) | `pytest skills/x/evals --treatment control` |
 | `-k <expr>` | Boolean slices over cell ids and case names (stock pytest) | `-k "opus or sol"`, `-k "codex and not sol"` |
 | `--xharness-timeout <s>` | Seconds one cell's CLI may run before it is killed (default 600). Raise it for the top effort rungs, which think for longer by design | `pytest skills/x/evals --xharness-timeout 1800` |
+| `--xharness-keep-workspaces` | Leave each finished cell's build workspace in `.xharness_eval_cache/build/` for inspection. By default it is removed once its evidence is captured and graded | `pytest skills/x/evals --xharness-keep-workspaces` |
 | `--dry-run` | Enumerate cells and validate pricing, invoke nothing | `pytest skills/x/evals --dry-run` |
 | `--collect-only -q` | List cell node ids (stock pytest) | `pytest --collect-only -q skills/x/evals` |
 
@@ -312,6 +313,7 @@ The ini keys, paths relative to pytest's rootdir:
 | `xharness_report_design_tokens` | bundled | design tokens JSON that themes `report/report.html` (flag: `--xharness-report-design-tokens FILE`) |
 | `xharness_report_inline` | `false` | embed every result, log and the tokens into `report/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
 | `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`) |
+| `xharness_keep_workspaces` | `false` | Leave each finished cell's build workspace in place for inspection instead of removing it once its evidence is captured and graded (flag: `--xharness-keep-workspaces`, ADR 0062) |
 | `xharness_prices` | (none) | Price rows that add to or override the bundled price records: `<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..] [long_context_above=<prompt tokens> long_input=.. long_output=.. [long_cache_read=..] [long_cache_write=..] [long_cache_write_1h=..]] [from=YYYY-MM-DD] [to=YYYY-MM-DD]` (ADR 0030, ADR 0050, ADR 0051) |
 
 ```toml

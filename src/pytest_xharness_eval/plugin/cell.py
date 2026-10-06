@@ -229,6 +229,11 @@ class CellRun:
             cache=self.settings.cache,
         )
 
+    def tidy(self, workspace: Path) -> None:
+        """Remove the finished cell's workspace, unless the project keeps them for inspection (ADR 0062)."""
+        if not self.settings.keep_workspaces:
+            ws.discard(workspace)
+
     # -- the sequence ------------------------------------------------------------------
 
     def execute(self, stash: pytest.Stash) -> None:  # pragma: no cover - invoke() spends (ADR 0002)
@@ -236,12 +241,16 @@ class CellRun:
 
         The record is written in a ``finally`` because a failing cell is the case a metrics
         history exists for: a sweep that only recorded its passes would show cost dropping
-        as quality dropped.
+        as quality dropped. The workspace is tidied in an outer ``finally``, after the record,
+        so a cell whose CLI failed does not leave its downloads behind either.
         """
         workspace = self.materialise()
-        attempt = self.invoke(workspace)
-        session = self.store(attempt.result)
         try:
-            self.grade(attempt.result, workspace)
+            attempt = self.invoke(workspace)
+            session = self.store(attempt.result)
+            try:
+                self.grade(attempt.result, workspace)
+            finally:
+                stash[RECORD_KEY] = self.record(attempt, session)
         finally:
-            stash[RECORD_KEY] = self.record(attempt, session)
+            self.tidy(workspace)

@@ -933,6 +933,20 @@
     },
     {
       "data": {
+        "id": "ADR-0062",
+        "label": "0062",
+        "parent": "group-storage",
+        "colour": "#64748b",
+        "file": "0062-a-finished-cell-removes-its-workspace.md",
+        "title": "A finished cell removes its workspace, and a project can keep them for inspection",
+        "description": "A finished cell removes its workspace, and a project can keep them for inspection",
+        "status": "accepted",
+        "group": "storage",
+        "tags": "storage"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2499,6 +2513,26 @@
         "label": "supersedes",
         "relation": "supersedes",
         "note": "part 3, the one-screen budget for SessionTable"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0062-extends-ADR-0004",
+        "source": "ADR-0062",
+        "target": "ADR-0004",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0062-extends-ADR-0032",
+        "source": "ADR-0062",
+        "target": "ADR-0032",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
       }
     }
   ],

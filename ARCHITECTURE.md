@@ -121,7 +121,9 @@ CLI's own default. Both CLIs accept a rung they do not recognise and run at that
 anyway, so the rung is validated at collection rather than trusted at the flag (ADR 0049).
 
 The workspace itself is a plain copy of the fixture tree under the work directory,
-discarded and rebuilt for every cell. No git repository is created, which puts
+rebuilt for every cell and removed, with the run directories its harness made beside it,
+once the cell's evidence is captured and graded; `--xharness-keep-workspaces` leaves it for
+inspection (ADR 0062). No git repository is created, which puts
 git-dependent skills out of scope for now (ADR 0004). A treated cell then has its
 treatment's directories copied over that copy, and the instructions lever above is what
 makes each CLI actually read the overlaid file: `--setting-sources ""` alone reads no

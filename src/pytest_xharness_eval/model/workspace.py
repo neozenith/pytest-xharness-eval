@@ -11,6 +11,9 @@ import hashlib
 import shutil
 from typing import TYPE_CHECKING
 
+# Our Libraries
+from pytest_xharness_eval.model import registry
+
 if TYPE_CHECKING:
     # Standard Library
     from collections.abc import Sequence
@@ -36,6 +39,22 @@ def materialise(fixture: Path, cell_id: str, workdir: Path, overlays: Sequence[P
     for overlay in overlays:
         shutil.copytree(overlay, ws, dirs_exist_ok=True)
     return ws
+
+
+def discard(workspace: Path) -> None:
+    """Remove a finished cell's workspace and the run directories its harness made beside it (ADR 0062).
+
+    A workspace is scratch once its cell is captured and graded: the evidence is under
+    ``results/``. Left in place, a sweep accumulates every agent's downloads (a skill's render
+    step alone fetched 675MB per cell) until the disk fills mid-sweep. Each harness keeps its
+    own run directory as ``<workspace>.<harness>`` (the claude plugin wrapper, codex's private
+    home with its copied credentials); only those exact names are removed, never a pattern,
+    because ``<workspace>.*`` would also match a neighbouring cell's workspace
+    (``…-gpt-5`` against ``…-gpt-5.6-sol``).
+    """
+    for path in (workspace, *(workspace.parent / f"{workspace.name}.{name}" for name in registry.names())):
+        if path.is_dir():
+            shutil.rmtree(path)
 
 
 def snapshot(root: Path) -> dict[str, str]:

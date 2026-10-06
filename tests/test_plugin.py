@@ -27,6 +27,7 @@ def test_help_lists_options_and_ini_keys(pytester: pytest.Pytester) -> None:
             "*--effort=*",
             "*--treatment=NAME*",
             "*--xharness-timeout=SECONDS*",
+            "*--xharness-keep-workspaces*",
             "*--dry-run*",
         ]
     )

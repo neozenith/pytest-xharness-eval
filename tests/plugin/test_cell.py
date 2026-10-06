@@ -1,6 +1,7 @@
 """``plugin.cell``: one cell's live run, step by step (ADR 0002, ADR 0040)."""
 
 # Standard Library
+import dataclasses
 import json
 import os
 import re
@@ -196,3 +197,14 @@ def test_a_treated_cell_stacks_its_overlay_and_counts_it_as_seeded(tmp_path: Pat
     assert (workspace / "AGENTS.md").is_file()
     assert run.output(_captured_run(tmp_path), workspace).seeded == {"README.md", "AGENTS.md"}
     assert run.session_dir("sid").rel.split("/")[2] == "claude-opus-5+lean-ci"
+
+
+def test_a_finished_cell_tidies_its_workspace_unless_the_project_keeps_them(tmp_path: Path) -> None:
+    run = _cell_run(tmp_path)
+    workspace = run.materialise()
+    run.tidy(workspace)
+    assert not workspace.exists()
+    kept = dataclasses.replace(run, settings=dataclasses.replace(run.settings, keep_workspaces=True))
+    workspace = kept.materialise()
+    kept.tidy(workspace)
+    assert workspace.is_dir()

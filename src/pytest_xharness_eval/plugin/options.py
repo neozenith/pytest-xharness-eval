@@ -30,6 +30,7 @@ from pytest_xharness_eval.plugin.results import RESULTS_KEY, ResultCollector
 from pytest_xharness_eval.runtime.settings import (
     DEFAULT_OUTPUT_RATE_LIMIT,
     INI_CACHE_DIR,
+    INI_KEEP_WORKSPACES,
     INI_MATRIX,
     INI_MODELS,
     INI_OUTPUT_RATE_LIMIT,
@@ -92,6 +93,14 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=None,
         metavar="SECONDS",
         help="how long one cell's CLI may run before it is killed (overrides the ini key; default 600)",
+    )
+    g.addoption(
+        "--xharness-keep-workspaces",
+        dest="xharness_keep_workspaces",
+        action="store_true",
+        default=False,
+        help="leave each finished cell's build workspace in place for inspection (overrides the ini key; "
+        "by default it is removed once its evidence is captured and graded, ADR 0062)",
     )
     g.addoption(
         "--dry-run",
@@ -184,6 +193,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "seconds one cell's CLI may run before it is killed (default 600); raise it for a sweep "
             "across the top effort rungs, which think for longer by design (ADR 0049)"
         ),
+    )
+    parser.addini(
+        INI_KEEP_WORKSPACES,
+        type="bool",
+        default=False,
+        help="leave each finished cell's build workspace under <cache>/build/ for inspection; "
+        "by default it is removed once its evidence is captured and graded (ADR 0062)",
     )
     parser.addini(
         INI_SKILL_IGNORE,

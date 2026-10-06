@@ -51,6 +51,7 @@ INI_SKILL_IGNORE = "xharness_skill_ignore"
 INI_REPORT_TOKENS = "xharness_report_design_tokens"
 INI_REPORT_INLINE = "xharness_report_inline"
 INI_TIMEOUT = "xharness_timeout_s"
+INI_KEEP_WORKSPACES = "xharness_keep_workspaces"
 
 DEFAULT_SKILLS_DIR = "skills"
 DEFAULT_CACHE_DIR = ".xharness_eval_cache"
@@ -142,6 +143,10 @@ class Settings:
     # a timeout raises RunError, so the default cutting them off would read on the report as
     # the skill failing rather than the budget being too small (ADR 0049).
     timeout_s: int = DEFAULT_TIMEOUT_S
+    # Leave each finished cell's build workspace in place for inspection, rather than removing
+    # it once its evidence is captured and graded (ADR 0062). Off by default: a sweep's
+    # workspaces otherwise grow without bound.
+    keep_workspaces: bool = False
 
     # -- constructors ------------------------------------------------------------------
 
@@ -164,6 +169,9 @@ class Settings:
             report_inline=bool(config.getoption("xharness_report_inline", False) or config.getini(INI_REPORT_INLINE)),
             timeout_s=int(
                 config.getoption("xharness_timeout", None) or config.getini(INI_TIMEOUT) or DEFAULT_TIMEOUT_S
+            ),
+            keep_workspaces=bool(
+                config.getoption("xharness_keep_workspaces", False) or config.getini(INI_KEEP_WORKSPACES)
             ),
         )
 
