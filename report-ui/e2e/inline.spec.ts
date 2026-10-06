@@ -129,7 +129,7 @@ test("inline page boots over file:// and binds the captured data", async ({ page
       ) ?? false,
   );
   if (tiered) {
-    await expect(page.locator("#SessionTable td[data-k='model'] .tier-badge").first()).toHaveText(/^T\d+$/);
+    await expect(page.locator("#SessionTable td[data-k='family_tier'] .tier-badge").first()).toHaveText(/^T\d+$/);
     await expect(page.locator("#OverviewFilters [data-facet='tier']").first()).toBeVisible();
   } else {
     await expect(page.locator("#SessionTable .tier-badge")).toHaveCount(0);

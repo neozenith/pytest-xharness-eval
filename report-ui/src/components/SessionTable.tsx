@@ -141,16 +141,22 @@ const COLUMNS: Column[] = [
     key: "model",
     name: "model",
     label: "model",
+    title: "the model the harness was told to use, without its vendor prefix; hover a cell for the full id",
+    render: (c, ctx) => <code title={c.model}>{ctx.shortModel(c.model)}</code>,
+  },
+  /*
+   * The family tier (ADR 0057) is a column of its own, beside the model it describes. It rode
+   * inside the model cell as a `T3` mark while the table was budgeted to one screen; since ADR 0061
+   * the table scrolls and the reader trims it, so the tier can be sorted on like any other column.
+   */
+  {
+    key: "family_tier",
+    name: "family_tier",
+    label: "tier",
     title:
-      "the model the harness was told to use, without its vendor prefix; hover a cell for the full id. T<n> is its family tier in the model catalogue (1 the smallest; hover it for the line and release date)",
-    // The tier rides inside the model cell rather than in a column of its own (ADR 0057): it is a
-    // fact about the model, and the table has no width left for a twentieth column.
-    render: (c, ctx) => (
-      <>
-        <code title={c.model}>{ctx.shortModel(c.model)}</code>
-        <TierBadge model={c} />
-      </>
-    ),
+      "the model's family tier in the model catalogue: its role in its provider's lineup, 1 the smallest (ADR 0057); hover a cell for the line and release date",
+    numeric: true,
+    render: (c) => (c.family_tier == null ? nil : <TierBadge model={c} />),
   },
   {
     key: "effort",

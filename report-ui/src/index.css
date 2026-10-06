@@ -1862,23 +1862,13 @@ button.filter-chip[data-on="true"] > .muted {
 }
 
 /*
- * The family tier (ADR 0057) rides inside the model cell as a `T3` mark rather than a column of
- * its own: the session table has no width left, and the tier is a fact about the model the cell
- * already names. It is set small and muted, a qualifier on the name, in the mono face so `T1`..`T4`
- * stand the same width down the column. The line and release date are on its `title`.
- */
-/*
- * The mark is paid for out of the model name itself: a dated id (`haiku-4-5-20251001`) was the
- * column's widest value, so the name caps and elides, the full id still on its `title`. The
- * model column is then no wider with the mark than it was without it.
+ * The family tier (ADR 0057) as a `T3` mark: its own column in SessionTable, a qualifier after the
+ * model name in SessionSummaryTable. Small and muted, in the mono face so `T1`..`T4` stand the same
+ * width down a column. The line and release date are on its `title`. The model name prints whole:
+ * since ADR 0061 the table scrolls, so no column is capped to pay for another.
  */
 #SessionTable td[data-k="model"] > code {
-  display: inline-block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: bottom;
   white-space: nowrap;
-  max-width: 14ch;
 }
 
 .tier-badge {
@@ -1894,7 +1884,12 @@ button.filter-chip[data-on="true"] > .muted {
  * The SessionTable column picker (ADR 0061): a disclosure above the table's top-right corner.
  * It is a preference, not a filter, so it sits apart from the overview's filter chips.
  */
+/*
+ * The picker is the panel's positioning context and sits flush right, so the panel opens leftward
+ * from the button into the page, never past the card's right edge.
+ */
 .column-picker {
+  position: relative;
   display: flex;
   justify-content: flex-end;
   margin-bottom: 0.375rem;
@@ -1920,8 +1915,10 @@ button.filter-chip[data-on="true"] > .muted {
 
 .column-picker-panel {
   position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  max-width: min(36rem, calc(100vw - 2rem));
   z-index: 5;
-  margin-top: 1.75rem;
   padding: 0.5rem 0.75rem;
   background: var(--xh-panel);
   border: 1px solid var(--xh-line);

@@ -24,6 +24,7 @@ const ALL_KEYS = [
   "case",
   "harness",
   "model",
+  "family_tier",
   "effort",
   "estimated_cost_usd",
   "accumulative_billed_tokens",
@@ -443,10 +444,10 @@ test.describe("SessionTable: sorting", () => {
 });
 
 test.describe("SessionTable: the effort axis (ADR 0049)", () => {
-  test("the effort column sits after model and prints each rung as sent", async ({ mount, page }) => {
+  test("the effort column sits after the model and its tier, and prints each rung as sent", async ({ mount, page }) => {
     await mount(<SessionTable cells={sweep()} />);
     const keys = await heads(page);
-    expect(keys.indexOf("effort")).toBe(keys.indexOf("model") + 1);
+    expect(keys.indexOf("effort")).toBe(keys.indexOf("family_tier") + 1);
     expect(await column(page, "effort")).toEqual(["max", "low", "high", NONE, "medium", "xhigh", "low"]);
   });
 
@@ -649,19 +650,26 @@ test("a long treatment name prints whole, now that the table scrolls rather than
   await expect(page.locator("#SessionTable")).toHaveAttribute("data-treated", "true");
 });
 
-// ADR 0057: the family tier is a `T<n>` mark inside the model cell, never a column of its own.
+// ADR 0057, ADR 0061: the family tier is a column of its own, right after the model it describes.
 test.describe("the family tier (ADR 0057)", () => {
-  test("a catalogued model carries a T<n> mark with its line and release date on the title; an old capture carries none", async ({ mount, page }) => {
+  test("the tier column carries T<n> with its line and release date on the title; an old capture reads none", async ({ mount, page }) => {
     await mount(<SessionTable cells={sweep()} />);
-    expect(await heads(page)).not.toContain("tier");
-    expect(await heads(page)).not.toContain("family_tier");
-    const sol = page.locator('#SessionTable tbody tr[data-sid="cccccccc-0001"] td[data-k="model"]');
-    await expect(sol.locator("code")).toHaveText("5.6-sol");
-    await expect(sol.locator(".tier-badge")).toHaveText("T3");
-    await expect(sol.locator(".tier-badge")).toHaveAttribute("title", "line sol · family tier 3 · released 2026-06-10");
-    await expect(page.locator('#SessionTable tbody tr[data-sid="cccccccc-0002"] td[data-k="model"] .tier-badge')).toHaveText("T1");
-    // the session captured before the catalogue: same model, no mark
-    await expect(page.locator('#SessionTable tbody tr[data-sid="aaaaaaaa-0004"] td[data-k="model"] .tier-badge')).toHaveCount(0);
+    const keys = await headKeys(page);
+    expect(keys.indexOf("family_tier")).toBe(keys.indexOf("model") + 1);
+    const sol = page.locator('#SessionTable tbody tr[data-sid="cccccccc-0001"]');
+    await expect(sol.locator('td[data-k="model"] code')).toHaveText("5.6-sol");
+    await expect(sol.locator('td[data-k="model"] .tier-badge')).toHaveCount(0);
+    await expect(sol.locator('td[data-k="family_tier"] .tier-badge')).toHaveText("T3");
+    await expect(sol.locator('td[data-k="family_tier"] .tier-badge')).toHaveAttribute("title", "line sol · family tier 3 · released 2026-06-10");
+    await expect(page.locator('#SessionTable tbody tr[data-sid="cccccccc-0002"] td[data-k="family_tier"] .tier-badge')).toHaveText("T1");
+    // the session captured before the catalogue: same model, no tier
+    await expect(page.locator('#SessionTable tbody tr[data-sid="aaaaaaaa-0004"] td[data-k="family_tier"]')).toHaveText(NONE);
+  });
+
+  test("the tier column sorts numerically", async ({ mount, page }) => {
+    await mount(<SessionTable cells={sweep()} />, { hooksConfig: { search: "?sort=family_tier&dir=asc" } });
+    const tiers = (await column(page, "family_tier")).filter((t) => t !== NONE);
+    expect(tiers).toEqual([...tiers].sort());
   });
 
   test("a collapsed model keeps its tier in the caption", async ({ mount, page }) => {
