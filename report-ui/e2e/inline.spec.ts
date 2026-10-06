@@ -119,6 +119,22 @@ test("inline page boots over file:// and binds the captured data", async ({ page
   expect(charts).toEqual({ cards: 2, sameRow: true, plots: 2, plotDelta: 0 });
   await expect(page.locator("#SessionSummaryTable")).toBeVisible();
 
+  // The family tier (ADR 0057): a `T<n>` mark in the model cell of the sessions table exactly when
+  // the capture's index carries a tier, and a `tier` filter row with it. A capture from before the
+  // catalogue carries neither, which is the shape this check must also accept.
+  const tiered = await page.evaluate(
+    () =>
+      (window as unknown as { __XH_DATA__?: { index: { cells: { family_tier?: number | null }[] } } }).__XH_DATA__?.index.cells.some(
+        (c) => c.family_tier != null,
+      ) ?? false,
+  );
+  if (tiered) {
+    await expect(page.locator("#SessionTable td[data-k='model'] .tier-badge").first()).toHaveText(/^T\d+$/);
+    await expect(page.locator("#OverviewFilters [data-facet='tier']").first()).toBeVisible();
+  } else {
+    await expect(page.locator("#SessionTable .tier-badge")).toHaveCount(0);
+  }
+
   // The column budget: the sessions table has to fit its card without a horizontal scrollbar,
   // which is the whole point of dropping the id column, merging the two cost columns and
   // abbreviating the token counts. Measured, not asserted from the column count.

@@ -8,9 +8,10 @@ import type { Page } from "@playwright/test";
 import { SessionView } from "../src/views/SessionView";
 import { EFFORT_DEFAULT } from "../src/lib/effort";
 import { TREATMENT_CONTROL } from "../src/lib/treatment";
+import { NOT_CATALOGUED } from "../src/lib/catalogue";
 import type { SessionRoute } from "../src/lib/route";
 import type { Cell } from "../src/lib/types";
-import { cell, inline, SID } from "./fixtures";
+import { CATALOGUE, cell, inline, SID } from "./fixtures";
 
 const route = (over: Partial<SessionRoute> = {}): SessionRoute => ({
   view: "session",
@@ -75,6 +76,9 @@ test("title and metadata name the arm, with the rung on its own row", async ({ m
     "harness / model",
     "effort",
     "treatment",
+    "line",
+    "family_tier",
+    "released",
     "started",
     "wall",
     "estimated_cost_usd",
@@ -98,6 +102,9 @@ test("title and metadata name the arm, with the rung on its own row", async ({ m
     "harness / model": "claude / claude-opus-5",
     effort: "high",
     treatment: TREATMENT_CONTROL,
+    line: NOT_CATALOGUED,
+    family_tier: NOT_CATALOGUED,
+    released: NOT_CATALOGUED,
     wall: "83.0s",
     estimated_cost_usd: "$1.0276",
     harness_reported_cost_usd: "$1.0288",
@@ -272,4 +279,13 @@ test("the theme param survives a control write", async ({ mount, page }) => {
   await mount(<SessionView cell={c} route={route({ theme: "dark" })} />, { hooksConfig: { search: `?session=${SID}&theme=dark`, inline: inline([c]) } });
   await page.locator("#ChartAxisToggle").getByText("per session-log line").click();
   await expect.poll(() => search(page)).toBe(`?session=${SID}&view=summary&axis=line&theme=dark`);
+});
+
+// ADR 0057: a catalogued model's line, family tier and release date each get a metadata row.
+test("a catalogued model's line, family tier and release date are on their own rows", async ({ mount, page }) => {
+  const c1 = cell({ ...CATALOGUE["claude-opus-5"] });
+  await mount(<SessionView cell={c1} route={route()} />, { hooksConfig: { search: `?session=${SID}`, inline: inline([c1]) } });
+  const m = await meta(page);
+  expect(m).toMatchObject({ line: "opus", family_tier: "tier 3", released: "2026-05-14" });
+  await expect(page.locator("#SessionMetaTable code", { hasText: /^opus$/ })).toHaveCount(1);
 });

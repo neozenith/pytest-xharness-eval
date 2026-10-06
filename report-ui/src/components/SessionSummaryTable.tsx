@@ -20,6 +20,7 @@
 import { useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ColumnHead } from "@/components/ColumnHead";
+import { TierBadge } from "@/components/TierBadge";
 import { caseShort, compact, dec, fmt, modelShort, NONE, pct, secs, usd, windowLabel } from "@/lib/format";
 import { effortSortValue } from "@/lib/effort";
 import { NO_MATCH } from "@/lib/facets";
@@ -88,7 +89,13 @@ const COLUMNS: Column[] = [
     label: "model",
     title: "the model the harness was told to use, without its vendor prefix; hover a cell for the full id",
     sortValue: (r) => r.model,
-    render: (r, ctx) => <code title={r.model}>{ctx.shortModel(r.model)}</code>,
+    // The tier is a mark on the model, never a column or a key (ADR 0057): it never splits a group.
+    render: (r, ctx) => (
+      <>
+        <code title={r.model}>{ctx.shortModel(r.model)}</code>
+        <TierBadge model={r} />
+      </>
+    ),
   },
   {
     key: "effort",

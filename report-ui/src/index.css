@@ -1868,6 +1868,35 @@ button.filter-chip[data-on="true"] > .muted {
 }
 
 /*
+ * The family tier (ADR 0057) rides inside the model cell as a `T3` mark rather than a column of
+ * its own: the session table has no width left, and the tier is a fact about the model the cell
+ * already names. It is set small and muted, a qualifier on the name, in the mono face so `T1`..`T4`
+ * stand the same width down the column. The line and release date are on its `title`.
+ */
+/*
+ * The mark is paid for out of the model name itself: a dated id (`haiku-4-5-20251001`) was the
+ * column's widest value, so the name caps and elides, the full id still on its `title`. The
+ * model column is then no wider with the mark than it was without it.
+ */
+#SessionTable td[data-k="model"] > code {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+  max-width: 14ch;
+}
+
+.tier-badge {
+  margin-left: 0.25em;
+  color: var(--xh-muted);
+  font-family: var(--xh-font-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/*
  * A treated sweep's table carries one column more than the budget above was drawn for, and on a
  * real two-harness capture it ran ~30px past a 1440px card even with the cap. The width comes
  * back from the gutters, one pixel a side per cell, and only on a table that actually shows the

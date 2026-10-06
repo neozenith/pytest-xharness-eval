@@ -18,7 +18,7 @@ const OVERVIEW: Route = {
   view: "overview",
   sort: null,
   summarySort: null,
-  facets: { skill: null, harness: null, model: null, effort: null, treatment: null },
+  facets: { skill: null, harness: null, model: null, effort: null, treatment: null, tier: null },
   theme: null,
 };
 const session = (sessionId: string, theme: "light" | "dark" | null = null): Route => ({

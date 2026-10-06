@@ -115,7 +115,8 @@ export const TIERS: Record<TierName, MatrixTier> = {
  * single-select per facet that offers a real choice, one multi-select (which is what covers the
  * comma serialisation, and is not the same URL as the param being absent), and — when the data
  * offers one — a harness × model pair, and a harness × effort pair, that select zero sessions:
- * the empty states the matrix must look at every sweep; and, on a treated sweep, the control beside
+ * the empty states the matrix must look at every sweep; one family tier across harnesses, when the
+ * catalogue gave the sweep one (ADR 0057); and, on a treated sweep, the control beside
  * one treatment. A facet with fewer than two options emits nothing: there is
  * no choice there to cover.
  */
@@ -175,6 +176,20 @@ function filterPermutations(cells: Cell[]): Permutation[] {
    * carries (a control's wire value is null), so the literal is swept through the comma
    * serialisation on its own rather than trusted to the generic multi-select above.
    */
+  /*
+   * The cross-provider tier comparison (ADR 0057): one family tier that more than one harness ran,
+   * which is the read the tier exists for ("every tier 3 model"). The generic single-select above
+   * may land on a tier only one provider ran, so the comparison is swept on its own; on a capture
+   * from before the catalogue every tier is null, `options.tier` is empty, and nothing is emitted.
+   */
+  const shared = options.tier.find((t) => new Set(filterCells(cells, { ...NO_FACETS, tier: [t] }).map((c) => c.harness)).size >= 2);
+  if (shared !== undefined) {
+    perms.push({
+      slug: `overview--filter-tier-${slugify(shared)}-across-harnesses`,
+      search: overviewSearch(null, null, { ...NO_FACETS, tier: [shared] }),
+      description: `SweepOverview filtered to family tier ${shared}, every harness's model of that tier side by side`,
+    });
+  }
   const treated = options.treatment.filter((t) => t !== CONTROL);
   if (options.treatment.includes(CONTROL) && treated.length >= 1) {
     perms.push({

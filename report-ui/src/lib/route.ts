@@ -16,6 +16,7 @@
  *   &model=<a>[,<b>]                           overview, only those models
  *   &effort=<a>[,<b>]                          overview, only those effort rungs (ADR 0049)
  *   &treatment=<a>[,<b>]                       overview, only those treatments; `control` selects the untreated arm (ADR 0055)
+ *   &tier=<n>[,<m>]                            overview, only the models of those family tiers (ADR 0057); a model with no tier never matches
  *   &theme=light|dark                          forced theme (any route; otherwise remembered)
  *
  * Query strings — not path segments — because the shipped page is one static file copied
@@ -47,13 +48,15 @@ export interface FacetSelection {
   effort: string[] | null;
   /** Treatment names, and the reserved `control` for the untreated arm (`lib/treatment.ts`). */
   treatment: string[] | null;
+  /** Family tiers as their decimal digits (`"3"`), from the model catalogue (ADR 0057). */
+  tier: string[] | null;
 }
 
 /** Nothing selected: the unfiltered overview, and what a non-overview route reports. */
-export const NO_FACETS: FacetSelection = Object.freeze({ skill: null, harness: null, model: null, effort: null, treatment: null });
+export const NO_FACETS: FacetSelection = Object.freeze({ skill: null, harness: null, model: null, effort: null, treatment: null, tier: null });
 
-/** The five params, in the order they serialise; `lib/facets.ts` re-declares them as its vocabulary. */
-const FACET_PARAMS = ["skill", "harness", "model", "effort", "treatment"] as const;
+/** The six params, in the order they serialise; `lib/facets.ts` re-declares them as its vocabulary. */
+const FACET_PARAMS = ["skill", "harness", "model", "effort", "treatment", "tier"] as const;
 
 export interface SortState {
   key: string;
@@ -126,6 +129,7 @@ export function parseSearch(search: string): Route {
       model: list(params.get("model")),
       effort: list(params.get("effort")),
       treatment: list(params.get("treatment")),
+      tier: list(params.get("tier")),
     };
     return {
       view: "overview",

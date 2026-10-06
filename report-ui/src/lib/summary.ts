@@ -42,6 +42,13 @@ export interface SummaryRow {
   effort: string | null;
   /** The treatment every run in the group ran under; null for the control (ADR 0055). */
   treatment: string | null;
+  /**
+   * The model catalogue's facts about the group's model (ADR 0057). A property of the model, never
+   * part of the key: every run in a group ran the same model, so they agree by construction.
+   */
+  line: string | null;
+  family_tier: number | null;
+  released: string | null;
   runs: number;
   /** runs whose verdict is exactly `pass`, over `graded` — an ungraded run is never a failure. */
   pass: number;
@@ -116,6 +123,9 @@ export function summaryRows(cells: Cell[]): SummaryRow[] {
       model: first.model,
       effort: first.effort,
       treatment: first.treatment,
+      line: first.line,
+      family_tier: first.family_tier,
+      released: first.released,
       runs: group.length,
       pass: group.filter((c) => c.verdict === "pass").length,
       graded: group.filter((c) => c.verdict != null).length,

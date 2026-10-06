@@ -648,3 +648,25 @@ test("a long treatment name elides in its cell and keeps the whole of it on the 
   expect(await control.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   await expect(page.locator("#SessionTable")).toHaveAttribute("data-treated", "true");
 });
+
+// ADR 0057: the family tier is a `T<n>` mark inside the model cell, never a column of its own.
+test.describe("the family tier (ADR 0057)", () => {
+  test("a catalogued model carries a T<n> mark with its line and release date on the title; an old capture carries none", async ({ mount, page }) => {
+    await mount(<SessionTable cells={sweep()} />);
+    expect(await heads(page)).not.toContain("tier");
+    expect(await heads(page)).not.toContain("family_tier");
+    const sol = page.locator('#SessionTable tbody tr[data-sid="cccccccc-0001"] td[data-k="model"]');
+    await expect(sol.locator("code")).toHaveText("5.6-sol");
+    await expect(sol.locator(".tier-badge")).toHaveText("T3");
+    await expect(sol.locator(".tier-badge")).toHaveAttribute("title", "line sol · family tier 3 · released 2026-06-10");
+    await expect(page.locator('#SessionTable tbody tr[data-sid="cccccccc-0002"] td[data-k="model"] .tier-badge')).toHaveText("T1");
+    // the session captured before the catalogue: same model, no mark
+    await expect(page.locator('#SessionTable tbody tr[data-sid="aaaaaaaa-0004"] td[data-k="model"] .tier-badge')).toHaveCount(0);
+  });
+
+  test("a collapsed model keeps its tier in the caption", async ({ mount, page }) => {
+    const cells = sweep().filter((c) => c.model === "claude-opus-5" && c.family_tier != null);
+    await mount(<SessionTable cells={cells} />);
+    await expect(page.locator("#SessionTable caption")).toContainText("model opus-5 (tier 3)");
+  });
+});

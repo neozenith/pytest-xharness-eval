@@ -483,3 +483,24 @@ test.describe("SessionSummaryTable: the treatment axis (ADR 0055)", () => {
     await expect(cell(`${OPUS}|high`, "runs")).toHaveText("1");
   });
 });
+
+// ADR 0057: the tier marks a group's model and never splits a group.
+test.describe("SessionSummaryTable: the family tier (ADR 0057)", () => {
+  test("a group's model carries its T<n> mark; the tier is no column and no key", async ({ mount, page }) => {
+    await mount(<SessionSummaryTable cells={sweep()} />);
+    await expect(td(page, `${OPUS}|high`, "model").locator(".tier-badge")).toHaveText("T3");
+    await expect(td(page, "mermaidjs-diagrams|eval_dual_density|claude|claude-sonnet-5|medium", "model").locator(".tier-badge")).toHaveText("T2");
+    // the rung-less group is the pre-catalogue session: no mark
+    await expect(td(page, OPUS, "model").locator(".tier-badge")).toHaveCount(0);
+    await expect(page.locator("#SessionSummaryTable thead th")).toHaveCount(KEYS.length);
+  });
+
+  test("a catalogued and an uncatalogued run of one arm stay one group", async ({ mount, page }) => {
+    const cells = [
+      cell({ session_id: "x1", effort: "high", line: "opus", family_tier: 3, released: "2026-05-14" }),
+      cell({ session_id: "x2", effort: "high" }),
+    ];
+    await mount(<SessionSummaryTable cells={cells} />);
+    await expect(rows(page)).toHaveCount(1);
+  });
+});

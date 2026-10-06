@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ColumnHead } from "@/components/ColumnHead";
+import { TierBadge } from "@/components/TierBadge";
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { caseShort, compact, coverageShare, coverageText, dec, fmt, modelShort, NONE, pct, secs, usd, usd3, when, windowLabel } from "@/lib/format";
+import { tierLabel } from "@/lib/catalogue";
 import { armLabel, effortSortValue } from "@/lib/effort";
 import { NO_MATCH } from "@/lib/facets";
 import { anyTreated, treatmentLabel, treatmentSortValue } from "@/lib/treatment";
@@ -137,8 +139,16 @@ const COLUMNS: Column[] = [
     key: "model",
     name: "model",
     label: "model",
-    title: "the model the harness was told to use, without its vendor prefix; hover a cell for the full id",
-    render: (c, ctx) => <code title={c.model}>{ctx.shortModel(c.model)}</code>,
+    title:
+      "the model the harness was told to use, without its vendor prefix; hover a cell for the full id. T<n> is its family tier in the model catalogue (1 the smallest; hover it for the line and release date)",
+    // The tier rides inside the model cell rather than in a column of its own (ADR 0057): it is a
+    // fact about the model, and the table has no width left for a twentieth column.
+    render: (c, ctx) => (
+      <>
+        <code title={c.model}>{ctx.shortModel(c.model)}</code>
+        <TierBadge model={c} />
+      </>
+    ),
   },
   {
     key: "effort",
@@ -257,7 +267,9 @@ function constantColumns(rows: Cell[], ctx: RowContext): { key: SortKey; name: s
     const first = rows[0]![key as keyof Cell];
     if (first == null || typeof first !== "string") continue;
     if (!rows.every((r) => r[key as keyof Cell] === first)) continue;
-    const text = key === "case" ? caseShort(first) : key === "model" ? ctx.shortModel(first) : first;
+    // A collapsed model keeps its tier mark in the caption, so filtering to one model never hides it.
+    const tier = rows[0]!.family_tier;
+    const text = key === "case" ? caseShort(first) : key === "model" ? `${ctx.shortModel(first)}${tier != null ? ` (${tierLabel(tier)})` : ""}` : first;
     out.push({ key, name: key, text });
   }
   return out;

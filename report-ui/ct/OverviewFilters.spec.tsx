@@ -43,7 +43,7 @@ test.describe("rendering", () => {
     await expect(c.locator('.el[data-el="OverviewFilters"]')).toHaveText("OverviewFilters");
     await expect(c).toContainText("narrows the chart and both tables below");
     const facets = await c.locator('[role="group"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-facet")));
-    expect(facets).toEqual(["skill", "harness", "model", "effort"]);
+    expect(facets).toEqual(["skill", "harness", "model", "effort", "tier"]);
     for (const f of facets) await expect(row(c, f!)).toHaveAttribute("aria-label", `filter by ${f}`);
     await expect(c.locator("#OverviewFilterCount")).toHaveText(/^7 of 7 sessions\s*7 sessions$/);
     await expect(c.getByRole("status")).toHaveAttribute("aria-atomic", "true");
@@ -417,7 +417,7 @@ test.describe("the treatment facet (ADR 0055)", () => {
   test("a treated sweep offers control first, then the treatments alphabetically", async ({ mount }) => {
     const c = await mount(<OverviewFilters cells={treatedSweep()} />);
     const facets = await c.locator('[role="group"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-facet")));
-    expect(facets).toEqual(["skill", "harness", "model", "effort", "treatment"]);
+    expect(facets).toEqual(["skill", "harness", "model", "effort", "treatment", "tier"]);
     expect(await values(c, "treatment")).toEqual(["control", "agents-md", "lean-ci"]);
     await expect(countOf(c, "treatment", "control")).toHaveText("7");
     await expect(countOf(c, "treatment", "lean-ci")).toHaveText("2");
@@ -438,5 +438,42 @@ test.describe("the treatment facet (ADR 0055)", () => {
     const key = row(c, "treatment").locator("> *").first();
     const fits = await key.evaluate((el) => el.scrollWidth <= el.clientWidth);
     expect(fits).toBe(true);
+  });
+});
+
+/*
+ * The family tier facet (ADR 0057). `sweep()` catalogues every model but its one pre-catalogue
+ * session: tier 1 (luna), tier 2 (sonnet), tier 3 (three opus and one sol, across both harnesses).
+ */
+test.describe("the family tier facet (ADR 0057)", () => {
+  test("a sweep before the catalogue has no tier row", async ({ mount }) => {
+    const c = await mount(<OverviewFilters cells={[cell({ session_id: "a" }), cell({ session_id: "b", harness: "codex", model: "gpt-5.6-sol" })]} />);
+    await expect(row(c, "tier")).toHaveCount(0);
+  });
+
+  test("tiers come ascending by number, read `tier n`, and the null tier is never a chip", async ({ mount }) => {
+    const c = await mount(<OverviewFilters cells={[...sweep(), cell({ session_id: "ten", family_tier: 10 })]} />);
+    expect(await values(c, "tier")).toEqual(["1", "2", "3", "10"]);
+    await expect(chip(c, "tier", "3")).toContainText("tier 3");
+    await expect(countOf(c, "tier", "3")).toHaveText("4");
+    await expect(countOf(c, "tier", "1")).toHaveText("1");
+  });
+
+  test("clicking a tier writes ?tier=…, selects across harnesses, and excludes the untiered session", async ({ mount, page }) => {
+    const c = await mount(<OverviewFilters cells={sweep()} />);
+    await chip(c, "tier", "3").click();
+    expect(await search(page)).toBe("?tier=3");
+    await expect(c.locator("#OverviewFilterCount > span:not(.sizer)")).toHaveText("4 of 7 sessions");
+    // tier 3 spans both providers, so the harness row still counts codex's sol
+    await expect(countOf(c, "harness", "codex")).toHaveText("1");
+    await chip(c, "tier", "1").click();
+    expect(await search(page)).toBe("?tier=3,1");
+    await expect(c.locator("#OverviewFilterCount > span:not(.sizer)")).toHaveText("5 of 7 sessions");
+  });
+
+  test("a tier deeplink lights its chip", async ({ mount }) => {
+    const c = await mount<HooksConfig>(<OverviewFilters cells={sweep()} />, { hooksConfig: { search: "?tier=2" } });
+    await expect(chip(c, "tier", "2")).toHaveAttribute("aria-pressed", "true");
+    await expect(c.locator("#OverviewFilterCount > span:not(.sizer)")).toHaveText("1 of 7 sessions");
   });
 });
