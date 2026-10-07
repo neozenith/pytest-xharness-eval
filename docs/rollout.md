@@ -205,6 +205,12 @@ Extractors in `verify.facets`: `fence_count`, `fences`, `visible_fences`,
 `fill_colours`, `text_colours`, `unstyled_nodes`, `headings`, `headings_at(n)`,
 `hex_colours`, `body_text`. Any `str -> object` works.
 
+`node_ids`, `edges` and `unstyled_nodes` read flowchart fences only, one fence at a time,
+because a class applies only within the diagram that assigns it. Front matter, `%%`
+comment lines, node labels of every shape and edge labels (`|x|`, `-- x -->`,
+`-. x .->`, `== x ==>`) are dropped before anything is read as an id, and a `subgraph`
+id is a container rather than a node.
+
 `GOLDEN.assert_matches(output)` raises `GoldenMismatch` (an `AssertionError`, so the cell
 grades `fail`, not `error`) carrying one row per facet, passing ones included, with what
 was missing and what was extra:
