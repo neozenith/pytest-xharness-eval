@@ -72,9 +72,11 @@ def test_each_runresult_field_has_exactly_one_owner() -> None:
     derived = {"turns", "usage", "calls", "subagents"}
     priced = {"estimated_cost_usd", "cost_status", "cost_by_tier", "rates_applied", "long_context_calls"}
     attached = {"case", "effort", "treatment", "line", "family_tier", "released", "skill_coverage"}
+    # Observed at the spawn when the CLI is killed at the wall, by `harness.mark_timed_out` (ADR 0064).
+    killed = {"timed_out_after_s", "idle_before_timeout_s"}
     supplied = _typed_dict_keys(runresult.RunResultFields)
-    assert not supplied & (derived | priced | attached)
-    assert supplied | derived | priced | attached == {f.name for f in dataclasses.fields(RunResult)}
+    assert not supplied & (derived | priced | attached | killed)
+    assert supplied | derived | priced | attached | killed == {f.name for f in dataclasses.fields(RunResult)}
 
 
 def test_each_subagent_field_is_derived_from_the_ledger_or_named_by_the_transcript() -> None:

@@ -54,6 +54,32 @@ if TYPE_CHECKING:
 # processes -- agree with the controller and a sweep's cells share one ``{run}`` level.
 RUN_STAMP_ENV = "XHARNESS_EVAL_RUN_TS"
 
+#: A run killed at the wall whose session logs had been silent this long had stalled (ADR 0064).
+#: Inside it the agent was still working when time ran out.
+STALLED_AFTER_S = 300
+
+
+def check_completed(result: RunResult) -> None:
+    """Refuse a run the CLI was killed for at the wall-clock limit, with the verdict its cause earns.
+
+    Still active within :data:`STALLED_AFTER_S` of the wall, the agent was working and simply
+    ran out of time: a ``fail`` to complete in a timely manner, which a longer
+    ``xharness_timeout_s`` might turn into a pass. Silent for longer, something stalled (a skill
+    script, the harness, the network): an ``error`` to investigate, because a stalled run is not
+    a clean run of the skill to call failed. A run with no log at all had no activity to show.
+    """
+    if result.timed_out_after_s is None:
+        return
+    idle = result.idle_before_timeout_s
+    limit = result.timed_out_after_s
+    if idle is not None and idle < STALLED_AFTER_S:
+        raise AssertionError(
+            f"did not complete within the {limit}s timeout: the session was still active {idle:.0f}s "
+            "before the wall, so it ran out of time (raise xharness_timeout_s to let it finish)"
+        )
+    silent = f"no session activity for {idle:.0f}s" if idle is not None else "no session log at all"
+    raise harness.RunError(f"stalled: killed at the {limit}s timeout after {silent} (ADR 0064)")
+
 
 def run_stamp() -> str:
     """This sweep's run stamp: path-safe, sortable, and minted at most once per session.
@@ -209,6 +235,7 @@ class CellRun:
         attempt the task, so grading it would record the skill as failing a test it never sat.
         """
         try:
+            check_completed(result)
             if not result.attempted:
                 raise harness.RunError(
                     f"{result.harness} exited {result.exit_code} without a model call, so the task was "

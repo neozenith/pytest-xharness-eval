@@ -34,6 +34,7 @@ from pytest_xharness_eval.model import effort as effort_words
 
 if TYPE_CHECKING:
     # Standard Library
+    from collections.abc import Iterable
     from pathlib import Path
 
     # Our Libraries
@@ -55,11 +56,48 @@ class UnknownHarness(LookupError):
     """
 
 
+#: The exit code a CLI killed at the wall-clock limit is reported with, as GNU `timeout` does.
+#: The kill is not an exception: the session log the CLI wrote up to that moment is still the
+#: run's evidence, and it was billed, so each harness folds it like any other (ADR 0064).
+TIMED_OUT = 124
+
+
 def spawn(
     cmd: list[str], cwd: Path, env: dict[str, str], timeout_s: int
 ) -> subprocess.CompletedProcess[str]:  # pragma: no cover - spawns a real CLI (ADR 0002)
-    """Run a CLI to completion, capturing both streams. The one place a subprocess starts."""
-    return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout_s)
+    """Run a CLI to completion, capturing both streams. The one place a subprocess starts.
+
+    At ``timeout_s`` the CLI is killed and :data:`TIMED_OUT` is returned with whatever it had
+    printed, rather than an exception that would lose the partial session (ADR 0064).
+    """
+    try:
+        return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout_s)
+    except subprocess.TimeoutExpired as exc:
+        out, err = exc.stdout, exc.stderr
+        return subprocess.CompletedProcess(
+            cmd,
+            TIMED_OUT,
+            stdout=out.decode(errors="replace") if isinstance(out, bytes) else (out or ""),
+            stderr=err.decode(errors="replace") if isinstance(err, bytes) else (err or ""),
+        )
+
+
+def seconds_idle(logs: Iterable[Path], now: float) -> float | None:
+    """How long before ``now`` the newest of ``logs`` was last written, or None when none exist.
+
+    A session's logs grow while its agent works, so their newest write is the last sign of
+    activity a killed run left behind: what tells a run that ran out of time from one that had
+    stalled (ADR 0064).
+    """
+    written = [p.stat().st_mtime for p in logs if p.is_file()]
+    return max(now - max(written), 0.0) if written else None
+
+
+def mark_timed_out(result: RunResult, timeout_s: int, idle_s: float | None) -> RunResult:
+    """Record on ``result`` that its CLI was killed at ``timeout_s``, and how idle it had been."""
+    result.timed_out_after_s = timeout_s
+    result.idle_before_timeout_s = idle_s
+    return result
 
 
 #: Directories never shipped to the agent under test, whatever a provider's loading path is.

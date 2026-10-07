@@ -139,6 +139,7 @@
   "final_text": "done",
   "harness": "codex",
   "harness_reported_cost_usd": null,
+  "idle_before_timeout_s": null,
   "line": "sol",
   "long_context_calls": 0,
   "model": "gpt-5.6-sol",
@@ -300,6 +301,7 @@
       }
     }
   ],
+  "timed_out_after_s": null,
   "tool_calls": {
     "CommandExecution": 1
   },

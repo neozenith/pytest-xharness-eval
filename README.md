@@ -312,7 +312,7 @@ The ini keys, paths relative to pytest's rootdir:
 | `xharness_skill_ignore` | (none) | gitignore-style patterns for skill files that are not decision surface; a bare pattern applies to every skill, `<skill>: <pattern>` to the skills matching the selector (ADR 0026) |
 | `xharness_report_design_tokens` | bundled | design tokens JSON that themes `report/report.html` (flag: `--xharness-report-design-tokens FILE`) |
 | `xharness_report_inline` | `false` | embed every result, log and the tokens into `report/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
-| `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`) |
+| `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`). A killed run is captured and priced: it **fails** if its session was still active in the 5 minutes before the limit (it ran out of time), and **errors** if it had been silent longer (it stalled) (ADR 0064) |
 | `xharness_keep_workspaces` | `false` | Leave each finished cell's build workspace in place for inspection instead of removing it once its evidence is captured and graded (flag: `--xharness-keep-workspaces`, ADR 0062) |
 | `xharness_prices` | (none) | Price rows that add to or override the bundled price records: `<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..] [long_context_above=<prompt tokens> long_input=.. long_output=.. [long_cache_read=..] [long_cache_write=..] [long_cache_write_1h=..]] [from=YYYY-MM-DD] [to=YYYY-MM-DD]` (ADR 0030, ADR 0050, ADR 0051) |
 

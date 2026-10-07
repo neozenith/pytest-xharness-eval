@@ -961,6 +961,20 @@
     },
     {
       "data": {
+        "id": "ADR-0064",
+        "label": "0064",
+        "parent": "group-grading",
+        "colour": "#0284c7",
+        "file": "0064-a-run-killed-at-the-wall-fails-if-active-and-errors-if-stalled.md",
+        "title": "A run killed at the timeout keeps its evidence, fails if it was still working, and errors if it had stalled",
+        "description": "A run killed at the timeout keeps its evidence, fails if it was still working, and errors if it had stalled",
+        "status": "accepted",
+        "group": "grading",
+        "tags": "grading, harness"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2563,6 +2577,26 @@
       "data": {
         "id": "ADR-0063-extends-ADR-0049",
         "source": "ADR-0063",
+        "target": "ADR-0049",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0064-extends-ADR-0063",
+        "source": "ADR-0064",
+        "target": "ADR-0063",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0064-extends-ADR-0049",
+        "source": "ADR-0064",
         "target": "ADR-0049",
         "label": "extends",
         "relation": "extends",

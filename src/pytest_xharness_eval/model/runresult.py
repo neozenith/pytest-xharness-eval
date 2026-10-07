@@ -399,6 +399,11 @@ class RunResult:
     line: str | None = None
     family_tier: int | None = None
     released: str | None = None
+    # Set when the CLI was killed at the wall-clock limit (ADR 0064): the limit it ran into,
+    # and how long its session logs had been silent at that moment. Observed by the harness
+    # at the kill, never folded from a log. None on a run that finished on its own.
+    timed_out_after_s: int | None = None
+    idle_before_timeout_s: float | None = None
     # Parallel threads the session spawned, each with its own ledger. Their usage is folded
     # into ``usage`` (the run's billed total); ``turns`` and ``calls`` stay the primary's.
     subagents: list[Subagent] = field(default_factory=list)

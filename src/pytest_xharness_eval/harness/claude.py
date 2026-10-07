@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import time
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -26,11 +27,14 @@ from typing import TYPE_CHECKING, Any
 from pytest_xharness_eval.harness import records as record_kinds
 from pytest_xharness_eval.harness.base import (
     DEFAULT_TIMEOUT_S,
+    TIMED_OUT,
     Harness,
     RunError,
     SessionLog,
     copy_skill,
+    mark_timed_out,
     register,
+    seconds_idle,
     spawn,
 )
 from pytest_xharness_eval.harness.normalise import (
@@ -152,16 +156,23 @@ def run_claude(
 
     before = ws.snapshot(workspace)
     proc = spawn(cmd, cwd=workspace, env={**os.environ, **_WORKSPACE_MEMORY_ENV}, timeout_s=timeout_s)
+    ended_at = time.time()
     after = ws.snapshot(workspace)
-
-    if proc.returncode != 0 and not proc.stdout.strip():
-        raise RunError(f"claude exited {proc.returncode} with no result envelope: {proc.stderr[:2000]}")
-    try:
-        envelope = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise RunError(f"claude stdout was not the JSON envelope: {proc.stdout[:500]}") from exc
-
     log = claude_log_path(config_dir, workspace, session_id)
+    timed_out = proc.returncode == TIMED_OUT
+
+    if timed_out:
+        # Killed at the wall: claude prints its envelope only when it finishes, so the
+        # session log it wrote up to the kill is the whole of the evidence (ADR 0064).
+        envelope = timed_out_envelope(session_id)
+    else:
+        if proc.returncode != 0 and not proc.stdout.strip():
+            raise RunError(f"claude exited {proc.returncode} with no result envelope: {proc.stderr[:2000]}")
+        try:
+            envelope = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise RunError(f"claude stdout was not the JSON envelope: {proc.stdout[:500]}") from exc
+
     if not log.is_file():
         raise RunError(f"claude session log not found at derived path: {log}")
 
@@ -169,7 +180,20 @@ def run_claude(
     if got != session_id:
         raise RunError(f"session id mismatch: harness minted {session_id}, envelope says {got}")
 
-    return ClaudeSessionLog(log, envelope).to_result(workspace, ws.diff(before, after))
+    result = ClaudeSessionLog(log, envelope).to_result(workspace, ws.diff(before, after))
+    if timed_out:
+        logs = [log, *log.with_suffix("").glob("subagents/*.jsonl")]
+        mark_timed_out(result, timeout_s, seconds_idle(logs, ended_at))
+    return result
+
+
+def timed_out_envelope(session_id: str) -> dict[str, Any]:
+    """The envelope a run killed at the wall gets: its minted id, an error, and nothing measured.
+
+    Every figure the real envelope would carry (the CLI's own cost, its usage, its turn count)
+    is left out rather than zeroed, so the run is priced and counted from its log alone.
+    """
+    return {"session_id": session_id, "is_error": True, "result": ""}
 
 
 # -- folding the log -------------------------------------------------------------------

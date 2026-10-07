@@ -231,3 +231,35 @@ def test_a_run_that_called_the_model_then_exited_non_zero_is_still_graded(tmp_pa
     with pytest.raises(AssertionError):
         run.grade(result, run.materialise())
     assert run.verdict is Verdict.FAIL
+
+
+@pytest.mark.parametrize(
+    ("idle", "verdict", "raised", "match"),
+    [
+        (
+            30.0,
+            Verdict.FAIL,
+            AssertionError,
+            "did not complete within the 1200s timeout: the session was still active 30s",
+        ),
+        (299.0, Verdict.FAIL, AssertionError, "ran out of time"),
+        (
+            300.0,
+            Verdict.ERROR,
+            harness.RunError,
+            "stalled: killed at the 1200s timeout after no session activity for 300s",
+        ),
+        (None, Verdict.ERROR, harness.RunError, "no session log at all"),
+    ],
+)
+def test_a_run_killed_at_the_wall_fails_if_still_active_and_errors_if_stalled(
+    tmp_path: Path, idle: float | None, verdict: Verdict, raised: type[Exception], match: str
+) -> None:
+    """Working when time ran out is a fail to complete in time; silent for five minutes is a stall (ADR 0064)."""
+    run = _cell_run(tmp_path)  # a grader that would pass: the timeout decides before it runs
+    result = _captured_run(tmp_path)
+    result.calls = [Call(n=1, at="t")]
+    harness.mark_timed_out(result, 1200, idle)
+    with pytest.raises(raised, match=match):
+        run.grade(result, run.materialise())
+    assert run.verdict is verdict

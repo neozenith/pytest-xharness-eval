@@ -94,6 +94,11 @@ def rebuild_result(
     # The treatment the same way, for the same reason: the case's treatments may have moved
     # since, and the run had the overlay it had (ADR 0055).
     treatment = old.get("treatment")
+    # A kill at the wall is not in the log either: it was observed at the spawn. Carry it
+    # forward, so a rebuild still knows the run was cut off and how idle it was (ADR 0064).
+    timed_out, idle = old.get("timed_out_after_s"), old.get("idle_before_timeout_s")
+    if isinstance(timed_out, int):
+        harness.mark_timed_out(result, timed_out, float(idle) if isinstance(idle, int | float) else None)
     return pipeline.derive(
         result,
         table=table,

@@ -150,6 +150,7 @@
   "final_text": "done",
   "harness": "claude",
   "harness_reported_cost_usd": 0.51,
+  "idle_before_timeout_s": null,
   "line": "opus",
   "long_context_calls": 0,
   "model": "claude-opus-5",
@@ -312,6 +313,7 @@
       }
     }
   ],
+  "timed_out_after_s": null,
   "tool_calls": {
     "Agent": 1,
     "Bash": 1,

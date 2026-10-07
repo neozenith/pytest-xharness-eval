@@ -63,6 +63,8 @@ that only checks `exists` passes for a run that did nothing at all.
 | `line` | `str \| None` | The model's product line from the catalogue, such as `opus` or `sol` (ADR 0057). |
 | `family_tier` | `int \| None` | The model's hand-curated role in its lineup, 1 the smallest, frozen at release (ADR 0057). |
 | `released` | `str \| None` | The model's release date, `YYYY-MM-DD` (ADR 0057). |
+| `timed_out_after_s` | `int \| None` | The wall-clock limit the CLI was killed at; `None` when it finished on its own (ADR 0064). |
+| `idle_before_timeout_s` | `float \| None` | How long the session's logs had been silent when it was killed. Under 300s the cell fails (it ran out of time); 300s or more, or no log, it errors (it had stalled) (ADR 0064). |
 | `session_id` | `str` | The session this verdict is tied to. |
 | `session_log` | `str` | Path to the captured JSONL. Exists on disk during grading. |
 | `workspace` | `str` | The same directory as `output.workspace`, as the run recorded it. |

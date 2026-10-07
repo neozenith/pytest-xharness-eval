@@ -28,11 +28,14 @@ from typing import TYPE_CHECKING, Any
 from pytest_xharness_eval.harness import records as record_kinds
 from pytest_xharness_eval.harness.base import (
     DEFAULT_TIMEOUT_S,
+    TIMED_OUT,
     Harness,
     RunError,
     SessionLog,
     copy_skill,
+    mark_timed_out,
     register,
+    seconds_idle,
     spawn,
 )
 from pytest_xharness_eval.harness.normalise import (
@@ -200,6 +203,7 @@ def run_codex(
     before = ws.snapshot(workspace)
     start = time.monotonic()
     proc = spawn(cmd, cwd=workspace, env=env, timeout_s=timeout_s)
+    ended_at = time.time()
     wall_ms = int((time.monotonic() - start) * 1000)
     after = ws.snapshot(workspace)
 
@@ -208,12 +212,16 @@ def run_codex(
         raise RunError(f"no rollout under private CODEX_HOME; codex exited {proc.returncode}: {proc.stderr[:2000]}")
     rollout = primary_rollout(rollouts)
 
+    # A run killed at the wall (ADR 0064) folds the same way: codex writes its rollouts as it
+    # goes, so what it wrote up to the kill is still the run, and it was billed.
     session = CodexSessionLog(rollout, proc.returncode, sub_rollouts=[r for r in rollouts if r != rollout])
     result = session.to_result(workspace, ws.diff(before, after))
     if not result.duration_ms:
         result.duration_ms = wall_ms
     if not result.session_id:
         raise RunError(f"rollout {rollouts[0]} carries no session_meta id")
+    if proc.returncode == TIMED_OUT:
+        mark_timed_out(result, timeout_s, seconds_idle(rollouts, ended_at))
     return result
 
 
