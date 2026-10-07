@@ -989,6 +989,20 @@
     },
     {
       "data": {
+        "id": "ADR-0066",
+        "label": "0066",
+        "parent": "group-accounting",
+        "colour": "#ea580c",
+        "file": "0066-a-harness-says-what-commands-a-shell-call-ran.md",
+        "title": "A harness says which commands a shell call ran",
+        "description": "A harness says which commands a shell call ran",
+        "status": "accepted",
+        "group": "accounting",
+        "tags": "evidence, harness"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2635,6 +2649,26 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0066-extends-ADR-0048",
+        "source": "ADR-0066",
+        "target": "ADR-0048",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0066-extends-ADR-0034",
+        "source": "ADR-0066",
+        "target": "ADR-0034",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the difference lives on the harness class, never a name check"
       }
     }
   ],

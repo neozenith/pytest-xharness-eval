@@ -12,7 +12,7 @@ accepted_on: '2026-10-08'
 last_changed_on: '2026-10-08'
 group: accounting
 tags:
-- coverage
+- evidence
 - harness
 lens: |-
   Coverage can only attribute a command it can read as a command.
