@@ -13,12 +13,14 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval import (
+    Call,
     CaseOutput,
     Cell,
     CostStatus,
     RunResult,
     Usage,
     evalcase,
+    harness,
 )
 from pytest_xharness_eval.derive import skillcov
 from pytest_xharness_eval.emit.metrics import CellMetrics
@@ -208,3 +210,24 @@ def test_a_finished_cell_tidies_its_workspace_unless_the_project_keeps_them(tmp_
     workspace = kept.materialise()
     kept.tidy(workspace)
     assert workspace.is_dir()
+
+
+def test_a_run_that_never_reached_the_model_is_an_error_not_a_fail(tmp_path: Path) -> None:
+    """A session limit attempted nothing, so it must not read as the skill failing (ADR 0063)."""
+    run = _cell_run(tmp_path, grader=eval_fails)
+    result = _captured_run(tmp_path)
+    result.exit_code, result.calls = 1, []
+    result.final_text = "You've hit your session limit · resets 2:10am"
+    with pytest.raises(harness.RunError, match="never attempted: You've hit your session limit"):
+        run.grade(result, run.materialise())
+    assert run.verdict is Verdict.ERROR
+
+
+def test_a_run_that_called_the_model_then_exited_non_zero_is_still_graded(tmp_path: Path) -> None:
+    run = _cell_run(tmp_path, grader=eval_fails)
+    result = _captured_run(tmp_path)
+    result.exit_code, result.calls = 1, [Call(n=1, at="t")]
+    assert result.attempted
+    with pytest.raises(AssertionError):
+        run.grade(result, run.materialise())
+    assert run.verdict is Verdict.FAIL

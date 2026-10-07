@@ -81,3 +81,18 @@ def test_every_bundled_model_is_priced_today_and_tiers_are_contiguous_per_harnes
     for harness_name in registry.names():
         tiers = {s.family_tier for h, s in catalogue if h == harness_name}
         assert tiers == set(range(1, max(tiers) + 1)), harness_name
+
+
+def test_a_model_line_may_say_the_model_takes_no_effort_rung() -> None:
+    _, spec = parse_model_line("claude/claude-x: line=x tier=1 released=2026-01-01 effort=false")
+    assert spec.takes_effort is False
+    _, default = parse_model_line("claude/claude-x: line=x tier=1 released=2026-01-01")
+    assert default.takes_effort is True
+    with pytest.raises(CatalogueError, match="effort must be true or false"):
+        parse_model_line("claude/claude-x: line=x tier=1 released=2026-01-01 effort=no")
+
+
+def test_the_bundled_catalogue_marks_haiku_as_taking_no_effort_rung() -> None:
+    catalogue = load_catalogue()
+    assert catalogue.require("claude", "claude-haiku-4-5-20251001").takes_effort is False
+    assert catalogue.require("claude", "claude-sonnet-5").takes_effort is True

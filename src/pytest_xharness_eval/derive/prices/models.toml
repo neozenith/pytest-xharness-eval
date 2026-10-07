@@ -12,6 +12,8 @@
 #             A role, never a price; frozen at release, so a later lineup change renumbers
 #             only the models that follow.
 #   released  the release date
+#   effort    optional, default true; false where the CLI accepts a reasoning-effort rung for
+#             the model and silently ignores it, so a matrix entry naming one is refused (ADR 0063)
 #
 # Today's tiers: 1 haiku / luna, 2 sonnet / terra, 3 opus / sol, 4 fable / astra.
 # Gated models (the Mythos line, gpt-5.6-cyber) and retired ones are left out.
@@ -26,6 +28,9 @@ one_hour_cache_write_is_five_minute = false
 line = "haiku"
 tier = 1
 released = 2025-10-15
+# Claude Code accepts --effort for Haiku 4.5 and ignores it: a 2026-10-06 sweep across all
+# five rungs showed flat reasoning tokens and cost, where every other model scaled (ADR 0063).
+effort = false
 
 [claude.models."claude-sonnet-5"]
 line = "sonnet"

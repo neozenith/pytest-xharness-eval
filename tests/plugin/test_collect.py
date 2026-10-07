@@ -172,3 +172,16 @@ def test_a_model_the_feed_does_not_price_either_still_stops_collection(pytester:
     result.assert_outcomes(errors=1)
     result.stdout.fnmatch_lines(["*PricingError*unpriced models in matrix*codex/gpt-7-terra*"])
     assert not (pytester.path / ".xharness_eval_cache" / "pricing").exists()
+
+
+def test_a_rung_on_a_model_that_ignores_effort_stops_collection(pytester: pytest.Pytester) -> None:
+    """Haiku 4.5 accepts --effort and runs at its default, so a rung on it would mislabel a billed run (ADR 0063)."""
+    make_tree(pytester, ini="xharness_matrix =\n    claude/claude-haiku-4-5-20251001/high\n")
+    result = pytester.runpytest("--collect-only")
+    assert result.ret != 0
+    result.stdout.fnmatch_lines(["*claude-haiku-4-5-20251001 takes no effort rung*"])
+
+
+def test_the_same_model_without_a_rung_still_collects(pytester: pytest.Pytester) -> None:
+    make_tree(pytester, ini="xharness_matrix =\n    claude/claude-haiku-4-5-20251001\n")
+    assert cell_ids(pytester.runpytest("--collect-only", "-q")) == ["claude/claude-haiku-4-5-20251001"]

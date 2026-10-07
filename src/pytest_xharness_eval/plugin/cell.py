@@ -203,8 +203,17 @@ class CellRun:
         The verdict is recorded on this run *before* the grader's exception leaves, because
         a failed cell still has to emit its record: an assertion is a ``fail``, anything
         else is an ``error``, and either way pytest gets the original exception (ADR 0012).
+
+        A run whose CLI never reached the model is an ``error`` before the grader is asked
+        anything (ADR 0063): a session limit, an expired login or a refused request did not
+        attempt the task, so grading it would record the skill as failing a test it never sat.
         """
         try:
+            if not result.attempted:
+                raise harness.RunError(
+                    f"{result.harness} exited {result.exit_code} without a model call, so the task was "
+                    f"never attempted: {result.final_text[:300] or '(no message)'}"
+                )
             self.case.fn(self.output(result, workspace))
         except AssertionError:
             self.verdict = Verdict.FAIL

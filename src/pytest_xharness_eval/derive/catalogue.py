@@ -57,11 +57,19 @@ def _read(path: Path) -> dict[str, dict[str, Any]]:
 
 def _spec(path: Path, harness: str, model: str, raw: Any) -> ModelSpec:
     where = f"{path} [{harness}.models.{model!r}]"
-    if not isinstance(raw, dict) or set(raw) != _MODEL_KEYS:
-        raise CatalogueError(f"{where}: expected exactly {sorted(_MODEL_KEYS)}")
+    if not isinstance(raw, dict) or not _MODEL_KEYS <= set(raw) <= _MODEL_KEYS | {"effort"}:
+        raise CatalogueError(f"{where}: expected {sorted(_MODEL_KEYS)}, and optionally effort")
     if not isinstance(raw["tier"], int) or not isinstance(raw["released"], date):
         raise CatalogueError(f"{where}: tier must be an integer and released a TOML date")
-    return ModelSpec(id=model, line=str(raw["line"]), family_tier=raw["tier"], released=raw["released"])
+    if not isinstance(raw.get("effort", True), bool):
+        raise CatalogueError(f"{where}: effort must be true or false")
+    return ModelSpec(
+        id=model,
+        line=str(raw["line"]),
+        family_tier=raw["tier"],
+        released=raw["released"],
+        takes_effort=raw.get("effort", True),
+    )
 
 
 def load_catalogue(lines: Iterable[str] = (), path: Path | None = None) -> Catalogue:

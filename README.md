@@ -305,7 +305,7 @@ The ini keys, paths relative to pytest's rootdir:
 | `xharness_matrix` | (plugin default) | Project matrix: `harness/model` or `harness/model/effort` entries every case sweeps unless it sets `models=` |
 | `xharness_output_rate_limit` | `50` | The plugin default matrix sweeps only catalogued models whose output rate, in USD per million tokens, is below this. Raise it to opt in to apex models (ADR 0058) |
 | `xharness_price_feed` | LiteLLM's feed | Where a model with no price row is priced live from at collection: a URL or a local path (ADR 0060) |
-| `xharness_models` | (none) | Model catalogue rows that add or correct a model before a plugin release: `<harness>/<model>: line=<line> tier=<n> released=YYYY-MM-DD` (ADR 0057) |
+| `xharness_models` | (none) | Model catalogue rows that add or correct a model before a plugin release: `<harness>/<model>: line=<line> tier=<n> released=YYYY-MM-DD [effort=false]`; `effort=false` marks a model whose CLI ignores a reasoning rung, so a matrix entry naming one is refused (ADR 0057, ADR 0063) |
 | `xharness_treatments` | (none) | Treatment names under each suite's `evals/treatments/`, swept beside the untreated control unless a case sets `treatments=` (ADR 0055) |
 | `xharness_skills_dir` | `skills` | Directory holding `<skill>/evals/` trees |
 | `xharness_cache_dir` | `.xharness_eval_cache` | The git-ignored root for build workspaces, results and the report (ADR 0032) |

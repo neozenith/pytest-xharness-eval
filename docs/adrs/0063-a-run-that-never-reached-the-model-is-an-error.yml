@@ -1,0 +1,59 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0063
+slug: a-run-that-never-reached-the-model-is-an-error
+title: A run that never reached the model is an error, and a model that ignores effort refuses a rung
+status: accepted
+status_note: |-
+  accepted, 2026-10-07.
+  Refines [0012](0012-grading-is-composable-not-prescribed.md) (grading is composable, not prescribed) with a check before the grader runs.
+  Extends [0049](0049-effort-is-the-third-matrix-axis.md) (effort is the third matrix axis) to a model whose CLI ignores the rung.
+accepted_on: '2026-10-07'
+last_changed_on: '2026-10-07'
+group: grading
+tags:
+- grading
+- collection
+lens: |-
+  A fail is a statement about the skill, so only a run that attempted the task can earn one.
+  A label is a statement about the run, so a setting the run never had must be refused, not recorded.
+relates_to:
+- relation: extends
+  target: ADR-0012
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0049
+  note: the record's status line says "extends"
+body:
+  context: |-
+    Two findings from the first effort sweep.
+
+    Twenty-nine claude cells hit the subscription's session limit.
+    The CLI exited 1 with the message "You've hit your session limit", made no model call and spent nothing.
+    The grader then ran against an untouched workspace and failed.
+    So the report showed 29 fails of the skill that were never attempts at the task.
+
+    Haiku 4.5 was swept at all five effort rungs.
+    Its reasoning tokens and cost stayed flat from low to max.
+    Every other model scaled clearly: Sonnet 5 went from 5k to 100k reasoning tokens.
+    Claude Code accepts `--effort` for Haiku 4.5 and runs it at its default.
+    So five billed runs carried five rung labels none of them had, which is the failure ADR 0049 closed for an unknown rung.
+  decision: |-
+    **A run is attempted when its CLI exited cleanly or made at least one model call.** `RunResult.attempted` states it.
+
+    **An unattempted run is an error, decided before the grader is asked.** `CellRun.grade` raises a `RunError` naming the CLI's own message, so the record's verdict is `error` and the evidence is still captured.
+    A run that called the model and then exited non-zero did attempt the task, and is graded as before.
+
+    **The catalogue can say a model takes no effort rung.** `effort = false` on a model in `models.toml`, or `effort=false` on an `xharness_models` line, sets `ModelSpec.takes_effort`.
+    Haiku 4.5 is marked so.
+
+    **A matrix entry naming a rung for such a model stops collection, before spend.** The refusal names the model and tells the reader to drop the rung.
+    The same model with no rung still collects.
+  consequences: |-
+    A session limit, an expired login or a refused request now reads as an error on the report, not a regression of the skill.
+
+    The Haiku rows already captured at a rung keep their labels, because a replay carries a stored effort forward (ADR 0049).
+    No new Haiku cell can be recorded at a rung.
+
+    Whether a model honours effort is now a curated fact, settled by a sweep and recorded in the catalogue with the evidence beside it.

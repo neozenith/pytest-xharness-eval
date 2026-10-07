@@ -22,7 +22,12 @@ def test_the_bundled_file_loads_and_names_each_harness_feed_provider() -> None:
     [
         ('[gemini]\nfeed_provider = "google"\n', "unknown harness 'gemini'"),
         ('[codex]\nfeed_provider = "openai"\nprice = 1\n', "expected only"),
-        ('[codex]\nfeed_provider = "openai"\n[codex.models."m"]\nline = "x"\ntier = 1\n', "expected exactly"),
+        ('[codex]\nfeed_provider = "openai"\n[codex.models."m"]\nline = "x"\ntier = 1\n', "and optionally effort"),
+        (
+            '[codex]\nfeed_provider = "openai"\n[codex.models."m"]\n'
+            'line = "x"\ntier = 1\nreleased = 2026-01-01\neffort = "no"\n',
+            "effort must be true or false",
+        ),
         (
             '[codex]\nfeed_provider = "openai"\n[codex.models."m"]\nline = "x"\ntier = "1"\nreleased = 2026-01-01\n',
             "tier must be an integer",

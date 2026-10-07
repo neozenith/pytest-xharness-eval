@@ -435,6 +435,16 @@ class RunResult:
         self.cost_status = CostStatus.PRICED
 
     @property
+    def attempted(self) -> bool:
+        """Whether the CLI reached the model at all: it exited cleanly, or made at least one call.
+
+        A non-zero exit with no model call is a run that never attempted the task (a session
+        limit, an expired login, a refused request), and is graded as an error rather than a
+        fail (ADR 0063). A run that called the model and then exited non-zero did attempt it.
+        """
+        return self.exit_code == 0 or bool(self.calls)
+
+    @property
     def baseline_tokens(self) -> int:
         """The context of the first call: everything the harness loads before the agent acts."""
         return self.calls[0].context_tokens if self.calls else 0

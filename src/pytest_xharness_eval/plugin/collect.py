@@ -98,7 +98,15 @@ class EvalFile(pytest.File):
         """
         try:
             for cell in cells:
-                catalogue.require(cell.harness, cell.model)
+                spec = catalogue.require(cell.harness, cell.model)
+                # ADR 0063: a rung the model ignores is a full run at its default, billed and
+                # reported under a label it never had, so it stops here like an unknown rung does.
+                if cell.effort and not spec.takes_effort:
+                    raise CatalogueError(
+                        f"{cell.id}: {cell.harness}/{cell.model} takes no effort rung (effort = false in the "
+                        "model catalogue): its CLI accepts one and runs at the default anyway. Drop the rung "
+                        "from the matrix entry (ADR 0063)"
+                    )
         except CatalogueError as exc:
             raise pytest.UsageError(f"{self.path}: {case.name}: {exc}") from exc
 

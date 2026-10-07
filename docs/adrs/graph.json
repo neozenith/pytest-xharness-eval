@@ -947,6 +947,20 @@
     },
     {
       "data": {
+        "id": "ADR-0063",
+        "label": "0063",
+        "parent": "group-grading",
+        "colour": "#0284c7",
+        "file": "0063-a-run-that-never-reached-the-model-is-an-error.md",
+        "title": "A run that never reached the model is an error, and a model that ignores effort refuses a rung",
+        "description": "A run that never reached the model is an error, and a model that ignores effort refuses a rung",
+        "status": "accepted",
+        "group": "grading",
+        "tags": "grading, collection"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2533,6 +2547,26 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0063-extends-ADR-0012",
+        "source": "ADR-0063",
+        "target": "ADR-0012",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0063-extends-ADR-0049",
+        "source": "ADR-0063",
+        "target": "ADR-0049",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
       }
     }
   ],

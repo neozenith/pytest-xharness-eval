@@ -49,6 +49,10 @@ class ModelSpec:
     line: str
     family_tier: int
     released: date
+    #: Whether the model responds to a reasoning-effort rung. False where the CLI accepts a
+    #: rung for it and silently runs at its default, so naming one would bill the wrong
+    #: experiment under the right label (ADR 0049, ADR 0063).
+    takes_effort: bool = True
 
     def __post_init__(self) -> None:
         if self.family_tier < 1:
@@ -68,15 +72,18 @@ def parse_model_line(text: str) -> tuple[str, ModelSpec]:
         )
     fields = dict(part.split("=", 1) for part in m["kv"].split() if "=" in part)
     missing = [k for k in _KEYS if k not in fields]
-    unknown = sorted(set(fields) - set(_KEYS))
+    unknown = sorted(set(fields) - set(_KEYS) - {"effort"})
     if missing or unknown:
         raise CatalogueError(f"xharness_models {text!r}: missing {missing}, unknown {unknown}")
+    if fields.get("effort", "true") not in ("true", "false"):
+        raise CatalogueError(f"xharness_models {text!r}: effort must be true or false")
     try:
         spec = ModelSpec(
             id=m["model"],
             line=fields["line"],
             family_tier=int(fields["tier"]),
             released=date.fromisoformat(fields["released"]),
+            takes_effort=fields.get("effort", "true") == "true",
         )
     except ValueError as exc:
         raise CatalogueError(f"xharness_models {text!r}: {exc}") from exc

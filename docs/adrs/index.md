@@ -79,6 +79,7 @@ Edit the YAML; never the markdown.
 | [0060](0060-an-unpriced-model-is-priced-live-into-the-cache.md) | An unpriced model is priced live from LiteLLM's feed into a cached dated record, and only then refused | accepted, 2026-10-07. Refines [0007](0007-unpriced-model-aborts-before-spend.md) (an unpriced model aborts before spend) with a lookup before the refusal. Extends [0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md) and [0051](0051-long-context-is-a-tier-priced-per-call-and-records-are-curated.md) with a second writer of the same records. |
 | [0061](0061-the-session-table-scrolls-and-the-reader-picks-its-columns.md) | The session table scrolls sideways, and the reader picks which columns it shows | accepted, 2026-10-07. Supersedes part 3 of [0043](0043-the-overview-tables-are-budgeted-to-one-screen.md) (`SessionTable` is budgeted to one screen). The rest of 0043 stands. |
 | [0062](0062-a-finished-cell-removes-its-workspace.md) | A finished cell removes its workspace, and a project can keep them for inspection | accepted, 2026-10-07. Refines [0004](0004-workspace-is-a-plain-copy.md) (a workspace is a plain copy of the fixture tree) with when a workspace is removed. Refines [0032](0032-all-run-output-consolidates-under-a-cache-dir.md) (all run output consolidates under a cache dir) the same way. |
+| [0063](0063-a-run-that-never-reached-the-model-is-an-error.md) | A run that never reached the model is an error, and a model that ignores effort refuses a rung | accepted, 2026-10-07. Refines [0012](0012-grading-is-composable-not-prescribed.md) (grading is composable, not prescribed) with a check before the grader runs. Extends [0049](0049-effort-is-the-third-matrix-axis.md) (effort is the third matrix axis) to a model whose CLI ignores the rung. |
 ## The typed relation graph
 
 Open [graph.html](graph.html) to browse it: records cluster by domain, selecting one renders it beside the graph, and a link inside a record navigates to it.
@@ -247,3 +248,5 @@ The same edge set is [graph.md](graph.md) and, as raw data, [graph.json](graph.j
 - ADR-0061 --supersedes--> ADR-0043
 - ADR-0062 --extends--> ADR-0004
 - ADR-0062 --extends--> ADR-0032
+- ADR-0063 --extends--> ADR-0012
+- ADR-0063 --extends--> ADR-0049
