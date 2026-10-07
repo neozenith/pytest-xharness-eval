@@ -146,6 +146,24 @@ class Harness(ABC):
     shell_tools: ClassVar[frozenset[str]] = frozenset()
     #: Of those, the ones whose working directory persists between calls.
     persistent_shells: ClassVar[frozenset[str]] = frozenset()
+
+    @staticmethod
+    def shell_commands(tool_input: Any) -> list[tuple[str, str | None]]:
+        """The commands one shell-tool call ran, each with its per-call working directory.
+
+        A ``command`` or ``cmd`` key (a string or an argv list) with an optional ``workdir`` or
+        ``cwd``, else the input itself as one command. A CLI whose shell tool wraps its commands
+        in something else overrides this, so coverage reads the commands rather than the
+        wrapper (ADR 0066).
+        """
+        if isinstance(tool_input, dict):
+            command = tool_input.get("command") or tool_input.get("cmd") or ""
+            if isinstance(command, list):
+                command = " ".join(str(c) for c in command)
+            workdir = tool_input.get("workdir") or tool_input.get("cwd")
+            return [(str(command), str(workdir) if workdir else None)]
+        return [(str(tool_input or ""), None)]
+
     #: This CLI's reasoning-effort rungs, lowest first: the third matrix axis (ADR 0049).
     #:
     #: The order is the ladder, not decoration -- the portable aliases ``min``/``mid``/``max``

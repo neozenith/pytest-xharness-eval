@@ -397,17 +397,6 @@ def resolve_command(command: str, skill: str, cwd: str | None) -> tuple[str, str
     return "\n".join(out), cwd
 
 
-def _command_of(arguments: Any) -> tuple[str, str | None]:
-    """The shell command and the per-call working directory (Codex ``workdir``) of a tool input."""
-    if isinstance(arguments, dict):
-        command = arguments.get("command") or arguments.get("cmd") or ""
-        if isinstance(command, list):
-            command = " ".join(str(c) for c in command)
-        workdir = arguments.get("workdir") or arguments.get("cwd")
-        return str(command), str(workdir) if workdir else None
-    return str(arguments or ""), None
-
-
 def _tool_text(
     tool: ToolCall, skill: str, vocab: Shells, cwd: str | None, workspace: str | None
 ) -> tuple[str, str | None]:
@@ -420,10 +409,14 @@ def _tool_text(
     text = _call_text(tool.name, tool.input)
     if tool.name not in vocab.tools:
         return text, cwd
-    command, workdir = _command_of(tool.input)
     persistent = tool.name in vocab.persistent
-    resolved, after = resolve_command(command, skill, cwd if persistent else (workdir or workspace))
-    return f"{text}\n{resolved}", after if persistent else cwd
+    resolved: list[str] = []
+    after = cwd
+    for command, workdir in vocab.commands(tool.input):
+        text_of, moved = resolve_command(command, skill, after if persistent else (workdir or workspace))
+        resolved.append(text_of)
+        after = moved if persistent else after
+    return "\n".join([text, *resolved]), after
 
 
 def _access(tool: str, text: str, skill: str, entry: FileCoverage, shells: Shells) -> Access | None:

@@ -31,10 +31,14 @@ from __future__ import annotations
 
 # Standard Library
 from dataclasses import dataclass
-from typing import Self
+from typing import TYPE_CHECKING, Any, Self
 
 # Our Libraries
 from pytest_xharness_eval import harness
+
+if TYPE_CHECKING:
+    # Standard Library
+    from collections.abc import Callable
 
 
 def names() -> tuple[str, ...]:
@@ -51,17 +55,19 @@ class Shells:
     call is where the next one starts (ADR 0027). ``persistent`` is a subset of ``tools``
     for every shipped harness, and the default is the empty vocabulary: a harness that
     runs no shell has no command to attribute, which is a coherent answer rather than a
-    missing one.
+    missing one. ``commands`` reads the commands out of one call's input, for a CLI whose
+    shell tool wraps them (ADR 0066).
     """
 
     tools: frozenset[str] = frozenset()
     persistent: frozenset[str] = frozenset()
+    commands: Callable[[Any], list[tuple[str, str | None]]] = harness.Harness.shell_commands
 
     @classmethod
     def of(cls, name: str) -> Self:
         """The registered harness ``name``'s own vocabulary; an unknown name raises (ADR 0034)."""
         agent = harness.get(name)
-        return cls(tools=agent.shell_tools, persistent=agent.persistent_shells)
+        return cls(tools=agent.shell_tools, persistent=agent.persistent_shells, commands=agent.shell_commands)
 
 
 def efforts(harness_name: str) -> tuple[str, ...]:

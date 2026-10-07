@@ -2,6 +2,7 @@
 
 # Standard Library
 import dataclasses
+import json
 from pathlib import Path
 
 # Third Party
@@ -366,3 +367,19 @@ def test_a_script_a_subagent_ran_is_credited_to_the_turn_that_spawned_it(tmp_pat
     assert by["scripts/check.ts"].run == [2]
     assert by["resources/guide.md"].loaded == [3]
     assert cov.run == ["scripts/check.ts"]
+
+
+def test_a_script_run_through_a_variable_inside_a_codex_exec_script_counts_as_run(tmp_path: Path) -> None:
+    """Codex's ``exec`` takes JavaScript wrapping each command (ADR 0066).
+
+    Read whole, the script's first statement swallowed ``skill_root='<dir>'``, so the
+    ``$skill_root/scripts/check.ts`` it then ran never expanded to the skill's path.
+    """
+    files = skillcov.catalog(_skill(tmp_path))
+    r = _result("m", Usage(), harness="codex")
+    r.workspace = "/x/ws"
+    command = "skill_root='/x/codex_home/skills/demo'; bun run \"$skill_root/scripts/check.ts\" ARCHITECTURE.md"
+    script = f"const r = await tools.exec_command({json.dumps({'cmd': command, 'workdir': '/x/ws'})});\ntext(r.output);"
+    r.calls = [Call(n=1, at="t", tools=[ToolCall("exec", "", script)])]
+    cov = skillcov.annotate("demo", files, r)
+    assert {f.path: f for f in cov.files}["scripts/check.ts"].run == [1]
