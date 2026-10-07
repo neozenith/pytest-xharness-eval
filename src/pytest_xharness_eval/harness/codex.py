@@ -471,7 +471,9 @@ def subagents_of(rollouts: list[Path], primary_calls: list[Call]) -> list[Subage
                 meta = rec.get("payload") or {}
                 spawn_at = str(rec.get("timestamp") or meta.get("timestamp") or "")
                 break
-        session_id, _model, ledger = fold(records)
+        # The last turn_context is the thread's own: a fork first replays its parent's, so
+        # the earlier one names the parent's model, not the one that answered (ADR 0065).
+        session_id, model, ledger = fold(records)
         parent = next(
             (c.n for c in primary_calls if spawn_at and c.at and c.at >= spawn_at),
             primary_calls[-1].n if primary_calls else None,
@@ -484,6 +486,7 @@ def subagents_of(rollouts: list[Path], primary_calls: list[Call]) -> list[Subage
                 log=str(rollout),
                 parent_turn=parent,
                 description=str(meta.get("agent_path") or ""),
+                model=model,
             )
         )
     return subs

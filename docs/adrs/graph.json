@@ -975,6 +975,20 @@
     },
     {
       "data": {
+        "id": "ADR-0065",
+        "label": "0065",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0065-a-subagent-is-priced-at-its-own-models-rates.md",
+        "title": "A subagent is priced at its own model's rates, from the final usage of each call",
+        "description": "A subagent is priced at its own model's rates, from the final usage of each call",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing, accounting"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2601,6 +2615,26 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0065-extends-ADR-0033",
+        "source": "ADR-0065",
+        "target": "ADR-0033",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0065-extends-ADR-0051",
+        "source": "ADR-0065",
+        "target": "ADR-0051",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"refines\""
       }
     }
   ],

@@ -190,6 +190,7 @@ class SubagentFields(TypedDict):
     log: str
     parent_turn: NotRequired[int | None]
     description: NotRequired[str]
+    model: NotRequired[str]
 
 
 @dataclass(slots=True)
@@ -213,6 +214,13 @@ class Subagent:
     description: str = ""
     usage: Usage = field(default_factory=Usage)
     calls: list[Call] = field(default_factory=list)
+    #: The model that answered this thread's calls, read from its own transcript. A subagent
+    #: often runs on a cheaper model than its parent, and is priced at that model's rates;
+    #: empty when the transcript names none, which prices it at the parent's (ADR 0065).
+    model: str = ""
+    #: What this thread's calls cost at its own model's rates; written by pricing, with the
+    #: run's ``estimated_cost_usd`` its sum with the primary's (ADR 0065).
+    estimated_cost_usd: float | None = None
 
     @classmethod
     def folded(cls, calls: list[Call], **fields: Unpack[SubagentFields]) -> Self:

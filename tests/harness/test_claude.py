@@ -340,3 +340,29 @@ def test_the_workspace_is_added_so_its_own_claude_md_is_read_and_nothing_above_i
     """``--setting-sources ""`` drops every CLAUDE.md; this re-admits the workspace's alone (ADR 0055)."""
     assert claude_harness.workspace_memory_argv(tmp_path) == ["--add-dir", str(tmp_path)]
     assert claude_harness._WORKSPACE_MEMORY_ENV == {"CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1"}
+
+
+def test_a_call_written_as_several_records_bills_its_final_usage_not_its_first(tmp_path: Path) -> None:
+    """A subagent transcript streams output_tokens 4, 4, 917 across one message's records (ADR 0065)."""
+
+    def rec(out: int, block: str) -> dict:
+        return {
+            "type": "assistant",
+            "timestamp": "2026-10-07T00:00:00Z",
+            "message": {
+                "id": "msg_1",
+                "model": "claude-haiku-4-5-20251001",
+                "usage": {"input_tokens": 10, "output_tokens": out},
+                "content": [{"type": block, "text": "x"} if block == "text" else {"type": block}],
+            },
+        }
+
+    log = _jsonl(tmp_path / "agent-a.jsonl", [rec(4, "thinking"), rec(4, "text"), rec(917, "text")])
+    records = claude_harness.read_jsonl_numbered(log)
+    calls, _ = claude_harness.ledger_of(records)
+    assert len(calls) == 1 and calls[0].usage.output_tokens == 917
+    assert claude_harness.model_of(records) == "claude-haiku-4-5-20251001"
+
+
+def test_a_transcript_naming_no_model_reads_as_empty() -> None:
+    assert claude_harness.model_of([(1, {"type": "user", "message": {"content": "hi"}})]) == ""

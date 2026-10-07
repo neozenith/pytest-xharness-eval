@@ -82,7 +82,8 @@ def test_each_runresult_field_has_exactly_one_owner() -> None:
 def test_each_subagent_field_is_derived_from_the_ledger_or_named_by_the_transcript() -> None:
     """The same partition for a spawned thread: ``turns`` and ``usage`` are never supplied."""
     derived = {"turns", "usage", "calls"}
-    supplied = _typed_dict_keys(runresult.SubagentFields)
+    priced = {"estimated_cost_usd"}  # written by pricing at the subagent's own model's rates (ADR 0065)
+    supplied = _typed_dict_keys(runresult.SubagentFields) | priced
     assert not supplied & derived
     assert supplied | derived == {f.name for f in dataclasses.fields(Subagent)}
 

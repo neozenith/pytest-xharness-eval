@@ -121,7 +121,9 @@ every turn, the quick way to ask "did it ever call Bash".
 
 `run.subagents` is a `list[Subagent]`, one per parallel thread the session spawned, each
 with its own `.calls`, `.usage`, `.parent_turn` and captured `.log`. Their usage is
-already folded into `run.usage`, so the run's bill is the whole bill.
+already folded into `run.usage`, so the run's bill is the whole bill. Each also names the
+`.model` that answered it and carries its own `.estimated_cost_usd`, priced at that model's
+rates rather than its parent's (ADR 0065).
 
 ### Skill coverage
 

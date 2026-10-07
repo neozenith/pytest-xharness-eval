@@ -285,8 +285,10 @@
         }
       ],
       "description": "agents/scout.md",
+      "estimated_cost_usd": 0.000307,
       "id": "codex-sub-1",
       "log": "<tmp>/results/codex/sid/subagents/rollout-sub1.jsonl",
+      "model": "gpt-5.6-sol",
       "parent_turn": 1,
       "turns": 1,
       "usage": {

@@ -385,3 +385,69 @@ def test_two_price_lines_for_one_pair_may_not_overlap_in_time() -> None:
         ["claude/m: input=1 output=1 to=2026-09-01", "claude/m: input=2 output=2 from=2026-09-01"]
     )
     assert [r.input for r in rows] == [1.0, 2.0]
+
+
+def test_a_subagent_is_billed_at_its_own_models_rates_not_its_parents() -> None:
+    """A Haiku subagent under an Opus parent is a Haiku bill (ADR 0065)."""
+    parent_call = Usage(input_tokens=1_000_000)
+    sub_call = Usage(input_tokens=1_000_000)
+    r = _with_calls("claude-opus-5", [parent_call], "claude")
+    r.subagents = [
+        Subagent(
+            agent="general-purpose",
+            id="a1",
+            log="l",
+            model="claude-haiku-4-5-20251001",
+            calls=[Call(n=1, at="t", usage=sub_call)],
+        )
+    ]
+    r.usage = parent_call + sub_call
+    priced = pricing.price(r, pricing.load_table(), DAY)
+    opus, haiku = 5.0, 1.0  # USD per MTok input, the bundled rows
+    assert r.subagents[0].estimated_cost_usd == pytest.approx(haiku)
+    assert priced.estimated_cost_usd == pytest.approx(opus + haiku)
+    assert priced.rates_applied is not None and priced.rates_applied.model == "claude-opus-5"
+
+
+def test_a_subagent_naming_no_model_is_billed_at_its_parents_rates() -> None:
+    r = _with_calls("claude-opus-5", [Usage(input_tokens=1_000_000)], "claude")
+    r.subagents = [
+        Subagent(agent="x", id="a1", log="l", calls=[Call(n=1, at="t", usage=Usage(input_tokens=1_000_000))])
+    ]
+    r.usage = Usage(input_tokens=2_000_000)
+    assert pricing.price(r, pricing.load_table(), DAY).estimated_cost_usd == pytest.approx(10.0)
+
+
+def test_a_subagent_on_an_unpriced_model_stops_pricing_rather_than_borrowing_a_rate() -> None:
+    """Never a neighbour's rates, never zero (ADR 0007, ADR 0050)."""
+    r = _with_calls("claude-opus-5", [Usage(input_tokens=10)], "claude")
+    r.subagents = [
+        Subagent(
+            agent="x",
+            id="a1",
+            log="l",
+            model="claude-nonesuch",
+            calls=[Call(n=1, at="t", usage=Usage(input_tokens=10))],
+        )
+    ]
+    r.usage = Usage(input_tokens=20)
+    with pytest.raises(pricing.PricingError, match="claude/claude-nonesuch"):
+        pricing.price(r, pricing.load_table(), DAY)
+
+
+def test_pricing_in_parts_rounds_once_so_the_total_matches_a_single_model_run() -> None:
+    """Splitting a same-model run into parent and subagent never moves its total by a micro-dollar."""
+    calls = [Usage(input_tokens=333, output_tokens=7, cache_read_tokens=11) for _ in range(5)]
+    whole = pricing.price(_with_calls("claude-opus-5", calls, "claude"), pricing.load_table(), DAY).estimated_cost_usd
+    split = _with_calls("claude-opus-5", calls[:2], "claude")
+    split.subagents = [
+        Subagent(
+            agent="x",
+            id="a1",
+            log="l",
+            model="claude-opus-5",
+            calls=[Call(n=i, at="t", usage=u) for i, u in enumerate(calls[2:])],
+        )
+    ]
+    split.usage = Usage.total(calls)
+    assert pricing.price(split, pricing.load_table(), DAY).estimated_cost_usd == whole

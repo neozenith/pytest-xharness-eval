@@ -1,0 +1,62 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0065
+slug: a-subagent-is-priced-at-its-own-models-rates
+title: A subagent is priced at its own model's rates, from the final usage of each call
+status: accepted
+status_note: |-
+  accepted, 2026-10-08.
+  Refines [0033](0033-subagent-transcripts-are-captured-and-billed.md) (subagent transcripts are captured and billed) with which rates bill them.
+  Refines [0051](0051-long-context-is-a-tier-priced-per-call-and-records-are-curated.md) (each call is priced on its own) with which row a call is priced from.
+accepted_on: '2026-10-08'
+last_changed_on: '2026-10-08'
+group: pricing
+tags:
+- pricing
+- accounting
+lens: |-
+  A cost estimate is only trustworthy where it can be checked against the provider's own bill, and it must be checked there.
+  Price each call at the rates of the model that answered it, and count what it produced, not the first fragment of it.
+relates_to:
+- relation: extends
+  target: ADR-0033
+  note: the record's status line says "refines"
+- relation: extends
+  target: ADR-0051
+  note: the record's status line says "refines"
+body:
+  context: |-
+    Claude's CLI reports a session's whole cost, subagents included.
+    For the 82 claude sessions without subagents, the plugin's estimate matched it to the cent.
+    For the 57 with subagents it drifted from -23% to +25%.
+    That made the delegation treatment look more expensive than it was: up to 87% on a codex parent.
+
+    Two causes, both visible in the captured logs.
+    Every call of a run was priced at the run's model, so a Haiku subagent under an Opus parent was billed as Opus.
+    The model that answered is named on each record of the subagent's own transcript.
+
+    And a subagent transcript streams a call's usage across that call's records.
+    One call recorded output tokens of 4, 4, 4 and then 917, while the main session's log repeats the final figure on every record.
+    The ledger kept the first, so subagent output was undercounted about 100-fold.
+  decision: |-
+    **A subagent records the model that answered it.** Claude's is the model its assistant records name.
+    Codex's is its rollout's last `turn_context`, because a fork first replays its parent's.
+
+    **Each part of a run is priced at its own model's rates.** The primary's calls bill at the run's model, and each subagent's at its own.
+    A subagent whose transcript names no model bills at its parent's, the only rate it can be shown to have.
+    A subagent model with no price row stops pricing, as an unpriced run does (ADR 0007); it never borrows a neighbour's rate.
+
+    **The parts are summed before any rounding.** So a run priced in parts costs the same, to the micro-dollar, as one priced whole.
+    Each subagent also carries its own `estimated_cost_usd`.
+    The run's `rates_applied` stays the primary's row, the one a reader checks it against.
+
+    **A call bills its final usage.** When one message spans several records, the ledger keeps the furthest-along usage, not the first.
+  consequences: |-
+    Replayed against the cache, all 139 claude sessions now land within 0.5% of the CLI's own cost.
+    The 57 with subagents sum to $52.41, exactly the CLI's figure; the worst single session is 0.26% off.
+    The comparison is the check this record leaves behind, and a replay re-runs it for free.
+
+    Codex prints no cost of its own, so its subagents are priced by the same rule but cannot be cross-checked the same way.
+
+    The characterization goldens gain each subagent's `model` and `estimated_cost_usd`, and no total moves.

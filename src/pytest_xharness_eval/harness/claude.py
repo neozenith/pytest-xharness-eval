@@ -273,6 +273,14 @@ class _Ledger:
             return
         mid = str(msg.get("id") or f"anon-{len(self.calls)}")
         call = self._by_id.get(mid)
+        if call is not None:
+            # A message is written as one record per content block. The primary log repeats
+            # the final usage on each, but a subagent transcript streams it: the first record
+            # of a call can say 4 output tokens where the last says 917. Keep the furthest
+            # along, so a call bills what it produced rather than its first fragment (ADR 0065).
+            later = _call_usage(msg.get("usage") or {})
+            if later.output_tokens > call.usage.output_tokens:
+                call.usage = later
         if call is None:
             call = Call(
                 n=len(self.calls) + 1,
@@ -403,6 +411,20 @@ class ClaudeSessionLog(SessionLog):
         )
 
 
+def model_of(records: Numbered) -> str:
+    """The model a transcript's assistant records name, or empty when none does (ADR 0065).
+
+    A subagent's transcript says which model answered it, and that is the model its calls
+    are billed at: Claude Code runs an ``Agent(model: "haiku")`` subagent on Haiku however
+    expensive the parent is. Synthetic notices name ``<synthetic>`` and are skipped.
+    """
+    for _, rec in records:
+        msg = rec.get("message") or {}
+        if rec.get("type") == "assistant" and not record_kinds.is_synthetic(msg) and msg.get("model"):
+            return str(msg["model"])
+    return ""
+
+
 def subagents_of(log: Path, spawns: dict[str, int]) -> list[Subagent]:
     """Fold every subagent transcript beside a Claude session log.
 
@@ -439,6 +461,7 @@ def subagents_of(log: Path, spawns: dict[str, int]) -> list[Subagent]:
                 log=str(transcript),
                 parent_turn=spawns.get(str(meta.get("toolUseId") or "")),
                 description=str(meta.get("description") or ""),
+                model=model_of(records),
             )
         )
     return subs
