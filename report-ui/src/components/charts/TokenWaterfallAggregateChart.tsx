@@ -20,15 +20,18 @@ const NOTE =
   "Where the tokens went, averaged over every run in view: each column is the mean over the runs that reached that turn, faded in proportion to how many, with their min–max spread as a whisker.";
 
 /**
- * How many arms (harness × model × effort rung) the mean pools: the same ledgered runs
- * `aggregateWaterfall` averages. Two rungs are two experiments (ADR 0049); the accumulation chart
+ * How many arms (harness × model × effort rung × treatment) the mean pools: the same ledgered runs
+ * `aggregateWaterfall` averages. Two rungs are two experiments (ADR 0049), and so are a control and
+ * its treated twin (ADR 0055); the accumulation chart
  * keeps them apart, this one deliberately does not, so the note has to say when it is mixing them.
  */
 const pooledArms = (cells: Cell[], results: Record<string, RunResult | null | undefined>): number =>
-  new Set(cells.filter((c) => c.has_ledger && results[c.session_id]?.calls?.length).map((c) => `${c.harness}|${c.model}|${c.effort ?? ""}`)).size;
+  new Set(
+    cells.filter((c) => c.has_ledger && results[c.session_id]?.calls?.length).map((c) => `${c.harness}|${c.model}|${c.effort ?? ""}|${c.treatment ?? ""}`),
+  ).size;
 
 const poolNote = (arms: number): string =>
-  arms > 1 ? ` It pools ${arms} arms (harness × model × effort rung) into one mean; filter to one arm to read a single experiment.` : "";
+  arms > 1 ? ` It pools ${arms} arms (harness × model × effort rung × treatment) into one mean; filter to one arm to read a single experiment.` : "";
 
 /**
  * How solid a column is drawn: the share of the runs that reached it. A turn only one run of

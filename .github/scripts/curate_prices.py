@@ -46,9 +46,25 @@ import shutil
 import sys
 import tomllib
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
+
+# Our Libraries
+# The feed conversion and the record format are the package's, shared with live pricing
+# (ADR 0060), so the two writers cannot disagree on how a feed entry becomes a row.
+from pytest_xharness_eval.derive import feed as shared
+from pytest_xharness_eval.derive.feed import (  # the constants are re-exported for the curator's own tests
+    LITELLM_FIELD,  # noqa: F401
+    LONG_CONTEXT,  # noqa: F401
+    THRESHOLD,  # noqa: F401
+    Row,
+    close,
+    open_record,
+    read_rows,
+    shown,
+)
+from pytest_xharness_eval.derive.feed import FeedError as CurationError
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 PRICES_DIR = PROJECT_ROOT / "src" / "pytest_xharness_eval" / "derive" / "prices"
@@ -60,24 +76,6 @@ COMMITS_API = f"https://api.github.com/repos/{REPO}/commits?path={FEED_PATH}&per
 RAW = "https://raw.githubusercontent.com/{repo}/{ref}/{path}"
 
 KEEP_MARKER = "# curate: keep"
-TIERS = ("input", "output", "cache_read", "cache_write", "cache_write_1h")
-LONG_CONTEXT = "long_context"
-THRESHOLD = "above_prompt_tokens"
-# Our tier -> LiteLLM's per-token field. A long-context tier is the same field plus
-# ``_above_<N>k_tokens``, where N thousand prompt tokens is the threshold.
-LITELLM_FIELD = {
-    "input": "input_cost_per_token",
-    "output": "output_cost_per_token",
-    "cache_read": "cache_read_input_token_cost",
-    "cache_write": "cache_creation_input_token_cost",
-    "cache_write_1h": "cache_creation_input_token_cost_above_1hr",
-}
-LONG_FIELD = re.compile(rf"(?P<field>{'|'.join(LITELLM_FIELD.values())})_above_(?P<k>\d+)k_tokens")
-# Cost fields deliberately not modelled, and why. The service-tier suffixes are rates the
-# harness CLIs never request (batch, flex, priority and ultrafast processing); the search fee is billed
-# per web-search query by a tool, not per token.
-IGNORED_SUFFIXES = ("_batches", "_flex", "_priority", "_ultrafast")
-IGNORED_FIELDS = frozenset({"search_context_cost_per_query"})
 
 
 @dataclass(frozen=True)
@@ -134,26 +132,6 @@ WATCHES = (
 )
 
 
-class CurationError(RuntimeError):
-    """A condition the curator refuses to guess past."""
-
-
-@dataclass
-class Row:
-    """One price row in USD per MTok: base tiers, an optional long-context tier, and its comments."""
-
-    harness: str
-    model: str
-    tiers: dict[str, float]
-    long_context: dict[str, float] | None = None  # THRESHOLD plus the long-context tiers
-    comments: list[str] = field(default_factory=list)
-
-    def rates(self) -> dict[str, float]:
-        """Every rate the row states, long-context ones prefixed: what a re-price is judged on."""
-        long = {f"{LONG_CONTEXT}.{k}": v for k, v in (self.long_context or {}).items()}
-        return {**self.tiers, **long}
-
-
 # -- the feed -------------------------------------------------------------------------
 
 
@@ -169,11 +147,6 @@ def fetch_feed(ref: str | None) -> tuple[dict, str]:
 
 def _request(url: str) -> urllib.request.Request:
     return urllib.request.Request(url, headers={"User-Agent": "pytest-xharness-eval-curate-prices"})
-
-
-def per_mtok(value: object) -> float | None:
-    """A per-token rate as USD per MTok, rounded past float noise (3e-06 -> 3.0)."""
-    return round(float(value) * 1_000_000, 6) if isinstance(value, int | float) else None
 
 
 def select(feed: dict) -> tuple[list[Row], list[str], list[str]]:
@@ -198,99 +171,12 @@ def select(feed: dict) -> tuple[list[Row], list[str], list[str]]:
     return rows, unpriced, unrecognised
 
 
-def unmodelled_fields(entry: dict) -> list[str]:
-    """Cost fields on ``entry`` the curator neither models nor deliberately ignores."""
-    modelled = set(LITELLM_FIELD.values())
-    return sorted(
-        k
-        for k in entry
-        if "cost" in k
-        and k not in modelled
-        and k not in IGNORED_FIELDS
-        and not k.endswith(IGNORED_SUFFIXES)
-        and not LONG_FIELD.fullmatch(k)
-    )
-
-
-def long_context_of(watch: Watch, key: str, entry: dict) -> dict[str, float] | None:
-    """The long-context tier from ``*_above_<N>k_tokens`` fields: one threshold, all tiers at it."""
-    found: dict[str, float] = {}
-    thresholds = set()
-    by_field = {v: k for k, v in LITELLM_FIELD.items()}
-    for name, value in entry.items():
-        m = LONG_FIELD.fullmatch(name)
-        if m and (rate := per_mtok(value)) is not None:
-            thresholds.add(int(m.group("k")) * 1000)  # LiteLLM reads "272k" as 272,000
-            found[by_field[m.group("field")]] = rate
-    if not found:
-        return None
-    if len(thresholds) != 1:
-        raise CurationError(
-            f"{watch.harness}/{key}: long-context fields disagree on the threshold: {sorted(thresholds)}"
-        )
-    if "input" not in found or "output" not in found:
-        raise CurationError(f"{watch.harness}/{key}: a long-context tier needs input and output rates, got {found}")
-    if "cache_write_1h" not in found and "cache_write" in found and watch.one_hour_is_five_minute:
-        found["cache_write_1h"] = found["cache_write"]
-    return {THRESHOLD: float(thresholds.pop()), **{t: found[t] for t in TIERS if t in found}}
-
-
 def row_from(watch: Watch, key: str, entry: dict) -> Row | None:
-    """One feed entry as a row in USD per MTok, or None when it has no per-token input and output rate."""
-    unmodelled = unmodelled_fields(entry)
-    if unmodelled:
-        raise CurationError(f"{watch.harness}/{key}: cost fields the curator does not model: {unmodelled}")
-    tiers = {t: v for t in TIERS if (v := per_mtok(entry.get(LITELLM_FIELD[t]))) is not None}
-    if "input" not in tiers or "output" not in tiers:
-        return None
-    if "cache_write_1h" not in tiers and "cache_write" in tiers and watch.one_hour_is_five_minute:
-        tiers["cache_write_1h"] = tiers["cache_write"]
-    return Row(watch.harness, key, tiers, long_context_of(watch, key, entry))
+    """One feed entry as a row in USD per MTok, by the conversion live pricing uses too (ADR 0060)."""
+    return shared.row_from(watch.harness, key, entry, watch.one_hour_is_five_minute)
 
 
 # -- the open record ------------------------------------------------------------------
-
-
-def open_record(directory: Path) -> Path | None:
-    """The one record with no ``effective_to``, or None when there are no records yet."""
-    records = sorted(directory.glob("prices-*.toml"))
-    open_ = [p for p in records if "effective_to" not in tomllib.loads(p.read_text())]
-    if not records:
-        return None
-    if len(open_) != 1:
-        raise CurationError(f"expected exactly one open record in {directory}, found {[p.name for p in open_]}")
-    return open_[0]
-
-
-def read_rows(path: Path) -> dict[tuple[str, str], Row]:
-    """The rows of a record, each with its long-context tier and the comments under its header."""
-    raw = tomllib.loads(path.read_text(encoding="utf-8"))
-    comments = header_comments(path.read_text(encoding="utf-8"))
-    rows = {}
-    for harness, models in raw.items():
-        if not isinstance(models, dict):
-            continue
-        for model, stated in models.items():
-            tiers = {k: float(v) for k, v in stated.items() if k != LONG_CONTEXT}
-            long = stated.get(LONG_CONTEXT)
-            long_context = {k: float(v) for k, v in long.items()} if isinstance(long, dict) else None
-            rows[(harness, model)] = Row(harness, model, tiers, long_context, comments.get((harness, model), []))
-    return rows
-
-
-def header_comments(text: str) -> dict[tuple[str, str], list[str]]:
-    """The comment lines directly under each ``[harness."model"]`` header."""
-    out: dict[tuple[str, str], list[str]] = {}
-    current: tuple[str, str] | None = None
-    for line in text.splitlines():
-        if m := re.fullmatch(r'\[(\w+)\."([^"]+)"\]', line.strip()):
-            current = (m.group(1), m.group(2))
-            out[current] = []
-        elif current and line.startswith("#"):
-            out[current].append(line)
-        elif line.strip():
-            current = None
-    return out
 
 
 def is_kept(row: Row) -> bool:
@@ -337,67 +223,17 @@ def changed(report: dict[str, list[str]]) -> bool:
 # -- rendering ------------------------------------------------------------------------
 
 
-def money(value: float | None) -> str:
-    if value is None:
-        return "–"
-    text = f"{value:.4f}".rstrip("0")
-    whole, _, frac = text.partition(".")
-    return f"{whole}.{frac.ljust(2, '0')}"
-
-
-def shown(name: str, value: float | None) -> str:
-    """A rate as money, but a threshold as the whole token count it is."""
-    return str(int(value)) if value is not None and name.endswith(THRESHOLD) else money(value)
-
-
 def render(rows: list[Row], effective_from: date, commit: str, fetched: date) -> str:
-    """A record in the bundled format: a provenance header, the date, then rows by harness."""
-    lines = [
-        "# One dated price record (ADR 0050, ADR 0051). Rates are USD per million tokens, the unit",
-        "# every provider publishes; the arithmetic divides by 1e6 once, per tier, at pricing time.",
-        "#",
-        "# The interval is half-open: a run whose stamp falls on or after `effective_from` and",
-        "# before `effective_to` prices from this file. `effective_to` is omitted on the one file",
-        "# still in effect. A run date no file covers stops the sweep; it never prices as zero (ADR 0007).",
-        "#",
-        "# A `long_context` table is the tier a call is billed at, in full, once its prompt (input",
-        "# plus cached input) exceeds `above_prompt_tokens`. Each call is priced on its own prompt.",
-        "#",
+    """A bundled record: the shared format, with the curator's own provenance header."""
+    provenance = (
         "# Curated by .github/scripts/curate_prices.py from",
         f"# https://github.com/{REPO}/blob/{commit}/{FEED_PATH}",
         f"# (fetched {fetched.isoformat()}). First-party rows only: anthropic under [claude], openai under [codex].",
         "# OpenAI publishes no 1-hour cache-write tier, so each [codex] cache_write_1h repeats its",
         "# cache_write: an assumption, stated, never a zero.",
         "# A row with a comment line starting `# curate: keep` is a local override never re-priced.",
-        f"effective_from = {effective_from.isoformat()}",
-    ]
-    order = {w.harness: i for i, w in enumerate(WATCHES)}
-    for row in sorted(rows, key=lambda r: (order.get(r.harness, 99), r.model)):
-        lines += ["", f'[{row.harness}."{row.model}"]', *row.comments]
-        lines += [f"{t:<14} = {money(row.tiers[t])}" for t in TIERS if t in row.tiers]
-        if row.long_context:
-            lc = row.long_context
-            lines += ["", f'[{row.harness}."{row.model}".{LONG_CONTEXT}]', f"{THRESHOLD} = {int(lc[THRESHOLD])}"]
-            lines += [f"{t:<14} = {money(lc[t])}" for t in TIERS if t in lc]
-    return "\n".join(lines) + "\n"
-
-
-def close(text: str, on: date) -> str:
-    """The open record's text with ``effective_to`` set: the one edit an open record ever takes."""
-    # Read the parsed record, not the text: every header comment mentions `effective_to`.
-    if "effective_to" in tomllib.loads(text):
-        raise CurationError("the record to close already has an effective_to")
-    note = f"# Closed when prices-{on:%Y%m%d}.toml opened; this record is never edited again."
-    closed, n = re.subn(
-        r"^(effective_from = \d{4}-\d{2}-\d{2})$",
-        rf"\1\n{note}\neffective_to = {on.isoformat()}",
-        text,
-        count=1,
-        flags=re.M,
     )
-    if n != 1:
-        raise CurationError("no effective_from line to close after")
-    return closed
+    return shared.render(rows, effective_from, provenance, [w.harness for w in WATCHES])
 
 
 # -- validation and the run -----------------------------------------------------------
@@ -418,13 +254,14 @@ def stage(directory: Path, closes: tuple[Path, str] | None, new_name: str, new_t
 
 
 def validate(staged: Path, on: date) -> None:
-    """The staged set must load exactly as the plugin loads it, and price the default matrix."""
+    """The staged set must load exactly as the plugin loads it, and price every catalogued model (ADR 0057)."""
     # Our Libraries
     from pytest_xharness_eval.derive import pricing
-    from pytest_xharness_eval.model.matrix import DEFAULT_MATRIX
+    from pytest_xharness_eval.derive.catalogue import load_catalogue
+    from pytest_xharness_eval.model import matrix
 
     table = pricing.PriceTable(tuple(pricing.load_records(staged)))
-    table.validate_matrix(DEFAULT_MATRIX, on)
+    table.validate_matrix(matrix.catalogued(load_catalogue()), on)
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -444,7 +281,24 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="stage and report under tmp/curate-prices; write nothing into the package",
     )
     parser.add_argument("--always", action="store_true", help="write a record even when nothing changed")
+    parser.add_argument(
+        "--when-catalogue-unpriced",
+        action="store_true",
+        help="curate only when a model in derive/prices/models.toml has no bundled price today; "
+        "otherwise exit at once without touching the network (what `make test` runs, ADR 0060)",
+    )
     return parser.parse_args(argv)
+
+
+def catalogue_unpriced(on: date) -> list[str]:
+    """Every catalogued model the bundled records leave unpriced on ``on``: the trigger for a new snapshot."""
+    # Our Libraries
+    from pytest_xharness_eval.derive import pricing
+    from pytest_xharness_eval.derive.catalogue import load_catalogue
+    from pytest_xharness_eval.model import matrix
+
+    table = pricing.PriceTable(tuple(pricing.load_records(PRICES_DIR)))
+    return [f"{h}/{m}" for h, m in table.unpriced(matrix.catalogued(load_catalogue()), on)]
 
 
 def report_lines(report: dict[str, list[str]], unpriced: list[str]) -> list[str]:
@@ -460,6 +314,12 @@ def report_lines(report: dict[str, list[str]], unpriced: list[str]) -> list[str]
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.when_catalogue_unpriced:
+        missing = catalogue_unpriced(args.date)
+        if not missing:
+            print("every catalogued model is priced; nothing to curate")
+            return 0
+        print(f"catalogued but unpriced, curating a new snapshot: {missing}")
     if args.feed:
         feed, commit = json.loads(args.feed.read_text(encoding="utf-8")), args.ref or f"local file {args.feed}"
     else:

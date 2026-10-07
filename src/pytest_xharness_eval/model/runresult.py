@@ -190,6 +190,7 @@ class SubagentFields(TypedDict):
     log: str
     parent_turn: NotRequired[int | None]
     description: NotRequired[str]
+    model: NotRequired[str]
 
 
 @dataclass(slots=True)
@@ -213,6 +214,13 @@ class Subagent:
     description: str = ""
     usage: Usage = field(default_factory=Usage)
     calls: list[Call] = field(default_factory=list)
+    #: The model that answered this thread's calls, read from its own transcript. A subagent
+    #: often runs on a cheaper model than its parent, and is priced at that model's rates;
+    #: empty when the transcript names none, which prices it at the parent's (ADR 0065).
+    model: str = ""
+    #: What this thread's calls cost at its own model's rates; written by pricing, with the
+    #: run's ``estimated_cost_usd`` its sum with the primary's (ADR 0065).
+    estimated_cost_usd: float | None = None
 
     @classmethod
     def folded(cls, calls: list[Call], **fields: Unpack[SubagentFields]) -> Self:
@@ -300,8 +308,8 @@ class RunResultFields(TypedDict):
     their own owners and are absent here on purpose, so a dialect cannot reach them
     through the constructor: :meth:`RunResult.folded` derives ``turns``, ``usage``,
     ``calls`` and ``subagents`` from the ledgers, :meth:`RunResult.apply_cost` writes the
-    four cost fields together, and the derivation pipeline attaches ``case``, ``effort``
-    and ``skill_coverage`` once the run is graded.
+    four cost fields together, and the derivation pipeline attaches ``case``, ``effort``,
+    ``treatment``, the model's catalogue facts and ``skill_coverage`` once the run is graded.
 
     Every key is a :class:`RunResult` field with the same type; the required ones are the
     fields that have no default. ``tests/model/test_runresult.py`` asserts that the four groups
@@ -388,6 +396,22 @@ class RunResult:
     # log, because no dialect records what it was *told* -- only what it then did -- so a
     # harness that folded it would be reporting its own argv back to itself.
     effort: str | None = None
+    # The treatment the workspace was given over its fixture, or None for the control
+    # (ADR 0055). Attached by the derivation pipeline for the same reason as ``effort``: the
+    # log shows what the agent read, never which overlay put it there.
+    treatment: str | None = None
+    # What kind of model ran, from the catalogue (ADR 0057): its product line, its frozen
+    # family tier and its release date as ``YYYY-MM-DD``. Stored rather than looked up at
+    # report time, so an archived run says what it was even after the catalogue moves on.
+    # None on a capture of a model the catalogue never described.
+    line: str | None = None
+    family_tier: int | None = None
+    released: str | None = None
+    # Set when the CLI was killed at the wall-clock limit (ADR 0064): the limit it ran into,
+    # and how long its session logs had been silent at that moment. Observed by the harness
+    # at the kill, never folded from a log. None on a run that finished on its own.
+    timed_out_after_s: int | None = None
+    idle_before_timeout_s: float | None = None
     # Parallel threads the session spawned, each with its own ledger. Their usage is folded
     # into ``usage`` (the run's billed total); ``turns`` and ``calls`` stay the primary's.
     subagents: list[Subagent] = field(default_factory=list)
@@ -422,6 +446,16 @@ class RunResult:
         self.rates_applied = estimate.rates
         self.long_context_calls = estimate.long_context_calls
         self.cost_status = CostStatus.PRICED
+
+    @property
+    def attempted(self) -> bool:
+        """Whether the CLI reached the model at all: it exited cleanly, or made at least one call.
+
+        A non-zero exit with no model call is a run that never attempted the task (a session
+        limit, an expired login, a refused request), and is graded as an error rather than a
+        fail (ADR 0063). A run that called the model and then exited non-zero did attempt it.
+        """
+        return self.exit_code == 0 or bool(self.calls)
 
     @property
     def baseline_tokens(self) -> int:

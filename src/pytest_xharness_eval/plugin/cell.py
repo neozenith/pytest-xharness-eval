@@ -1,11 +1,12 @@
 """One cell's live run: the sequence around the one call that spends money (ADR 0002, ADR 0040).
 
-A cell is a (case, harness, model, effort) point, and running it is always the same seven steps:
-stamp the run, copy the fixture into a fresh workspace, invoke the CLI, derive everything
-derivable from what came back, write the evidence, grade it, record the metrics. Exactly
-one of those steps spawns a paid process, and it used to be inside a forty-line
-``# pragma: no cover`` block that took the other six with it -- so the ordering that a
-replay is pinned against could not be exercised at all without spending (ADR 0034).
+A cell is a (case, harness, model, effort, treatment) point, and running it is always the
+same seven steps: stamp the run, copy the fixture (and any treatment over it) into a fresh
+workspace, invoke the CLI, derive everything derivable from what came back, write the
+evidence, grade it, record the metrics. Exactly one of those steps spawns a paid process,
+and it used to be inside a forty-line ``# pragma: no cover`` block that took the other six
+with it -- so the ordering that a replay is pinned against could not be exercised at all
+without spending (ADR 0034).
 
 Here each step is a method. :meth:`CellRun.invoke` is the paid one and is the only method
 that carries the pragma; the rest are exercised directly from captured logs in
@@ -53,6 +54,32 @@ if TYPE_CHECKING:
 # processes -- agree with the controller and a sweep's cells share one ``{run}`` level.
 RUN_STAMP_ENV = "XHARNESS_EVAL_RUN_TS"
 
+#: A run killed at the wall whose session logs had been silent this long had stalled (ADR 0064).
+#: Inside it the agent was still working when time ran out.
+STALLED_AFTER_S = 300
+
+
+def check_completed(result: RunResult) -> None:
+    """Refuse a run the CLI was killed for at the wall-clock limit, with the verdict its cause earns.
+
+    Still active within :data:`STALLED_AFTER_S` of the wall, the agent was working and simply
+    ran out of time: a ``fail`` to complete in a timely manner, which a longer
+    ``xharness_timeout_s`` might turn into a pass. Silent for longer, something stalled (a skill
+    script, the harness, the network): an ``error`` to investigate, because a stalled run is not
+    a clean run of the skill to call failed. A run with no log at all had no activity to show.
+    """
+    if result.timed_out_after_s is None:
+        return
+    idle = result.idle_before_timeout_s
+    limit = result.timed_out_after_s
+    if idle is not None and idle < STALLED_AFTER_S:
+        raise AssertionError(
+            f"did not complete within the {limit}s timeout: the session was still active {idle:.0f}s "
+            "before the wall, so it ran out of time (raise xharness_timeout_s to let it finish)"
+        )
+    silent = f"no session activity for {idle:.0f}s" if idle is not None else "no session log at all"
+    raise harness.RunError(f"stalled: killed at the {limit}s timeout after {silent} (ADR 0064)")
+
 
 def run_stamp() -> str:
     """This sweep's run stamp: path-safe, sortable, and minted at most once per session.
@@ -94,24 +121,29 @@ class CellRun:
     node: str
     suite: str
     skill_files: list[SkillFile] = field(default_factory=list)
+    # The treatment's directories, copied over the fixture in order; empty for the control
+    # (ADR 0055). Resolved at collection, where a treatment that would copy nothing has
+    # already stopped the sweep.
+    overlays: list[Path] = field(default_factory=list)
     verdict: Verdict = Verdict.ERROR
 
     # -- the steps ---------------------------------------------------------------------
 
     @property
     def cell_id(self) -> str:
-        """The workspace name for this cell: case, harness, model and effort, path-safe.
+        """The workspace name for this cell: case, harness, model, effort and treatment, path-safe.
 
-        The effort rung is part of the name because two cells of one sweep may differ in
-        nothing else, and a shared workspace name would have them overwrite each other's
-        build directory (ADR 0049).
+        The effort rung and the treatment are part of the name because two cells of one
+        sweep may differ in nothing else, and a shared workspace name would have them
+        overwrite each other's build directory (ADR 0049, ADR 0055).
         """
         rung = f"-{self.cell.effort}" if self.cell.effort else ""
-        return f"{self.case.name}-{self.cell.harness}-{self.cell.model}{rung}"
+        treated = f"-{self.cell.treatment}" if self.cell.treatment else ""
+        return f"{self.case.name}-{self.cell.harness}-{self.cell.model}{rung}{treated}"
 
     def materialise(self) -> Path:
-        """A fresh copy of the fixture tree under ``<cache>/build/``, for this cell alone (ADR 0004)."""
-        return ws.materialise(self.fixture_dir, self.cell_id, self.settings.cache.build)
+        """A fresh copy of the fixture, then the treatment over it, under ``<cache>/build/`` (ADR 0004, ADR 0055)."""
+        return ws.materialise(self.fixture_dir, self.cell_id, self.settings.cache.build, self.overlays)
 
     @property
     def prompt(self) -> str:
@@ -148,6 +180,7 @@ class CellRun:
             harness=self.cell.harness,
             model=self.cell.model,
             effort=self.cell.effort,
+            treatment=self.cell.treatment,
             run=run_stamp(),
             session=session_id,
         )
@@ -168,6 +201,8 @@ class CellRun:
             skill_files=self.skill_files,
             case=CaseRef.of(self.case, self.suite, self.prompt),
             effort=self.cell.effort,
+            treatment=self.cell.treatment,
+            spec=self.settings.catalogue().get(self.cell.harness, self.cell.model),
         )
         pipeline.capture(result, session)
         return session
@@ -175,11 +210,17 @@ class CellRun:
     def output(self, result: RunResult, workspace: Path) -> CaseOutput:
         """The rollout as the grader sees it: the record, the workspace, and the seed list.
 
-        ``seeded`` is taken from the fixture tree rather than the workspace, because by
-        grading time the two are mixed together and only this side knows which was which
-        (ADR 0045).
+        ``seeded`` is taken from the fixture tree and the treatment's directories rather
+        than the workspace, because by grading time they are mixed together and only this
+        side knows which was which (ADR 0045). A treatment's files are seeded, not written:
+        the agent found them there, exactly as it found the fixture (ADR 0055).
         """
-        seeded = frozenset(str(p.relative_to(self.fixture_dir)) for p in self.fixture_dir.rglob("*") if p.is_file())
+        seeded = frozenset(
+            str(p.relative_to(layer))
+            for layer in (self.fixture_dir, *self.overlays)
+            for p in layer.rglob("*")
+            if p.is_file()
+        )
         return CaseOutput(run=result, workspace=workspace, seeded=seeded)
 
     def grade(self, result: RunResult, workspace: Path) -> Verdict:
@@ -188,8 +229,18 @@ class CellRun:
         The verdict is recorded on this run *before* the grader's exception leaves, because
         a failed cell still has to emit its record: an assertion is a ``fail``, anything
         else is an ``error``, and either way pytest gets the original exception (ADR 0012).
+
+        A run whose CLI never reached the model is an ``error`` before the grader is asked
+        anything (ADR 0063): a session limit, an expired login or a refused request did not
+        attempt the task, so grading it would record the skill as failing a test it never sat.
         """
         try:
+            check_completed(result)
+            if not result.attempted:
+                raise harness.RunError(
+                    f"{result.harness} exited {result.exit_code} without a model call, so the task was "
+                    f"never attempted: {result.final_text[:300] or '(no message)'}"
+                )
             self.case.fn(self.output(result, workspace))
         except AssertionError:
             self.verdict = Verdict.FAIL
@@ -214,6 +265,11 @@ class CellRun:
             cache=self.settings.cache,
         )
 
+    def tidy(self, workspace: Path) -> None:
+        """Remove the finished cell's workspace, unless the project keeps them for inspection (ADR 0062)."""
+        if not self.settings.keep_workspaces:
+            ws.discard(workspace)
+
     # -- the sequence ------------------------------------------------------------------
 
     def execute(self, stash: pytest.Stash) -> None:  # pragma: no cover - invoke() spends (ADR 0002)
@@ -221,12 +277,16 @@ class CellRun:
 
         The record is written in a ``finally`` because a failing cell is the case a metrics
         history exists for: a sweep that only recorded its passes would show cost dropping
-        as quality dropped.
+        as quality dropped. The workspace is tidied in an outer ``finally``, after the record,
+        so a cell whose CLI failed does not leave its downloads behind either.
         """
         workspace = self.materialise()
-        attempt = self.invoke(workspace)
-        session = self.store(attempt.result)
         try:
-            self.grade(attempt.result, workspace)
+            attempt = self.invoke(workspace)
+            session = self.store(attempt.result)
+            try:
+                self.grade(attempt.result, workspace)
+            finally:
+                stash[RECORD_KEY] = self.record(attempt, session)
         finally:
-            stash[RECORD_KEY] = self.record(attempt, session)
+            self.tidy(workspace)

@@ -1,6 +1,6 @@
 /**
- * The one global filter on the overview (glossary: `OverviewFilters`, ADR 0042): four facets —
- * skill, harness, model, effort — held in the URL and rippling through the `TokenAccumulationChart`, the
+ * The one global filter on the overview (glossary: `OverviewFilters`, ADR 0042): six facets —
+ * skill, harness, model, effort, treatment, family tier (ADR 0057) — held in the URL and rippling through the `TokenAccumulationChart`, the
  * `SessionSummaryTable` and the `SessionTable`.
  *
  * It is the *producer* of the filter state, not a consumer, so unlike those three it reads
@@ -31,7 +31,7 @@ import { X } from "lucide-react";
 import { Text, XStack, YStack } from "tamagui";
 import { El } from "@/components/El";
 import { Card } from "@/components/ui/card";
-import { facetCount, facetOptions, FACETS, filterCells, toggleFacet } from "@/lib/facets";
+import { facetCount, facetLabel, facetOptions, FACETS, filterCells, toggleFacet } from "@/lib/facets";
 import { NO_FACETS, overviewWith, replaceRoute, useRoute, type FacetSelection } from "@/lib/route";
 import type { Cell } from "@/lib/types";
 
@@ -206,7 +206,7 @@ export function OverviewFilters({ cells }: { cells: Cell[] }) {
                        * had to be read against seven neighbours to be believed.
                        */}
                       <span className="chip-dot" aria-hidden />
-                      {value} <span className="muted">{count}</span>
+                      {facetLabel(facet, value)} <span className="muted">{count}</span>
                     </button>
                   );
                 })}

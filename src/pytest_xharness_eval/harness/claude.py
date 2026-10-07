@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import time
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -26,11 +27,14 @@ from typing import TYPE_CHECKING, Any
 from pytest_xharness_eval.harness import records as record_kinds
 from pytest_xharness_eval.harness.base import (
     DEFAULT_TIMEOUT_S,
+    TIMED_OUT,
     Harness,
     RunError,
     SessionLog,
     copy_skill,
+    mark_timed_out,
     register,
+    seconds_idle,
     spawn,
 )
 from pytest_xharness_eval.harness.normalise import (
@@ -50,6 +54,18 @@ if TYPE_CHECKING:
 
 # Isolation levers verified against the installed CLI (claude 2.1.237).
 _ISOLATION = ["--setting-sources", ""]
+
+# The workspace's own instruction file, and nothing above it (ADR 0055; claude 2.1.287).
+# ``--setting-sources ""`` drops every CLAUDE.md, the workspace's included, while
+# ``project`` loads the user's and every ancestor directory's as well. ``--add-dir`` on the
+# workspace with this variable set loads the workspace's CLAUDE.md, and its ``@`` imports,
+# alone -- the same file codex already reads as ``AGENTS.md`` from its cwd.
+_WORKSPACE_MEMORY_ENV = {"CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1"}
+
+
+def workspace_memory_argv(workspace: Path) -> list[str]:
+    """``--add-dir <workspace>``: with :data:`_WORKSPACE_MEMORY_ENV`, its CLAUDE.md is read."""
+    return ["--add-dir", str(workspace)]
 
 
 # -- invocation ------------------------------------------------------------------------
@@ -132,23 +148,31 @@ def run_claude(
         "bypassPermissions",
         *effort_argv(effort),
         *_ISOLATION,
+        *workspace_memory_argv(workspace),
     ]
     if skill_dir is not None:
         run_dir = workspace.parent / f"{workspace.name}.claude"
         cmd += ["--plugin-dir", str(skill_plugin(skill_dir, run_dir))]
 
     before = ws.snapshot(workspace)
-    proc = spawn(cmd, cwd=workspace, env=dict(os.environ), timeout_s=timeout_s)
+    proc = spawn(cmd, cwd=workspace, env={**os.environ, **_WORKSPACE_MEMORY_ENV}, timeout_s=timeout_s)
+    ended_at = time.time()
     after = ws.snapshot(workspace)
-
-    if proc.returncode != 0 and not proc.stdout.strip():
-        raise RunError(f"claude exited {proc.returncode} with no result envelope: {proc.stderr[:2000]}")
-    try:
-        envelope = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise RunError(f"claude stdout was not the JSON envelope: {proc.stdout[:500]}") from exc
-
     log = claude_log_path(config_dir, workspace, session_id)
+    timed_out = proc.returncode == TIMED_OUT
+
+    if timed_out:
+        # Killed at the wall: claude prints its envelope only when it finishes, so the
+        # session log it wrote up to the kill is the whole of the evidence (ADR 0064).
+        envelope = timed_out_envelope(session_id)
+    else:
+        if proc.returncode != 0 and not proc.stdout.strip():
+            raise RunError(f"claude exited {proc.returncode} with no result envelope: {proc.stderr[:2000]}")
+        try:
+            envelope = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise RunError(f"claude stdout was not the JSON envelope: {proc.stdout[:500]}") from exc
+
     if not log.is_file():
         raise RunError(f"claude session log not found at derived path: {log}")
 
@@ -156,7 +180,20 @@ def run_claude(
     if got != session_id:
         raise RunError(f"session id mismatch: harness minted {session_id}, envelope says {got}")
 
-    return ClaudeSessionLog(log, envelope).to_result(workspace, ws.diff(before, after))
+    result = ClaudeSessionLog(log, envelope).to_result(workspace, ws.diff(before, after))
+    if timed_out:
+        logs = [log, *log.with_suffix("").glob("subagents/*.jsonl")]
+        mark_timed_out(result, timeout_s, seconds_idle(logs, ended_at))
+    return result
+
+
+def timed_out_envelope(session_id: str) -> dict[str, Any]:
+    """The envelope a run killed at the wall gets: its minted id, an error, and nothing measured.
+
+    Every figure the real envelope would carry (the CLI's own cost, its usage, its turn count)
+    is left out rather than zeroed, so the run is priced and counted from its log alone.
+    """
+    return {"session_id": session_id, "is_error": True, "result": ""}
 
 
 # -- folding the log -------------------------------------------------------------------
@@ -236,6 +273,14 @@ class _Ledger:
             return
         mid = str(msg.get("id") or f"anon-{len(self.calls)}")
         call = self._by_id.get(mid)
+        if call is not None:
+            # A message is written as one record per content block. The primary log repeats
+            # the final usage on each, but a subagent transcript streams it: the first record
+            # of a call can say 4 output tokens where the last says 917. Keep the furthest
+            # along, so a call bills what it produced rather than its first fragment (ADR 0065).
+            later = _call_usage(msg.get("usage") or {})
+            if later.output_tokens > call.usage.output_tokens:
+                call.usage = later
         if call is None:
             call = Call(
                 n=len(self.calls) + 1,
@@ -366,6 +411,20 @@ class ClaudeSessionLog(SessionLog):
         )
 
 
+def model_of(records: Numbered) -> str:
+    """The model a transcript's assistant records name, or empty when none does (ADR 0065).
+
+    A subagent's transcript says which model answered it, and that is the model its calls
+    are billed at: Claude Code runs an ``Agent(model: "haiku")`` subagent on Haiku however
+    expensive the parent is. Synthetic notices name ``<synthetic>`` and are skipped.
+    """
+    for _, rec in records:
+        msg = rec.get("message") or {}
+        if rec.get("type") == "assistant" and not record_kinds.is_synthetic(msg) and msg.get("model"):
+            return str(msg["model"])
+    return ""
+
+
 def subagents_of(log: Path, spawns: dict[str, int]) -> list[Subagent]:
     """Fold every subagent transcript beside a Claude session log.
 
@@ -402,6 +461,7 @@ def subagents_of(log: Path, spawns: dict[str, int]) -> list[Subagent]:
                 log=str(transcript),
                 parent_turn=spawns.get(str(meta.get("toolUseId") or "")),
                 description=str(meta.get("description") or ""),
+                model=model_of(records),
             )
         )
     return subs

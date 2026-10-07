@@ -1,6 +1,6 @@
 /**
  * The collapsible left navigation (glossary: `NavSidebar`): the sweep's hierarchy as a tree
- * — skill → suite → harness → model (with its rung, when one was named) → one entry per session (its case) — plus section
+ * — skill → suite → harness → model (with its rung and treatment, when named) → one entry per session (its case) — plus section
  * jump-links for the open session. Every level starts collapsed; the reader opts into
  * expanding it, and the active session's ancestors open themselves so a deeplink is never
  * hidden. Collapse is a viewer preference, not a route param: it changes how you look,
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { El } from "@/components/El";
 import { armLabel, compareEffort } from "@/lib/effort";
 import { short } from "@/lib/format";
+import { compareTreatment } from "@/lib/treatment";
 import { navigateOnClick, overviewSearch, sessionSearch, type Route } from "@/lib/route";
 import type { Cell, Index } from "@/lib/types";
 
@@ -76,21 +77,27 @@ const suiteName = (c: Cell): string => (c.suite ? (c.suite.split("/").pop() ?? c
  * The tree's model level is the arm: the model *and* the rung it was sent, keyed the way the
  * cache names the directory (`{model}[--{effort}]`, ADR 0049), so two rungs of one model are two
  * branches rather than one branch whose sessions ran different experiments. A cell that named no
- * rung keeps the bare model key, so every tree path from before the axis is unchanged.
+ * rung keeps the bare model key, so every tree path from before the axis is unchanged. A treated
+ * cell's arm carries its treatment the same way the cache does (`{model}[--{effort}][+{treatment}]`,
+ * ADR 0055), so a control and its treated twin are two branches; a control's key is unchanged.
  */
-const armKey = (c: Cell): string => (c.effort ? `${c.model}--${c.effort}` : c.model);
+const armKey = (c: Cell): string => `${c.effort ? `${c.model}--${c.effort}` : c.model}${c.treatment ? `+${c.treatment}` : ""}`;
 
-/** What an arm's branch prints: the model, then its rung when one was named. */
-const armName = (c: Cell): string => (c.effort ? `${c.model} · ${c.effort}` : c.model);
+/** What an arm's branch prints: the model, then its rung when one was named, then its treatment. */
+const armName = (c: Cell): string => `${c.effort ? `${c.model} · ${c.effort}` : c.model}${c.treatment ? ` +${c.treatment}` : ""}`;
 
 /**
- * The arm branches of one harness: models in first-seen order (the tree follows the index), and a
- * model's rungs beside each other in ladder order, `low` above `max`, whatever order they ran in.
+ * The arm branches of one harness: models in first-seen order (the tree follows the index), a
+ * model's rungs beside each other in ladder order, `low` above `max`, whatever order they ran in,
+ * and each rung's control directly above its treated twins.
  */
 function armGroups(cells: Cell[]): [string, Cell[]][] {
   const models = [...new Set(cells.map((c) => c.model))];
   return [...groupBy(cells, armKey).entries()].sort(
-    ([, a], [, b]) => models.indexOf(a[0]!.model) - models.indexOf(b[0]!.model) || compareEffort(a[0]!.effort, b[0]!.effort),
+    ([, a], [, b]) =>
+      models.indexOf(a[0]!.model) - models.indexOf(b[0]!.model) ||
+      compareEffort(a[0]!.effort, b[0]!.effort) ||
+      compareTreatment(a[0]!.treatment, b[0]!.treatment),
   );
 }
 
@@ -260,7 +267,7 @@ export function NavSidebar({ index, route }: Props) {
                                                 onClick={navigateOnClick(sessionSearch(cell.session_id, null, null, { theme }))}
                                                 className="nav-link"
                                                 data-active={active ? "true" : undefined}
-                                                title={`${cell.skill ? `${cell.skill} · ` : ""}${cell.case} · ${armLabel(cell.harness, cell.model, cell.effort)} · ${cell.session_id}`}
+                                                title={`${cell.skill ? `${cell.skill} · ` : ""}${cell.case} · ${armLabel(cell.harness, cell.model, cell.effort, cell.treatment)} · ${cell.session_id}`}
                                               >
                                                 <VerdictDot verdict={cell.verdict} />
                                                 <span className="truncate">{cell.case}</span>

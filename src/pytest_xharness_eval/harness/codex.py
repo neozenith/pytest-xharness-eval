@@ -19,6 +19,7 @@ from __future__ import annotations
 # Standard Library
 import json
 import os
+import re
 import shutil
 import time
 from pathlib import Path
@@ -28,11 +29,14 @@ from typing import TYPE_CHECKING, Any
 from pytest_xharness_eval.harness import records as record_kinds
 from pytest_xharness_eval.harness.base import (
     DEFAULT_TIMEOUT_S,
+    TIMED_OUT,
     Harness,
     RunError,
     SessionLog,
     copy_skill,
+    mark_timed_out,
     register,
+    seconds_idle,
     spawn,
 )
 from pytest_xharness_eval.harness.normalise import (
@@ -68,6 +72,8 @@ _CRED_FILES = ["auth.json", ".credentials.json", "config.toml"]
 _TOOL_ITEMS = {"CommandExecution", "FileChange", "Extension"}
 _CALL_ITEMS = {"custom_tool_call", "function_call"}
 _OUTPUT_ITEMS = {"custom_tool_call_output", "function_call_output"}
+#: Where one shell command opens inside an ``exec`` script: the JSON object after it is its arguments.
+_EXEC_COMMAND = re.compile(r"\bexec_command\(\s*")
 
 
 # -- invocation ------------------------------------------------------------------------
@@ -200,6 +206,7 @@ def run_codex(
     before = ws.snapshot(workspace)
     start = time.monotonic()
     proc = spawn(cmd, cwd=workspace, env=env, timeout_s=timeout_s)
+    ended_at = time.time()
     wall_ms = int((time.monotonic() - start) * 1000)
     after = ws.snapshot(workspace)
 
@@ -208,12 +215,16 @@ def run_codex(
         raise RunError(f"no rollout under private CODEX_HOME; codex exited {proc.returncode}: {proc.stderr[:2000]}")
     rollout = primary_rollout(rollouts)
 
+    # A run killed at the wall (ADR 0064) folds the same way: codex writes its rollouts as it
+    # goes, so what it wrote up to the kill is still the run, and it was billed.
     session = CodexSessionLog(rollout, proc.returncode, sub_rollouts=[r for r in rollouts if r != rollout])
     result = session.to_result(workspace, ws.diff(before, after))
     if not result.duration_ms:
         result.duration_ms = wall_ms
     if not result.session_id:
         raise RunError(f"rollout {rollouts[0]} carries no session_meta id")
+    if proc.returncode == TIMED_OUT:
+        mark_timed_out(result, timeout_s, seconds_idle(rollouts, ended_at))
     return result
 
 
@@ -463,7 +474,9 @@ def subagents_of(rollouts: list[Path], primary_calls: list[Call]) -> list[Subage
                 meta = rec.get("payload") or {}
                 spawn_at = str(rec.get("timestamp") or meta.get("timestamp") or "")
                 break
-        session_id, _model, ledger = fold(records)
+        # The last turn_context is the thread's own: a fork first replays its parent's, so
+        # the earlier one names the parent's model, not the one that answered (ADR 0065).
+        session_id, model, ledger = fold(records)
         parent = next(
             (c.n for c in primary_calls if spawn_at and c.at and c.at >= spawn_at),
             primary_calls[-1].n if primary_calls else None,
@@ -476,6 +489,7 @@ def subagents_of(rollouts: list[Path], primary_calls: list[Call]) -> list[Subage
                 log=str(rollout),
                 parent_turn=parent,
                 description=str(meta.get("agent_path") or ""),
+                model=model,
             )
         )
     return subs
@@ -507,6 +521,44 @@ def _classify(rec: dict[str, Any]) -> str:
     return f"codex/{rtype}"
 
 
+#: One step of an object literal, whitespace first: a bare key, a quoted key, or a ``}``.
+_KEY_OR_CLOSE = re.compile(r"\s*(?:(?P<bare>[A-Za-z_$][\w$]*)|(?P<quoted>\")|(?P<close>\}))")
+#: What follows a key (``:``) or a value (``,`` or ``}``), whitespace first.
+_PUNCT = re.compile(r"\s*([:,}])\s*")
+
+
+def _object_literal(text: str, at: int) -> dict[str, Any] | None:
+    """The JavaScript object literal starting at ``text[at]``, or None when it is not one this reads.
+
+    Keys may be bare (``{cmd: "ls"}``, as the model often writes them) or quoted; values are
+    JSON, which every string, number and array the ``exec`` scripts pass is.
+    """
+    if text[at : at + 1] != "{":
+        return None
+    decoder = json.JSONDecoder()
+    out: dict[str, Any] = {}
+    pos = at + 1
+    try:
+        while (key := _KEY_OR_CLOSE.match(text, pos)) and not key.group("close"):
+            if key.group("bare"):
+                name, pos = key.group("bare"), key.end()
+            else:
+                name, pos = decoder.raw_decode(text, key.end() - 1)
+            colon = _PUNCT.match(text, pos)
+            if colon is None or colon.group(1) != ":":
+                return None
+            out[str(name)], pos = decoder.raw_decode(text, colon.end())
+            after = _PUNCT.match(text, pos)
+            if after is None or after.group(1) == ":":
+                return None
+            if after.group(1) == "}":
+                return out
+            pos = after.end()
+    except json.JSONDecodeError:
+        return None
+    return out if key else None
+
+
 # -- the harness -----------------------------------------------------------------------
 
 
@@ -517,6 +569,25 @@ class CodexHarness(Harness):
     shell_tools = frozenset({"exec", "shell", "CommandExecution", "bash", "exec_command"})
     persistent_shells = frozenset()  # every exec runs in its own process at ``workdir``
     efforts = CODEX_EFFORTS
+
+    @staticmethod
+    def shell_commands(tool_input: Any) -> list[tuple[str, str | None]]:
+        """Codex's ``exec`` tool takes a script, not a command: read each ``exec_command`` it makes.
+
+        The input is JavaScript, ``const r = await tools.exec_command({"cmd": ..., "workdir": ...})``,
+        one or more calls. Read whole, the script's first statement swallows the command's
+        leading ``skill_root='<dir>'`` assignment, and the ``$skill_root/scripts/...`` it then
+        runs is never expanded (ADR 0066). An argument that is not a JSON object is left as
+        the script text, which is what was matched before.
+        """
+        if not isinstance(tool_input, str) or "exec_command(" not in tool_input:
+            return Harness.shell_commands(tool_input)
+        found: list[tuple[str, str | None]] = []
+        for call in _EXEC_COMMAND.finditer(tool_input):
+            args = _object_literal(tool_input, call.end())
+            if args is not None:
+                found.extend(Harness.shell_commands(args))
+        return found or Harness.shell_commands(tool_input)
 
     def invoke(self, *, skill: str, task: str) -> str:
         """``$<skill> <task>``: the mention Codex's own instructions name as the trigger.

@@ -22,6 +22,11 @@ export const cell = (over: Partial<Cell> = {}): Cell => ({
   harness: "claude",
   model: "claude-opus-5",
   effort: null,
+  treatment: null,
+  // Null by default: the shape of every session captured before the model catalogue (ADR 0057).
+  line: null,
+  family_tier: null,
+  released: null,
   session_id: SID,
   verdict: "pass",
   at: "2026-09-23T07:18:05.537Z",
@@ -87,6 +92,7 @@ export const result = (over: Partial<RunResult> = {}): RunResult => ({
   harness: "claude",
   model: "claude-opus-5",
   effort: null,
+  treatment: null,
   session_id: SID,
   turns: 3,
   reported_turns: 23,
@@ -135,18 +141,45 @@ export const log = (): string[] =>
     ),
   );
 
+/** What the model catalogue (ADR 0057) says of each fixture model: line, family tier, release date. */
+export const CATALOGUE: Record<string, Pick<Cell, "line" | "family_tier" | "released">> = {
+  "claude-opus-5": { line: "opus", family_tier: 3, released: "2026-05-14" },
+  "claude-sonnet-5": { line: "sonnet", family_tier: 2, released: "2026-04-02" },
+  "gpt-5.6-sol": { line: "sol", family_tier: 3, released: "2026-06-10" },
+  "gpt-5.6-luna": { line: "luna", family_tier: 1, released: "2026-06-10" },
+};
+
+/** A cell whose model the catalogue describes: its `line`, `family_tier` and `released` filled in. */
+const catalogued = (over: Partial<Cell>): Cell => cell({ ...CATALOGUE[over.model ?? "claude-opus-5"], ...over });
+
 /**
  * A sweep across every axis: two harnesses, three models, and one model at three rungs plus a
- * rung-less (pre-ADR 0049) session, so ordering, grouping and the null case all show.
+ * rung-less (pre-ADR 0049) session, so ordering, grouping and the null case all show. Every
+ * session but that old one carries the catalogue's facts (ADR 0057), so tier 3 spans both
+ * harnesses and the old capture's null tier shows beside them.
  */
 export const sweep = (): Cell[] => [
-  cell({ session_id: "aaaaaaaa-0001", effort: "max", estimated_cost_usd: 3.1, verdict: "pass" }),
-  cell({ session_id: "aaaaaaaa-0002", effort: "low", estimated_cost_usd: 0.4, verdict: "fail" }),
-  cell({ session_id: "aaaaaaaa-0003", effort: "high", estimated_cost_usd: 1.2, verdict: "pass" }),
+  catalogued({ session_id: "aaaaaaaa-0001", effort: "max", estimated_cost_usd: 3.1, verdict: "pass" }),
+  catalogued({ session_id: "aaaaaaaa-0002", effort: "low", estimated_cost_usd: 0.4, verdict: "fail" }),
+  catalogued({ session_id: "aaaaaaaa-0003", effort: "high", estimated_cost_usd: 1.2, verdict: "pass" }),
   cell({ session_id: "aaaaaaaa-0004", effort: null, estimated_cost_usd: 1.0, verdict: null }),
-  cell({ session_id: "bbbbbbbb-0001", model: "claude-sonnet-5", effort: "medium", estimated_cost_usd: 0.6 }),
-  cell({ session_id: "cccccccc-0001", harness: "codex", model: "gpt-5.6-sol", effort: "xhigh", estimated_cost_usd: 0.9 }),
-  cell({ session_id: "cccccccc-0002", harness: "codex", model: "gpt-5.6-luna", effort: "low", skill: "discovery", case: "eval_map" }),
+  catalogued({ session_id: "bbbbbbbb-0001", model: "claude-sonnet-5", effort: "medium", estimated_cost_usd: 0.6 }),
+  catalogued({ session_id: "cccccccc-0001", harness: "codex", model: "gpt-5.6-sol", effort: "xhigh", estimated_cost_usd: 0.9 }),
+  catalogued({ session_id: "cccccccc-0002", harness: "codex", model: "gpt-5.6-luna", effort: "low", skill: "discovery", case: "eval_map" }),
+];
+
+/**
+ * The sweep with the treatment axis switched on (ADR 0055): the `high` rung's control
+ * (`aaaaaaaa-0003`, untreated as every `sweep()` cell is) gains a treated twin, run twice, and a
+ * second treatment run once — so a control and its twins sit side by side in every view, and the
+ * control-first, then-alphabetical order shows. `sweep()` itself stays untreated, which is the
+ * shape of every capture made before the axis.
+ */
+export const treatedSweep = (): Cell[] => [
+  ...sweep(),
+  catalogued({ session_id: "dddddddd-0001", effort: "high", treatment: "lean-ci", estimated_cost_usd: 0.8, verdict: "pass" }),
+  catalogued({ session_id: "dddddddd-0002", effort: "high", treatment: "lean-ci", estimated_cost_usd: 0.6, verdict: "pass" }),
+  catalogued({ session_id: "dddddddd-0003", effort: "high", treatment: "agents-md", estimated_cost_usd: 1.4, verdict: "fail" }),
 ];
 
 export const index = (cells: Cell[] = sweep()): Index => ({ generated_at: "2026-09-24T01:00:00Z", captured: ".xharness_eval_cache", inline: true, cells });
@@ -154,7 +187,9 @@ export const index = (cells: Cell[] = sweep()): Index => ({ generated_at: "2026-
 /** The inline payload: every cell served the same result (its identity overridden) and log. */
 export const inline = (cells: Cell[] = sweep()): InlineData => ({
   index: index(cells),
-  results: Object.fromEntries(cells.map((c) => [c.session_id, result({ session_id: c.session_id, harness: c.harness, model: c.model, effort: c.effort })])),
+  results: Object.fromEntries(
+    cells.map((c) => [c.session_id, result({ session_id: c.session_id, harness: c.harness, model: c.model, effort: c.effort, treatment: c.treatment })]),
+  ),
   logs: Object.fromEntries(cells.map((c) => [c.session_id, log().join("\n")])),
   tokens: tokens as unknown as DesignTokens,
 });

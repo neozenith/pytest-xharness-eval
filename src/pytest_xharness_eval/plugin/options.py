@@ -23,17 +23,25 @@ from pytest_xharness_eval.derive import pricing
 from pytest_xharness_eval.derive.ignorerules import IgnoreRules
 from pytest_xharness_eval.model import matrix as mx
 from pytest_xharness_eval.model.effort import Effort
+from pytest_xharness_eval.model.layout import run_date
+from pytest_xharness_eval.model.treatment import CONTROL, check_name
 from pytest_xharness_eval.plugin.cell import run_stamp
 from pytest_xharness_eval.plugin.results import RESULTS_KEY, ResultCollector
 from pytest_xharness_eval.runtime.settings import (
+    DEFAULT_OUTPUT_RATE_LIMIT,
     INI_CACHE_DIR,
+    INI_KEEP_WORKSPACES,
     INI_MATRIX,
+    INI_MODELS,
+    INI_OUTPUT_RATE_LIMIT,
+    INI_PRICE_FEED,
     INI_PRICES,
     INI_REPORT_INLINE,
     INI_REPORT_TOKENS,
     INI_SKILL_IGNORE,
     INI_SKILLS_DIR,
     INI_TIMEOUT,
+    INI_TREATMENTS,
     Settings,
 )
 
@@ -69,12 +77,30 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         ),
     )
     g.addoption(
+        "--treatment",
+        action="append",
+        default=None,
+        metavar="NAME",
+        help=(
+            "narrow the sweep to cells under this treatment (repeatable); "
+            f"'{CONTROL}' names the untreated cell every treated case also sweeps (ADR 0055)"
+        ),
+    )
+    g.addoption(
         "--xharness-timeout",
         dest="xharness_timeout",
         type=int,
         default=None,
         metavar="SECONDS",
         help="how long one cell's CLI may run before it is killed (overrides the ini key; default 600)",
+    )
+    g.addoption(
+        "--xharness-keep-workspaces",
+        dest="xharness_keep_workspaces",
+        action="store_true",
+        default=False,
+        help="leave each finished cell's build workspace in place for inspection (overrides the ini key; "
+        "by default it is removed once its evidence is captured and graded, ADR 0062)",
     )
     g.addoption(
         "--dry-run",
@@ -99,12 +125,47 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         ),
     )
     parser.addini(
+        INI_MODELS,
+        type="linelist",
+        default=[],
+        help=(
+            "model catalogue rows that add or correct a model before a plugin release: "
+            "'<harness>/<model>: line=<line> tier=<n> released=YYYY-MM-DD' (ADR 0057)"
+        ),
+    )
+    parser.addini(
+        INI_PRICE_FEED,
+        default="",
+        help=(
+            "where a model with no price row is priced live from at collection: LiteLLM's feed by default, "
+            "or another URL or a local path; what it finds is saved under <cache>/pricing/ (ADR 0060)"
+        ),
+    )
+    parser.addini(
+        INI_OUTPUT_RATE_LIMIT,
+        default="",
+        help=(
+            "the plugin default matrix sweeps only catalogued models whose output rate is below this, "
+            f"in USD per million tokens (default {DEFAULT_OUTPUT_RATE_LIMIT:g}); "
+            "raise it to opt in to apex models (ADR 0058)"
+        ),
+    )
+    parser.addini(
         INI_MATRIX,
         type="linelist",
         default=[],
         help=(
             "project matrix: 'harness/model' or 'harness/model/effort' entries, one per line; "
             "a case's models= overrides it"
+        ),
+    )
+    parser.addini(
+        INI_TREATMENTS,
+        type="linelist",
+        default=[],
+        help=(
+            "project treatments: names under each suite's evals/treatments/, one per line, swept beside "
+            "the untreated control; a case's treatments= overrides it (ADR 0055)"
         ),
     )
     g.addoption(
@@ -134,6 +195,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         ),
     )
     parser.addini(
+        INI_KEEP_WORKSPACES,
+        type="bool",
+        default=False,
+        help="leave each finished cell's build workspace under <cache>/build/ for inspection; "
+        "by default it is removed once its evidence is captured and graded (ADR 0062)",
+    )
+    parser.addini(
         INI_SKILL_IGNORE,
         type="linelist",
         default=[],
@@ -154,11 +222,15 @@ def pytest_configure(config: pytest.Config) -> None:
     # Minted here, before any xdist worker is forked, so the workers inherit it through the
     # environment and a run's cells share one results/{...}/{run}/ level (ADR 0032).
     run_stamp()
-    # ADR 0026 / ADR 0030: a malformed ignore or price line stops the session here,
-    # before any cell is collected.
+    # ADR 0026 / ADR 0030 / ADR 0055 / ADR 0057: a malformed ignore, price, treatment or model
+    # line, or a rate limit that is not a number, stops the session here, before any cell is collected.
     try:
         IgnoreRules.for_skill("", [str(p) for p in config.getini(INI_SKILL_IGNORE)])
         pricing.parse_price_lines([str(line) for line in config.getini(INI_PRICES)])
+        settings = Settings.from_config(config)
+        for name in settings.treatment_lines:
+            check_name(name)
+        settings.catalogue()
     except (ValueError, pricing.PricingError) as exc:
         raise pytest.UsageError(str(exc)) from exc
     config.pluginmanager.register(ResultCollector(config), COLLECTOR_NAME)
@@ -174,10 +246,19 @@ def pytest_report_header(config: pytest.Config) -> list[str]:
     root = settings.skills_root
     state = "" if root.is_dir() else " (missing: no eval cells will be collected)"
     project = settings.matrix_lines
-    source = (
-        f"{INI_MATRIX} ({len(project)} entries)" if project else f"plugin default ({len(mx.DEFAULT_MATRIX)} entries)"
-    )
+    if project:
+        source = f"{INI_MATRIX} ({len(project)} entries)"
+    else:
+        default = settings.default_matrix(run_date(run_stamp()))
+        catalogued = len(mx.catalogued(settings.catalogue()))
+        source = (
+            f"plugin default ({len(default)} of {catalogued} catalogued models, "
+            f"output rate below ${settings.output_rate_limit:g}/MTok)"
+        )
+    treatments = settings.treatment_lines
+    treated = f"{INI_TREATMENTS} ({len(treatments)} entries)" if treatments else "none"
     return [
         f"xharness-eval: skills root = {root}{state}, cache = {settings.cache.root}",
         f"xharness-eval: matrix = {source}; a case's models= overrides it",
+        f"xharness-eval: treatments = {treated}; a case's treatments= overrides it",
     ]

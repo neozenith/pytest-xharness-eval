@@ -7,7 +7,7 @@
 import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { SessionTable } from "../src/components/SessionTable";
-import { cell, sweep } from "./fixtures";
+import { cell, sweep, treatedSweep } from "./fixtures";
 
 // The `when` column prints local time; pin the zone so `07:18` is `07:18` on every machine.
 test.use({ timezoneId: "UTC" });
@@ -24,6 +24,7 @@ const ALL_KEYS = [
   "case",
   "harness",
   "model",
+  "family_tier",
   "effort",
   "estimated_cost_usd",
   "accumulative_billed_tokens",
@@ -412,8 +413,11 @@ test.describe("SessionTable: sorting", () => {
     await expect.poll(() => search(page)).toBe("?sort=turns&dir=desc");
   });
 
-  test("the first Tab stop is the first head, and heads come before rows", async ({ mount, page }) => {
+  test("the column picker is the first Tab stop, then the heads in order, then the rows", async ({ mount, page }) => {
     await mount(<SessionTable cells={timeline()} />);
+    // ADR 0061: the picker sits above the table, so it is reached before the first head.
+    await page.keyboard.press("Tab");
+    await expect(page.locator("#SessionTableColumns > summary")).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "verdict", exact: true })).toBeFocused();
     const shown = (await heads(page)).length;
@@ -440,10 +444,10 @@ test.describe("SessionTable: sorting", () => {
 });
 
 test.describe("SessionTable: the effort axis (ADR 0049)", () => {
-  test("the effort column sits after model and prints each rung as sent", async ({ mount, page }) => {
+  test("the effort column sits after the model and its tier, and prints each rung as sent", async ({ mount, page }) => {
     await mount(<SessionTable cells={sweep()} />);
     const keys = await heads(page);
-    expect(keys.indexOf("effort")).toBe(keys.indexOf("model") + 1);
+    expect(keys.indexOf("effort")).toBe(keys.indexOf("family_tier") + 1);
     expect(await column(page, "effort")).toEqual(["max", "low", "high", NONE, "medium", "xhigh", "low"]);
   });
 
@@ -616,4 +620,98 @@ test.describe("SessionTable: opening a session", () => {
     await page.keyboard.press("Tab");
     await expect(page.locator('#SessionTable tr[data-sid="t-3"]')).toBeFocused();
   });
+});
+
+test.describe("the treatment axis (ADR 0055)", () => {
+  test("an untreated sweep has no treatment column", async ({ mount, page }) => {
+    await mount(<SessionTable cells={sweep()} />);
+    expect(await heads(page)).not.toContain("treatment");
+  });
+
+  test("a treated sweep shows treatment beside effort, names the control, and sorts it first", async ({ mount, page }) => {
+    await mount(<SessionTable cells={treatedSweep()} />, { hooksConfig: { search: "?sort=treatment&dir=asc" } });
+    const h = await heads(page);
+    expect(h.indexOf("treatment")).toBe(h.indexOf("effort") + 1);
+    const values = await column(page, "treatment");
+    const firstTreated = values.findIndex((v) => v !== "control");
+    expect(values.slice(0, firstTreated).every((v) => v === "control")).toBe(true);
+    expect(values.slice(firstTreated)).toEqual(["agents-md", "lean-ci", "lean-ci"]);
+    // a treated row's accessible name tells it from its control
+    await expect(rows(page).filter({ has: page.locator('td[data-k="treatment"]', { hasText: "agents-md" }) })).toHaveAttribute("aria-label", /\+agents-md/);
+  });
+});
+
+test("a long treatment name prints whole, now that the table scrolls rather than truncates (ADR 0061)", async ({ mount, page }) => {
+  const cells = [cell({ session_id: "c" }), cell({ session_id: "t", treatment: "cheap_eval_subagents" })];
+  await mount(<SessionTable cells={cells} />);
+  const td = page.locator('#SessionTable tbody tr[data-sid="t"] td[data-k="treatment"] > span');
+  await expect(td).toHaveText("cheap_eval_subagents");
+  expect(await td.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await expect(page.locator("#SessionTable")).toHaveAttribute("data-treated", "true");
+});
+
+// ADR 0057, ADR 0061: the family tier is a column of its own, right after the model it describes.
+test.describe("the family tier (ADR 0057)", () => {
+  test("the tier column carries T<n> with its line and release date on the title; an old capture reads none", async ({ mount, page }) => {
+    await mount(<SessionTable cells={sweep()} />);
+    const keys = await headKeys(page);
+    expect(keys.indexOf("family_tier")).toBe(keys.indexOf("model") + 1);
+    const sol = page.locator('#SessionTable tbody tr[data-sid="cccccccc-0001"]');
+    await expect(sol.locator('td[data-k="model"] code')).toHaveText("5.6-sol");
+    await expect(sol.locator('td[data-k="model"] .tier-badge')).toHaveCount(0);
+    await expect(sol.locator('td[data-k="family_tier"] .tier-badge')).toHaveText("T3");
+    await expect(sol.locator('td[data-k="family_tier"] .tier-badge')).toHaveAttribute("title", "line sol · family tier 3 · released 2026-06-10");
+    await expect(page.locator('#SessionTable tbody tr[data-sid="cccccccc-0002"] td[data-k="family_tier"] .tier-badge')).toHaveText("T1");
+    // the session captured before the catalogue: same model, no tier
+    await expect(page.locator('#SessionTable tbody tr[data-sid="aaaaaaaa-0004"] td[data-k="family_tier"]')).toHaveText(NONE);
+  });
+
+  test("the tier column sorts numerically", async ({ mount, page }) => {
+    await mount(<SessionTable cells={sweep()} />, { hooksConfig: { search: "?sort=family_tier&dir=asc" } });
+    const tiers = (await column(page, "family_tier")).filter((t) => t !== NONE);
+    expect(tiers).toEqual([...tiers].sort());
+  });
+
+  test("a collapsed model keeps its tier in the caption", async ({ mount, page }) => {
+    const cells = sweep().filter((c) => c.model === "claude-opus-5" && c.family_tier != null);
+    await mount(<SessionTable cells={cells} />);
+    await expect(page.locator("#SessionTable caption")).toContainText("model opus-5 (tier 3)");
+  });
+});
+
+// -- the column picker (ADR 0061) ------------------------------------------------
+
+const headKeys = (page: Page) => page.locator("#SessionTable thead th").evaluateAll((ths) => ths.map((th) => th.getAttribute("data-k")));
+
+test("the column picker hides a column, remembers it, and select all brings it back", async ({ mount, page }) => {
+  await page.evaluate(() => localStorage.clear());
+  const table = await mount(<SessionTable cells={sweep()} />);
+  await page.locator("#SessionTableColumns > summary").click();
+  await page.locator("#SessionTableColumns input[data-k='turns']").uncheck();
+  expect(await headKeys(page)).not.toContain("turns");
+  expect(await page.evaluate(() => localStorage.getItem("xharness.sessionTable.hiddenColumns.v1"))).toBe('["turns"]');
+  await page.locator("#SessionTableColumns [data-action='select-all']").click();
+  expect(await headKeys(page)).toContain("turns");
+  await table.unmount();
+});
+
+test("deselect all leaves only the always-shown verdict and case columns", async ({ mount, page }) => {
+  await page.evaluate(() => localStorage.clear());
+  await mount(<SessionTable cells={sweep()} />);
+  await page.locator("#SessionTableColumns > summary").click();
+  await page.locator("#SessionTableColumns [data-action='deselect-all']").click();
+  expect(await headKeys(page)).toEqual(["verdict", "case"]);
+  await expect(page.locator("#SessionTableColumns input[data-k='verdict']")).toBeDisabled();
+  await expect(rows(page).first()).toBeVisible();
+});
+
+test("a stored preference applies on the next mount", async ({ mount, page }) => {
+  await page.evaluate(() => localStorage.setItem("xharness.sessionTable.hiddenColumns.v1", '["wall_ms","coverage"]'));
+  await mount(<SessionTable cells={sweep()} />);
+  const keys = await headKeys(page);
+  expect(keys).not.toContain("wall_ms");
+  expect(keys).not.toContain("coverage");
+  await page.locator("#SessionTableColumns > summary").click();
+  await expect(page.locator("#SessionTableColumns input[data-k='wall_ms']")).not.toBeChecked();
+  await expect(page.locator("#SessionTableColumns input[data-k='turns']")).toBeChecked();
 });

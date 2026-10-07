@@ -20,6 +20,7 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval.derive import pricing
+from pytest_xharness_eval.derive.catalogue import load_catalogue
 
 if TYPE_CHECKING:
     # Standard Library
@@ -304,11 +305,13 @@ def test_an_empty_prices_directory_bootstraps_the_first_record(tmp_path: Path, m
     monkeypatch.setattr(cp, "STAGING", tmp_path / "staging")
     feed = tmp_path / "feed.json"
     source = json.loads(json.dumps(FEED))
-    # The default matrix must price, so the bootstrap feed carries its rows too.
-    for model in ("claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"):
-        source[model] = {"litellm_provider": "anthropic", **_per_token(input_cost_per_token=1, output_cost_per_token=2)}
-    for model in ("gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra"):
-        source[model] = {"litellm_provider": "openai", **_per_token(input_cost_per_token=1, output_cost_per_token=2)}
+    # Every catalogued model must price (ADR 0057), so the bootstrap feed carries their rows too.
+    provider = {"claude": "anthropic", "codex": "openai"}
+    for harness_name, spec in load_catalogue():
+        source[spec.id] = {
+            "litellm_provider": provider[harness_name],
+            **_per_token(input_cost_per_token=1, output_cost_per_token=2),
+        }
     feed.write_text(json.dumps(source), encoding="utf-8")
     assert cp.main(["--feed", str(feed), "--date", "2026-09-29"]) == 0
     assert [p.name for p in empty.iterdir()] == ["prices-20260929.toml"]
@@ -322,3 +325,32 @@ def test_a_date_not_after_the_open_record_is_refused(prices_dir: Path, tmp_path:
     feed.write_text(json.dumps(_feed_from_bundled(prices_dir, extra)), encoding="utf-8")
     with pytest.raises(cp.CurationError, match="must be after the open record"):
         cp.main(["--feed", str(feed), "--date", "2026-09-29"])
+
+
+def test_when_catalogue_unpriced_exits_offline_if_every_catalogued_model_is_priced(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """What ``make test`` runs first: no feed is named, so reaching for the network would fail the test."""
+    assert cp.main(["--when-catalogue-unpriced", "--date", "2026-10-07"]) == 0
+    assert "nothing to curate" in capsys.readouterr().out
+
+
+def test_when_catalogue_unpriced_curates_a_model_the_bundled_records_lack(
+    prices_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model added to models.toml without a price row triggers a new snapshot (ADR 0060)."""
+    catalogue_file = tmp_path / "models.toml"
+    catalogue_file.write_text(
+        cp.PRICES_DIR.joinpath("models.toml").read_text(encoding="utf-8")
+        + '\n[codex.models."gpt-6-nova"]\nline = "nova"\ntier = 2\nreleased = 2026-10-06\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("pytest_xharness_eval.derive.catalogue.MODELS_FILE", catalogue_file)
+    assert cp.catalogue_unpriced(date(2026, 10, 7)) == ["codex/gpt-6-nova"]
+    feed = tmp_path / "feed.json"
+    extra = {
+        "gpt-6-nova": {"litellm_provider": "openai", **_per_token(input_cost_per_token=3, output_cost_per_token=9)}
+    }
+    feed.write_text(json.dumps(_feed_from_bundled(prices_dir, extra)), encoding="utf-8")
+    assert cp.main(["--when-catalogue-unpriced", "--feed", str(feed), "--date", "2026-10-07"]) == 0
+    assert (prices_dir / "prices-20261007.toml").is_file()

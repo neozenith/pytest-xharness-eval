@@ -17,7 +17,7 @@ Run everything from the repository root.
 |------|---------|------|
 | Format | `make format` | free |
 | Lint and type-check (`ruff`, `isort`, `mypy --strict`) | `make check` | free |
-| Run the plugin's own tests with coverage | `make test` | free |
+| Run the plugin's own tests with coverage (first runs `make prices-sync`, which curates a price snapshot only when `models.toml` lists an unpriced model, and otherwise exits offline) | `make test` | free |
 | Build a wheel | `make build` | free |
 | Check the decision records: generated markdown matches its `.yml`, and every record passes the pinned prose gates (fix findings in the `.yml`) | `make adrs-check`, `make adrs-prose` | free |
 | Curate a new dated price record from LiteLLM's feed (first-party rows of the watched families; writes only on a change; `ARGS="--dry-run"` stages under `tmp/curate-prices/`) | `make prices` | free |
@@ -32,7 +32,7 @@ In a consuming repository with the plugin installed:
 | Preview cells and validate pricing | `pytest skills/<skill>/evals --dry-run` | free |
 | Run one skill's evals, or all | `pytest skills/<skill>/evals -v`, `pytest skills/*/evals -v` | paid |
 | Run cells in parallel | `pytest skills/*/evals -v -n 4`; add `--dist loadgroup` to keep each harness serial | paid |
-| Run one harness, model or effort only | `pytest skills/<skill>/evals --harness codex`, `--model opus`, `--effort max`, `-k "opus or sol"` | paid |
+| Run one harness, model, effort or treatment only | `pytest skills/<skill>/evals --harness codex`, `--model opus`, `--effort max`, `--treatment control`, `-k "opus or sol"` | paid |
 | Read the last report | `cat .xharness_eval_cache/report/report.json` | free |
 | Rebuild results, history and `report.html` from captured logs after a plugin change | `uv run -m pytest_xharness_eval.replay .xharness_eval_cache` (a legacy `<skill>/evals/captured` dir migrates into the cache, ADR 0032) | free |
 
@@ -51,9 +51,9 @@ this list:
 
 | Layer | What lives there |
 |-------|------------------|
-| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
+| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `treatment.py`, `catalogue.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
 | `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, and the record-kind catalogue `records.py` |
-| `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, and the bundled `prices/prices-YYYYMMDD.toml` records |
+| `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, `catalogue.py` (reads `prices/models.toml`), `feed.py` (LiteLLM's feed into price records, for the curator and live pricing), and the bundled `prices/prices-YYYYMMDD.toml` records |
 | `verify/` | what a *grader* is written with: `checks.py` (the shared `check_*` verifiers), `tolerance.py` (`Facet` and the six tolerances), `facets.py` (markdown/mermaid extractors), `golden.py` (`GoldenCase`) |
 | `emit/` | the documents that leave: `metrics.py`, `index.py`, `summary.py`, `tokens.py`, `page.py` |
 | `runtime/` | how a sweep is wired: `settings.py`, `pipeline.py`, and the transitional `legacy.py` |
@@ -65,12 +65,15 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 |-----------------|------|
 | How a CLI is invoked or its log is found | `harness/claude.py` or `harness/codex.py`; the shared spawn contract is `harness/base.py` (ADR 0034) |
 | How a skill is *named* to a CLI, or registered with it | `Harness.invoke` in `harness/<provider>.py` -- `/<skill> <task>` for claude (registered by `skill_plugin`'s `--plugin-dir` wrapper), `$<skill> <task>` for codex (copied into the private `CODEX_HOME/skills/`). The one edge from beneath is `model/registry.invocation` (ADR 0044) |
-| A whole new agent CLI | one module under `harness/`: subclass `Harness`, implement `run`, `session_from_capture`, `classify_record`, `shell_tools` / `persistent_shells`, `efforts` / `effort_args` (an empty ladder is a coherent "no effort control", ADR 0049), then `register()` it in `harness/__init__.py`. Nothing else dispatches on the name (ADR 0034) |
+| A whole new agent CLI | one module under `harness/`: subclass `Harness`, implement `run`, `session_from_capture`, `classify_record`, `shell_tools` / `persistent_shells` (and `shell_commands` if its shell tool wraps commands, ADR 0066), `efforts` / `effort_args` (an empty ladder is a coherent "no effort control", ADR 0049), then `register()` it in `harness/__init__.py`. Nothing else dispatches on the name (ADR 0034) |
 | How subagent transcripts are found, attributed and billed | `harness/claude.py` and `harness/codex.py` (`subagents_of` per dialect), `runtime/pipeline.py`'s `capture_subagents` (capture into `subagents/`) (ADR 0033) |
 | How a session log maps to `RunResult` fields | the harness's `SessionLog.to_result` in `harness/<provider>.py`; the primitives both dialects fold with are `harness/normalise.py` |
 | A new field on the run record | `model/runresult.py`, then `harness/claude.py` and `harness/codex.py` for both dialects |
 | A bundled model price | `derive/prices/` only, USD per MTok, rows under their harness's table. A price *change* never edits a closed record: set `effective_to` on the open one and add `prices-<date>.toml` whose `effective_from` is that date. `make prices` does both from LiteLLM's feed; the watched families are `WATCHES` in `.github/scripts/curate_prices.py`, and a row with a comment line starting `# curate: keep` is a local override it never re-prices. A long-context rate is a row's `long_context` sub-table, never a comment. A project overrides with `<harness>/<model>: ...` `xharness_prices` lines, optionally `from=`/`to=` bounded and with `long_context_above` / `long_*` keys (ADR 0030, ADR 0050, ADR 0051) |
-| The plugin-default matrix or narrowing | `model/matrix.py`; the *known* harnesses are the registry, reached through `model/registry.py` and never a second list (ADR 0034, ADR 0039) |
+| The plugin-default matrix or narrowing | `model/matrix.py` (`catalogued`, `narrow`) and `Settings.default_matrix` in `runtime/settings.py`, which applies the `xharness_output_rate_limit` cost filter; the *known* harnesses are the registry, reached through `model/registry.py` and never a second list (ADR 0034, ADR 0039, ADR 0058) |
+| The models the plugin supports, or a model's line, family tier or release date | `derive/prices/models.toml`, the one config file; `derive/catalogue.py` reads it, and the noun and the `xharness_models` line parser are `model/catalogue.py`. A tier is a hand-curated role, frozen at release, never derived from price. `make test` curates a price snapshot for a model added without one (ADR 0057, ADR 0059, ADR 0060) |
+| How a model with no price row is priced at collection | `Settings.ensure_priced` in `runtime/settings.py`, which reads the feed at `xharness_price_feed` and writes `<cache>/pricing/` records through `derive/feed.py`; the conversion is shared with `.github/scripts/curate_prices.py` (ADR 0060) |
+| How a treatment is named, found under `evals/treatments/`, or refused at collection | `model/treatment.py`; the crossing with the control is `matrix.treat`, the overlay copy is `model/workspace.py`'s `materialise`, and how each CLI reads the overlaid instructions file is its harness's isolation lever (ADR 0055) |
 | The effort vocabulary, or a portable alias's meaning | `model/effort.py` (`Effort`, `resolve`); a harness's own ladder is `Harness.efforts` in `harness/<provider>.py` and the rendering is its `effort_args`, reached from beneath through `model/registry.py` (ADR 0049) |
 | A plugin option or ini key's registration | `plugin/options.py` (which also validates the price and ignore lines at configure time, and prints the header) |
 | The collection rule, the cell item, or how one cell runs | `plugin/collect.py` (`EvalFile`, `EvalItem`), `plugin/cell.py` (`CellRun`: materialise, invoke, store, grade, record; only `invoke` spends, ADR 0002) |
@@ -130,7 +133,9 @@ in `emit/metrics.py`.
 - Never make a cell pass without a real session log. A missing log, a mismatched
   session id, or zero tokens is a failure, not a skip.
 - Never price an unknown model as zero or `None` and continue. Add the bundled row or
-  an `xharness_prices` ini line, or let the sweep stop at collection (ADR 0007, ADR 0030).
+  an `xharness_prices` ini line, price it live from the feed into `<cache>/pricing/`, or let
+  the sweep stop at collection (ADR 0007, ADR 0030, ADR 0060). Live pricing matches an exact
+  first-party id only; it never guesses from a host's spelling or a neighbouring model.
   The same holds for a *day* no record covers: never borrow a neighbouring record's rates
   (ADR 0050).
 - Never edit the rates in a closed price record, or re-price a run at a rate other than
@@ -152,7 +157,8 @@ in `emit/metrics.py`.
 - Never write run output under `evals/fixtures/`. A fixture is copied into every
   workspace, so anything placed there leaks into the next agent's working directory.
 - Never add a runtime dependency beyond pytest and the standard library (ADR 0003).
-- Never derive a path from `__file__` except for the bundled `derive/prices/` records.
+- Never derive a path from `__file__` except for the bundled `derive/prices/` records and
+  the model catalogue beside them (`models.toml`, ADR 0059).
   Every other location is an ini key resolved against `config.rootpath` (ADR 0014, ADR 0050).
 - Never register the plugin through a `conftest.py` or `-p` flag. The `pytest11`
   entry point in `pyproject.toml` is the one registration (ADR 0014).
@@ -186,10 +192,12 @@ in `emit/metrics.py`.
 ## Vocabulary
 
 Use the terms in [GLOSSARY.md](GLOSSARY.md) for identifiers, docs, and conversation:
-*case*, *cell*, *harness*, *matrix*, *effort*, *rung*, *alias*, *fixture*, *workspace*,
-*session log*, *RunResult*, *captured*, *skills root*. The first matrix axis is *harness*,
-never *cli* (ADR 0015); the third is *effort*, and one level of a harness's ladder is a
-*rung*, never a "level" or a "thinking budget" (ADR 0049). When a new domain term enters
+*case*, *cell*, *harness*, *matrix*, *effort*, *rung*, *alias*, *fixture*, *treatment*,
+*control*, *workspace*, *session log*, *RunResult*, *captured*, *skills root*. The first
+matrix axis is *harness*, never *cli* (ADR 0015); the third is *effort*, and one level of a
+harness's ladder is a *rung*, never a "level" or a "thinking budget" (ADR 0049); the fourth
+is *treatment*, and the untreated cell is the *control*, never a "baseline" or a "null
+treatment" (ADR 0055). When a new domain term enters
 the code, add it to the glossary in the same change.
 
 ## When you change one thing, update the other
@@ -201,7 +209,7 @@ the code, add it to the glossary in the same change.
 | A term in [GLOSSARY.md](GLOSSARY.md) | The "How the terms relate" diagram beneath it; re-run the mermaid contrast and complexity gates |
 | A plugin option or ini key | `README.md` tables and `tests/test_plugin.py` |
 | A `RunResult` field, a `CaseOutput` accessor, or a bundled verifier | `docs/rollout.md` -- it is the published grader surface, so a field a suite may assert on and cannot find there does not exist |
-| The default matrix | `README.md` Quickstart expected output, `tests/test_plugin.py` |
+| The default matrix, or `derive/prices/models.toml` | `README.md` Quickstart expected output and its catalogue table, `GLOSSARY.md`'s family tier row, `tests/test_plugin.py`'s `DEFAULT_CELLS`, and a price row for every catalogued model (`make test` curates one; `tests/model/test_catalogue.py` fails the build without one) |
 | A harness's `efforts` ladder, or a word in `model/effort.py` | `README.md`'s alias table, `GLOSSARY.md`, `ARCHITECTURE.md`'s isolation-levers table, and `tests/model/test_effort.py` -- the ladder is ordered, so adding a rung moves what `mid` resolves to |
 | A decision recorded in an ADR | Write a new ADR that supersedes it; do not change the old one's argument (shape-only prose fixes to its `.yml` are allowed, ADR 0054) |
 | Any ADR `.yml`, or `docs/adrs/templates/` | `make adrs`, then `make adrs-check` and `make adrs-prose` (both run in CI) |

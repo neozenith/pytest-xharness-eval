@@ -7,15 +7,31 @@
 import pytest
 
 # Our Libraries
-from pytest_xharness_eval import (
-    DEFAULT_MATRIX,
-    Cell,
-)
+from pytest_xharness_eval import Cell
+from pytest_xharness_eval.derive.catalogue import load_catalogue
 from pytest_xharness_eval.model import matrix as mx
 
+#: A fixed six-entry matrix to expand and narrow; what the plugin default is lives in the
+#: catalogue and is pinned by ``tests/test_plugin.py`` (ADR 0058).
+SIX = [
+    "claude/claude-opus-5",
+    "claude/claude-sonnet-5",
+    "claude/claude-haiku-4-5-20251001",
+    "codex/gpt-5.6-sol",
+    "codex/gpt-5.6-luna",
+    "codex/gpt-5.6-terra",
+]
 
-def test_expand_default_matrix() -> None:
-    cells = mx.expand(DEFAULT_MATRIX)
+
+def test_catalogued_lists_every_harness_model_in_declared_order() -> None:
+    entries = mx.catalogued(load_catalogue())
+    assert entries[0] == "claude/claude-haiku-4-5-20251001"
+    assert entries.index("claude/claude-fable-5-1") < entries.index("codex/gpt-5.6-luna")
+    assert set(SIX) <= set(entries)
+
+
+def test_expand_a_matrix() -> None:
+    cells = mx.expand(SIX)
     assert [c.id for c in cells] == [
         "claude/claude-opus-5",
         "claude/claude-sonnet-5",
@@ -35,7 +51,7 @@ def test_expand_rejects_malformed_entries(entry: str) -> None:
 
 
 def test_narrow_by_harness_and_model() -> None:
-    cells = mx.expand(DEFAULT_MATRIX)
+    cells = mx.expand(SIX)
     assert [c.id for c in mx.narrow(cells, None, ["codex"])] == [
         "codex/gpt-5.6-sol",
         "codex/gpt-5.6-luna",
@@ -95,3 +111,27 @@ def test_narrow_by_effort_matches_the_resolved_rung() -> None:
         Cell("claude", "claude-opus-5"),
     ]
     assert mx.narrow(cells, None, None, None) == cells
+
+
+def test_treat_keeps_the_control_first_and_crosses_every_cell() -> None:
+    """The control is always swept beside a treatment: it is what the treatment is compared to (ADR 0055)."""
+    cells = mx.expand(["claude/claude-haiku-4-5", "codex/gpt-5.6-luna"])
+    assert [c.id for c in mx.treat(cells, ["lean-ci"])] == [
+        "claude/claude-haiku-4-5",
+        "codex/gpt-5.6-luna",
+        "claude/claude-haiku-4-5+lean-ci",
+        "codex/gpt-5.6-luna+lean-ci",
+    ]
+    # No treatments is exactly the matrix it was before ADR 0055.
+    assert mx.treat(cells, []) == cells
+
+
+def test_a_treated_cell_id_puts_the_treatment_after_the_rung() -> None:
+    assert Cell("claude", "claude-opus-5", "high", "lean-ci").id == "claude/claude-opus-5/high+lean-ci"
+
+
+def test_narrow_by_treatment_names_the_control_by_its_reserved_word() -> None:
+    cells = mx.treat(mx.expand(["claude/claude-haiku-4-5"]), ["lean-ci", "terse"])
+    assert [c.treatment for c in mx.narrow(cells, None, None, None, ["control"])] == [None]
+    assert [c.treatment for c in mx.narrow(cells, None, None, None, ["lean-ci", "control"])] == [None, "lean-ci"]
+    assert mx.narrow(cells, None, None, None, None) == cells

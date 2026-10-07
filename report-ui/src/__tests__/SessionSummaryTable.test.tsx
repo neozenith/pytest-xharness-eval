@@ -125,3 +125,24 @@ test("filtered to nothing the table keeps its id and its head, and says why the 
   expect(empty).toHaveLength(1);
   expect(empty[0]).toHaveTextContent(NO_MATCH);
 });
+
+test("a control and its treated twin are two adjacent rows, the control first and named (ADR 0055)", () => {
+  history.replaceState(null, "", "/");
+  mount([
+    cell({ session_id: "1", treatment: "lean-ci", estimated_cost_usd: 2 }),
+    cell({ session_id: "2", treatment: null, estimated_cost_usd: 4 }),
+    cell({ session_id: "3", treatment: null, estimated_cost_usd: 6 }),
+  ]);
+  const rows = screen.getAllByRole("row").slice(1);
+  expect(rows.map((r) => r.getAttribute("data-key"))).toEqual(["discovery|eval_case|claude|claude-opus-5", "discovery|eval_case|claude|claude-opus-5+lean-ci"]);
+  const heads = [...document.querySelectorAll("#SessionSummaryTable thead th")].map((th) => th.getAttribute("data-k"));
+  expect(heads.indexOf("treatment")).toBe(heads.indexOf("effort") + 1);
+  const at = heads.indexOf("treatment");
+  expect(rows[0]!.querySelectorAll("td")[at]).toHaveTextContent("control");
+  expect(rows[1]!.querySelectorAll("td")[at]).toHaveTextContent("lean-ci");
+});
+
+test("an untreated sweep's summary has no treatment column", () => {
+  mount([cell({ session_id: "1" }), cell({ session_id: "2", harness: "codex" })]);
+  expect([...document.querySelectorAll("#SessionSummaryTable thead th")].map((th) => th.getAttribute("data-k"))).not.toContain("treatment");
+});

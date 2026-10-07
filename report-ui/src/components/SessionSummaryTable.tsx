@@ -1,13 +1,13 @@
 /**
  * The aggregate view of exactly the runs `SessionTable` lists (glossary: `SessionSummaryTable`,
- * ADR 0042): one row per skill × case × harness × model × effort, which is one line of the
+ * ADR 0042): one row per skill × case × harness × model × effort × treatment, which is one line of the
  * `TokenAccumulationChart` above it, so the two read as a pair.
  *
  * It takes the cells it is given and knows nothing about filters; its arithmetic is in
  * `lib/summary.ts`. It sorts on its OWN param pair (`ssort`/`sdir`), because the reader ranks
  * groups by mean cost while ranking sessions by when they ran, and a shared pair would have made
  * every click here silently reorder the table below. Unsorted, the rows come out in the fixed
- * `skill|case|harness|model|effort` key order — the only order in which the banding and the repeat
+ * `skill|case|harness|model|effort|treatment` key order — the only order in which the banding and the repeat
  * muting below tell the truth, which is why both switch off the moment a column is sorted.
  *
  * Every aggregate is named `mean <field>` in full (ADR 0021) in its tooltip and its accessible
@@ -20,9 +20,11 @@
 import { useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ColumnHead } from "@/components/ColumnHead";
+import { TierBadge } from "@/components/TierBadge";
 import { caseShort, compact, dec, fmt, modelShort, NONE, pct, secs, usd, windowLabel } from "@/lib/format";
 import { effortSortValue } from "@/lib/effort";
 import { NO_MATCH } from "@/lib/facets";
+import { anyTreated, treatmentLabel, treatmentSortValue } from "@/lib/treatment";
 import { overviewWith, replaceRoute, useRoute, type SortDir } from "@/lib/route";
 import { summaryRows, type SummaryRow } from "@/lib/summary";
 import type { RowContext } from "@/components/SessionTable";
@@ -87,7 +89,13 @@ const COLUMNS: Column[] = [
     label: "model",
     title: "the model the harness was told to use, without its vendor prefix; hover a cell for the full id",
     sortValue: (r) => r.model,
-    render: (r, ctx) => <code title={r.model}>{ctx.shortModel(r.model)}</code>,
+    // The tier is a mark on the model, never a column or a key (ADR 0057): it never splits a group.
+    render: (r, ctx) => (
+      <>
+        <code title={r.model}>{ctx.shortModel(r.model)}</code>
+        <TierBadge model={r} />
+      </>
+    ),
   },
   {
     key: "effort",
@@ -98,6 +106,15 @@ const COLUMNS: Column[] = [
     // `high` before `low` because h sorts before l.
     sortValue: (r) => effortSortValue(r.effort),
     render: (r) => orNil(r.effort, r.effort ?? ""),
+  },
+  {
+    key: "treatment",
+    name: "treatment",
+    label: "treatment",
+    title: "the named treatment every run in this group ran under (ADR 0055); control is the untreated arm, and leads its treated twins",
+    // The control is the baseline, so it ranks first and is named rather than blank.
+    sortValue: (r) => treatmentSortValue(r.treatment),
+    render: (r) => treatmentLabel(r.treatment),
   },
   {
     key: "runs",
@@ -228,7 +245,7 @@ const COLUMNS: Column[] = [
 ];
 
 /**
- * One row per skill × case × harness × model × effort group of the cells it is given, in the fixed key
+ * One row per skill × case × harness × model × effort × treatment group of the cells it is given, in the fixed key
  * order until a head is clicked.
  */
 export function SessionSummaryTable({ cells, shortModel = modelShort }: { cells: Cell[]; shortModel?: (model: string) => string }) {
@@ -237,6 +254,11 @@ export function SessionSummaryTable({ cells, shortModel = modelShort }: { cells:
   const column = routeSort ? (COLUMNS.find((c) => c.key === routeSort.key) ?? null) : null;
   const dir: 1 | -1 = routeSort?.dir === "desc" ? -1 : 1;
   const ctx: RowContext = { shortModel };
+  /*
+   * `treatment` shows only when a group in view ran under one (ADR 0055). An untreated sweep is
+   * all control, and a column reading `control` down every row would print an axis it never used.
+   */
+  const columns = useMemo(() => (anyTreated(cells) ? COLUMNS : COLUMNS.filter((col) => col.key !== "treatment")), [cells]);
 
   const rows = useMemo(() => {
     const grouped = summaryRows(cells);
@@ -277,7 +299,7 @@ export function SessionSummaryTable({ cells, shortModel = modelShort }: { cells:
       </caption>
       <TableHeader>
         <TableRow>
-          {COLUMNS.map((col) => {
+          {columns.map((col) => {
             const active = column?.key === col.key;
             return (
               <TableHead
@@ -305,7 +327,7 @@ export function SessionSummaryTable({ cells, shortModel = modelShort }: { cells:
         {rows.length === 0 ? (
           <TableRow>
             {/* The head stays, so the reader sees what would be there; the body says why it is not. */}
-            <TableCell className="empty" colSpan={COLUMNS.length}>
+            <TableCell className="empty" colSpan={columns.length}>
               {NO_MATCH}
             </TableCell>
           </TableRow>
@@ -326,7 +348,7 @@ export function SessionSummaryTable({ cells, shortModel = modelShort }: { cells:
                */
               data-band={!column && i > 0 && row.skill !== rows[i - 1]?.skill ? "skill" : undefined}
             >
-              {COLUMNS.map((col) => {
+              {columns.map((col) => {
                 const above = rows[i - 1];
                 const repeat = !column && above != null && (col.repeat?.(row, above) ?? false);
                 return (

@@ -3,7 +3,9 @@
  * `report.py --inline` embedded one, otherwise fetched from beside the page. Every
  * accessor goes through here so a component never knows which mode it is in.
  */
+import { lineOf, releasedOf, tierOf } from "./catalogue";
 import { rungOf } from "./effort";
+import { treatmentOf } from "./treatment";
 import type { Cell, DesignTokens, Index, RunResult } from "./types";
 
 const inline = () => (typeof window === "undefined" ? undefined : window.__XH_DATA__);
@@ -41,11 +43,22 @@ async function getText(path: string): Promise<string> {
 }
 
 /**
- * The boundary reader for `index.json`: each row's `effort` is folded to what `Cell` declares
- * (`rungOf`), so an absent key (a capture from before ADR 0049) or the empty string never reaches
- * a consumer as a value its type does not describe (ADR 0038).
+ * The boundary reader for `index.json`: each row's `effort`, `treatment` and model-catalogue keys
+ * (`line`, `family_tier`, `released`) are folded to what `Cell` declares (`rungOf`, `treatmentOf`,
+ * `lib/catalogue.ts`), so an absent key (a capture from before ADR 0049, ADR 0055 or ADR 0057) or
+ * the empty string never reaches a consumer as a value its type does not describe (ADR 0038).
  */
-const fromWire = (index: Index): Index => ({ ...index, cells: index.cells.map((c) => ({ ...c, effort: rungOf(c.effort) })) });
+export const fromWire = (index: Index): Index => ({
+  ...index,
+  cells: index.cells.map((c) => ({
+    ...c,
+    effort: rungOf(c.effort),
+    treatment: treatmentOf(c.treatment),
+    line: lineOf(c.line),
+    family_tier: tierOf(c.family_tier),
+    released: releasedOf(c.released),
+  })),
+});
 
 export const loadIndex = (): Promise<Index> => {
   const d = inline();

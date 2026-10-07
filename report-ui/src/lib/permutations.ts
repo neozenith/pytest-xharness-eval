@@ -10,6 +10,7 @@
  */
 import { facetOptions, FACETS, filterCells, type Facet } from "./facets";
 import { NO_FACETS, overviewSearch, sessionSearch, type TurnView } from "./route";
+import { CONTROL } from "./treatment";
 import type { Cell, Index, RunResult } from "./types";
 
 export interface Permutation {
@@ -38,8 +39,9 @@ export function slugify(...parts: (string | number | null | undefined)[]): strin
 function cellSlug(cell: Cell): string {
   // The case × harness × model triple reads well; the session-id prefix guarantees
   // uniqueness when the same cell was captured more than once. A rung joins the arm only when
-  // the cell named one, so every slug written before ADR 0049 is unchanged.
-  return slugify(cell.case, [cell.harness, cell.model, cell.effort].filter(Boolean).join("-"), cell.session_id.slice(0, 8));
+  // the cell named one, and a treatment only when the cell ran under one (ADR 0055), so every slug
+  // written before either axis, and every control's, is unchanged.
+  return slugify(cell.case, [cell.harness, cell.model, cell.effort, cell.treatment].filter(Boolean).join("-"), cell.session_id.slice(0, 8));
 }
 
 function turnCount(cell: Cell, result: RunResult | null | undefined): number {
@@ -52,7 +54,7 @@ function turnCount(cell: Cell, result: RunResult | null | undefined): number {
  * the cartesian product scales with the cost you are willing to absorb:
  *
  *   small   the inner loop: one session per harness, one mid turn, detailed view only
- *   medium  breadth: one session per harness×model×effort, first/middle/last turns, every variant
+ *   medium  breadth: one session per harness×model×effort×treatment, first/middle/last turns, every variant
  *   large   the full covering matrix: every session, every turn, both views, every variant
  *
  * A tier's permutations keep the slugs they would have in `large`, so a faster run
@@ -94,7 +96,7 @@ export const TIERS: Record<TierName, MatrixTier> = {
   },
   medium: {
     name: "medium",
-    cells: (cells) => firstBy(cells, (c) => `${c.harness}/${c.model}/${c.effort ?? ""}`),
+    cells: (cells) => firstBy(cells, (c) => `${c.harness}/${c.model}/${c.effort ?? ""}+${c.treatment ?? ""}`),
     turns: (n) => (n ? [...new Set([1, mid(n), n])] : []),
     views: ["summary", "detailed"],
     variants: { sortedOverview: true, darkOverview: true, filteredOverview: true, axisLine: true, dark: true, recRaw: true, line: true },
@@ -113,7 +115,9 @@ export const TIERS: Record<TierName, MatrixTier> = {
  * single-select per facet that offers a real choice, one multi-select (which is what covers the
  * comma serialisation, and is not the same URL as the param being absent), and — when the data
  * offers one — a harness × model pair, and a harness × effort pair, that select zero sessions:
- * the empty states the matrix must look at every sweep. A facet with fewer than two options emits nothing: there is
+ * the empty states the matrix must look at every sweep; one family tier across harnesses, when the
+ * catalogue gave the sweep one (ADR 0057); and, on a treated sweep, the control beside
+ * one treatment. A facet with fewer than two options emits nothing: there is
  * no choice there to cover.
  */
 function filterPermutations(cells: Cell[]): Permutation[] {
@@ -165,6 +169,34 @@ function filterPermutations(cells: Cell[]): Permutation[] {
       });
       break;
     }
+  }
+  /*
+   * The treatment comparison (ADR 0055): the control beside one treated twin, which is the view the
+   * axis exists for. It is the one facet whose selectable `control` is a word the data never
+   * carries (a control's wire value is null), so the literal is swept through the comma
+   * serialisation on its own rather than trusted to the generic multi-select above.
+   */
+  /*
+   * The cross-provider tier comparison (ADR 0057): one family tier that more than one harness ran,
+   * which is the read the tier exists for ("every tier 3 model"). The generic single-select above
+   * may land on a tier only one provider ran, so the comparison is swept on its own; on a capture
+   * from before the catalogue every tier is null, `options.tier` is empty, and nothing is emitted.
+   */
+  const shared = options.tier.find((t) => new Set(filterCells(cells, { ...NO_FACETS, tier: [t] }).map((c) => c.harness)).size >= 2);
+  if (shared !== undefined) {
+    perms.push({
+      slug: `overview--filter-tier-${slugify(shared)}-across-harnesses`,
+      search: overviewSearch(null, null, { ...NO_FACETS, tier: [shared] }),
+      description: `SweepOverview filtered to family tier ${shared}, every harness's model of that tier side by side`,
+    });
+  }
+  const treated = options.treatment.filter((t) => t !== CONTROL);
+  if (options.treatment.includes(CONTROL) && treated.length >= 1) {
+    perms.push({
+      slug: "overview--filter-treatment-vs-control",
+      search: overviewSearch(null, null, { ...NO_FACETS, treatment: [CONTROL, treated[0]!] }),
+      description: `SweepOverview filtered to the control and treatment ${treated[0]}, side by side`,
+    });
   }
   return perms;
 }

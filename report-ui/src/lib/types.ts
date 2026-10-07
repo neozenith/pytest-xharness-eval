@@ -67,6 +67,22 @@ export interface Cell {
    * never a filter the page applies on its own.
    */
   effort: string | null;
+  /**
+   * The named treatment layered over the case's fixture (ADR 0055), or null for its control —
+   * the untreated arm every treated case also sweeps — and on every session captured before the
+   * axis existed. Unlike a null rung, a control is a measured arm: it is labelled and selectable
+   * as `control` (`lib/treatment.ts`).
+   */
+  treatment: string | null;
+  /** The model's product line from the catalogue (ADR 0057): `opus`, `sol`, …; null when it never described the model, or on a capture before it. */
+  line: string | null;
+  /**
+   * The model's numbered role in its provider's lineup (ADR 0057), 1 the smallest: a number, never a
+   * name, so it compares across providers. Null on a model the catalogue never described.
+   */
+  family_tier: number | null;
+  /** The model's release date, `YYYY-MM-DD` (ADR 0057); null when the catalogue does not say. */
+  released: string | null;
   session_id: string;
   verdict: string | null;
   at: string | null;
@@ -179,6 +195,12 @@ export interface RunResult {
   harness: string;
   model: string;
   effort: string | null;
+  /** The treatment (ADR 0055); null for a control, absent on a result written before the axis. */
+  treatment?: string | null;
+  /** The catalogue's facts about the model (ADR 0057); null when undescribed, absent on a result written before it. */
+  line?: string | null;
+  family_tier?: number | null;
+  released?: string | null;
   session_id: string;
   turns: number;
   reported_turns: number | null;

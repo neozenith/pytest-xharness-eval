@@ -7,7 +7,7 @@
 import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { SessionSummaryTable } from "../src/components/SessionSummaryTable";
-import { cell, sweep } from "./fixtures";
+import { cell, sweep, treatedSweep } from "./fixtures";
 
 const MUTED = { light: "rgb(91, 96, 112)", dark: "rgb(154, 160, 176)" };
 const BAD = { light: "rgb(185, 28, 28)", dark: "rgb(248, 113, 113)" };
@@ -459,5 +459,48 @@ test.describe("SessionSummaryTable: keyboard access to a clipped table", () => {
     expect(focusable).toBe(0);
     await rows(page).first().click();
     expect(await search(page)).toBe("");
+  });
+});
+
+test.describe("SessionSummaryTable: the treatment axis (ADR 0055)", () => {
+  test("an untreated sweep shows no treatment column", async ({ mount, page }) => {
+    await mount(<SessionSummaryTable cells={sweep()} />);
+    await expect(head(page, "treatment")).toHaveCount(0);
+  });
+
+  test("a control and its treated twins are adjacent rows, the control first, named, never blended", async ({ mount, page }) => {
+    await mount(<SessionSummaryTable cells={treatedSweep()} />);
+    const heads = await page.locator("#SessionSummaryTable thead th").evaluateAll((ths) => ths.map((th) => th.getAttribute("data-k")));
+    expect(heads.indexOf("treatment")).toBe(heads.indexOf("effort") + 1);
+    const all = await keys(page);
+    const at = all.indexOf(`${OPUS}|high`);
+    expect(all.slice(at, at + 3)).toEqual([`${OPUS}|high`, `${OPUS}|high+agents-md`, `${OPUS}|high+lean-ci`]);
+    const cell = (key: string, k: string) => row(page, key).locator("td").nth(heads.indexOf(k));
+    await expect(cell(`${OPUS}|high`, "treatment")).toHaveText("control");
+    await expect(cell(`${OPUS}|high+lean-ci`, "treatment")).toHaveText("lean-ci");
+    // the twin's two runs are their own mean, not pooled with the control's
+    await expect(cell(`${OPUS}|high+lean-ci`, "runs")).toHaveText("2");
+    await expect(cell(`${OPUS}|high`, "runs")).toHaveText("1");
+  });
+});
+
+// ADR 0057: the tier marks a group's model and never splits a group.
+test.describe("SessionSummaryTable: the family tier (ADR 0057)", () => {
+  test("a group's model carries its T<n> mark; the tier is no column and no key", async ({ mount, page }) => {
+    await mount(<SessionSummaryTable cells={sweep()} />);
+    await expect(td(page, `${OPUS}|high`, "model").locator(".tier-badge")).toHaveText("T3");
+    await expect(td(page, "mermaidjs-diagrams|eval_dual_density|claude|claude-sonnet-5|medium", "model").locator(".tier-badge")).toHaveText("T2");
+    // the rung-less group is the pre-catalogue session: no mark
+    await expect(td(page, OPUS, "model").locator(".tier-badge")).toHaveCount(0);
+    await expect(page.locator("#SessionSummaryTable thead th")).toHaveCount(KEYS.length);
+  });
+
+  test("a catalogued and an uncatalogued run of one arm stay one group", async ({ mount, page }) => {
+    const cells = [
+      cell({ session_id: "x1", effort: "high", line: "opus", family_tier: 3, released: "2026-05-14" }),
+      cell({ session_id: "x2", effort: "high" }),
+    ];
+    await mount(<SessionSummaryTable cells={cells} />);
+    await expect(rows(page)).toHaveCount(1);
   });
 });

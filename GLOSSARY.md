@@ -16,15 +16,24 @@ Two standing obligations, restated in [AGENTS.md](AGENTS.md):
 | task | What a case declares: the sentence a user types *after* naming the skill. It never names the skill, a CLI, or a loading path -- each harness renders its own invocation around it, and the same task therefore produces a different prompt per arm (ADR 0044) |
 | invocation | How one harness names a skill to itself: `/<skill> <task>` for `claude` (registered for the session with `--plugin-dir`), `$<skill> <task>` for `codex` (registered under the private `CODEX_HOME/skills/`). `Harness.invoke` is the only place either is spelled; `model/registry.py` is the one edge that asks from beneath (ADR 0011, ADR 0044) |
 | EvalSuite | One imported `eval_*.py` module and the cases it declares. A suite belongs to no package, so it is imported by path under a name derived from that path; `EvalSuite.load` and `find_case` are the one loader collection and a replay share, where each used to keep its own (`model/suite.py`, ADR 0040) |
-| cell | One (harness, model, effort) point of a case; the unit pytest collects, runs, and reports |
+| cell | One (harness, model, effort, treatment) point of a case; the unit pytest collects, runs, and reports. Its id is `harness/model[/effort][+treatment]` |
 | harness | The agent CLI a cell runs on, `claude` or `codex`; the first half of a cell id |
-| matrix | The list of `harness/model` or `harness/model/effort` entries a case expands into cells; three scopes, case over project over plugin; `--harness`, `--model`, `--effort` and `-k` narrow it |
+| matrix | The list of `harness/model` or `harness/model/effort` entries a case expands into cells; three scopes, case over project over plugin; `--harness`, `--model`, `--effort`, `--treatment` and `-k` narrow it. The plugin default is every catalogued model whose output rate is below `xharness_output_rate_limit` (ADR 0058) |
+| model catalogue | Every supported model, in one config file: `derive/prices/models.toml`, beside the price records. One table per harness names its LiteLLM `feed_provider` and lists its models with `line`, `tier` and `released`; `derive/catalogue.py` reads it into `ModelSpec`s. A matrix entry naming an uncatalogued model is a collection error; `xharness_models` ini lines add or correct one before a plugin release (ADR 0057, ADR 0059) |
+| live pricing | Pricing a matrix entry that no price row covers by looking it up in LiteLLM's feed (`xharness_price_feed`) at collection, by exact first-party id. What it finds is saved as a dated record under `<cache>/pricing/`, which the sweep and every later replay read; an entry the feed cannot price either still stops the sweep (ADR 0060) |
+| line | A model's product line in its provider's lineup: `haiku`, `sonnet`, `opus`, `fable`, `luna`, `terra`, `sol`, `astra`. Stored on every record (ADR 0057) |
+| timed out | A run whose CLI was killed at `xharness_timeout_s`. Its partial session is captured and priced; it fails if its logs were written within the 5 minutes before the kill (it ran out of time) and errors if they had been silent longer (it stalled) (`RunResult.timed_out_after_s`, `idle_before_timeout_s`, ADR 0064) |
+| attempted | A run whose CLI exited cleanly or made at least one model call (`RunResult.attempted`). An unattempted run (a session limit, an expired login, a refused request) is graded an error before its grader runs, never a fail of the skill (ADR 0063) |
+| family tier | A hand-curated integer for a model's role in its provider's lineup, 1 the smallest; today 1 is Haiku and Luna, 4 is Fable and Astra. A number rather than a name, so it survives a lineup change; a role, never a price; frozen at release, so history stays comparable. The cross-provider bucket: "every tier 3 model" (ADR 0057) |
+| released | A model's release date, `YYYY-MM-DD`, stored on every record. A generation format derived from it is not yet decided (ADR 0057) |
 | effort | The reasoning budget a cell asks its CLI for: the third matrix axis, and the optional third component of an entry. An entry that names none leaves the CLI on its own default (ADR 0049) |
 | rung | One level of a harness's own effort ladder (`Harness.efforts`, lowest first). Both shipped harnesses declare `low, medium, high, xhigh, max`; the ladder is per-harness, not shared. A matrix entry may name a rung exactly, and a rung the named harness lacks is a collection error, never the nearest one (ADR 0049) |
 | alias | A portable effort word naming a *position* rather than a level: `min`, `mid`, `max`. It resolves against whichever ladder the harness has, once, at matrix expansion -- so one line sweeps both arms at comparable intensity and nothing downstream ever holds a word the CLI would not understand (ADR 0049) |
 | skills root | The directory under the rootdir holding `<skill>/evals/` trees; ini key `xharness_skills_dir` |
 | fixture | A committed seed directory under `evals/fixtures/<name>/` that a workspace is copied from; several cases may share one |
-| workspace | The per-cell copy of the fixture under the work directory that the agent works in |
+| treatment | A committed overlay directory under `evals/treatments/<name>/`, plus an optional `<name>__<harness>/` dialect directory copied last, layered over the fixture to change what the agent finds in its workspace (an `AGENTS.md`, a `CLAUDE.md`). The opt-in fourth matrix axis: a case names treatments with `treatments=` or inherits `xharness_treatments`, and the default is none. A treatment with no files for a harness it is swept on is a collection error (ADR 0055) |
+| control | The untreated cell, and the reserved word that names it in `--treatment` and on the report. Every treated case also sweeps its control, so a treatment is always measured against the same cell without it (ADR 0055) |
+| workspace | The per-cell copy of the fixture, with any treatment copied over it, under the work directory that the agent works in. Removed with its harness run directories once the cell's evidence is captured and graded, unless `xharness_keep_workspaces` keeps it for inspection (ADR 0062) |
 | session log | The JSONL file the CLI writes for one session; the evidence a verdict is tied to |
 | Harness | The class behind a harness name: how its CLI is invoked, how its log correlates back to the run, how its records classify, and what its shell tools mean for coverage. `harness.get(name)` is the only way to reach one; an unregistered name raises rather than defaulting (ADR 0034) |
 | SessionLog | One captured session in a provider's dialect *plus the side-channel that dialect needs* -- Claude's stdout envelope, Codex's exit code -- so every caller gets one uniform `to_result` (ADR 0034) |
@@ -45,7 +54,7 @@ Two standing obligations, restated in [AGENTS.md](AGENTS.md):
 | settings | One resolved view of a project's configuration, built either from the live `pytest.Config` or, for a replay, from the pytest config on disk; `runtime/settings.py` (ADR 0034, ADR 0039) |
 | CellRun, Attempt | One cell's live run as a small state machine: materialise the workspace, `invoke` the CLI, `store` (derive then capture), `grade`, `record`. Exactly one of those steps spends money, and it is the only one carrying `pragma: no cover`, so the sequence a replay is pinned against is testable without paying (`plugin/cell.py`, ADR 0002, ADR 0040). An `Attempt` is what one invocation produced plus the two clock facts no log carries |
 | CacheLayout, SessionDir, LocatedSession | The cache tree as a value object, and one session's evidence directory within it. `CacheLayout` owns `build/`, `results/`, `report/`, every file name under them and the five-level `sessions()` walk; `SessionDir` owns `log.jsonl`, `result.json`, `history.json` and `subagents/`. `LocatedSession` is a `SessionDir` that knows its five coordinates, and therefore the only one that can be named by `rel` or linked to from the page; only `CacheLayout` builds one (ADR 0038). `Settings.cache` is a `CacheLayout`, so nothing reassembles a path under the cache root (ADR 0032, ADR 0037) |
-| captured | `<cache>/results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/`, where each run's log, `RunResult` and metrics record are written; git-ignored. Five levels deep whether or not a rung was named -- the effort shares the model's level rather than adding one (ADR 0032, ADR 0049) |
+| captured | `<cache>/results/{skill}/{harness}/{model}[--{effort}][+{treatment}]/{run}/{session}/`, where each run's log, `RunResult` and metrics record are written; git-ignored. Five levels deep whether or not a rung or a treatment was named -- both share the model's level rather than adding one (ADR 0032, ADR 0049, ADR 0055) |
 | CellMetrics, Outcome | One graded cell's metrics record -- the `history.json` written beside its evidence and one line of the combined `report/history.jsonl` -- as a type: flat, built of builtins, and carrying `status_word()` and its own `cache` field. `Outcome` is the four values grading observed and no log can supply (node, verdict, wall clock, start), which a replay carries forward while recomputing everything else. The record crosses to the xdist controller as a plain mapping and is a type on both sides; `from_dict` drops an unknown key *and* a value that is not of its field's declared type, so every reader may trust the declaration (ADR 0016, ADR 0018, ADR 0037, ADR 0038) |
 | history | One `history.json` per session (turns, tool calls, duration, wall clock, USD, tokens), combined into `<cache>/report/history.jsonl`; git-ignored with the rest of the cache (ADR 0032) |
 | call, turn | One model API call inside a cell's session (a *SessionTurn* in the report); `RunResult.calls` is the ledger of them, each with its usage, tools issued, results fed in, text, thinking, and the log lines it came from (ADR 0019, 0021). `turns` counts them; the CLI's own count is `reported_turns` |
@@ -82,12 +91,14 @@ flowchart TB
         SKILL["skill<br/>the directory under test"]:::declare
         CASE["case<br/>@evalcase in eval_*.py"]:::declare
         FIX["fixture<br/>committed seed tree"]:::declare
+        TREAT["treatment<br/>overlay swept beside the control"]:::declare
         PRICES["price records<br/>dated prices-YYYYMMDD.toml + ini rows"]:::cfg
+        CATALOG["model catalogue<br/>models.toml: line, tier, released"]:::cfg
     end
 
     subgraph expanded["Expanded by the plugin at collection"]
         MATRIX["matrix<br/>case over project over plugin"]:::plan
-        CELL["cell<br/>one (harness, model, effort) of a case"]:::plan
+        CELL["cell<br/>one (harness, model, effort, treatment) of a case"]:::plan
         HARNESS["harness<br/>claude or codex"]:::plan
         MODEL["model"]:::plan
         EFFORT["effort<br/>a rung of the harness ladder"]:::plan
@@ -115,7 +126,11 @@ flowchart TB
     CELL -->|"with"| MODEL
     CELL -->|"at"| EFFORT
     HARNESS -->|"declares the ladder<br/>a rung resolves on"| EFFORT
+    CATALOG -->|"describes"| MODEL
+    CATALOG -->|"defaults under<br/>the rate limit"| MATRIX
     FIX -->|"copied per cell into"| WS
+    CASE -->|"may add with treatments="| TREAT
+    TREAT -->|"copied over the fixture in"| WS
     HARNESS -->|"works inside"| WS
     HARNESS -->|"writes"| LOG
     HARNESS -->|"forks per subagent"| SUB

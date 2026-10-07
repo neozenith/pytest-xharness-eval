@@ -4,7 +4,7 @@
 
 Browse it interactively in [graph.html](graph.html): click a node to read its record.
 
-54 decision records, 139 typed edges, grouped into 11 groups.
+66 decision records, 167 typed edges, grouped into 11 groups.
 Every edge comes from a record's `relates_to` block, so this view cannot drift from the records.
 
 ```cytoscape
@@ -136,3 +136,27 @@ These are gaps in the record set, not rendering artifacts.
 * `ADR-0052` declares `see_also ADR-0049`, but `ADR-0049` has no `see_also ADR-0052`
 * `ADR-0053` declares `extends ADR-0039`, but `ADR-0039` has no `extended_by ADR-0053`
 * `ADR-0053` declares `extends ADR-0040`, but `ADR-0040` has no `extended_by ADR-0053`
+* `ADR-0055` declares `extends ADR-0004`, but `ADR-0004` has no `extended_by ADR-0055`
+* `ADR-0055` declares `extends ADR-0018`, but `ADR-0018` has no `extended_by ADR-0055`
+* `ADR-0055` declares `extends ADR-0049`, but `ADR-0049` has no `extended_by ADR-0055`
+* `ADR-0055` declares `extends ADR-0007`, but `ADR-0007` has no `extended_by ADR-0055`
+* `ADR-0056` declares `extends ADR-0022`, but `ADR-0022` has no `extended_by ADR-0056`
+* `ADR-0056` declares `extends ADR-0033`, but `ADR-0033` has no `extended_by ADR-0056`
+* `ADR-0057` declares `extends ADR-0034`, but `ADR-0034` has no `extended_by ADR-0057`
+* `ADR-0057` declares `extends ADR-0007`, but `ADR-0007` has no `extended_by ADR-0057`
+* `ADR-0058` declares `extends ADR-0015`, but `ADR-0015` has no `extended_by ADR-0058`
+* `ADR-0058` declares `extends ADR-0010`, but `ADR-0010` has no `extended_by ADR-0058`
+* `ADR-0059` declares `extends ADR-0050`, but `ADR-0050` has no `extended_by ADR-0059`
+* `ADR-0060` declares `extends ADR-0007`, but `ADR-0007` has no `extended_by ADR-0060`
+* `ADR-0060` declares `extends ADR-0050`, but `ADR-0050` has no `extended_by ADR-0060`
+* `ADR-0060` declares `extends ADR-0051`, but `ADR-0051` has no `extended_by ADR-0060`
+* `ADR-0062` declares `extends ADR-0004`, but `ADR-0004` has no `extended_by ADR-0062`
+* `ADR-0062` declares `extends ADR-0032`, but `ADR-0032` has no `extended_by ADR-0062`
+* `ADR-0063` declares `extends ADR-0012`, but `ADR-0012` has no `extended_by ADR-0063`
+* `ADR-0063` declares `extends ADR-0049`, but `ADR-0049` has no `extended_by ADR-0063`
+* `ADR-0064` declares `extends ADR-0063`, but `ADR-0063` has no `extended_by ADR-0064`
+* `ADR-0064` declares `extends ADR-0049`, but `ADR-0049` has no `extended_by ADR-0064`
+* `ADR-0065` declares `extends ADR-0033`, but `ADR-0033` has no `extended_by ADR-0065`
+* `ADR-0065` declares `extends ADR-0051`, but `ADR-0051` has no `extended_by ADR-0065`
+* `ADR-0066` declares `extends ADR-0048`, but `ADR-0048` has no `extended_by ADR-0066`
+* `ADR-0066` declares `extends ADR-0034`, but `ADR-0034` has no `extended_by ADR-0066`

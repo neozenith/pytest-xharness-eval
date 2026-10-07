@@ -1853,6 +1853,110 @@ button.filter-chip[data-on="true"] > .muted {
 }
 
 /*
+ * `treatment` (ADR 0055) prints its whole name. It used to be capped at 7ch to fit a one-screen
+ * budget, which made `cheap_eval_subagents` read as `cheap_...`; since ADR 0061 the table scrolls
+ * sideways and the reader trims columns with the picker instead, so the name is legible again.
+ */
+#SessionTable td[data-k="treatment"] > * {
+  white-space: nowrap;
+}
+
+/*
+ * The family tier (ADR 0057) as a `T3` mark: its own column in SessionTable, a qualifier after the
+ * model name in SessionSummaryTable. Small and muted, in the mono face so `T1`..`T4` stand the same
+ * width down a column. The line and release date are on its `title`. The model name prints whole:
+ * since ADR 0061 the table scrolls, so no column is capped to pay for another.
+ */
+#SessionTable td[data-k="model"] > code {
+  white-space: nowrap;
+}
+
+.tier-badge {
+  margin-left: 0.25em;
+  color: var(--xh-muted);
+  font-family: var(--xh-font-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/*
+ * The SessionTable column picker (ADR 0061): a disclosure above the table's top-right corner.
+ * It is a preference, not a filter, so it sits apart from the overview's filter chips.
+ */
+/*
+ * The picker is the panel's positioning context and sits flush right, so the panel opens leftward
+ * from the button into the page, never past the card's right edge.
+ */
+.column-picker {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.375rem;
+  font-size: 0.75rem;
+}
+
+.column-picker > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--xh-line);
+  border-radius: 999px;
+  color: var(--xh-ink);
+}
+
+.column-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.column-picker[open] > summary {
+  border-color: var(--xh-accent);
+}
+
+.column-picker-panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  max-width: min(36rem, calc(100vw - 2rem));
+  z-index: 5;
+  padding: 0.5rem 0.75rem;
+  background: var(--xh-panel);
+  border: 1px solid var(--xh-line);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+}
+
+.column-picker-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+}
+
+.column-picker-actions button {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--xh-line);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--xh-ink);
+  cursor: pointer;
+}
+
+.column-picker ul {
+  columns: 2;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.column-picker li label {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  white-space: nowrap;
+  padding: 0.0625rem 0;
+}
+
+/*
  * A column whose value is the same on every visible row is not telling the reader anything: it
  * is a fact about the whole table, so it is stated once above the table and the column is gone.
  * With the overview's filters this is the common case — filter to one harness and the harness

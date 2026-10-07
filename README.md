@@ -5,7 +5,7 @@
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/cicd.yml/badge.svg" alt="CICD Checks"></a>
     <a href="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml"><img src="https://github.com/neozenith/pytest-xharness-eval/actions/workflows/publish.yml/badge.svg" alt="Build Status"></a>
     <!-- coverage-badge -->
-    <img src="https://img.shields.io/badge/coverage-96%25-brightgreen.svg" alt="Coverage">
+    <img src="https://img.shields.io/badge/coverage-97%25-brightgreen.svg" alt="Coverage">
     <!-- coverage-badge -->
 </p>
 <p align="center">
@@ -79,9 +79,11 @@ with `--dry-run` before a sweep. The design rationale lives in
        eval_<suite>.py
        fixtures/<name>/
        goldens/<name>/                                  # optional known-good output (ADR 0046)
+       treatments/<name>[__<harness>]/                  # optional overlays swept beside the control (ADR 0055)
    .xharness_eval_cache/
      build/                                             # per-cell workspaces
-     results/{skill}/{harness}/{model}[--{effort}]/{run}/{session}/  # log.jsonl, result.json, history.json
+     pricing/prices-YYYYMMDD.toml                       # rates priced live at collection (ADR 0060)
+     results/{skill}/{harness}/{model}[--{effort}][+{treatment}]/{run}/{session}/  # log.jsonl, result.json, history.json
      report/                                            # report.json + the aggregated microsite
    ```
 
@@ -110,18 +112,16 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    ```text
    xharness-eval: skills root = /repo/skills, cache = /repo/.xharness_eval_cache
-   xharness-eval: matrix = plugin default (2 entries); a case's models= overrides it
-   collected 2 items
-   skills/<skill>/evals/eval_<case>.py ss
+   xharness-eval: matrix = plugin default (11 of 14 catalogued models, output rate below $50/MTok); a case's models= overrides it
+   collected 11 items
+   skills/<skill>/evals/eval_<case>.py sssssssssss
 
    ============================ agent eval report ============================
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-opus-5]
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-sonnet-5]
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-haiku-4-5-20251001]
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-sol]
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-luna]
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-5.6-terra]
-     total spend: $0.0000 across 6 cell(s)
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-sonnet-5]
+     ...
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-6.1-sol]
+     total spend: $0.0000 across 11 cell(s)
      report: /repo/.xharness_eval_cache/report/report.json
    ```
 
@@ -171,8 +171,10 @@ stock pytest (`-k`, `-x`, `-m eval`, node ids).
 | `--harness <name>` | Only cells for that harness (`claude` or `codex`), repeatable | `pytest skills/x/evals --harness codex` |
 | `--model <substring>` | Only cells whose model id contains the string, or one exact `harness/model`, repeatable | `pytest skills/x/evals --model opus` |
 | `--effort <rung>` | Only cells at that reasoning rung, repeatable. Matches the *resolved* rung, so `--effort max` selects claude's `max` and codex's `xhigh` alike | `pytest skills/x/evals --effort max` |
+| `--treatment <name>` | Only cells under that treatment, repeatable. `control` names the untreated cell (ADR 0055) | `pytest skills/x/evals --treatment control` |
 | `-k <expr>` | Boolean slices over cell ids and case names (stock pytest) | `-k "opus or sol"`, `-k "codex and not sol"` |
 | `--xharness-timeout <s>` | Seconds one cell's CLI may run before it is killed (default 600). Raise it for the top effort rungs, which think for longer by design | `pytest skills/x/evals --xharness-timeout 1800` |
+| `--xharness-keep-workspaces` | Leave each finished cell's build workspace in `.xharness_eval_cache/build/` for inspection. By default it is removed once its evidence is captured and graded | `pytest skills/x/evals --xharness-keep-workspaces` |
 | `--dry-run` | Enumerate cells and validate pricing, invoke nothing | `pytest skills/x/evals --dry-run` |
 | `--collect-only -q` | List cell node ids (stock pytest) | `pytest --collect-only -q skills/x/evals` |
 
@@ -219,6 +221,33 @@ That check is not theoretical: `minimal` appears in codex-cli's own local enum, 
 sweep found that no gpt-5.6 model accepts it — the CLI forwards it, the API answers 400,
 and the run exits having produced nothing (ADR 0049).
 
+### The treatment axis
+
+A treatment is a directory of files copied over a case's fixture: an `AGENTS.md`, a
+`CLAUDE.md`, anything the agent should find in its workspace. It answers "does this change
+to the agent's standing instructions change what the same cell costs and how well it does?"
+
+```text
+evals/treatments/cheap_eval_subagents/AGENTS.md          # every harness gets this
+evals/treatments/cheap_eval_subagents__claude/CLAUDE.md  # claude also gets this: "@AGENTS.md"
+```
+
+Name it on the case, or for every case with the `xharness_treatments` ini key:
+
+```python
+@evalcase(task=TASK, skill=SKILL, fixture=FIXTURE, treatments=["cheap_eval_subagents"])
+```
+
+The axis is opt-in, and every treatment is swept beside its *control*, the same cell with
+no treatment. So the case above collects `claude/claude-sonnet-5` and
+`claude/claude-sonnet-5+cheap_eval_subagents` as two separately graded cells.
+`--treatment control` or `--treatment cheap_eval_subagents` narrows to one arm.
+
+The `__<harness>` directory exists because the CLIs read different files: codex reads
+`AGENTS.md`, claude reads `CLAUDE.md`. Each cell reads its workspace's own file and nothing
+above it. A treatment with no files for a harness the case sweeps stops collection, because
+that cell would be its control billed twice under a second name (ADR 0055).
+
 ----
 
 ## Configuration
@@ -227,24 +256,64 @@ The matrix has three scopes, highest precedence first: a case's `models=`, the
 project's `xharness_matrix` ini key, and the plugin's bundled default. The report
 header names which one applied.
 
-The bundled default is every model the bundled price table carries: three per harness,
-`claude/{claude-opus-5, claude-sonnet-5, claude-haiku-4-5-20251001}` and
-`codex/{gpt-5.6-sol, gpt-5.6-luna, gpt-5.6-terra}`. An axis nobody narrowed means the
-whole axis, so this is deliberately the widest default that cannot abort at collection —
-a model with no price row would stop the sweep before it spent anything (ADR 0007).
-Preview it with `--dry-run` and narrow it with `xharness_matrix` before a first paid run.
+The bundled default is every model in the **model catalogue** whose output rate is below
+`xharness_output_rate_limit` (default `50` USD per million tokens). Today that keeps every
+catalogued model except the apex ones, Fable and Astra. Raise the limit to opt in to their
+cost, or name them in `xharness_matrix` or a case's `models=`, which the limit never filters
+(ADR 0058). Preview the default with `--dry-run` before a first paid run.
 
-Four ini keys, paths relative to pytest's rootdir:
+### The model catalogue
+
+Every supported model is listed in one config file,
+[`src/pytest_xharness_eval/derive/prices/models.toml`](src/pytest_xharness_eval/derive/prices/models.toml),
+beside the dated price records. Each model carries three facts that every record stores
+(ADR 0057, ADR 0059):
+
+| Fact | Example | Meaning |
+|------|---------|---------|
+| `line` | `opus`, `sol` | The provider's own product line |
+| `family_tier` | `3` | The model's role in its lineup, 1 the smallest, curated by hand. A number rather than a name, so it survives a lineup change, and frozen at release, so history stays comparable |
+| `released` | `2026-07-24` | The release date |
+
+Today's tiers: 1 is Haiku and Luna, 2 is Sonnet and Terra, 3 is Opus and Sol, 4 is Fable
+and Astra. A tier is a role, never a price, which is what lets a report compare every tier 3
+model across providers.
+
+A matrix entry naming a model the catalogue does not list stops collection before anything
+is spent. Add a new model before a plugin release with one ini line:
+
+```ini
+xharness_models =
+    codex/gpt-6.2-sol: line=sol tier=3 released=2026-10-20
+```
+
+### Live pricing
+
+A catalogued model with no bundled price row is **priced live** at collection. Its rates are
+looked up in LiteLLM's price feed by exact first-party id, and saved as a dated record under
+`.xharness_eval_cache/pricing/`. The sweep and every later replay read that record, so a run
+priced live is re-priced identically. A model the feed does not price either still stops
+collection, and nothing is guessed (ADR 0060). With every model priced, nothing is fetched.
+
+The bundled records are the offline default. In this repository, `make test` first curates a
+new bundled snapshot (`make prices`) whenever `models.toml` lists a model they do not price.
+
+The ini keys, paths relative to pytest's rootdir:
 
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `xharness_matrix` | (plugin default) | Project matrix: `harness/model` or `harness/model/effort` entries every case sweeps unless it sets `models=` |
+| `xharness_output_rate_limit` | `50` | The plugin default matrix sweeps only catalogued models whose output rate, in USD per million tokens, is below this. Raise it to opt in to apex models (ADR 0058) |
+| `xharness_price_feed` | LiteLLM's feed | Where a model with no price row is priced live from at collection: a URL or a local path (ADR 0060) |
+| `xharness_models` | (none) | Model catalogue rows that add or correct a model before a plugin release: `<harness>/<model>: line=<line> tier=<n> released=YYYY-MM-DD [effort=false]`; `effort=false` marks a model whose CLI ignores a reasoning rung, so a matrix entry naming one is refused (ADR 0057, ADR 0063) |
+| `xharness_treatments` | (none) | Treatment names under each suite's `evals/treatments/`, swept beside the untreated control unless a case sets `treatments=` (ADR 0055) |
 | `xharness_skills_dir` | `skills` | Directory holding `<skill>/evals/` trees |
 | `xharness_cache_dir` | `.xharness_eval_cache` | The git-ignored root for build workspaces, results and the report (ADR 0032) |
 | `xharness_skill_ignore` | (none) | gitignore-style patterns for skill files that are not decision surface; a bare pattern applies to every skill, `<skill>: <pattern>` to the skills matching the selector (ADR 0026) |
 | `xharness_report_design_tokens` | bundled | design tokens JSON that themes `report/report.html` (flag: `--xharness-report-design-tokens FILE`) |
 | `xharness_report_inline` | `false` | embed every result, log and the tokens into `report/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
-| `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`) |
+| `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`). A killed run is captured and priced: it **fails** if its session was still active in the 5 minutes before the limit (it ran out of time), and **errors** if it had been silent longer (it stalled) (ADR 0064) |
+| `xharness_keep_workspaces` | `false` | Leave each finished cell's build workspace in place for inspection instead of removing it once its evidence is captured and graded (flag: `--xharness-keep-workspaces`, ADR 0062) |
 | `xharness_prices` | (none) | Price rows that add to or override the bundled price records: `<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..] [long_context_above=<prompt tokens> long_input=.. long_output=.. [long_cache_read=..] [long_cache_write=..] [long_cache_write_1h=..]] [from=YYYY-MM-DD] [to=YYYY-MM-DD]` (ADR 0030, ADR 0050, ADR 0051) |
 
 ```toml

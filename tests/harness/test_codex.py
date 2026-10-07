@@ -254,3 +254,25 @@ def test_primary_rollout_skips_subagent_forks(tmp_path: Path) -> None:
         codex_harness.primary_rollout(sorted(tmp_path.glob("rollout-*.jsonl")))
     with pytest.raises(harnesses.RunError, match="found 0"):
         codex_harness.primary_rollout([tmp_path / "rollout-2-s1.jsonl"])
+
+
+def test_an_exec_script_yields_each_command_it_runs_with_its_workdir() -> None:
+    script = (
+        'const a = await tools.exec_command({"cmd": "ls", "workdir": "/w"});\n'
+        'const b = await tools.exec_command({"cmd": ["bash", "-lc", "pwd"]});'
+    )
+    assert codex_harness.CodexHarness.shell_commands(script) == [("ls", "/w"), ("bash -lc pwd", None)]
+
+
+def test_an_exec_input_that_is_not_a_script_is_read_as_before() -> None:
+    assert codex_harness.CodexHarness.shell_commands({"command": "ls", "cwd": "/w"}) == [("ls", "/w")]
+    assert codex_harness.CodexHarness.shell_commands("tools.exec_command(notjson)") == [
+        ("tools.exec_command(notjson)", None)
+    ]
+
+
+def test_an_exec_script_with_bare_object_keys_is_read_too() -> None:
+    """``{cmd:"..."}`` is JavaScript, not JSON, and the model writes it that way as often as not."""
+    script = 'await tools.exec_command({cmd:"S=/s\\nbun run \\"$S/x.ts\\"", workdir: "/w", "yield_time_ms":10000});'
+    assert codex_harness.CodexHarness.shell_commands(script) == [('S=/s\nbun run "$S/x.ts"', "/w")]
+    assert codex_harness.CodexHarness.shell_commands("tools.exec_command({})") == [("", None)]

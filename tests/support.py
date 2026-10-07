@@ -6,6 +6,9 @@ import textwrap
 from datetime import date
 from pathlib import Path
 
+# Third Party
+import pytest
+
 # Our Libraries
 from pytest_xharness_eval import (
     RunResult,
@@ -121,3 +124,56 @@ DOC = textwrap.dedent(
     </details>
     """
 )
+
+
+# -- pytester trees: a one-skill project for whole-plugin sessions -------------
+
+CASE = textwrap.dedent(
+    """
+    from pytest_xharness_eval import evalcase
+
+    @evalcase(task="say hi", skill="demo", fixture="seed"{models})
+    def eval_demo(output):
+        assert output.run.exit_code == 0
+    """
+)
+
+
+#: The two-cell project matrix nearly every test here wants: one arm per harness, enough to
+#: exercise grouping and narrowing, and *pinned* so that widening the plugin default does not
+#: renumber forty unrelated assertions. A test that is about the default itself passes
+#: ``matrix=None`` and gets the bundled one.
+PINNED_MATRIX = "xharness_matrix =\n    claude/claude-opus-5\n    codex/gpt-5.6-sol\n"
+
+
+def make_tree(
+    pytester: pytest.Pytester,
+    *,
+    models: str = "",
+    skills_dir: str = "skills",
+    ini: str = "",
+    matrix: str | None = PINNED_MATRIX,
+) -> Path:
+    """Lay out ``<skills_dir>/demo/evals/eval_demo.py`` with ``fixtures/seed/`` and return the evals dir.
+
+    Live pricing reads a local, empty feed unless a test names its own, so no session in
+    the suite ever reaches the network (ADR 0060).
+    """
+    if matrix and "xharness_matrix" not in ini:
+        ini = f"{ini}\n{matrix}" if ini else matrix
+    if "xharness_price_feed" not in ini:
+        empty = pytester.path / "empty-feed.json"
+        empty.write_text("{}", encoding="utf-8")
+        ini = f"{ini}\nxharness_price_feed = {empty}"
+    pytester.makeini(f"[pytest]\n{ini}\n")
+    skill = pytester.path / skills_dir / "demo"
+    (skill / "evals" / "fixtures" / "seed").mkdir(parents=True)
+    (skill / "SKILL.md").write_text("# demo skill\n", encoding="utf-8")
+    (skill / "evals" / "fixtures" / "seed" / "README.md").write_text("seed\n", encoding="utf-8")
+    (skill / "evals" / "eval_demo.py").write_text(CASE.format(models=models), encoding="utf-8")
+    return skill / "evals"
+
+
+def cell_ids(result: pytest.RunResult) -> list[str]:
+    """The ``harness/model`` part of every collected eval node id, in order."""
+    return [line.split("[", 1)[1].rstrip("]") for line in result.stdout.lines if "::eval_demo[" in line]

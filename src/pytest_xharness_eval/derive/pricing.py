@@ -315,23 +315,35 @@ class CostEstimate:
     @classmethod
     def of(cls, calls: Sequence[Usage], rates: Rates, residual: Usage | None = None) -> Self:
         """Price each call at the tier its own prompt size selects, stamped with the moment of application."""
+        return cls.of_parts([(calls, rates, residual)], rates)
+
+    @classmethod
+    def of_parts(cls, parts: Sequence[tuple[Sequence[Usage], Rates, Usage | None]], provenance: Rates) -> Self:
+        """Price several ledgers, each at its own rates, summed before any rounding (ADR 0065).
+
+        A run's primary and each of its subagents can be answered by different models, so each
+        part brings the row its calls bill at; ``provenance`` is the row the run is checked
+        against. The tiers are summed unrounded and rounded once, so the total of a run priced
+        in parts is the same to the micro-dollar as one priced whole.
+        """
         totals: dict[str, float] = dict.fromkeys(
             ("input", "output", "cache_read", "cache_write_5m", "cache_write_1h"), 0.0
         )
         long_calls = 0
-        for usage in calls:
-            tier = rates.for_request(usage)
-            long_calls += tier is not rates
-            for key, usd in tier_costs(usage, tier).items():
-                totals[key] += usd
-        if residual is not None:
-            for key, usd in tier_costs(residual, rates).items():
-                totals[key] += usd
+        for calls, rates, residual in parts:
+            for usage in calls:
+                tier = rates.for_request(usage)
+                long_calls += tier is not rates
+                for key, usd in tier_costs(usage, tier).items():
+                    totals[key] += usd
+            if residual is not None:
+                for key, usd in tier_costs(residual, rates).items():
+                    totals[key] += usd
         return cls(
             total_usd=round(sum(totals.values()), 6),
             by_tier={k: round(v, 6) for k, v in totals.items()},
             long_context_calls=long_calls,
-            rates=rates.applied(now_iso()),
+            rates=provenance.applied(now_iso()),
         )
 
 
@@ -372,16 +384,24 @@ class PriceTable:
             f"add an xharness_prices line '{harness}/{model}: input=<usd/MTok> output=<usd/MTok>' (ADR 0030, ADR 0050)."
         )
 
-    def validate_matrix(self, entries: Iterable[str], day: date | None) -> None:
-        """Every ``harness/model[/effort]`` entry must resolve before a sweep spends anything (ADR 0007)."""
-        missing = []
+    def unpriced(self, entries: Iterable[str], day: date | None) -> list[tuple[str, str]]:
+        """The ``(harness, model)`` of every ``harness/model[/effort]`` entry no row prices on ``day``."""
+        out = []
         for entry in entries:
             harness, _, rest = entry.partition("/")
             model = rest.partition("/")[0]
             try:
                 self.resolve(harness, model, day)
             except PricingError:
-                missing.append(entry)
+                if (harness, model) not in out:
+                    out.append((harness, model))
+        return out
+
+    def validate_matrix(self, entries: Iterable[str], day: date | None) -> None:
+        """Every ``harness/model[/effort]`` entry must resolve before a sweep spends anything (ADR 0007)."""
+        entries = list(entries)
+        unpriced = set(self.unpriced(entries, day))
+        missing = [e for e in entries if tuple(e.split("/")[:2]) in unpriced]
         if missing:
             raise PricingError(
                 f"unpriced models in matrix: {missing}. Add xharness_prices lines to your pytest config (ADR 0030)."
@@ -487,7 +507,7 @@ def load_records(directory: Path = PRICES_DIR) -> list[Rates]:
     file, and the rows are returned newest record first.
     """
     records = []
-    for path in sorted(directory.glob("*.toml")):
+    for path in sorted(directory.glob("prices-*.toml")):
         rows = parse_record(path)
         if rows:
             records.append((path, rows[0].interval, rows))
@@ -598,19 +618,36 @@ def parse_price_lines(lines: Iterable[str]) -> list[Rates]:
     return rows
 
 
-def load_table(directory: Path = PRICES_DIR, rows: Iterable[str] = ()) -> PriceTable:
-    """The bundled records, with ``xharness_prices`` ini rows layered on top (ADR 0030, ADR 0050)."""
-    return PriceTable(tuple(parse_price_lines(rows)) + tuple(load_records(directory)))
+def load_table(directory: Path = PRICES_DIR, rows: Iterable[str] = (), cached: Path | None = None) -> PriceTable:
+    """The bundled records, with ``xharness_prices`` ini rows layered on top (ADR 0030, ADR 0050).
+
+    ``cached`` is a project's ``<cache>/pricing/`` directory of live-priced records. They come
+    after the bundled ones, so a live row only ever fills a gap the bundled records leave
+    (ADR 0060).
+    """
+    live = tuple(load_records(cached)) if cached is not None and cached.is_dir() else ()
+    return PriceTable(tuple(parse_price_lines(rows)) + tuple(load_records(directory)) + live)
 
 
 def price(result: RunResult, table: PriceTable, day: date | None) -> RunResult:
     """Price ``result`` from the rows in effect on ``day`` and record the estimate; the run is returned.
 
-    Each call is priced at the tier its own prompt size selects (ADR 0051). Resolving the row
-    is the only step that can fail, and it raises rather than pricing an unknown model as
-    zero (ADR 0007).
+    Each call is priced at the tier its own prompt size selects (ADR 0051), and at the rates
+    of the model that answered it (ADR 0065): the primary's calls at the run's model, each
+    subagent's at its own. A subagent on Haiku under an Opus parent is a Haiku bill, and
+    pricing it at Opus's rates overstated delegation by up to 87%.
+
+    Resolving a row is the only step that can fail, and it raises rather than pricing an
+    unknown model as zero or at a neighbour's rates (ADR 0007, ADR 0050). A subagent whose
+    transcript names no model is priced at the parent's, the only rate it can be shown to have.
     """
     rates = table.resolve(result.harness, result.model, day)
-    calls, residual = calls_of(result)
-    result.apply_cost(CostEstimate.of(calls, rates, residual))
+    _, residual = calls_of(result)
+    parts: list[tuple[Sequence[Usage], Rates, Usage | None]] = [([c.usage for c in result.calls], rates, residual)]
+    for sub in result.subagents:
+        sub_rates = table.resolve(result.harness, sub.model, day) if sub.model else rates
+        sub_calls = [c.usage for c in sub.calls]
+        sub.estimated_cost_usd = CostEstimate.of(sub_calls, sub_rates).total_usd
+        parts.append((sub_calls, sub_rates, None))
+    result.apply_cost(CostEstimate.of_parts(parts, rates))
     return result

@@ -17,8 +17,8 @@ test("a rung's sort value ranks the ladder under a plain `<` comparator, and nul
 });
 
 test("an arm label names the rung only when one was sent", () => {
-  expect(armLabel("claude", "claude-opus-5", "high")).toBe("claude/claude-opus-5 · high");
-  expect(armLabel("claude", "claude-opus-5", null)).toBe("claude/claude-opus-5");
+  expect(armLabel("claude", "claude-opus-5", "high", null)).toBe("claude/claude-opus-5 · high");
+  expect(armLabel("claude", "claude-opus-5", null, null)).toBe("claude/claude-opus-5");
   expect(sessionLabel(cell({ case: "eval_x", effort: "low", session_id: "1feb573f-ba51" }))).toBe("eval_x · claude/claude-opus-5 · low · 1feb573f");
 });
 

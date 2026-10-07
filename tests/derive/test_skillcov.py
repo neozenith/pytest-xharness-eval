@@ -2,6 +2,7 @@
 
 # Standard Library
 import dataclasses
+import json
 from pathlib import Path
 
 # Third Party
@@ -11,6 +12,7 @@ import pytest
 from pytest_xharness_eval import (
     Call,
     ExecutedCommand,
+    Subagent,
     ToolCall,
     ToolResult,
     Usage,
@@ -330,3 +332,54 @@ def test_annotate_resolves_each_codex_exec_at_its_own_workdir(tmp_path: Path) ->
     assert by["resources/guide.md"].loaded == [1]
     assert by["resources/unused.md"].loaded == []
     assert cov.run == []
+
+
+def test_a_script_a_subagent_ran_is_credited_to_the_turn_that_spawned_it(tmp_path: Path) -> None:
+    """The run is billed for its subagents, so it is credited with their work (ADR 0056).
+
+    A run told to delegate its checks ran them in a subagent, and a coverage walk that
+    read the primary ledger alone reported the mandatory gate as never executed.
+    """
+    files = skillcov.catalog(_skill(tmp_path))
+    r = _result("m", Usage(), harness="claude")
+    r.workspace = "/x/ws"
+    r.calls = [Call(n=1, at="t"), Call(n=2, at="t")]
+    r.subagents = [
+        Subagent(
+            agent="general-purpose",
+            id="a1",
+            log="subagents/agent-a1.jsonl",
+            parent_turn=2,
+            calls=[
+                Call(n=1, at="t", tools=[ToolCall("Bash", "", {"command": "bun run /x/skills/demo/scripts/check.ts"})])
+            ],
+        ),
+        # A spawn the harness could not match to a turn keeps the subagent's own turn number.
+        Subagent(
+            agent="general-purpose",
+            id="a2",
+            log="subagents/agent-a2.jsonl",
+            calls=[Call(n=3, at="t", tools=[ToolCall("Read", "", {"file_path": "/x/skills/demo/resources/guide.md"})])],
+        ),
+    ]
+    cov = skillcov.annotate("demo", files, r)
+    by = {f.path: f for f in cov.files}
+    assert by["scripts/check.ts"].run == [2]
+    assert by["resources/guide.md"].loaded == [3]
+    assert cov.run == ["scripts/check.ts"]
+
+
+def test_a_script_run_through_a_variable_inside_a_codex_exec_script_counts_as_run(tmp_path: Path) -> None:
+    """Codex's ``exec`` takes JavaScript wrapping each command (ADR 0066).
+
+    Read whole, the script's first statement swallowed ``skill_root='<dir>'``, so the
+    ``$skill_root/scripts/check.ts`` it then ran never expanded to the skill's path.
+    """
+    files = skillcov.catalog(_skill(tmp_path))
+    r = _result("m", Usage(), harness="codex")
+    r.workspace = "/x/ws"
+    command = "skill_root='/x/codex_home/skills/demo'; bun run \"$skill_root/scripts/check.ts\" ARCHITECTURE.md"
+    script = f"const r = await tools.exec_command({json.dumps({'cmd': command, 'workdir': '/x/ws'})});\ntext(r.output);"
+    r.calls = [Call(n=1, at="t", tools=[ToolCall("exec", "", script)])]
+    cov = skillcov.annotate("demo", files, r)
+    assert {f.path: f for f in cov.files}["scripts/check.ts"].run == [1]

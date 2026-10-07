@@ -8,7 +8,8 @@ Within a matched suite the rule repeats itself for functions -- the ``eval_`` pr
 this plugin what ``test_`` is to pytest -- and every way of getting it slightly wrong is a
 loud :class:`pytest.UsageError` at collection rather than a session that quietly grades
 nothing: no ``@evalcase`` in the file, a case whose grader is misnamed, a model nobody
-has a price for (ADR 0007), or an effort rung the named harness does not have (ADR 0049).
+has a price for (ADR 0007), an effort rung the named harness does not have (ADR 0049),
+or a treatment with no files for a harness it is about to be swept on (ADR 0055).
 """
 
 from __future__ import annotations
@@ -24,6 +25,8 @@ from pytest_xharness_eval import harness
 from pytest_xharness_eval.derive import skillcov
 from pytest_xharness_eval.emit.metrics import CellMetrics
 from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model import treatment
+from pytest_xharness_eval.model.catalogue import CatalogueError
 from pytest_xharness_eval.model.layout import run_date
 from pytest_xharness_eval.model.suite import EvalSuite
 from pytest_xharness_eval.plugin.cell import CellRun, run_stamp
@@ -37,6 +40,7 @@ if TYPE_CHECKING:
 
     # Our Libraries
     from pytest_xharness_eval.model.case import EvalCase
+    from pytest_xharness_eval.model.catalogue import Catalogue
 
 
 def pytest_collect_file(file_path: Path, parent: pytest.Collector) -> pytest.Collector | None:
@@ -57,23 +61,54 @@ class EvalFile(pytest.File):
     def collect(self) -> Iterator[pytest.Item]:
         cases = self._cases()
         settings = Settings.from_config(self.config)
-        table = settings.price_table()
         # ADR 0050: the rows that must exist are the ones in effect on the day this sweep's
         # cells will be stamped with, which is the day every one of them is priced on.
         today = run_date(run_stamp())
         opts = self.config.option
+        catalogue = settings.catalogue()
         for case in cases:
-            models = settings.matrix_for(case)
-            # ADR 0007: an unpriced model stops the sweep at collection, before any spend.
-            table.validate_matrix(models, today)
+            models = settings.matrix_for(case, today)
+            # ADR 0060: a gap is priced live from LiteLLM's feed into <cache>/pricing/ first;
+            # ADR 0007: whatever is still unpriced stops the sweep here, before any spend.
+            settings.ensure_priced(models, today).validate_matrix(models, today)
+            # ADR 0057: so does one the catalogue cannot say what kind of model it is.
+            self._require_catalogued(catalogue, case, mx.expand(models))
             # ADR 0022: the skill's file tree is catalogued here, before any cell runs, so every
             # cell of the sweep is measured against the same inventory.
             skill_dir = settings.skill_dir(case.skill)
             files = skillcov.catalog(skill_dir, ignore=settings.skill_ignore) if skill_dir.is_dir() else []
-            for cell in mx.narrow(mx.expand(models), opts.model, opts.harness, opts.effort):
+            cells = mx.expand(models)
+            # ADR 0055: a treatment that copies nothing onto some harness's workspace would bill
+            # that harness's control twice under two names, so it stops collection here.
+            treatments = settings.treatments_for(case)
+            try:
+                treatment.validate(self.path.parent, treatments, (c.harness for c in cells))
+            except treatment.UnknownTreatment as exc:
+                raise pytest.UsageError(f"{self.path}: {case.name}: {exc}") from exc
+            for cell in mx.narrow(mx.treat(cells, treatments), opts.model, opts.harness, opts.effort, opts.treatment):
                 yield EvalItem.from_parent(
                     self, name=f"{case.name}[{cell.id}]", case=case, cell=cell, skill_files=files
                 )
+
+    def _require_catalogued(self, catalogue: Catalogue, case: EvalCase, cells: list[mx.Cell]) -> None:
+        """Every cell's model is in the catalogue, or a usage error naming the line that would add it (ADR 0057).
+
+        A record states the model's line, tier and release date so it stands alone once
+        archived; a model the catalogue does not describe would ship records that cannot.
+        """
+        try:
+            for cell in cells:
+                spec = catalogue.require(cell.harness, cell.model)
+                # ADR 0063: a rung the model ignores is a full run at its default, billed and
+                # reported under a label it never had, so it stops here like an unknown rung does.
+                if cell.effort and not spec.takes_effort:
+                    raise CatalogueError(
+                        f"{cell.id}: {cell.harness}/{cell.model} takes no effort rung (effort = false in the "
+                        "model catalogue): its CLI accepts one and runs at the default anyway. Drop the rung "
+                        "from the matrix entry (ADR 0063)"
+                    )
+        except CatalogueError as exc:
+            raise pytest.UsageError(f"{self.path}: {case.name}: {exc}") from exc
 
     def _cases(self) -> list[EvalCase]:
         """Every case this suite declares, or a usage error naming what is wrong with it.
@@ -135,6 +170,13 @@ class EvalItem(pytest.Item):
         return self.evals_dir / "fixtures" / self.case.fixture
 
     @property
+    def overlays(self) -> list[Path]:
+        """This cell's treatment directories, copied over the fixture in order; none for the control (ADR 0055)."""
+        if self.cell.treatment is None:
+            return []
+        return treatment.layers(self.evals_dir, self.cell.treatment, self.cell.harness)
+
+    @property
     def suite(self) -> str:
         """This suite file, relative to the project root when it is under one (ADR 0025)."""
         try:
@@ -180,6 +222,7 @@ class EvalItem(pytest.Item):
             settings=settings,
             skill_dir=skill_dir,
             fixture_dir=self.fixture_dir,
+            overlays=self.overlays,
             node=self.node,
             suite=self.suite,
             skill_files=self.skill_files,

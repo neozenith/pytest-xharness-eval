@@ -43,8 +43,8 @@ itself; the artifact is the directory it worked in.
 | `output.filenames` | `list[str]` | Every file in the workspace, relative and sorted. |
 | `output.wrote(rel)` | `bool` | Whether *this run's diff* names the path. Not the same as `exists`. |
 | `output.written` | `list[str]` | Every path the run created or modified. |
-| `output.added` | `list[str]` | Written paths the fixture did **not** seed: what this rollout brought into being. |
-| `output.changed` | `list[str]` | Written paths the fixture did seed: what it edited in place. |
+| `output.added` | `list[str]` | Written paths the fixture did **not** seed: what this rollout brought into being. A treatment's files count as seeded (ADR 0055). |
+| `output.changed` | `list[str]` | Written paths the fixture or treatment did seed: what it edited in place. |
 
 The `exists` / `wrote` distinction is the one worth internalising. A fixture file the
 agent never touched **exists**; it was not **written**. A case about editing something
@@ -59,6 +59,12 @@ that only checks `exists` passes for a run that did nothing at all.
 | `harness` | `str` | `claude` or `codex`, the first matrix axis. |
 | `model` | `str` | The model id the harness was told to use. |
 | `effort` | `str \| None` | The reasoning rung the CLI was asked for, resolved to that harness's own ladder; `None` when the cell named none and inherited the CLI's default. The third matrix axis (ADR 0049). |
+| `treatment` | `str \| None` | The treatment copied over the fixture; `None` for the control. The opt-in fourth matrix axis (ADR 0055). |
+| `line` | `str \| None` | The model's product line from the catalogue, such as `opus` or `sol` (ADR 0057). |
+| `family_tier` | `int \| None` | The model's hand-curated role in its lineup, 1 the smallest, frozen at release (ADR 0057). |
+| `released` | `str \| None` | The model's release date, `YYYY-MM-DD` (ADR 0057). |
+| `timed_out_after_s` | `int \| None` | The wall-clock limit the CLI was killed at; `None` when it finished on its own (ADR 0064). |
+| `idle_before_timeout_s` | `float \| None` | How long the session's logs had been silent when it was killed. Under 300s the cell fails (it ran out of time); 300s or more, or no log, it errors (it had stalled) (ADR 0064). |
 | `session_id` | `str` | The session this verdict is tied to. |
 | `session_log` | `str` | Path to the captured JSONL. Exists on disk during grading. |
 | `workspace` | `str` | The same directory as `output.workspace`, as the run recorded it. |
@@ -115,7 +121,9 @@ every turn, the quick way to ask "did it ever call Bash".
 
 `run.subagents` is a `list[Subagent]`, one per parallel thread the session spawned, each
 with its own `.calls`, `.usage`, `.parent_turn` and captured `.log`. Their usage is
-already folded into `run.usage`, so the run's bill is the whole bill.
+already folded into `run.usage`, so the run's bill is the whole bill. Each also names the
+`.model` that answered it and carries its own `.estimated_cost_usd`, priced at that model's
+rates rather than its parent's (ADR 0065).
 
 ### Skill coverage
 
@@ -196,6 +204,12 @@ Extractors in `verify.facets`: `fence_count`, `fences`, `visible_fences`,
 `collapsed_fences`, `node_ids`, `edges`, `classdef_names`, `classdef_count`,
 `fill_colours`, `text_colours`, `unstyled_nodes`, `headings`, `headings_at(n)`,
 `hex_colours`, `body_text`. Any `str -> object` works.
+
+`node_ids`, `edges` and `unstyled_nodes` read flowchart fences only, one fence at a time,
+because a class applies only within the diagram that assigns it. Front matter, `%%`
+comment lines, node labels of every shape and edge labels (`|x|`, `-- x -->`,
+`-. x .->`, `== x ==>`) are dropped before anything is read as an id, and a `subgraph`
+id is a container rather than a node.
 
 `GOLDEN.assert_matches(output)` raises `GoldenMismatch` (an `AssertionError`, so the cell
 grades `fail`, not `error`) carrying one row per facet, passing ones included, with what

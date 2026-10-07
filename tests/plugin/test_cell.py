@@ -1,6 +1,7 @@
 """``plugin.cell``: one cell's live run, step by step (ADR 0002, ADR 0040)."""
 
 # Standard Library
+import dataclasses
 import json
 import os
 import re
@@ -12,12 +13,14 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval import (
+    Call,
     CaseOutput,
     Cell,
     CostStatus,
     RunResult,
     Usage,
     evalcase,
+    harness,
 )
 from pytest_xharness_eval.derive import skillcov
 from pytest_xharness_eval.emit.metrics import CellMetrics
@@ -181,3 +184,82 @@ def test_a_cells_record_carries_a_plain_string_verdict_beside_its_evidence(
     assert (record.node, record.wall_ms, record.at) == (run.node, 4321, "2026-08-28T00:00:00+00:00")
     assert record.cache == str(tmp_path / "cache")
     assert CellMetrics.stored(session.history) == record
+
+
+def test_a_treated_cell_stacks_its_overlay_and_counts_it_as_seeded(tmp_path: Path) -> None:
+    """The agent found the treatment's files there, so a grader must not see them as written (ADR 0055)."""
+    run = _cell_run(tmp_path)
+    overlay = tmp_path / "skills" / "demo" / "evals" / "treatments" / "lean-ci"
+    overlay.mkdir(parents=True)
+    (overlay / "AGENTS.md").write_text("use cheap subagents\n", encoding="utf-8")
+    run.cell = Cell(harness="claude", model="claude-opus-5", treatment="lean-ci")
+    run.overlays = [overlay]
+    workspace = run.materialise()
+    assert workspace.name == "eval_ok-claude-claude-opus-5-lean-ci"
+    assert (workspace / "AGENTS.md").is_file()
+    assert run.output(_captured_run(tmp_path), workspace).seeded == {"README.md", "AGENTS.md"}
+    assert run.session_dir("sid").rel.split("/")[2] == "claude-opus-5+lean-ci"
+
+
+def test_a_finished_cell_tidies_its_workspace_unless_the_project_keeps_them(tmp_path: Path) -> None:
+    run = _cell_run(tmp_path)
+    workspace = run.materialise()
+    run.tidy(workspace)
+    assert not workspace.exists()
+    kept = dataclasses.replace(run, settings=dataclasses.replace(run.settings, keep_workspaces=True))
+    workspace = kept.materialise()
+    kept.tidy(workspace)
+    assert workspace.is_dir()
+
+
+def test_a_run_that_never_reached_the_model_is_an_error_not_a_fail(tmp_path: Path) -> None:
+    """A session limit attempted nothing, so it must not read as the skill failing (ADR 0063)."""
+    run = _cell_run(tmp_path, grader=eval_fails)
+    result = _captured_run(tmp_path)
+    result.exit_code, result.calls = 1, []
+    result.final_text = "You've hit your session limit · resets 2:10am"
+    with pytest.raises(harness.RunError, match="never attempted: You've hit your session limit"):
+        run.grade(result, run.materialise())
+    assert run.verdict is Verdict.ERROR
+
+
+def test_a_run_that_called_the_model_then_exited_non_zero_is_still_graded(tmp_path: Path) -> None:
+    run = _cell_run(tmp_path, grader=eval_fails)
+    result = _captured_run(tmp_path)
+    result.exit_code, result.calls = 1, [Call(n=1, at="t")]
+    assert result.attempted
+    with pytest.raises(AssertionError):
+        run.grade(result, run.materialise())
+    assert run.verdict is Verdict.FAIL
+
+
+@pytest.mark.parametrize(
+    ("idle", "verdict", "raised", "match"),
+    [
+        (
+            30.0,
+            Verdict.FAIL,
+            AssertionError,
+            "did not complete within the 1200s timeout: the session was still active 30s",
+        ),
+        (299.0, Verdict.FAIL, AssertionError, "ran out of time"),
+        (
+            300.0,
+            Verdict.ERROR,
+            harness.RunError,
+            "stalled: killed at the 1200s timeout after no session activity for 300s",
+        ),
+        (None, Verdict.ERROR, harness.RunError, "no session log at all"),
+    ],
+)
+def test_a_run_killed_at_the_wall_fails_if_still_active_and_errors_if_stalled(
+    tmp_path: Path, idle: float | None, verdict: Verdict, raised: type[Exception], match: str
+) -> None:
+    """Working when time ran out is a fail to complete in time; silent for five minutes is a stall (ADR 0064)."""
+    run = _cell_run(tmp_path)  # a grader that would pass: the timeout decides before it runs
+    result = _captured_run(tmp_path)
+    result.calls = [Call(n=1, at="t")]
+    harness.mark_timed_out(result, 1200, idle)
+    with pytest.raises(raised, match=match):
+        run.grade(result, run.materialise())
+    assert run.verdict is verdict

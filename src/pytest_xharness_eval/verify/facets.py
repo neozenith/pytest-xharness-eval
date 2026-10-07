@@ -12,7 +12,9 @@ text in ``tests/verify/test_facets.py`` with no rollout and no spend.
 from __future__ import annotations
 
 # Standard Library
+import itertools
 import re
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -25,20 +27,25 @@ MERMAID_FENCE = re.compile(r"```mermaid[^\n]*\n(.*?)```", re.DOTALL)
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 #: One flowchart identifier.
 _ID = r"[A-Za-z][A-Za-z0-9_]*"
-#: The shape a node id may carry: ``[label]``, ``(label)``, ``{label}``, and their doubles.
-_SHAPE = r"(?:\[\[?[^\]]*\]\]?|\(\(?[^)]*\)\)?|\{[^}]*\})?"
-#: An inline class assignment: ``Node:::className``.
-_INLINE_CLASS = r"(?::::[A-Za-z0-9_]+)?"
-#: A link between two nodes: ``-->``, ``---``, ``-.->``, ``==>``, ``--o``, ``<-->``.
-_ARROW = r"<?[-=.]{2,}[>ox]?"
-#: A node declaration: an id immediately followed by a shape.
-_NODE = re.compile(rf"(?:^|[\s>|])({_ID})\s*(?:\[|\(|\{{)")
-#: An edge, in either direction, past whatever shape or class its endpoints carry.
-#:
-#: The endpoints are the part that is easy to get wrong: ``Loader[Load CSV] --> Transform``
-#: has a ``]`` between the id and the arrow, and ``Transform:::io --> Report`` has a class
-#: name that a looser pattern collects as a node of its own.
-_EDGE = re.compile(rf"({_ID}){_SHAPE}{_INLINE_CLASS}\s*{_ARROW}(?:\|[^|]*\|)?\s*({_ID})")
+#: A link between two nodes once its label is gone: ``-->``, ``---``, ``-.->``, ``==>``,
+#: ``--o``, ``--x``, ``<-->``, ``~~~``.
+_ARROW = r"<?(?:-{2,}|={2,}|-\.+-|~{3,})[>ox]?"
+#: What a flowchart statement is made of once its labels are gone: an id with its optional
+#: ``:::class``, an arrow, or the ``&`` that joins several ids on one side of an arrow.
+_TOKEN = re.compile(rf"({_ID})(?::::([A-Za-z0-9_]+))?|({_ARROW})|&")
+#: An edge's ``|label|``.
+_PIPE_LABEL = re.compile(r"\|[^|]*\|")
+#: An edge's inline label, ``-- text -->``, ``== text ==>`` or ``-. text .->``, which
+#: a looser reading collects as nodes of their own. The opener is never part of an arrow.
+_EDGE_TEXT = re.compile(
+    r"(?<![-=.<])(?:--|==|-\.)(?![->=.]|[ox]\s)\s*[^-=.>\s][^>]*?\s*(-{2,}>|={2,}>|\.-+>|-{3,}|={3,}|-{2,}[ox]\b|\.-+)"
+)
+#: A diagram's YAML front matter (``---`` / ``config: ...`` / ``---``), whose keys are not ids.
+_FRONT_MATTER = re.compile(r"\A\s*---\s*\n.*?\n\s*---\s*(?:\n|\Z)", re.DOTALL)
+#: A fence that holds a flowchart: its header line names one.
+_FLOWCHART = re.compile(r"^\s*(?:flowchart|graph)\b", re.MULTILINE)
+#: Statements that declare no node and no edge.
+_NOT_A_NODE = frozenset({"flowchart", "graph", "classDef", "style", "linkStyle", "click", "direction", "end"})
 #: A ``classDef`` line; group 1 is the class name, group 2 its style body.
 _CLASSDEF = re.compile(r"^\s*classDef\s+([A-Za-z0-9_]+)\s+(.+?)\s*$", re.MULTILINE)
 #: Any ``#rgb`` or ``#rrggbb`` colour literal.
@@ -111,19 +118,123 @@ def collapsed_fences(doc: str) -> list[str]:
     return out
 
 
+@dataclass(slots=True)
+class _Flowchart:
+    """What one flowchart fence declares, read statement by statement."""
+
+    nodes: set[str] = field(default_factory=set)
+    edges: set[tuple[str, str]] = field(default_factory=set)
+    classed: set[str] = field(default_factory=set)
+    containers: set[str] = field(default_factory=set)
+
+
+def _skip_shape(line: str, i: int) -> int:
+    """The index just past the balanced shape opening at ``i``, quotes respected.
+
+    Every node shape nests its delimiters: ``[[sub]]``, ``((circle))``, ``{{hex}}``,
+    ``[(cylinder)]``, ``([stadium])``. Counting depth across all three bracket kinds reads
+    each one whole, where a single-pair pattern stops at the first closer (issue #3).
+    """
+    depth, quoted = 0, False
+    while i < len(line):
+        c = line[i]
+        if c == '"':
+            quoted = not quoted
+        elif not quoted and c in "[({":
+            depth += 1
+        elif not quoted and c in "])}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return i
+
+
+def _without_shapes(line: str) -> str:
+    """The statement with every node's shape and label removed, ids and ``:::`` kept."""
+    out: list[str] = []
+    i = 0
+    while i < len(line):
+        c = line[i]
+        after_id = bool(out) and (out[-1].rstrip()[-1:].isalnum() or out[-1].rstrip()[-1:] == "_")
+        if c in "[({" and after_id:
+            i = _skip_shape(line, i)
+        elif c == ">" and after_id and out[-1][-1:] not in "-=.":
+            # The asymmetric shape, ``A>label]``.
+            close = line.find("]", i)
+            i = len(line) if close < 0 else close + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def _read(body: str) -> _Flowchart | None:
+    """Read one fence as a flowchart, or ``None`` when it holds another kind of diagram.
+
+    Comments, labels and edge text are removed before anything is read as an id, so a word
+    inside a ``%%`` comment, a ``[[label]]`` or a ``-. label .->`` never becomes a node.
+    A ``subgraph`` id is a container, not a node.
+    """
+    if not _FLOWCHART.search(body):
+        return None
+    chart = _Flowchart()
+    for text in _statements(body):
+        head, _, rest = text.partition(" ")
+        if head in _NOT_A_NODE:
+            continue
+        if head == "class":
+            ids, _, cls = rest.strip().partition(" ")
+            if cls.strip():
+                chart.classed.update(part.strip() for part in ids.split(","))
+        elif head == "subgraph":
+            found = re.match(_ID, _without_shapes(rest.strip()))
+            if found:
+                chart.containers.add(found.group(0))
+        else:
+            _read_statement(_EDGE_TEXT.sub(" --> ", _without_shapes(_PIPE_LABEL.sub(" ", text))), chart)
+    chart.nodes -= chart.containers | _KEYWORDS
+    return chart
+
+
+def _statements(body: str) -> list[str]:
+    """Every statement of a fence: front matter and ``%%`` comment lines dropped, ``;`` split."""
+    out: list[str] = []
+    for raw in _FRONT_MATTER.sub("", body, count=1).splitlines():
+        if raw.strip().startswith("%%"):
+            # A comment is a whole line, ``;`` included: split first and its tail reads as code.
+            continue
+        out.extend(text for statement in raw.split(";") if (text := statement.strip()))
+    return out
+
+
+def _read_statement(text: str, chart: _Flowchart) -> None:
+    """Fold one label-free statement: its ids, its ``:::`` classes, and an edge per arrow."""
+    groups: list[list[str]] = [[]]
+    for node, cls, arrow in _TOKEN.findall(text):
+        if arrow:
+            groups.append([])
+        elif node:
+            groups[-1].append(node)
+            chart.nodes.add(node)
+            if cls:
+                chart.classed.add(node)
+    for left, right in itertools.pairwise(groups):
+        chart.edges.update((a, b) for a in left for b in right if a not in _KEYWORDS)
+
+
+def _flowcharts(doc: str) -> list[_Flowchart]:
+    return [chart for body in fences(doc) if (chart := _read(body)) is not None]
+
+
 def node_ids(doc: str) -> set[str]:
-    """Every flowchart node id across the document's fences, keywords excluded.
+    """Every flowchart node id across the document's fences, keywords and subgraphs excluded.
 
     The concept set of a diagram: what it is *about*, independent of the labels and the
     layout. Usually the facet with the tightest defensible tolerance, because a fixture
     fixes the things that exist even when it leaves their names free.
     """
-    ids: set[str] = set()
-    for body in fences(doc):
-        ids.update(_NODE.findall(body))
-        for left, right in _EDGE.findall(body):
-            ids.update((left, right))
-    return ids - _KEYWORDS
+    return {node for chart in _flowcharts(doc) for node in chart.nodes}
 
 
 def edges(doc: str) -> set[str]:
@@ -132,10 +243,7 @@ def edges(doc: str) -> set[str]:
     The diagram's shape rather than its contents: two diagrams over the same nodes with
     different edges are telling different stories.
     """
-    out: set[str] = set()
-    for body in fences(doc):
-        out.update(f"{left}->{right}" for left, right in _EDGE.findall(body) if left not in _KEYWORDS)
-    return out
+    return {f"{a}->{b}" for chart in _flowcharts(doc) for a, b in chart.edges}
 
 
 def classdef_names(doc: str) -> set[str]:
@@ -171,14 +279,7 @@ def unstyled_nodes(doc: str) -> set[str]:
     Mermaid's default". A document can declare one ``classDef``, apply it to a single node,
     and satisfy every substring check ever written about it.
     """
-    assigned: set[str] = set()
-    for body in fences(doc):
-        for line in body.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("class ") and len(stripped.split()) >= 3:
-                assigned.update(part.strip() for part in stripped.split()[1].split(","))
-        assigned.update(re.findall(r"([A-Za-z][A-Za-z0-9_]*)\s*(?:\[[^\]]*\]|\([^)]*\))?:::", body))
-    return node_ids(doc) - assigned - _KEYWORDS
+    return {node for chart in _flowcharts(doc) for node in chart.nodes - chart.classed}
 
 
 def headings(doc: str) -> set[str]:

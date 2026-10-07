@@ -130,6 +130,7 @@
   "envelope": {},
   "estimated_cost_usd": 0.002332,
   "exit_code": 0,
+  "family_tier": 3,
   "files_written": [
     "out.md"
   ],
@@ -138,6 +139,8 @@
   "final_text": "done",
   "harness": "codex",
   "harness_reported_cost_usd": null,
+  "idle_before_timeout_s": null,
+  "line": "sol",
   "long_context_calls": 0,
   "model": "gpt-5.6-sol",
   "output_tokens_per_sec": 8.7,
@@ -170,6 +173,7 @@
     "codex/session_meta": 1,
     "codex/turn_context": 1
   },
+  "released": "2026-07-09",
   "reported_model_usage": {},
   "reported_turns": 1,
   "reported_usage": {
@@ -281,8 +285,10 @@
         }
       ],
       "description": "agents/scout.md",
+      "estimated_cost_usd": 0.000307,
       "id": "codex-sub-1",
       "log": "<tmp>/results/codex/sid/subagents/rollout-sub1.jsonl",
+      "model": "gpt-5.6-sol",
       "parent_turn": 1,
       "turns": 1,
       "usage": {
@@ -297,9 +303,11 @@
       }
     }
   ],
+  "timed_out_after_s": null,
   "tool_calls": {
     "CommandExecution": 1
   },
+  "treatment": null,
   "ttft_ms": 1100,
   "turns": 2,
   "usage": {

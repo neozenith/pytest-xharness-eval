@@ -20,7 +20,9 @@ import { RecordViewToggle, TurnRawRecords, turnId, type RecordView } from "@/com
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { useLog } from "@/hooks/useLog";
 import { useResult } from "@/hooks/useResult";
+import { NOT_CATALOGUED, tierLabel } from "@/lib/catalogue";
 import { armLabel, EFFORT_DEFAULT } from "@/lib/effort";
+import { TREATMENT_CONTROL } from "@/lib/treatment";
 import { fmt, pct, secs, usd, when, windowLabel } from "@/lib/format";
 import { navigateOnClick, replaceRoute, type SessionRoute } from "@/lib/route";
 import type { AxisMode } from "@/lib/series";
@@ -137,6 +139,14 @@ export function SessionView({ cell, route }: Props) {
     // Its own row, not a third slash: "none named" is a fact about the run worth stating in words,
     // and it would read as a missing value if it were a blank tail on the identity above.
     ["effort", cell.effort ? <code key="e">{cell.effort}</code> : <span className="muted">{EFFORT_DEFAULT}</span>],
+    // A row of its own for the same reason (ADR 0055): a control is a measured arm, worth saying in
+    // words, and a session captured before the axis is one.
+    ["treatment", cell.treatment ? <code key="t">{cell.treatment}</code> : <span className="muted">{TREATMENT_CONTROL}</span>],
+    // What kind of model ran, from the model catalogue (ADR 0057): one row per fact, each stated in
+    // words when the catalogue never described the model (and on every capture before it).
+    ["line", cell.line ? <code key="l">{cell.line}</code> : <span className="muted">{NOT_CATALOGUED}</span>],
+    ["family_tier", cell.family_tier != null ? tierLabel(cell.family_tier) : <span className="muted">{NOT_CATALOGUED}</span>],
+    ["released", cell.released ?? <span className="muted">{NOT_CATALOGUED}</span>],
     ["started", when(cell.at)],
     ["wall", secs(cell.wall_ms)],
     ["estimated_cost_usd", usd(cell.estimated_cost_usd)],
@@ -174,7 +184,7 @@ export function SessionView({ cell, route }: Props) {
           ← all sessions
         </Button>
         <Text render={<h2 id="SessionTitle" />} fontFamily="$body" fontSize={16} fontWeight="600" margin={0}>
-          {cell.case} · {armLabel(cell.harness, cell.model, cell.effort)} <CopyId id={cell.session_id} />
+          {cell.case} · {armLabel(cell.harness, cell.model, cell.effort, cell.treatment)} <CopyId id={cell.session_id} />
           <El name="SessionView" />
         </Text>
       </XStack>
