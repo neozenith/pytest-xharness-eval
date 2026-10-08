@@ -1,0 +1,63 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0067
+slug: a-priced-release-is-catalogued-or-excluded-before-it-is-curated
+title: A priced first-party release is catalogued or excluded before the curator writes it
+status: accepted
+status_note: |-
+  accepted, 2026-10-08.
+  Extends [0052](0052-scope-is-a-boundary-not-a-roster.md) (scope is a boundary, not a roster) with a decision owed for every id the boundary admits.
+  Extends [0059](0059-the-model-catalogue-is-one-config-file-beside-the-prices.md) with an `excluded` table beside each harness's models.
+  Extends [0060](0060-an-unpriced-model-is-priced-live-into-the-cache.md), which checks the other direction: a catalogued model with no price.
+accepted_on: '2026-10-08'
+last_changed_on: '2026-10-08'
+group: pricing
+tags:
+- pricing
+- collection
+lens: |-
+  A boundary that admits a new model on its own is only half the job.
+  Someone still has to decide whether the plugin sweeps it.
+  Ask for that decision on the day the feed first names the model, and refuse to go on without it.
+relates_to:
+- relation: extends
+  target: ADR-0052
+  note: the record's status line says "extends"
+- relation: extends
+  target: ADR-0059
+  note: the record's status line says "extends"
+- relation: extends
+  target: ADR-0060
+  note: the record's status line says "extends"
+body:
+  context: |-
+    The curator's watch-list is a boundary, so a new release is priced without an edit (ADR 0052).
+    The catalogue is a roster, so a new release is swept only once someone adds it (ADR 0059).
+    `make test` closes the gap in one direction only: a catalogued model with no price curates a snapshot (ADR 0060).
+
+    The other direction had no check.
+    Claude Haiku 5.5 was released on 2026-10-07, and the feed priced it the next day.
+    `make prices` would have bundled its row without a word, and the default matrix would never have swept it.
+    The priced rows the catalogue already left out (gated models, previous generations, undated aliases) were left out silently.
+    Nothing told a reader those omissions were decisions.
+  decision: |-
+    **Each harness in `models.toml` may carry an `excluded` table.** Each entry maps a model id to the reason it is left out.
+    The reason is a required non-empty string, and an id cannot be both catalogued and excluded.
+
+    **A priced first-party model that is neither catalogued nor excluded is undecided.** `derive/catalogue.py`'s `undecided` names every such model.
+
+    **The curator stops on an undecided model before it writes anything.** It names each one with the feed's `source` link and says where to decide it.
+    It does not guess a line, a tier or a release date, because those are hand-curated facts (ADR 0057).
+
+    **The weekly curation workflow asks for the decision.** When it stops on an undecided model, it opens or refreshes one "Undecided model releases" issue naming each model, and the run stays red.
+    Nobody has to watch the feed or name the new model to start an update.
+
+    **`make test` holds the bundled records to the same rule, offline.** A test fails when any bundled price row is undecided.
+  consequences: |-
+    A new release is decided on the day the feed first prices it.
+    The decision is reviewed in the same diff as its price row.
+    Every model the plugin prices but does not sweep now has a stated reason in the one config file.
+
+    A feed that adds a variant spelling of an existing model, such as a dated snapshot, stops curation until someone writes one line.
+    That is deliberate: a snapshot may be a new model behind a familiar name.

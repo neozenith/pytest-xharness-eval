@@ -112,16 +112,16 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    ```text
    xharness-eval: skills root = /repo/skills, cache = /repo/.xharness_eval_cache
-   xharness-eval: matrix = plugin default (11 of 14 catalogued models, output rate below $50/MTok); a case's models= overrides it
-   collected 11 items
-   skills/<skill>/evals/eval_<case>.py sssssssssss
+   xharness-eval: matrix = plugin default (12 of 15 catalogued models, output rate below $50/MTok); a case's models= overrides it
+   collected 12 items
+   skills/<skill>/evals/eval_<case>.py ssssssssssss
 
    ============================ agent eval report ============================
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-haiku-4-5-20251001]
-     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-sonnet-5]
+     dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-haiku-5-5]
      ...
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-6.1-sol]
-     total spend: $0.0000 across 11 cell(s)
+     total spend: $0.0000 across 12 cell(s)
      report: /repo/.xharness_eval_cache/report/report.json
    ```
 
@@ -286,6 +286,11 @@ is spent. Add a new model before a plugin release with one ini line:
 xharness_models =
     codex/gpt-6.2-sol: line=sol tier=3 released=2026-10-20
 ```
+
+Each harness's `excluded` table names the priced models the catalogue leaves out on purpose,
+each with a reason: gated, a previous generation, or another spelling of a catalogued id. In
+this repository, `make prices` stops on a first-party release that is neither catalogued nor
+excluded, so a new model is decided on the day the feed first prices it (ADR 0067).
 
 ### Live pricing
 

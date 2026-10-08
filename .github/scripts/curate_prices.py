@@ -301,6 +301,14 @@ def catalogue_unpriced(on: date) -> list[str]:
     return [f"{h}/{m}" for h, m in table.unpriced(matrix.catalogued(load_catalogue()), on)]
 
 
+def catalogue_undecided(rows: list[Row]) -> list[str]:
+    """Every fed row models.toml neither catalogues nor excludes: a release nobody has decided on yet."""
+    # Our Libraries
+    from pytest_xharness_eval.derive.catalogue import undecided
+
+    return undecided((r.harness, r.model) for r in rows)
+
+
 def report_lines(report: dict[str, list[str]], unpriced: list[str]) -> list[str]:
     lines = []
     for kind, items in report.items():
@@ -329,6 +337,12 @@ def main(argv: list[str] | None = None) -> int:
         raise CurationError(
             "first-party ids in a watched family fit no grammar; extend WATCHES rather than guess:\n  "
             + "\n  ".join(unrecognised)
+        )
+    if undecided := catalogue_undecided(new_rows):
+        raise CurationError(
+            "first-party models the catalogue neither lists nor excludes; add each to models.toml's "
+            "[<harness>.models] or [<harness>.excluded] with a reason (ADR 0067):\n  "
+            + "\n  ".join(f"{u}  (source: {feed[u.split('/', 1)[1]].get('source', 'none in feed')})" for u in undecided)
         )
     old_path = open_record(PRICES_DIR)
     old_rows = read_rows(old_path) if old_path else {}
