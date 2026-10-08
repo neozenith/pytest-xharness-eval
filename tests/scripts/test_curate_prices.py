@@ -11,7 +11,8 @@ import importlib.util
 import json
 import shutil
 import sys
-from datetime import date
+import tomllib
+from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -254,6 +255,35 @@ def prices_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return directory
 
 
+NOVA = {
+    "gpt-6-nova": {
+        "litellm_provider": "openai",
+        "source": "https://example.com/models/gpt-6-nova",
+        **_per_token(input_cost_per_token=3, output_cost_per_token=9),
+    }
+}
+
+
+@pytest.fixture
+def nova_catalogued(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The bundled catalogue plus a fictional ``codex/gpt-6-nova``, so a feed naming it is a decided release."""
+    catalogue_file = tmp_path / "models.toml"
+    catalogue_file.write_text(
+        cp.PRICES_DIR.joinpath("models.toml").read_text(encoding="utf-8")
+        + '\n[codex.models."gpt-6-nova"]\nline = "nova"\ntier = 2\nreleased = 2026-10-06\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("pytest_xharness_eval.derive.catalogue.MODELS_FILE", catalogue_file)
+    return catalogue_file
+
+
+def _day_after_open(directory: Path) -> date:
+    """The first day a new record may open: so a test outlives every curated snapshot."""
+    open_record = cp.open_record(directory)
+    assert open_record is not None
+    return date.fromisoformat(str(tomllib.loads(open_record.read_text())["effective_from"])) + timedelta(days=1)
+
+
 def _feed_from_bundled(directory: Path, extra: dict[str, dict]) -> dict:
     """A feed that reproduces the open record exactly, long-context tiers included, plus ``extra`` rows."""
     feed: dict = dict(extra)
@@ -280,12 +310,38 @@ def test_a_run_with_nothing_changed_writes_nothing(prices_dir: Path, tmp_path: P
     assert sorted(p.name for p in prices_dir.iterdir()) == before
 
 
+def test_a_release_the_catalogue_has_not_decided_on_stops_the_run(prices_dir: Path, tmp_path: Path) -> None:
+    """A new first-party id must be catalogued or excluded before any record is written (ADR 0067)."""
+    feed = tmp_path / "feed.json"
+    feed.write_text(json.dumps(_feed_from_bundled(prices_dir, NOVA)), encoding="utf-8")
+    before = sorted(p.name for p in prices_dir.iterdir())
+    with pytest.raises(cp.CurationError, match=r"neither lists nor excludes[^\n]*\n  codex/gpt-6-nova  \(source: "):
+        cp.main(["--feed", str(feed), "--date", "2099-01-01", "--dry-run"])
+    assert sorted(p.name for p in prices_dir.iterdir()) == before
+
+
+def test_an_excluded_release_is_priced_but_not_catalogued(
+    prices_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    catalogue_file = tmp_path / "models.toml"
+    catalogue_file.write_text(
+        cp.PRICES_DIR.joinpath("models.toml").read_text(encoding="utf-8").replace(
+            '"gpt-5.6-cyber" = "gated"', '"gpt-5.6-cyber" = "gated"\n"gpt-6-nova" = "gated"'
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("pytest_xharness_eval.derive.catalogue.MODELS_FILE", catalogue_file)
+    feed = tmp_path / "feed.json"
+    feed.write_text(json.dumps(_feed_from_bundled(prices_dir, NOVA)), encoding="utf-8")
+    assert cp.main(["--feed", str(feed), "--date", "2099-01-01"]) == 0
+    table = pricing.PriceTable(tuple(pricing.load_records(prices_dir)))
+    assert table.resolve("codex", "gpt-6-nova", date(2099, 1, 1)).input == 3.0
+
+
+@pytest.mark.usefixtures("nova_catalogued")
 def test_a_run_with_a_new_model_closes_the_open_record_and_adds_one(prices_dir: Path, tmp_path: Path) -> None:
     feed = tmp_path / "feed.json"
-    extra = {
-        "gpt-6-nova": {"litellm_provider": "openai", **_per_token(input_cost_per_token=3, output_cost_per_token=9)}
-    }
-    feed.write_text(json.dumps(_feed_from_bundled(prices_dir, extra)), encoding="utf-8")
+    feed.write_text(json.dumps(_feed_from_bundled(prices_dir, NOVA)), encoding="utf-8")
     old = cp.open_record(prices_dir)
     assert old is not None
     assert cp.main(["--feed", str(feed), "--date", "2099-01-01", "--dry-run"]) == 0
@@ -317,40 +373,37 @@ def test_an_empty_prices_directory_bootstraps_the_first_record(tmp_path: Path, m
     assert [p.name for p in empty.iterdir()] == ["prices-20260929.toml"]
 
 
+@pytest.mark.usefixtures("nova_catalogued")
 def test_a_date_not_after_the_open_record_is_refused(prices_dir: Path, tmp_path: Path) -> None:
     feed = tmp_path / "feed.json"
-    extra = {
-        "gpt-6-nova": {"litellm_provider": "openai", **_per_token(input_cost_per_token=3, output_cost_per_token=9)}
-    }
-    feed.write_text(json.dumps(_feed_from_bundled(prices_dir, extra)), encoding="utf-8")
+    feed.write_text(json.dumps(_feed_from_bundled(prices_dir, NOVA)), encoding="utf-8")
     with pytest.raises(cp.CurationError, match="must be after the open record"):
         cp.main(["--feed", str(feed), "--date", "2026-09-29"])
 
 
 def test_when_catalogue_unpriced_exits_offline_if_every_catalogued_model_is_priced(
-    capsys: pytest.CaptureFixture[str],
+    prices_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """What ``make test`` runs first: no feed is named, so reaching for the network would fail the test."""
-    assert cp.main(["--when-catalogue-unpriced", "--date", "2026-10-07"]) == 0
+    """What ``make test`` runs first. It runs on a copy of the records, and fetching the feed fails the test.
+
+    Were the catalogue ever ahead of the bundled prices, this test would otherwise curate the
+    package's own records from the network as a side effect of running it.
+    """
+
+    def no_network(ref: str | None) -> tuple[dict, str]:
+        raise AssertionError("--when-catalogue-unpriced fetched the feed with every catalogued model priced")
+
+    monkeypatch.setattr(cp, "fetch_feed", no_network)
+    assert cp.main(["--when-catalogue-unpriced", "--date", _day_after_open(prices_dir).isoformat()]) == 0
     assert "nothing to curate" in capsys.readouterr().out
 
 
-def test_when_catalogue_unpriced_curates_a_model_the_bundled_records_lack(
-    prices_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+@pytest.mark.usefixtures("nova_catalogued")
+def test_when_catalogue_unpriced_curates_a_model_the_bundled_records_lack(prices_dir: Path, tmp_path: Path) -> None:
     """A model added to models.toml without a price row triggers a new snapshot (ADR 0060)."""
-    catalogue_file = tmp_path / "models.toml"
-    catalogue_file.write_text(
-        cp.PRICES_DIR.joinpath("models.toml").read_text(encoding="utf-8")
-        + '\n[codex.models."gpt-6-nova"]\nline = "nova"\ntier = 2\nreleased = 2026-10-06\n',
-        encoding="utf-8",
-    )
-    monkeypatch.setattr("pytest_xharness_eval.derive.catalogue.MODELS_FILE", catalogue_file)
-    assert cp.catalogue_unpriced(date(2026, 10, 7)) == ["codex/gpt-6-nova"]
+    after = _day_after_open(prices_dir)
+    assert cp.catalogue_unpriced(after) == ["codex/gpt-6-nova"]
     feed = tmp_path / "feed.json"
-    extra = {
-        "gpt-6-nova": {"litellm_provider": "openai", **_per_token(input_cost_per_token=3, output_cost_per_token=9)}
-    }
-    feed.write_text(json.dumps(_feed_from_bundled(prices_dir, extra)), encoding="utf-8")
-    assert cp.main(["--when-catalogue-unpriced", "--feed", str(feed), "--date", "2026-10-07"]) == 0
-    assert (prices_dir / "prices-20261007.toml").is_file()
+    feed.write_text(json.dumps(_feed_from_bundled(prices_dir, NOVA)), encoding="utf-8")
+    assert cp.main(["--when-catalogue-unpriced", "--feed", str(feed), "--date", after.isoformat()]) == 0
+    assert (prices_dir / f"prices-{after:%Y%m%d}.toml").is_file()

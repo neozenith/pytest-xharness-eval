@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 # Our Libraries
-from pytest_xharness_eval.derive import catalogue
+from pytest_xharness_eval.derive import catalogue, pricing
 from pytest_xharness_eval.model.catalogue import CatalogueError
 
 
@@ -39,3 +39,32 @@ def test_a_malformed_catalogue_file_is_refused(tmp_path: Path, body: str, match:
     path.write_text(body, encoding="utf-8")
     with pytest.raises(CatalogueError, match=match):
         catalogue.load_catalogue(path=path)
+
+
+@pytest.mark.parametrize(
+    ("body", "match"),
+    [
+        ('[codex]\nfeed_provider = "openai"\n[codex.excluded]\n"m" = ""\n', "needs a reason string"),
+        (
+            '[codex]\nfeed_provider = "openai"\n[codex.excluded]\n"m" = "gated"\n'
+            '[codex.models."m"]\nline = "x"\ntier = 1\nreleased = 2026-01-01\n',
+            "is also catalogued",
+        ),
+    ],
+)
+def test_a_malformed_exclusion_is_refused(tmp_path: Path, body: str, match: str) -> None:
+    path = tmp_path / "models.toml"
+    path.write_text(body, encoding="utf-8")
+    with pytest.raises(CatalogueError, match=match):
+        catalogue.excluded(path)
+
+
+def test_undecided_names_what_is_neither_catalogued_nor_excluded() -> None:
+    priced = [("claude", "claude-haiku-5-5"), ("codex", "gpt-5.6-cyber"), ("codex", "gpt-7-nova")]
+    assert catalogue.undecided(priced) == ["codex/gpt-7-nova"]
+
+
+def test_every_bundled_price_row_is_catalogued_or_excluded() -> None:
+    """The offline half of ADR 0067: a record that prices a model nobody decided on fails ``make test``."""
+    table = pricing.PriceTable(tuple(pricing.load_records(pricing.PRICES_DIR)))
+    assert catalogue.undecided({(r.harness, r.model) for r in table.rows}) == []

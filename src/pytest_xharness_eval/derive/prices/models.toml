@@ -16,13 +16,33 @@
 #             the model and silently ignores it, so a matrix entry naming one is refused (ADR 0063)
 #
 # Today's tiers: 1 haiku / luna, 2 sonnet / terra, 3 opus / sol, 4 fable / astra.
-# Gated models (the Mythos line, gpt-5.6-cyber) and retired ones are left out.
 # A project adds or corrects a model before a release with an `xharness_models` ini line.
 # Every model here must have a row in the open price record: `make test` curates one when not.
+#
+# Every model the curator prices is either catalogued here or named in its harness's
+# `excluded` table with the reason it is left out: gated, a previous generation, or another
+# spelling of a catalogued id. A first-party release that is neither stops `make prices`, so a
+# new model is decided on the day the feed names it, never discovered later (ADR 0067).
 
 [claude]
 feed_provider = "anthropic"
 one_hour_cache_write_is_five_minute = false
+
+[claude.excluded]
+"claude-haiku-4-5"           = "undated alias of claude-haiku-4-5-20251001"
+"claude-mythos-5"            = "gated"
+"claude-mythos-5-1"          = "gated"
+"claude-mythos-preview"      = "gated"
+"claude-opus-4-5"            = "previous generation"
+"claude-opus-4-5-20251101"   = "previous generation"
+"claude-opus-4-6"            = "previous generation"
+"claude-opus-4-6-20260205"   = "previous generation"
+"claude-opus-4-7"            = "previous generation"
+"claude-opus-4-7-20260416"   = "previous generation"
+"claude-opus-4-8"            = "previous generation"
+"claude-sonnet-4-5"          = "previous generation"
+"claude-sonnet-4-5-20250929" = "previous generation"
+"claude-sonnet-4-6"          = "previous generation"
 
 [claude.models."claude-haiku-4-5-20251001"]
 line = "haiku"
@@ -31,6 +51,11 @@ released = 2025-10-15
 # Claude Code accepts --effort for Haiku 4.5 and ignores it: a 2026-10-06 sweep across all
 # five rungs showed flat reasoning tokens and cost, where every other model scaled (ADR 0063).
 effort = false
+
+[claude.models."claude-haiku-5-5"]
+line = "haiku"
+tier = 1
+released = 2026-10-07
 
 [claude.models."claude-sonnet-5"]
 line = "sonnet"
@@ -65,6 +90,10 @@ released = 2026-09-01
 [codex]
 feed_provider = "openai"
 one_hour_cache_write_is_five_minute = true
+
+[codex.excluded]
+"gpt-5.6"       = "unsuffixed id with no line"
+"gpt-5.6-cyber" = "gated"
 
 [codex.models."gpt-5.6-luna"]
 line = "luna"
