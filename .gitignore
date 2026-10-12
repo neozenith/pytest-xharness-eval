@@ -226,6 +226,7 @@ coverage.json
 .*_cache/
 .claude/
 .agents/
+.codex/
 
 # report-ui (ADR 0028): the SPA workspace keeps its sources; `lib/` and `dist/` above are
 # Python-packaging patterns and must not swallow shadcn's src/lib or the dev build.
