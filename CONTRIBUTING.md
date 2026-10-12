@@ -11,7 +11,7 @@ and never invoke `python` directly.
 
 ```sh
 make format   # ruff format + isort
-make check    # ruff check + isort --check-only + mypy --strict
+make check    # repository-wide ruff check + isort --check-only + mypy --strict
 make test     # pytester-based suite, no mocks, coverage badge refresh
 make build    # wheel into dist/
 ```

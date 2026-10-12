@@ -54,17 +54,21 @@ from pathlib import Path
 # The feed conversion and the record format are the package's, shared with live pricing
 # (ADR 0060), so the two writers cannot disagree on how a feed entry becomes a row.
 from pytest_xharness_eval.derive import feed as shared
-from pytest_xharness_eval.derive.feed import (  # the constants are re-exported for the curator's own tests
-    LITELLM_FIELD,  # noqa: F401
-    LONG_CONTEXT,  # noqa: F401
-    THRESHOLD,  # noqa: F401
+from pytest_xharness_eval.derive import pricing
+from pytest_xharness_eval.derive.catalogue import load_catalogue, undecided
+# The constants are re-exported for the curator's own tests.
+from pytest_xharness_eval.derive.feed import LITELLM_FIELD  # noqa: F401
+from pytest_xharness_eval.derive.feed import LONG_CONTEXT  # noqa: F401
+from pytest_xharness_eval.derive.feed import THRESHOLD  # noqa: F401
+from pytest_xharness_eval.derive.feed import FeedError as CurationError
+from pytest_xharness_eval.derive.feed import (
     Row,
     close,
     open_record,
     read_rows,
     shown,
 )
-from pytest_xharness_eval.derive.feed import FeedError as CurationError
+from pytest_xharness_eval.model import matrix
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 PRICES_DIR = PROJECT_ROOT / "src" / "pytest_xharness_eval" / "derive" / "prices"
@@ -255,11 +259,6 @@ def stage(directory: Path, closes: tuple[Path, str] | None, new_name: str, new_t
 
 def validate(staged: Path, on: date) -> None:
     """The staged set must load exactly as the plugin loads it, and price every catalogued model (ADR 0057)."""
-    # Our Libraries
-    from pytest_xharness_eval.derive import pricing
-    from pytest_xharness_eval.derive.catalogue import load_catalogue
-    from pytest_xharness_eval.model import matrix
-
     table = pricing.PriceTable(tuple(pricing.load_records(staged)))
     table.validate_matrix(matrix.catalogued(load_catalogue()), on)
 
@@ -292,20 +291,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def catalogue_unpriced(on: date) -> list[str]:
     """Every catalogued model the bundled records leave unpriced on ``on``: the trigger for a new snapshot."""
-    # Our Libraries
-    from pytest_xharness_eval.derive import pricing
-    from pytest_xharness_eval.derive.catalogue import load_catalogue
-    from pytest_xharness_eval.model import matrix
-
     table = pricing.PriceTable(tuple(pricing.load_records(PRICES_DIR)))
     return [f"{h}/{m}" for h, m in table.unpriced(matrix.catalogued(load_catalogue()), on)]
 
 
 def catalogue_undecided(rows: list[Row]) -> list[str]:
     """Every fed row models.toml neither catalogues nor excludes: a release nobody has decided on yet."""
-    # Our Libraries
-    from pytest_xharness_eval.derive.catalogue import undecided
-
     return undecided((r.harness, r.model) for r in rows)
 
 
@@ -320,18 +311,8 @@ def report_lines(report: dict[str, list[str]], unpriced: list[str]) -> list[str]
     return lines
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
-    if args.when_catalogue_unpriced:
-        missing = catalogue_unpriced(args.date)
-        if not missing:
-            print("every catalogued model is priced; nothing to curate")
-            return 0
-        print(f"catalogued but unpriced, curating a new snapshot: {missing}")
-    if args.feed:
-        feed, commit = json.loads(args.feed.read_text(encoding="utf-8")), args.ref or f"local file {args.feed}"
-    else:
-        feed, commit = fetch_feed(args.ref)
+def select_decided(feed: dict) -> tuple[list[Row], list[str]]:
+    """Select feed rows, refusing unfamiliar ids and models with no catalogue decision."""
     new_rows, unpriced, unrecognised = select(feed)
     if unrecognised:
         raise CurationError(
@@ -344,6 +325,22 @@ def main(argv: list[str] | None = None) -> int:
             "[<harness>.models] or [<harness>.excluded] with a reason (ADR 0067):\n  "
             + "\n  ".join(f"{u}  (source: {feed[u.split('/', 1)[1]].get('source', 'none in feed')})" for u in undecided)
         )
+    return new_rows, unpriced
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    if args.when_catalogue_unpriced:
+        missing = catalogue_unpriced(args.date)
+        if not missing:
+            print("every catalogued model is priced; nothing to curate")
+            return 0
+        print(f"catalogued but unpriced, curating a new snapshot: {missing}")
+    if args.feed:
+        feed, commit = json.loads(args.feed.read_text(encoding="utf-8")), args.ref or f"local file {args.feed}"
+    else:
+        feed, commit = fetch_feed(args.ref)
+    new_rows, unpriced = select_decided(feed)
     old_path = open_record(PRICES_DIR)
     old_rows = read_rows(old_path) if old_path else {}
     if old_path is not None:

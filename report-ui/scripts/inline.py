@@ -26,7 +26,10 @@ def main(argv: list[str]) -> None:
     index = json.loads((report_dir / report.INDEX_NAME).read_text(encoding="utf-8"))
     tokens_path = report_dir / report.TOKENS_NAME
     tokens = report.load_tokens(tokens_path if tokens_path.is_file() else None)
-    out.write_text(report.inline_page(template.read_text(encoding="utf-8"), report_dir, index, tokens, inline=True), encoding="utf-8")
+    out.write_text(
+        report.inline_page(template.read_text(encoding="utf-8"), report_dir, index, tokens, inline=True),
+        encoding="utf-8",
+    )
     print(f"{out} ({out.stat().st_size:,} bytes, {len(index['cells'])} sessions)")
 
 

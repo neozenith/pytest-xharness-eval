@@ -84,6 +84,7 @@ Edit the YAML; never the markdown.
 | [0065](0065-a-subagent-is-priced-at-its-own-models-rates.md) | A subagent is priced at its own model's rates, from the final usage of each call | accepted, 2026-10-08. Refines [0033](0033-subagent-transcripts-are-captured-and-billed.md) (subagent transcripts are captured and billed) with which rates bill them. Refines [0051](0051-long-context-is-a-tier-priced-per-call-and-records-are-curated.md) (each call is priced on its own) with which row a call is priced from. |
 | [0066](0066-a-harness-says-what-commands-a-shell-call-ran.md) | A harness says which commands a shell call ran | accepted, 2026-10-08. Refines [0048](0048-coverage-reads-the-command-the-shell-ran.md) (shell variables are expanded) with where the commands come from. |
 | [0067](0067-a-priced-release-is-catalogued-or-excluded-before-it-is-curated.md) | A priced first-party release is catalogued or excluded before the curator writes it | accepted, 2026-10-08. Extends [0052](0052-scope-is-a-boundary-not-a-roster.md) (scope is a boundary, not a roster) with a decision owed for every id the boundary admits. Extends [0059](0059-the-model-catalogue-is-one-config-file-beside-the-prices.md) with an `excluded` table beside each harness's models. Extends [0060](0060-an-unpriced-model-is-priced-live-into-the-cache.md), which checks the other direction: a catalogued model with no price. |
+| [0068](0068-imports-stay-in-the-top-import-section.md) | Imports stay in the top import section and Ruff checks the whole repository | accepted, 2026-10-12. Extends [0039](0039-the-package-listing-is-the-architecture.md) with an import-placement rule alongside the layer-boundary rules. |
 ## The typed relation graph
 
 Open [graph.html](graph.html) to browse it: records cluster by domain, selecting one renders it beside the graph, and a link inside a record navigates to it.
@@ -263,3 +264,4 @@ The same edge set is [graph.md](graph.md) and, as raw data, [graph.json](graph.j
 - ADR-0067 --extends--> ADR-0052
 - ADR-0067 --extends--> ADR-0059
 - ADR-0067 --extends--> ADR-0060
+- ADR-0068 --extends--> ADR-0039

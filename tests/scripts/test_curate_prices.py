@@ -325,9 +325,9 @@ def test_an_excluded_release_is_priced_but_not_catalogued(
 ) -> None:
     catalogue_file = tmp_path / "models.toml"
     catalogue_file.write_text(
-        cp.PRICES_DIR.joinpath("models.toml").read_text(encoding="utf-8").replace(
-            '"gpt-5.6-cyber" = "gated"', '"gpt-5.6-cyber" = "gated"\n"gpt-6-nova" = "gated"'
-        ),
+        cp.PRICES_DIR.joinpath("models.toml")
+        .read_text(encoding="utf-8")
+        .replace('"gpt-5.6-cyber" = "gated"', '"gpt-5.6-cyber" = "gated"\n"gpt-6-nova" = "gated"'),
         encoding="utf-8",
     )
     monkeypatch.setattr("pytest_xharness_eval.derive.catalogue.MODELS_FILE", catalogue_file)

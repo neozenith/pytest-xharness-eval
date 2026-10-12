@@ -63,7 +63,7 @@ dev = [
     "mypy>=1.14.1",
     "pytest-cov>=6.0.0",
     "pytest-xdist>=3.6.1",
-    "ruff>=0.9.2",
+    "ruff>=0.12.0",
 ]
 
 [tool.ruff]
@@ -80,6 +80,7 @@ select = [
     "TCH", # flake8-type-checking
     "C90", # mccabe
     "TID", # flake8-tidy-imports (the harness-boundary fitness function below)
+    "PLC0415", # all runtime imports belong in the top import section (ADR 0068)
 ]
 ignore = []
 fixable = ["ALL"]

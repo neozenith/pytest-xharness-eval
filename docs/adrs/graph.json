@@ -1017,6 +1017,20 @@
     },
     {
       "data": {
+        "id": "ADR-0068",
+        "label": "0068",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0068-imports-stay-in-the-top-import-section.md",
+        "title": "Imports stay in the top import section and Ruff checks the whole repository",
+        "description": "Imports stay in the top import section and Ruff checks the whole repository",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2713,6 +2727,16 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0068-extends-ADR-0039",
+        "source": "ADR-0068",
+        "target": "ADR-0039",
+        "label": "extends",
+        "relation": "extends",
+        "note": ""
       }
     }
   ],

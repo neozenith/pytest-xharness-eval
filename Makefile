@@ -16,11 +16,11 @@ agent-skills-update:
 ######################################################################
 
 format: .venv/deps
-	uvx ruff format src/ tests/ --respect-gitignore --line-length 120
+	uv run ruff format src/ tests/ --respect-gitignore --line-length 120
 	uvx isort src/ tests/ --profile 'black'
 
 check: .venv/deps
-	uvx ruff check src/ tests/
+	uv run ruff check .
 	uvx isort src/ tests/ --check-only
 	uv run mypy src/
 

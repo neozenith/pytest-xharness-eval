@@ -115,6 +115,9 @@ in `emit/metrics.py`.
 
 ## Hard boundaries
 
+- Never import inside a function or class. Put imports in the top import section,
+  with type-only imports in its `TYPE_CHECKING` block. Ruff `PLC0415` and `E402`
+  enforce import placement across the repository in `make check` (ADR 0068).
 - Never mock, patch, or fake a CLI, its subprocess, or its session log. Not in evals,
   not in unit tests. The functions that spawn a CLI carry `pragma: no cover` with a
   stated reason instead (ADR 0002).
