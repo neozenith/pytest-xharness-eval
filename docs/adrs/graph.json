@@ -1031,6 +1031,20 @@
     },
     {
       "data": {
+        "id": "ADR-0069",
+        "label": "0069",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0069-decisions-endpoint-rates-do-not-price-agent-runs.md",
+        "title": "Decisions endpoint rates do not price agent runs",
+        "description": "Decisions endpoint rates do not price agent runs",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2734,6 +2748,16 @@
         "id": "ADR-0068-extends-ADR-0039",
         "source": "ADR-0068",
         "target": "ADR-0039",
+        "label": "extends",
+        "relation": "extends",
+        "note": ""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0069-extends-ADR-0051",
+        "source": "ADR-0069",
+        "target": "ADR-0051",
         "label": "extends",
         "relation": "extends",
         "note": ""

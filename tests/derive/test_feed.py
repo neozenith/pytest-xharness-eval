@@ -41,6 +41,32 @@ def test_a_cost_field_nobody_models_stops_the_write() -> None:
         feed.row_from("codex", "gpt-7", {**OPENAI, "input_cost_per_audio_token": 1e-05}, one_hour_is_five_minute=True)
 
 
+def test_decisions_rates_do_not_replace_responses_rates_or_the_long_context_threshold() -> None:
+    """The current feed carries separate /v1/decisions rates on the same model id (ADR 0069)."""
+    fields = {tier: feed.LITELLM_FIELD[tier] for tier in ("input", "output", "cache_read", "cache_write")}
+    long = {
+        f"{field}_above_272k_tokens": OPENAI[field] * (1.5 if tier == "output" else 2) for tier, field in fields.items()
+    }
+    entry = {
+        **OPENAI,
+        **long,
+        **{f"{field}_decisions": 1e-07 if tier != "output" else 0 for tier, field in fields.items()},
+        **{f"{field}_above_272k_tokens_decisions": 2e-07 if tier != "output" else 0 for tier, field in fields.items()},
+    }
+    expected = feed.row_from("codex", "gpt-6-luna", {**OPENAI, **long}, one_hour_is_five_minute=True)
+    row = feed.row_from("codex", "gpt-6-luna", entry, one_hour_is_five_minute=True)
+    assert row == expected
+    assert row is not None and row.long_context is not None
+    assert row.long_context[feed.THRESHOLD] == 272_000
+    with pytest.raises(feed.FeedError, match="input_cost_per_audio_token_decisions"):
+        feed.row_from(
+            "codex",
+            "gpt-6-luna",
+            {**entry, "input_cost_per_audio_token_decisions": 1e-05},
+            one_hour_is_five_minute=True,
+        )
+
+
 def test_live_rows_match_the_exact_id_and_the_harness_provider_only() -> None:
     entries = {
         "gpt-7-terra": OPENAI,

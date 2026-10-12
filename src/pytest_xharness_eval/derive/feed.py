@@ -51,9 +51,11 @@ LITELLM_FIELD = {
     "cache_write_1h": "cache_creation_input_token_cost_above_1hr",
 }
 LONG_FIELD = re.compile(rf"(?P<field>{'|'.join(LITELLM_FIELD.values())})_above_(?P<k>\d+)k_tokens")
+DECISIONS_FIELD = re.compile(rf"(?:{'|'.join(LITELLM_FIELD.values())})(?:_above_\d+k_tokens)?_decisions")
 # Cost fields deliberately not modelled, and why. The service-tier suffixes are rates the
 # harness CLIs never request (batch, flex, priority and ultrafast processing); the search fee is billed
 # per web-search query by a tool, not per token.
+# Decisions token rates belong to /v1/decisions, which the harness CLIs do not use (ADR 0069).
 IGNORED_SUFFIXES = ("_batches", "_flex", "_priority", "_ultrafast")
 IGNORED_FIELDS = frozenset({"search_context_cost_per_query"})
 
@@ -108,6 +110,7 @@ def unmodelled_fields(entry: dict[str, Any]) -> list[str]:
         and k not in IGNORED_FIELDS
         and not k.endswith(IGNORED_SUFFIXES)
         and not LONG_FIELD.fullmatch(k)
+        and not DECISIONS_FIELD.fullmatch(k)
     )
 
 

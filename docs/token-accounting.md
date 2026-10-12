@@ -9,6 +9,7 @@ contradiction and is not.
 Sources were fetched on 2026-08-23; quotations are verbatim. The billed sum was called
 `total_tokens` until ADR 0029 renamed it `accumulative_billed_tokens` the same day; the
 vendors' own `total_tokens` fields keep their names and are quoted as such below.
+The short-context and long-context pricing subsection was verified on 2026-10-13.
 
 - Anthropic, *Context windows*: <https://platform.claude.com/docs/en/build-with-claude/context-windows>
 - Anthropic, *Prompt caching*: <https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching>
@@ -104,7 +105,22 @@ So on OpenAI `input_tokens` is the **whole prompt**, and cached / written tokens
 **subsets** of it. Codex's rollout log flattens this into `last_token_usage`
 `{input_tokens, cached_input_tokens, cache_write_input_tokens, output_tokens, reasoning_output_tokens, total_tokens}`, and its `total_tokens` is `input_tokens + output_tokens` (checked below), which shows `reasoning_output_tokens` is inside `output_tokens` just as Anthropic's thinking is.
 
-Cached input is billed at 0.1× the uncached rate.
+Cached input is billed at 0.1× the uncached rate on most GPT-5.6 and later models.
+GPT-6.1 Sol uses 0.05×, as its [model page](https://developers.openai.com/api/docs/models/gpt-6.1-sol) states.
+
+### Short-context and long-context pricing
+
+For GPT-6.1 Sol, short context includes requests with at most 272,000 input tokens.
+Long context begins strictly above 272,000 input tokens, including cached input and cache writes.
+Output tokens do not select the context tier.
+The full request then uses twice the input and cache rates, and 1.5 times the output rate.
+These are billing thresholds, distinct from the model's 1,050,000-token context window.
+The [model page](https://developers.openai.com/api/docs/models/gpt-6.1-sol) and [API pricing](https://developers.openai.com/api/docs/pricing) state the rates.
+
+The plugin selects a tier from each call's prompt, using that model's dated `long_context` table.
+It never selects a tier from the session's summed usage or the size of an output.
+The [Decisions API](https://developers.openai.com/api/docs/guides/decisions) has separate endpoint rates that do not apply to Codex's Responses requests.
+The feed reader excludes only recognised Decisions token-rate fields, and refuses other unknown cost fields (ADR 0069).
 
 ## 3. The plugin's per-call record
 
