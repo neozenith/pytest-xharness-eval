@@ -1045,6 +1045,20 @@
     },
     {
       "data": {
+        "id": "ADR-0070",
+        "label": "0070",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0070-pricing-updates-start-with-a-manual-check.md",
+        "title": "Pricing updates start with a manual Makefile check",
+        "description": "Pricing updates start with a manual Makefile check",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2760,6 +2774,16 @@
         "target": "ADR-0051",
         "label": "extends",
         "relation": "extends",
+        "note": ""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0070-supersedes-ADR-0067",
+        "source": "ADR-0070",
+        "target": "ADR-0067",
+        "label": "supersedes",
+        "relation": "supersedes",
         "note": ""
       }
     }

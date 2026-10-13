@@ -20,6 +20,7 @@ Status: accepted, 2026-10-08.
 Extends [0052](0052-scope-is-a-boundary-not-a-roster.md) (scope is a boundary, not a roster) with a decision owed for every id the boundary admits.
 Extends [0059](0059-the-model-catalogue-is-one-config-file-beside-the-prices.md) with an `excluded` table beside each harness's models.
 Extends [0060](0060-an-unpriced-model-is-priced-live-into-the-cache.md), which checks the other direction: a catalogued model with no price.
+Its weekly workflow decision is superseded by [0070](0070-pricing-updates-start-with-a-manual-check.md).
 
 ## Context
 

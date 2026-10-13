@@ -56,6 +56,7 @@ from pathlib import Path
 from pytest_xharness_eval.derive import feed as shared
 from pytest_xharness_eval.derive import pricing
 from pytest_xharness_eval.derive.catalogue import load_catalogue, undecided
+
 # The constants are re-exported for the curator's own tests.
 from pytest_xharness_eval.derive.feed import LITELLM_FIELD  # noqa: F401
 from pytest_xharness_eval.derive.feed import LONG_CONTEXT  # noqa: F401
@@ -281,6 +282,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--always", action="store_true", help="write a record even when nothing changed")
     parser.add_argument(
+        "--check", action="store_true", help="report whether a pricing PR is needed; stage and write nothing"
+    )
+    parser.add_argument(
         "--when-catalogue-unpriced",
         action="store_true",
         help="curate only when a model in derive/prices/models.toml has no bundled price today; "
@@ -321,6 +325,7 @@ def select_decided(feed: dict) -> tuple[list[Row], list[str]]:
         )
     if undecided := catalogue_undecided(new_rows):
         raise CurationError(
+            "pricing PR needed: catalogue decision required\n"
             "first-party models the catalogue neither lists nor excludes; add each to models.toml's "
             "[<harness>.models] or [<harness>.excluded] with a reason (ADR 0067):\n  "
             + "\n  ".join(f"{u}  (source: {feed[u.split('/', 1)[1]].get('source', 'none in feed')})" for u in undecided)
@@ -343,17 +348,20 @@ def main(argv: list[str] | None = None) -> int:
     new_rows, unpriced = select_decided(feed)
     old_path = open_record(PRICES_DIR)
     old_rows = read_rows(old_path) if old_path else {}
+    merged, report = merge(new_rows, old_rows)
+    print("\n".join(report_lines(report, unpriced)))
+    if args.check:
+        print(f"pricing PR needed: {'yes' if changed(report) else 'no'}")
+        return 0
+    if not changed(report) and not args.always:
+        print(f"nothing changed since {old_path.name if old_path else 'no record'}; nothing written")
+        return 0
     if old_path is not None:
         opened = date.fromisoformat(str(tomllib.loads(old_path.read_text())["effective_from"]))
         if args.date <= opened:
             raise CurationError(
                 f"--date {args.date} must be after the open record's effective_from {opened} ({old_path.name})"
             )
-    merged, report = merge(new_rows, old_rows)
-    print("\n".join(report_lines(report, unpriced)))
-    if not changed(report) and not args.always:
-        print(f"nothing changed since {old_path.name if old_path else 'no record'}; nothing written")
-        return 0
     new_name = f"prices-{args.date:%Y%m%d}.toml"
     new_text = render(merged, args.date, commit, datetime.now(UTC).date())
     closes = (old_path, close(old_path.read_text(encoding="utf-8"), args.date)) if old_path else None

@@ -289,8 +289,8 @@ xharness_models =
 
 Each harness's `excluded` table names the priced models the catalogue leaves out on purpose,
 each with a reason: gated, a previous generation, or another spelling of a catalogued id. In
-this repository, `make prices` stops on a first-party release that is neither catalogued nor
-excluded, so a new model is decided on the day the feed first prices it (ADR 0067).
+this repository, `make prices-check` reports whether a pricing PR is needed without writing records.
+A first-party release that is neither catalogued nor excluded stops the check and asks for a catalogue decision (ADR 0067, ADR 0070).
 
 ### Live pricing
 

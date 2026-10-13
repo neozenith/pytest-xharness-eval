@@ -302,21 +302,45 @@ def _feed_from_bundled(directory: Path, extra: dict[str, dict]) -> dict:
     return feed
 
 
-def test_a_run_with_nothing_changed_writes_nothing(prices_dir: Path, tmp_path: Path) -> None:
+@pytest.mark.parametrize("same_day", [False, True])
+def test_a_run_with_nothing_changed_writes_nothing(prices_dir: Path, tmp_path: Path, same_day: bool) -> None:
     feed = tmp_path / "feed.json"
     feed.write_text(json.dumps(_feed_from_bundled(prices_dir, {})), encoding="utf-8")
     before = sorted(p.name for p in prices_dir.iterdir())
-    assert cp.main(["--feed", str(feed), "--date", "2099-01-01"]) == 0
+    on = _day_after_open(prices_dir) - timedelta(days=int(same_day))
+    assert cp.main(["--feed", str(feed), "--date", on.isoformat()]) == 0
     assert sorted(p.name for p in prices_dir.iterdir()) == before
 
 
-def test_a_release_the_catalogue_has_not_decided_on_stops_the_run(prices_dir: Path, tmp_path: Path) -> None:
+@pytest.mark.parametrize("repriced", [False, True])
+def test_check_reports_a_pr_decision_without_staging_or_writing(
+    prices_dir: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], repriced: bool
+) -> None:
+    entries = _feed_from_bundled(prices_dir, {})
+    if repriced:
+        entries["gpt-6-sol"]["input_cost_per_token"] *= 2
+    feed = tmp_path / "feed.json"
+    feed.write_text(json.dumps(entries), encoding="utf-8")
+    before = {p.name: p.read_bytes() for p in prices_dir.iterdir()}
+    staged_before = list(cp.STAGING.rglob("*"))
+    # Detection must work on the open record's day, when a new interval cannot yet be written.
+    on = _day_after_open(prices_dir) - timedelta(days=1)
+    assert cp.main(["--check", "--feed", str(feed), "--date", on.isoformat()]) == 0
+    assert f"pricing PR needed: {'yes' if repriced else 'no'}" in capsys.readouterr().out
+    assert {p.name: p.read_bytes() for p in prices_dir.iterdir()} == before
+    assert list(cp.STAGING.rglob("*")) == staged_before
+
+
+@pytest.mark.parametrize("flags", [["--dry-run"], ["--check"]])
+def test_a_release_the_catalogue_has_not_decided_on_stops_the_run(
+    prices_dir: Path, tmp_path: Path, flags: list[str]
+) -> None:
     """A new first-party id must be catalogued or excluded before any record is written (ADR 0067)."""
     feed = tmp_path / "feed.json"
     feed.write_text(json.dumps(_feed_from_bundled(prices_dir, NOVA)), encoding="utf-8")
     before = sorted(p.name for p in prices_dir.iterdir())
     with pytest.raises(cp.CurationError, match=r"neither lists nor excludes[^\n]*\n  codex/gpt-6-nova  \(source: "):
-        cp.main(["--feed", str(feed), "--date", "2099-01-01", "--dry-run"])
+        cp.main(["--feed", str(feed), "--date", "2099-01-01", *flags])
     assert sorted(p.name for p in prices_dir.iterdir()) == before
 
 
