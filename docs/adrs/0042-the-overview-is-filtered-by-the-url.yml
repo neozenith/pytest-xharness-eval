@@ -10,6 +10,7 @@ status_note: |-
   Refines [0020](0020-captured-report-is-a-static-microsite.md) (the captured report is a static microsite) and [0021](0021-metric-names-carry-unit-and-provenance.md) (a metric name carries its unit and its source).
   It also refines [0028](0028-report-is-built-from-a-component-workspace.md) (the report page is built from a component workspace) and [0031](0031-plotly-tamagui-and-a-deeplink-permutation-matrix.md) (every state deeplinks, and a Playwright matrix sweeps them all).
   Nothing the Python side emits changes: no new JSON key, no ini key, no CLI option, no metric's value.
+  Part 3, the summary's single arithmetic mean, is superseded by [0071](0071-a-cell-is-judged-by-its-important-metrics-over-its-samples.md): each metric is reduced by its own aggregates.
 accepted_on: '2026-08-29'
 last_changed_on: '2026-08-29'
 group: report
@@ -30,6 +31,9 @@ relates_to:
 - relation: extends
   target: ADR-0031
   note: the record's status line says "refines"
+- relation: superseded_by
+  target: ADR-0071
+  note: the record's status line says "superseded by"
 body:
   context: |-
     The sweep grew to 24 sessions across 2 skills × 2 harnesses × 4 models, and both overview consumers stopped scaling with it. `TokenAccumulationChart` draws 16 lines whose legend already overflows its card, and `SessionTable` is 24 rows of 18 columns.

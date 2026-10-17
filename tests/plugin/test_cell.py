@@ -28,7 +28,7 @@ from pytest_xharness_eval.model.layout import CacheLayout
 from pytest_xharness_eval.model.verdict import Verdict
 from pytest_xharness_eval.plugin import cell as cellrun
 from pytest_xharness_eval.runtime import settings
-from tests.support import _result, _skill
+from tests.support import _late_transcript, _result, _skill, _unfoldable
 
 
 def test_two_cells_of_one_case_differing_only_in_effort_get_their_own_workspaces(tmp_path: Path) -> None:
@@ -144,6 +144,27 @@ def test_a_cell_derives_and_captures_where_its_five_coordinates_say(
     assert (result.case.name, result.case.suite) == ("eval_ok", "skills/demo/evals/eval_demo.py")
     assert json.loads(session.result.read_text(encoding="utf-8"))["session_id"] == "sid-1"
     assert session.log.read_text(encoding="utf-8").startswith('{"type": "user"')
+
+
+def test_a_run_whose_logs_would_not_fold_is_kept_where_its_result_would_have_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A subagent mismatch fails the cell, but the paid logs are captured first (ADR 0072)."""
+    monkeypatch.setenv(cellrun.RUN_STAMP_ENV, "20261028T000000Z")
+    err = _unfoldable(tmp_path / "native")
+    _late_transcript(tmp_path / "native" / "late")
+    err = harness.UnfoldedRun(
+        str(err), dataclasses.replace(err.evidence, transcripts=(tmp_path / "native" / "late" / "agent-x.jsonl",))
+    )
+
+    session = _cell_run(tmp_path).quarantine(err)
+
+    assert session.rel == "demo/claude/claude-opus-5/20261028T000000Z/sid-u"
+    assert session.log.read_bytes() == err.evidence.log.read_bytes()
+    assert (session.subagents / "agent-x.jsonl").is_file()
+    assert not session.result.exists()  # a partial capture: the report skips it
+    stored = json.loads(session.unfolded.read_text(encoding="utf-8"))
+    assert stored["error"] == str(err) and stored["case"]["name"] == "eval_ok"
 
 
 @pytest.mark.parametrize(

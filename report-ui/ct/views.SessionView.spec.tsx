@@ -60,6 +60,33 @@ test("an id the index does not hold says so and links back to the sweep", async 
   await expect(page.locator("#SessionTitle")).toHaveCount(0);
 });
 
+test("the session's Important Metrics: delegation, compactions, thinking share and per-model speed (ADR 0071)", async ({ mount, page }) => {
+  const c1 = cell({
+    subagents: 2,
+    subagent_token_share: 0.25,
+    subagent_cost_share: 0.1,
+    compactions: 1,
+    reasoning_share: 0.3,
+    output_tokens_per_sec_by_model: { "claude-haiku-5-5": 120.5, "claude-opus-5": 40 },
+  });
+  await mount(<SessionView cell={c1} route={route()} />, { hooksConfig: { search: `?session=${SID}`, inline: inline([c1]) } });
+  const m = await meta(page);
+  expect(m.subagents).toBe("2 · 25.0% of billed tokens · 10.0% of cost");
+  expect(m.compactions).toBe("1");
+  expect(m.reasoning_share).toBe("30.0%");
+  expect(m["output_tokens_per_sec by model"]).toBe("claude-haiku-5-5 120.5 · claude-opus-5 40.0");
+});
+
+test("a capture from before the Important Metrics says each is not recorded, never zero", async ({ mount, page }) => {
+  const c1 = cell({ subagents: 0 });
+  await mount(<SessionView cell={c1} route={route()} />, { hooksConfig: { search: `?session=${SID}`, inline: inline([c1]) } });
+  const m = await meta(page);
+  expect(m.subagents).toBe("none");
+  for (const key of ["compactions", "reasoning_share", "output_tokens_per_sec by model"]) {
+    expect(m[key], key).toMatch(/^not recorded on this capture; replay to recover it/);
+  }
+});
+
 test("title and metadata name the arm, with the rung on its own row", async ({ mount, page }) => {
   const c1 = cell({ effort: "high" });
   await mount(<SessionView cell={c1} route={route()} />, { hooksConfig: { search: `?session=${SID}`, inline: inline([c1]) } });
@@ -89,6 +116,10 @@ test("title and metadata name the arm, with the rung on its own row", async ({ m
     "context window",
     "turns",
     "tool_calls",
+    "subagents",
+    "compactions",
+    "reasoning_share",
+    "output_tokens_per_sec by model",
     "files written",
   ]);
   expect(m).toMatchObject({

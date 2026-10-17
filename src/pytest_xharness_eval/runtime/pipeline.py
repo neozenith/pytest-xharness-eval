@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 # Our Libraries
 from pytest_xharness_eval.derive import pricing, skillcov
 from pytest_xharness_eval.emit.metrics import CellMetrics
+from pytest_xharness_eval.emit.unfolded import UnfoldedRecord
 from pytest_xharness_eval.model.layout import SUBAGENTS_DIR
 
 if TYPE_CHECKING:
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
     # Our Libraries
     from pytest_xharness_eval.derive.skillcov import SkillFile
     from pytest_xharness_eval.emit.metrics import Outcome
+    from pytest_xharness_eval.harness.base import UnfoldedRun
     from pytest_xharness_eval.model.catalogue import ModelSpec
     from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
     from pytest_xharness_eval.model.runresult import CaseRef, RunResult
@@ -87,9 +89,9 @@ def capture_subagents(result: RunResult, session: SessionDir) -> None:
     directory = session.subagents
     directory.mkdir(parents=True, exist_ok=True)
     for sub in result.subagents:
+        # Every subagent was folded from its transcript (ADR 0072), so one that has gone is a
+        # lost piece of evidence, and the capture stops rather than writing a result without it.
         source = Path(sub.log)
-        if not source.is_file():
-            continue
         (directory / source.name).write_bytes(source.read_bytes())
         sidecar = source.with_name(f"{source.stem}.meta.json")
         if sidecar.is_file():
@@ -108,6 +110,25 @@ def capture(result: RunResult, session: SessionDir) -> SessionDir:
     session.log.write_bytes(Path(result.session_log).read_bytes())
     capture_subagents(result, session)
     result.write(session.result)
+    return session
+
+
+def quarantine(
+    err: UnfoldedRun, session: SessionDir, *, case: CaseRef, effort: str | None, treatment: str | None
+) -> SessionDir:
+    """Keep a billed run whose logs would not fold: the log, every transcript, and why (ADR 0072).
+
+    The ``unfolded.json`` written in place of ``result.json`` leaves the directory a partial
+    capture, so the report skips it, and carries what a replay needs to retry the fold.
+    """
+    evidence = err.evidence
+    session.mkdir()
+    session.log.write_bytes(evidence.log.read_bytes())
+    if evidence.transcripts:
+        session.subagents.mkdir(parents=True, exist_ok=True)
+        for source in evidence.transcripts:
+            (session.subagents / source.name).write_bytes(source.read_bytes())
+    UnfoldedRecord.of(evidence, str(err), case=case, effort=effort, treatment=treatment).write(session.unfolded)
     return session
 
 

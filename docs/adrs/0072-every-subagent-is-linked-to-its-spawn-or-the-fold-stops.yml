@@ -1,0 +1,83 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0072
+slug: every-subagent-is-linked-to-its-spawn-or-the-fold-stops
+title: Every subagent is linked to the record that spawned it, or the fold stops
+status: accepted
+status_note: |-
+  accepted, 2026-10-17.
+  Extends [0033](0033-subagent-transcripts-are-captured-and-billed.md) (subagent transcripts are captured and billed) and [0056](0056-a-run-is-credited-with-its-subagents-work.md) (a run is credited with its subagents' work).
+  Extends [0065](0065-a-subagent-is-priced-at-its-own-models-rates.md), whose per-thread estimate each subagent now shows beside its span.
+accepted_on: '2026-10-17'
+last_changed_on: '2026-10-17'
+group: harness
+tags:
+- harness
+- evidence
+lens: |-
+  A subagent is evidence twice: the spawn its parent logged, and the transcript it wrote.
+  Count a thread only when both sides agree, and stop when they do not.
+relates_to:
+- relation: extends
+  target: ADR-0033
+  note: the record's status line says "extends"
+- relation: extends
+  target: ADR-0056
+  note: the record's status line says "extends"
+- relation: extends
+  target: ADR-0065
+  note: the record's status line says "extends"
+body:
+  context: |-
+    Subagents were found by globbing transcripts beside the session log.
+    A missing transcript directory meant no subagents, and a missing or unreadable sidecar was read as empty.
+    The spawning turn was matched by tool-use id on Claude and by timestamp on Codex, and an unmatched thread kept no turn at all.
+
+    Replaying a real sweep showed what that hid.
+    Sixteen Claude threads had been spawned by other subagents, not by the primary, so none of them had a spawning turn.
+    Codex writes its spawns in two shapes, and a fork replays its parent's `session_meta` after its own.
+    The fold kept the later one, so those forks were recorded under the primary's id.
+    Nothing recorded when a thread started or ended.
+  decision: |-
+    **A thread is linked to its spawn, one to one.** Each harness reads every spawn record from every thread's log, the primary's and each subagent's, and reads each transcript's claim of who spawned it.
+    `harness/threads.py` pairs them.
+    Any other pairing raises `SubagentMismatch`, a `RunError`.
+    That covers a transcript no spawn names, a spawn with no transcript, and two claims on one spawn.
+    It also covers a transcript naming a parent that did not spawn it.
+    A spawn whose tool result reports a failure owes no transcript.
+
+    **Claude links by tool-use id.** A call to the `Agent` tool (or `Task`, its earlier name) is a spawn.
+    The transcript's `agent-<id>.meta.json` sidecar names the spawn's `toolUseId` and, for a nested thread, its `parentAgentId`.
+    The sidecar is required.
+
+    **Codex links by thread id or by path.** A code-mode `exec` completes a `CollabAgentToolCall` item naming each new thread in `receiver_thread_ids`.
+    A direct `spawn_agent` call is answered by an output naming the thread's `task_name`, which is the fork's `agent_path`.
+    A fork's own id is its first `session_meta`, and its parent is the `parent_thread_id` that record names.
+    The spawning turn is the turn whose records hold the spawn record's line, never a timestamp match.
+
+    **Each subagent records its link and its span.** `spawned_by` is the spawn record's id.
+    `parent` is the spawning thread, empty for the primary.
+    `depth` counts the threads between it and the primary.
+    `parent_turn` is the primary turn it descends from, where its work is credited.
+    `started_at` and `ended_at` are its transcript's first and last timestamps, and a transcript with none stops the fold.
+    `duration_ms` is the span.
+    `output_tokens_per_sec` is its output tokens over that span, because Claude can stamp every call's latency as zero.
+    Its `estimated_cost_usd` stays the cost at its own model's rates.
+
+    **A run that will not fold is kept, then failed.** The harness raises `UnfoldedRun`, a `RunError` carrying the run's evidence.
+    The cell copies the log and every transcript into the session directory before the error leaves.
+    It writes `unfolded.json` in place of `result.json`, holding the refusal and the keys a replay reads back.
+    The report skips that directory as a partial capture.
+    A replay retries it after every other session is rebuilt, and fails while it still does not fold.
+  consequences: |-
+    A run with a subagent its evidence cannot account for no longer grades.
+    It stops with the mismatch named, rather than billing work it does not show or showing work it did not bill.
+    What it paid for is still on disk, so a fixed reader turns it into an ordinary result by replay.
+    Every link field is required, so a subagent never carries a guessed turn.
+
+    The session page shows each thread's span, duration, throughput, cost, model and place in the spawn tree.
+    A result written before this record says its span is not recorded, and a replay links it.
+
+    A new spawn shape in either CLI surfaces as a failed fold that names the thread.
+    The fix is one more shape in that harness's `spawns_in`.

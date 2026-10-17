@@ -57,9 +57,15 @@ Two standing obligations, restated in [AGENTS.md](AGENTS.md):
 | captured | `<cache>/results/{skill}/{harness}/{model}[--{effort}][+{treatment}]/{run}/{session}/`, where each run's log, `RunResult` and metrics record are written; git-ignored. Five levels deep whether or not a rung or a treatment was named -- both share the model's level rather than adding one (ADR 0032, ADR 0049, ADR 0055) |
 | CellMetrics, Outcome | One graded cell's metrics record -- the `history.json` written beside its evidence and one line of the combined `report/history.jsonl` -- as a type: flat, built of builtins, and carrying `status_word()` and its own `cache` field. `Outcome` is the four values grading observed and no log can supply (node, verdict, wall clock, start), which a replay carries forward while recomputing everything else. The record crosses to the xdist controller as a plain mapping and is a type on both sides; `from_dict` drops an unknown key *and* a value that is not of its field's declared type, so every reader may trust the declaration (ADR 0016, ADR 0018, ADR 0037, ADR 0038) |
 | history | One `history.json` per session (turns, tool calls, duration, wall clock, USD, tokens), combined into `<cache>/report/history.jsonl`; git-ignored with the rest of the cache (ADR 0032) |
+| Important Metrics | The measures a cell is judged by beyond pass or fail: cost, billed tokens, peak context, subagents and their shares of tokens and cost, compactions, turns, skill files loaded and scripts run, thinking share, throughput, wall clock and the pass rate. Declared once as `IMPORTANT_METRICS` in `model/metrics.py` (`ImportantMetric`: an `id`, the history `field` it reads, optionally a `per` denominator, a `MetricKind` and a `Unit`), so `emit/`, the report and this glossary read one list (ADR 0071) |
+| sample | One graded session of a cell: its verdict is `pass`, `fail` or `error`. Repeated runs of a cell are repeated samples of one experiment, reduced together; a dry run, or a record whose verdict this version cannot read, is no sample (ADR 0071) |
+| aggregate, MetricKind | What a cell's samples reduce to, fixed by the metric's kind: `spread` (median, p25, p75), `fraction` (mean, min, max), `rare` (mean, share of samples with any) or `rate` (pass rate with its Wilson 95% interval), each with `n`, the samples that recorded the metric. A sample that did not record it drops out of `n`, never counted as zero. `emit/samples.py` reduces every cell into `index.json`'s `important_metrics` (ADR 0071) |
+| compaction | The harness summarising a session's conversation to free the context window: a `compaction`-category record kind, counted per run into `compactions` (ADR 0071) |
 | call, turn | One model API call inside a cell's session (a *SessionTurn* in the report); `RunResult.calls` is the ledger of them, each with its usage, tools issued, results fed in, text, thinking, and the log lines it came from (ADR 0019, 0021). `turns` counts them; the CLI's own count is `reported_turns` |
 | executed command | One shell command the harness itself reports as having run, after its own expansion: `call.executed` is the list of them, each with the `tool` the harness named the record, the `command` string and the `cwd` it ran in. Codex's `CommandExecution` item is one; Claude Code logs none, so its list is empty. Skill coverage attributes from it beside the tool call, because it is the one text every wrapper language and shell variable has already been resolved out of (ADR 0048) |
-| subagent | A parallel thread the session spawned (Claude's Agent tool sidecars under `subagents/`, Codex's forked rollouts), captured beside `log.jsonl` and folded through the same ledger; `RunResult.subagents` lists them, each attributed to the primary turn that spawned it (`parent_turn`), and their usage is inside the run's `usage` and estimate (ADR 0033) |
+| subagent | A thread the session spawned, at any depth (Claude's Agent tool sidecars under `subagents/`, Codex's forked rollouts), captured beside `log.jsonl` and folded through the same ledger; `RunResult.subagents` lists them, each attributed to the primary turn it descends from (`parent_turn`), and their usage is inside the run's `usage` and estimate (ADR 0033). Each is linked one to one to its spawn record (`spawned_by`, `parent`, `depth`) and carries its span (`started_at`, `ended_at`); a thread the evidence cannot pair with a spawn is a `SubagentMismatch`, never a guess (ADR 0072) |
+| unfolded run | A billed run whose logs exist but will not fold, such as one with a subagent its spawn records cannot account for. The harness raises `UnfoldedRun` carrying its `Evidence`; the cell copies the logs into the session directory with an `unfolded.json` in place of `result.json`, so the report skips it and a replay retries it (ADR 0072) |
+| spawn record | The record a thread logs when it spawns a subagent: Claude's `Agent` tool call, Codex's `CollabAgentToolCall` item or direct `spawn_agent` call. `harness/threads.py` pairs each with exactly one transcript (ADR 0072) |
 | estimated cost | `estimated_cost_usd`: this plugin's price-table estimate; `rates_applied` records the rates, row and file behind it (ADR 0021) |
 | harness reported cost | `harness_reported_cost_usd`: what the harness CLI itself said the run cost; Claude only |
 | total tokens | Every priced token summed over all turns; the cached prefix counts once per turn |
@@ -114,6 +120,7 @@ flowchart TB
     subgraph kept["Kept after the run"]
         CAP["SessionDir<br/>results/&lt;skill&gt;/…/&lt;session&gt;/, git-ignored"]:::out
         HIST["CellMetrics<br/>one history.json per session"]:::out
+        IM["Important Metrics<br/>each cell's samples reduced"]:::out
         REP["report/<br/>report.json and the combined microsite"]:::out
     end
 
@@ -135,7 +142,7 @@ flowchart TB
     HARNESS -->|"writes"| LOG
     HARNESS -->|"forks per subagent"| SUB
     LOG -->|"normalised into"| RR
-    SUB -->|"folded into, billed by"| RR
+    SUB -->|"linked to its spawn record, folded into"| RR
     PRICES -->|"prices, from the record<br/>in effect on the run's day"| RR
     RR -.->|"graded by the case fn,<br/>with the workspace"| CASE
     LOG -->|"copied to"| CAP
@@ -143,6 +150,8 @@ flowchart TB
     RR -->|"written to"| CAP
     RR -->|"metrics recorded as"| HIST
     RR -->|"summarised into"| REP
+    HIST -->|"samples of a cell<br/>reduced into"| IM
+    IM -->|"leads"| REP
 
     classDef declare fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
     classDef cfg     fill:#93c5fd,stroke:#1e40af,color:#1e293b,stroke-width:1px

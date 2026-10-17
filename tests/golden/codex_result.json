@@ -25,7 +25,8 @@
         6,
         7,
         8,
-        9
+        9,
+        10
       ],
       "results_in": [],
       "stop_reason": "tool_use",
@@ -65,11 +66,11 @@
       "n": 2,
       "output_tokens_per_sec": 7.5,
       "records": [
-        10,
         11,
         12,
         13,
-        14
+        14,
+        15
       ],
       "results_in": [
         {
@@ -115,6 +116,7 @@
     "suite": "skills/demo/evals/eval_codex.py",
     "task": "grade the skill"
   },
+  "compactions": 0,
   "context_window": 400000,
   "context_window_pct": 0.65,
   "cost_by_tier": {
@@ -144,6 +146,9 @@
   "long_context_calls": 0,
   "model": "gpt-5.6-sol",
   "output_tokens_per_sec": 8.7,
+  "output_tokens_per_sec_by_model": {
+    "gpt-5.6-sol": 8.33
+  },
   "peak_context_tokens": 2600,
   "rates_applied": {
     "applied_at": "<stamp>",
@@ -160,7 +165,9 @@
     "source": "xharness_prices",
     "unit": "usd_per_mtok"
   },
+  "reasoning_share": 0.2874,
   "record_kinds": {
+    "codex/event_msg/item_completed/CollabAgentToolCall": 1,
     "codex/event_msg/item_completed/CommandExecution": 1,
     "codex/event_msg/task_complete": 1,
     "codex/event_msg/task_started": 1,
@@ -251,6 +258,8 @@
       "tests": 0
     }
   },
+  "subagent_cost_share": 0.1316,
+  "subagent_token_share": 0.1115,
   "subagents": [
     {
       "agent": "scout",
@@ -266,7 +275,8 @@
           "records": [
             1,
             2,
-            3
+            3,
+            4
           ],
           "results_in": [],
           "stop_reason": "end_turn",
@@ -284,12 +294,19 @@
           }
         }
       ],
-      "description": "agents/scout.md",
+      "depth": 1,
+      "description": "/root/scout",
+      "duration_ms": 1000,
+      "ended_at": "2026-08-22T00:00:04Z",
       "estimated_cost_usd": 0.000307,
       "id": "codex-sub-1",
       "log": "<tmp>/results/codex/sid/subagents/rollout-sub1.jsonl",
       "model": "gpt-5.6-sol",
+      "output_tokens_per_sec": null,
+      "parent": "",
       "parent_turn": 1,
+      "spawned_by": "exec-spawn-1",
+      "started_at": "2026-08-22T00:00:03Z",
       "turns": 1,
       "usage": {
         "accumulative_billed_tokens": 612,

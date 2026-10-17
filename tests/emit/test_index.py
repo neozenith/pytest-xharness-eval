@@ -18,6 +18,7 @@ INDEX_ROW_KEYS = [
     "at",
     "baseline_tokens",
     "case",
+    "compactions",
     "context_window",
     "context_window_pct",
     "duration_ms",
@@ -35,9 +36,11 @@ INDEX_ROW_KEYS = [
     "model",
     "node",
     "output_tokens_per_sec",
+    "output_tokens_per_sec_by_model",
     "peak_context_tokens",
     "prompt",
     "rates_applied",
+    "reasoning_share",
     "record_kinds",
     "released",
     "reported_turns",
@@ -46,6 +49,8 @@ INDEX_ROW_KEYS = [
     "session_id",
     "skill",
     "skill_coverage",
+    "subagent_cost_share",
+    "subagent_token_share",
     "subagents",
     "suite",
     "task",
@@ -65,5 +70,5 @@ def test_index_json_has_exactly_the_frozen_key_set(tmp_path: Path) -> None:
     page.write(cache)
 
     index = json.loads(cache.index.read_text(encoding="utf-8"))
-    assert sorted(index) == ["captured", "cells", "generated_at", "inline"]
+    assert sorted(index) == ["captured", "cells", "generated_at", "important_metrics", "inline"]
     assert sorted(index["cells"][0]) == INDEX_ROW_KEYS

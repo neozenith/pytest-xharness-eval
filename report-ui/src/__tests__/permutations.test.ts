@@ -59,7 +59,7 @@ test("every permutation slug is unique and every turn is enumerated in both view
   expect(perms[0]).toEqual({ slug: "overview", search: "?", description: "SweepOverview: 1 sessions" });
   expect(perms.map((p) => p.slug)).toContain("overview--dark");
   // the two tables sort on their own param pairs, and one URL carries both orders at once
-  expect(perms.find((p) => p.slug === "overview--summary-sort-billed")?.search).toBe("?ssort=billed&sdir=desc");
+  expect(perms.find((p) => p.slug === "overview--summary-sort-tokens")?.search).toBe("?ssort=tokens&sdir=desc");
   expect(perms.find((p) => p.slug === "overview--sort-both")?.search).toBe("?sort=turns&dir=asc&ssort=cost&sdir=desc");
   expect(perms.find((p) => p.slug.endsWith("--axis-line"))?.search).toContain("axis=line");
   expect(perms.find((p) => p.slug.endsWith("--rec-raw"))?.search).toContain("view=detailed&rec=raw");

@@ -19,10 +19,9 @@ from pytest_xharness_eval import (
 from pytest_xharness_eval.derive import pricing, skillcov
 from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome
 from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
-from pytest_xharness_eval.model.runresult import Subagent
 from pytest_xharness_eval.model.verdict import Verdict
 from pytest_xharness_eval.runtime import pipeline
-from tests.support import DAY, _result, _skill
+from tests.support import DAY, _jsonl, _result, _skill, _subagent
 
 
 def test_capture_writes_the_log_subagent_transcripts_and_the_result(tmp_path: Path) -> None:
@@ -43,9 +42,7 @@ def test_capture_writes_the_log_subagent_transcripts_and_the_result(tmp_path: Pa
     r.session_log = str(native / "session.jsonl")
     r.session_id = "sid-1"
     r.subagents = [
-        Subagent(agent="Explore", id="a1", log=str(native / "agent-a1.jsonl"), turns=1, usage=Usage(1, 1)),
-        # A transcript the harness never wrote is skipped rather than failing the capture.
-        Subagent(agent="ghost", id="a2", log=str(native / "missing.jsonl"), turns=0, usage=Usage()),
+        _subagent([Call(n=1, at="t", usage=Usage(1, 1))], agent="Explore", log=str(native / "agent-a1.jsonl")),
     ]
 
     session = pipeline.capture(r, SessionDir(tmp_path / "results" / "sid-1"))
@@ -54,9 +51,17 @@ def test_capture_writes_the_log_subagent_transcripts_and_the_result(tmp_path: Pa
     assert (session.subagents / "agent-a1.jsonl").is_file()
     assert (session.subagents / "agent-a1.meta.json").is_file()
     assert r.subagents[0].log == "subagents/agent-a1.jsonl"  # rewritten to the captured copy
-    assert r.subagents[1].log == str(native / "missing.jsonl")  # untouched: nothing was copied
     stored = json.loads(session.result.read_text(encoding="utf-8"))
     assert stored["session_id"] == "sid-1"
+
+
+def test_a_folded_subagent_whose_transcript_has_gone_stops_the_capture(tmp_path: Path) -> None:
+    """Every subagent was folded from its transcript (ADR 0072): losing one is lost evidence, not a skip."""
+    r = _result("m", Usage(1, 1))
+    r.session_log = str(_jsonl(tmp_path / "session.jsonl", [{"type": "user"}]))
+    r.subagents = [_subagent(log=str(tmp_path / "missing.jsonl"))]
+    with pytest.raises(FileNotFoundError, match=r"missing\.jsonl"):
+        pipeline.capture(r, SessionDir(tmp_path / "results" / "sid-1"))
 
 
 def test_capture_of_a_run_without_subagents_writes_no_subagents_dir(tmp_path: Path) -> None:

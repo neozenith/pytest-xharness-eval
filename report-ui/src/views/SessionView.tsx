@@ -23,7 +23,7 @@ import { useResult } from "@/hooks/useResult";
 import { NOT_CATALOGUED, tierLabel } from "@/lib/catalogue";
 import { armLabel, EFFORT_DEFAULT } from "@/lib/effort";
 import { TREATMENT_CONTROL } from "@/lib/treatment";
-import { fmt, pct, secs, usd, when, windowLabel } from "@/lib/format";
+import { dec, fmt, pct, secs, usd, when, windowLabel } from "@/lib/format";
 import { navigateOnClick, replaceRoute, type SessionRoute } from "@/lib/route";
 import type { AxisMode } from "@/lib/series";
 import type { Cell } from "@/lib/types";
@@ -34,6 +34,27 @@ interface Props {
 }
 
 /** One captured session: metadata, the per-turn charts, the panels, the turn table and its records (glossary: `SessionView`). */
+/** Said where a capture predates an Important Metric (ADR 0071): replaying it recovers the figure. */
+const NOT_RECORDED = "not recorded on this capture; replay to recover it (ADR 0071)";
+
+/** The count, then the subagents' shares of the billed tokens and of the cost, where known. */
+const subagentsText = (cell: Cell): React.ReactNode => {
+  const n = cell.subagents ?? 0;
+  if (!n) return "none";
+  const shares = [
+    cell.subagent_token_share != null ? `${pct(100 * cell.subagent_token_share)} of billed tokens` : null,
+    cell.subagent_cost_share != null ? `${pct(100 * cell.subagent_cost_share)} of cost` : null,
+  ].filter(Boolean);
+  return `${fmt(n)}${shares.length ? ` · ${shares.join(" · ")}` : ""}`;
+};
+
+/** One `model tok/s` pair per model that answered, so a subagent on a cheaper model shows its own speed. */
+const throughputText = (cell: Cell): React.ReactNode => {
+  const byModel = Object.entries(cell.output_tokens_per_sec_by_model ?? {});
+  if (!byModel.length) return <span className="muted">{NOT_RECORDED}</span>;
+  return byModel.map(([model, tps]) => `${model} ${dec(tps, 1)}`).join(" · ");
+};
+
 export function SessionView({ cell, route }: Props) {
   const { sessionId } = route;
   const { result, error } = useResult(cell);
@@ -157,6 +178,12 @@ export function SessionView({ cell, route }: Props) {
     ["context window", cell.context_window ? `${fmt(cell.context_window)} tokens (harness-reported)` : "not reported"],
     ["turns", `${fmt(cell.turns)}${cell.reported_turns != null ? ` (harness reported ${fmt(cell.reported_turns)})` : ""}`],
     ["tool_calls", fmt(cell.tool_calls)],
+    // The Important Metrics a session carries beyond the rows above (ADR 0071). Each is stated in
+    // words when the capture predates it, never as a zero it did not measure.
+    ["subagents", subagentsText(cell)],
+    ["compactions", cell.compactions != null ? fmt(cell.compactions) : <span className="muted">{NOT_RECORDED}</span>],
+    ["reasoning_share", cell.reasoning_share != null ? pct(100 * cell.reasoning_share) : <span className="muted">{NOT_RECORDED}</span>],
+    ["output_tokens_per_sec by model", throughputText(cell)],
     ["files written", cell.files_written.length ? cell.files_written.join(", ") : "none"],
   ];
 

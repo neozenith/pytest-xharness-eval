@@ -53,6 +53,9 @@ PRICING_DIR = "pricing"
 # deliberately not interchangeable.
 LOG_NAME = "log.jsonl"
 RESULT_NAME = "result.json"
+# Written instead of ``result.json`` when a billed run's logs would not fold (ADR 0072): the
+# directory is then a partial capture the report skips and a replay retries.
+UNFOLDED_NAME = "unfolded.json"
 HISTORY_NAME = "history.json"
 SUBAGENTS_DIR = "subagents"
 
@@ -96,6 +99,11 @@ class SessionDir:
     def result(self) -> Path:
         """The normalised :class:`~pytest_xharness_eval.model.runresult.RunResult`."""
         return self.path / RESULT_NAME
+
+    @property
+    def unfolded(self) -> Path:
+        """The :class:`~pytest_xharness_eval.emit.unfolded.UnfoldedRecord` of a run whose logs would not fold."""
+        return self.path / UNFOLDED_NAME
 
     @property
     def history(self) -> Path:

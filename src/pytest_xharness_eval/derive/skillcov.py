@@ -467,11 +467,11 @@ def annotate(skill: str, files: list[SkillFile], result: RunResult, shells: Shel
     return SkillCoverage.over(skill, rows)
 
 
-def _spawned_at(parent_turn: int | None) -> Callable[[Call], int]:
-    """A subagent's calls credit the primary turn that spawned it, or their own turn when no match was found."""
+def _spawned_at(parent_turn: int) -> Callable[[Call], int]:
+    """A subagent's calls credit the primary turn it descends from, at any depth (ADR 0072)."""
 
-    def turn_of(call: Call) -> int:
-        return parent_turn if parent_turn is not None else call.n
+    def turn_of(_call: Call) -> int:
+        return parent_turn
 
     return turn_of
 

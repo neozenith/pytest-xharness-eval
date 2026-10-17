@@ -50,6 +50,15 @@ async function getText(path: string): Promise<string> {
  */
 export const fromWire = (index: Index): Index => ({
   ...index,
+  /*
+   * An index written before ADR 0071 has no aggregates. It reads as a declared set of nothing over
+   * no cells, so the summary table shows its groups with every metric absent, never a guess. A
+   * cell's rung and treatment are folded exactly as a session row's are, so `groupKey` spells both alike.
+   */
+  important_metrics: {
+    metrics: index.important_metrics?.metrics ?? [],
+    cells: (index.important_metrics?.cells ?? []).map((c) => ({ ...c, effort: rungOf(c.effort), treatment: treatmentOf(c.treatment) })),
+  },
   cells: index.cells.map((c) => ({
     ...c,
     effort: rungOf(c.effort),

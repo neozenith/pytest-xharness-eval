@@ -21,9 +21,11 @@ from __future__ import annotations
 # Our Libraries
 from pytest_xharness_eval.harness.base import (
     DEFAULT_TIMEOUT_S,
+    Evidence,
     Harness,
     RunError,
     SessionLog,
+    UnfoldedRun,
     UnknownHarness,
     get,
     mark_timed_out,
@@ -39,6 +41,7 @@ __all__ = [
     "CLAUDE",
     "CODEX",
     "DEFAULT_TIMEOUT_S",
+    "Evidence",
     "ClaudeHarness",
     "ClaudeSessionLog",
     "CodexHarness",
@@ -46,6 +49,7 @@ __all__ = [
     "Harness",
     "RunError",
     "SessionLog",
+    "UnfoldedRun",
     "UnknownHarness",
     "get",
     "mark_timed_out",

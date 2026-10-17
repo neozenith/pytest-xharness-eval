@@ -17,8 +17,7 @@ from pytest_xharness_eval import (
 )
 from pytest_xharness_eval import harness as harnesses
 from pytest_xharness_eval.derive import pricing
-from pytest_xharness_eval.model.runresult import Subagent
-from tests.support import DAY, _result
+from tests.support import DAY, _result, _subagent
 
 
 def test_bundled_table_prices_each_tier_separately() -> None:
@@ -252,7 +251,7 @@ def test_subagent_calls_cross_the_threshold_on_their_own_prompts() -> None:
     primary = Usage(input_tokens=10_000, output_tokens=100)
     spawned = Usage(input_tokens=300_000, output_tokens=100)
     r = _with_calls("gpt-6-sol", [primary])
-    r.subagents = [Subagent.folded([Call(n=1, at="t", usage=spawned)], agent="a", id="x", log="l")]
+    r.subagents = [_subagent([Call(n=1, at="t", usage=spawned)])]
     r.usage = primary + spawned
     priced = pricing.price(r, pricing.load_table(), DAY)
     assert priced.long_context_calls == 1
@@ -418,15 +417,7 @@ def test_a_subagent_is_billed_at_its_own_models_rates_not_its_parents() -> None:
     parent_call = Usage(input_tokens=1_000_000)
     sub_call = Usage(input_tokens=1_000_000)
     r = _with_calls("claude-opus-5", [parent_call], "claude")
-    r.subagents = [
-        Subagent(
-            agent="general-purpose",
-            id="a1",
-            log="l",
-            model="claude-haiku-4-5-20251001",
-            calls=[Call(n=1, at="t", usage=sub_call)],
-        )
-    ]
+    r.subagents = [_subagent([Call(n=1, at="t", usage=sub_call)], model="claude-haiku-4-5-20251001")]
     r.usage = parent_call + sub_call
     priced = pricing.price(r, pricing.load_table(), DAY)
     opus, haiku = 5.0, 1.0  # USD per MTok input, the bundled rows
@@ -437,9 +428,7 @@ def test_a_subagent_is_billed_at_its_own_models_rates_not_its_parents() -> None:
 
 def test_a_subagent_naming_no_model_is_billed_at_its_parents_rates() -> None:
     r = _with_calls("claude-opus-5", [Usage(input_tokens=1_000_000)], "claude")
-    r.subagents = [
-        Subagent(agent="x", id="a1", log="l", calls=[Call(n=1, at="t", usage=Usage(input_tokens=1_000_000))])
-    ]
+    r.subagents = [_subagent([Call(n=1, at="t", usage=Usage(input_tokens=1_000_000))])]
     r.usage = Usage(input_tokens=2_000_000)
     assert pricing.price(r, pricing.load_table(), DAY).estimated_cost_usd == pytest.approx(10.0)
 
@@ -447,15 +436,7 @@ def test_a_subagent_naming_no_model_is_billed_at_its_parents_rates() -> None:
 def test_a_subagent_on_an_unpriced_model_stops_pricing_rather_than_borrowing_a_rate() -> None:
     """Never a neighbour's rates, never zero (ADR 0007, ADR 0050)."""
     r = _with_calls("claude-opus-5", [Usage(input_tokens=10)], "claude")
-    r.subagents = [
-        Subagent(
-            agent="x",
-            id="a1",
-            log="l",
-            model="claude-nonesuch",
-            calls=[Call(n=1, at="t", usage=Usage(input_tokens=10))],
-        )
-    ]
+    r.subagents = [_subagent([Call(n=1, at="t", usage=Usage(input_tokens=10))], model="claude-nonesuch")]
     r.usage = Usage(input_tokens=20)
     with pytest.raises(pricing.PricingError, match="claude/claude-nonesuch"):
         pricing.price(r, pricing.load_table(), DAY)
@@ -466,14 +447,6 @@ def test_pricing_in_parts_rounds_once_so_the_total_matches_a_single_model_run() 
     calls = [Usage(input_tokens=333, output_tokens=7, cache_read_tokens=11) for _ in range(5)]
     whole = pricing.price(_with_calls("claude-opus-5", calls, "claude"), pricing.load_table(), DAY).estimated_cost_usd
     split = _with_calls("claude-opus-5", calls[:2], "claude")
-    split.subagents = [
-        Subagent(
-            agent="x",
-            id="a1",
-            log="l",
-            model="claude-opus-5",
-            calls=[Call(n=i, at="t", usage=u) for i, u in enumerate(calls[2:])],
-        )
-    ]
+    split.subagents = [_subagent([Call(n=i, at="t", usage=u) for i, u in enumerate(calls[2:])], model="claude-opus-5")]
     split.usage = Usage.total(calls)
     assert pricing.price(split, pricing.load_table(), DAY).estimated_cost_usd == whole

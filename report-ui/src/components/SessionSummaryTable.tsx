@@ -1,34 +1,39 @@
 /**
- * The aggregate view of exactly the runs `SessionTable` lists (glossary: `SessionSummaryTable`,
- * ADR 0042): one row per skill × case × harness × model × effort × treatment, which is one line of the
- * `TokenAccumulationChart` above it, so the two read as a pair.
+ * The Important Metrics of exactly the runs `SessionTable` lists (glossary: `SessionSummaryTable`,
+ * ADR 0042, ADR 0071): one row per skill × case × harness × model × effort × treatment — one cell
+ * of the experiment, and one line of the `TokenAccumulationChart` — so the overview leads with how
+ * each cell performed across its samples rather than with a pass count.
  *
- * It takes the cells it is given and knows nothing about filters; its arithmetic is in
+ * Its measure columns are not written here. They are the metrics `model/metrics.py` declares,
+ * read from `index.json` in declaration order, so a metric added in Python is a column here with no
+ * edit. Each cell prints its metric's headline aggregate (a median for a spread, a mean for a share
+ * or a count, a pass rate for the verdict) and its `title` spells out every aggregate, so the
+ * spread is one hover away and costs no width (ADR 0043).
+ *
+ * It takes the cells it is given and knows nothing about filters; its grouping is in
  * `lib/summary.ts`. It sorts on its OWN param pair (`ssort`/`sdir`), because the reader ranks
- * groups by mean cost while ranking sessions by when they ran, and a shared pair would have made
- * every click here silently reorder the table below. Unsorted, the rows come out in the fixed
- * `skill|case|harness|model|effort|treatment` key order — the only order in which the banding and the repeat
- * muting below tell the truth, which is why both switch off the moment a column is sorted.
+ * cells by cost while ranking sessions by when they ran, and a shared pair would have made every
+ * click here silently reorder the table below. Unsorted, the rows come out in the fixed
+ * `skill|case|harness|model|effort|treatment` key order — the only order in which the banding and
+ * the repeat muting below tell the truth, which is why both switch off the moment a column is sorted.
  *
- * Every aggregate is named `mean <field>` in full (ADR 0021) in its tooltip and its accessible
- * name — but not in its printed label. Eight heads reading `mean …` spent 264px saying the same
- * word eight times, in the table that most needed the width; the caption says it once, for every
- * measure column at once, and each head still answers to `mean output_tokens_per_sec` when a
- * reader or a screen reader asks it. It is the same trade as dropping the `eval_` prefix: the
- * glyphs every row (or every head) shares carry no signal, and the full name never leaves.
+ * Every measure head answers to its full name — the headline's operation and the field it reduces,
+ * `median estimated_cost_usd` (ADR 0021) — in its tooltip and its accessible name, while printing
+ * only the metric's short label.
  */
 import { useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ColumnHead } from "@/components/ColumnHead";
 import { TierBadge } from "@/components/TierBadge";
-import { caseShort, compact, dec, fmt, modelShort, NONE, pct, secs, usd, windowLabel } from "@/lib/format";
+import { caseShort, fmt, modelShort, NONE } from "@/lib/format";
+import { aggregatesTitle, formatAggregate, headline, headlineValue, metricName } from "@/lib/metrics";
 import { effortSortValue } from "@/lib/effort";
 import { NO_MATCH } from "@/lib/facets";
 import { anyTreated, treatmentLabel, treatmentSortValue } from "@/lib/treatment";
 import { overviewWith, replaceRoute, useRoute, type SortDir } from "@/lib/route";
 import { summaryRows, type SummaryRow } from "@/lib/summary";
 import type { RowContext } from "@/components/SessionTable";
-import type { Cell } from "@/lib/types";
+import type { Cell, ImportantMetric, ImportantMetricsDoc } from "@/lib/types";
 
 interface Column {
   /** The `ssort=` value: short, stable, and never the printed label. */
@@ -57,10 +62,7 @@ interface Column {
 const nil = <span className="muted">{NONE}</span>;
 const orNil = (v: unknown, text: string): React.ReactNode => (v == null ? nil : text);
 
-/** A token count abbreviated in the cell and exact on its `title`, exactly as `SessionTable` prints one. */
-const exact = (n: number | null | undefined): React.ReactNode => (n == null ? nil : <span title={fmt(Math.round(n))}>{compact(Math.round(n))}</span>);
-
-const COLUMNS: Column[] = [
+const KEY_COLUMNS: Column[] = [
   {
     key: "skill",
     name: "skill",
@@ -117,151 +119,88 @@ const COLUMNS: Column[] = [
     render: (r) => treatmentLabel(r.treatment),
   },
   {
-    key: "runs",
-    name: "runs",
-    label: "runs",
-    title: "captured sessions in this group; every mean below is over these runs",
+    key: "samples",
+    name: "samples",
+    label: "samples",
+    title: "graded sessions of this cell: every metric to the right is reduced over these samples",
     numeric: true,
     group: true,
-    sortValue: (r) => r.runs,
-    render: (r) => fmt(r.runs),
-  },
-  {
-    key: "pass",
-    name: "verdict pass rate",
-    label: "pass rate",
-    title: "runs whose history verdict is pass, over the runs that carry a verdict",
-    /*
-     * This is the aggregate's verdict, and it is the one cell in the table a reader scans
-     * rather than reads — so it answers the `VerdictBadge` rail one table below in the same
-     * key: a group that did not pass clean takes `bad` ink and 600 weight, a clean one stays
-     * quiet. Grey `0/1` among twelve grey `1/1`s was the single worst thing on this page: the
-     * only failing group in the sweep was indistinguishable from its neighbours.
-     *
-     * The fraction is the value and the percentage is derived from it, so only the fraction
-     * is coloured and the percentage stays a muted qualifier — the same value/qualifier split
-     * the `peak context` cells make either side of their `·`.
-     */
-    // Ranked by the share, not by the numerator: `1/1` outranks `1/2`, and an ungraded group
-    // has no rate at all rather than a rate of zero.
-    sortValue: (r) => (r.graded === 0 ? null : r.pass / r.graded),
-    render: (r) => {
-      if (r.graded === 0) return nil;
-      const ungraded = r.runs - r.graded;
-      const clean = r.pass === r.graded;
-      return (
-        <>
-          <span className={clean ? undefined : "bad strong"}>
-            {r.pass}/{r.graded}
-          </span>
-          <span className="muted"> · {pct((100 * r.pass) / r.graded)}</span>
-          {ungraded ? <span className="muted"> · {ungraded} no history</span> : null}
-        </>
-      );
-    },
-  },
-  {
-    key: "cost",
-    name: "mean estimated_cost_usd",
-    label: "cost",
-    title: "arithmetic mean of estimated_cost_usd over the runs that carry one",
-    numeric: true,
-    sortValue: (r) => r.mean_estimated_cost_usd,
-    render: (r) => orNil(r.mean_estimated_cost_usd, usd(r.mean_estimated_cost_usd)),
-  },
-  {
-    key: "billed",
-    name: "mean accumulative_billed_tokens",
-    label: "billed",
-    title: "arithmetic mean of the cross-turn billed sum; a spend figure, not a context figure",
-    numeric: true,
-    sortValue: (r) => r.mean_accumulative_billed_tokens,
-    render: (r) => exact(r.mean_accumulative_billed_tokens),
-  },
-  {
-    key: "peak",
-    name: "mean peak_context_tokens",
-    label: "peak ctx",
-    title: "arithmetic mean of the largest prompt one turn processed, with the mean share of the window; hover a cell for the window",
-    numeric: true,
-    // Ranked by the share, like `SessionTable`'s own peak-context column: a sweep spanning two
-    // window sizes ranks a 6% prompt above a 34% one on raw tokens alone.
-    sortValue: (r) => r.mean_context_window_pct,
+    sortValue: (r) => r.samples,
     render: (r) =>
-      r.mean_peak_context_tokens == null ? (
-        nil
+      r.samples === r.runs ? (
+        fmt(r.samples)
       ) : (
-        <span title={`${fmt(Math.round(r.mean_peak_context_tokens))} of a ${windowLabel(r.context_window)} window`}>
-          {compact(Math.round(r.mean_peak_context_tokens))}
-          <span className="muted qual">· {pct(r.mean_context_window_pct)}</span>
-        </span>
+        <>
+          {fmt(r.samples)}
+          <span className="muted"> · {r.runs - r.samples} not graded</span>
+        </>
       ),
   },
-  {
-    key: "turns",
-    name: "mean turns",
-    label: "turns",
-    title: "arithmetic mean of model API calls",
-    numeric: true,
-    sortValue: (r) => r.mean_turns,
-    render: (r) => (r.mean_turns == null ? nil : dec(r.mean_turns, 1)),
-  },
-  {
-    key: "tools",
-    name: "mean tool_calls",
-    label: "tools",
-    title: "arithmetic mean of tool invocations issued",
-    numeric: true,
-    sortValue: (r) => r.mean_tool_calls,
-    render: (r) => (r.mean_tool_calls == null ? nil : dec(r.mean_tool_calls, 1)),
-  },
-  {
-    key: "coverage",
-    name: "mean skill_coverage loaded share",
-    label: "coverage",
-    title: "arithmetic mean of loaded/files per run, ignored files excluded",
-    numeric: true,
-    sortValue: (r) => r.mean_skill_coverage_share,
-    render: (r) => (r.mean_skill_coverage_share == null ? nil : pct(100 * r.mean_skill_coverage_share)),
-  },
-  {
-    key: "tps",
-    name: "mean output_tokens_per_sec",
-    label: "tok/s",
-    title: "arithmetic mean of output tokens per second of API time",
-    numeric: true,
-    sortValue: (r) => r.mean_output_tokens_per_sec,
-    render: (r) => (r.mean_output_tokens_per_sec == null ? nil : dec(r.mean_output_tokens_per_sec, 2)),
-  },
-  {
-    key: "wall",
-    name: "mean wall_ms",
-    label: "wall",
-    title: "arithmetic mean of wall clock around the subprocess",
-    numeric: true,
-    sortValue: (r) => r.mean_wall_ms,
-    render: (r) => orNil(r.mean_wall_ms, secs(r.mean_wall_ms)),
-  },
 ];
+
+/**
+ * The verdict's pass rate prints as the fraction it is, `passes/n`, because the table's one scanned
+ * cell must answer the `VerdictBadge` rail below in the same key: a cell that did not pass clean
+ * takes `bad` ink at 600 weight, a clean one stays quiet. The percentage and interval are its title.
+ */
+const verdictCell = (metric: ImportantMetric, r: SummaryRow): React.ReactNode => {
+  const aggregates = r.metrics[metric.id];
+  const rate = aggregates?.pass_rate;
+  const n = aggregates?.n ?? 0;
+  if (rate == null || !n) return nil;
+  const passes = Math.round(rate * n);
+  return (
+    <span title={aggregatesTitle(metric, aggregates)}>
+      <span className={passes === n ? undefined : "bad strong"}>
+        {passes}/{n}
+      </span>
+    </span>
+  );
+};
+
+/** One measure column per declared metric: its headline in the cell, every aggregate on the title. */
+const metricColumn = (metric: ImportantMetric): Column => ({
+  key: metric.id,
+  name: metricName(metric),
+  label: metric.label,
+  title: `${metric.why}. Reduced over the cell's samples: ${metric.aggregates.join(", ")}; the cell shows the ${headline(metric)}`,
+  numeric: true,
+  sortValue: (r) => headlineValue(metric, r.metrics[metric.id]),
+  render: (r) => {
+    if (metric.kind === "rate") return verdictCell(metric, r);
+    const value = headlineValue(metric, r.metrics[metric.id]);
+    return value == null ? nil : <span title={aggregatesTitle(metric, r.metrics[metric.id])}>{formatAggregate(metric, headline(metric), value)}</span>;
+  },
+});
 
 /**
  * One row per skill × case × harness × model × effort × treatment group of the cells it is given, in the fixed key
  * order until a head is clicked.
  */
-export function SessionSummaryTable({ cells, shortModel = modelShort }: { cells: Cell[]; shortModel?: (model: string) => string }) {
+export function SessionSummaryTable({
+  cells,
+  metrics,
+  shortModel = modelShort,
+}: {
+  cells: Cell[];
+  /** `index.json`'s `important_metrics`; absent, the table lists its cells with no measure columns. */
+  metrics?: ImportantMetricsDoc;
+  shortModel?: (model: string) => string;
+}) {
   const route = useRoute();
   const routeSort = route.view === "overview" ? route.summarySort : null;
-  const column = routeSort ? (COLUMNS.find((c) => c.key === routeSort.key) ?? null) : null;
+  const allColumns = useMemo(() => [...KEY_COLUMNS, ...(metrics?.metrics ?? []).map(metricColumn)], [metrics]);
+  const column = routeSort ? (allColumns.find((c) => c.key === routeSort.key) ?? null) : null;
   const dir: 1 | -1 = routeSort?.dir === "desc" ? -1 : 1;
   const ctx: RowContext = { shortModel };
   /*
    * `treatment` shows only when a group in view ran under one (ADR 0055). An untreated sweep is
    * all control, and a column reading `control` down every row would print an axis it never used.
    */
-  const columns = useMemo(() => (anyTreated(cells) ? COLUMNS : COLUMNS.filter((col) => col.key !== "treatment")), [cells]);
+  const columns = useMemo(() => (anyTreated(cells) ? allColumns : allColumns.filter((col) => col.key !== "treatment")), [cells, allColumns]);
 
   const rows = useMemo(() => {
-    const grouped = summaryRows(cells);
+    const grouped = summaryRows(cells, metrics);
     if (!column) return grouped;
     // `summaryRows` already returns the key order, and `sort` is stable, so equal values keep it:
     // ranking by `runs` leaves the groups that tie alphabetical rather than arbitrary.
@@ -273,7 +212,7 @@ export function SessionSummaryTable({ cells, shortModel = modelShort }: { cells:
       if (y == null) return -1;
       return (x < y ? -1 : x > y ? 1 : 0) * dir;
     });
-  }, [cells, column, dir]);
+  }, [cells, metrics, column, dir]);
 
   /**
    * What a click on this head would sort by. A fresh text column opens ascending (A first) and a
@@ -295,7 +234,8 @@ export function SessionSummaryTable({ cells, shortModel = modelShort }: { cells:
        * no longer print belongs: it qualifies all of them at once.
        */}
       <caption>
-        every measure is the <span className="const">arithmetic mean</span> over the runs in its group that carry that field
+        each metric is reduced over the cell&apos;s samples by its own aggregate: the <span className="const">median</span> of a spread, the{" "}
+        <span className="const">mean</span> of a share or a count, the <span className="const">pass rate</span> of the verdict; hover a cell for the rest
       </caption>
       <TableHeader>
         <TableRow>

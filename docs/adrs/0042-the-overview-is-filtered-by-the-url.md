@@ -12,6 +12,7 @@ relates_to:
   - { relation: extends, target: ADR-0021 }
   - { relation: extends, target: ADR-0028 }
   - { relation: extends, target: ADR-0031 }
+  - { relation: superseded_by, target: ADR-0071 }
 generated: { by: human:neozenith, at: 2026-08-29T00:00:00Z }
 ---
 
@@ -21,6 +22,7 @@ Status: accepted, 2026-08-29.
 Refines [0020](0020-captured-report-is-a-static-microsite.md) (the captured report is a static microsite) and [0021](0021-metric-names-carry-unit-and-provenance.md) (a metric name carries its unit and its source).
 It also refines [0028](0028-report-is-built-from-a-component-workspace.md) (the report page is built from a component workspace) and [0031](0031-plotly-tamagui-and-a-deeplink-permutation-matrix.md) (every state deeplinks, and a Playwright matrix sweeps them all).
 Nothing the Python side emits changes: no new JSON key, no ini key, no CLI option, no metric's value.
+Part 3, the summary's single arithmetic mean, is superseded by [0071](0071-a-cell-is-judged-by-its-important-metrics-over-its-samples.md): each metric is reduced by its own aggregates.
 
 ## Context
 

@@ -207,6 +207,22 @@ class CellRun:
         pipeline.capture(result, session)
         return session
 
+    def quarantine(self, err: harness.UnfoldedRun) -> LocatedSession:
+        """Keep a billed run whose logs would not fold, where its result would have gone (ADR 0072).
+
+        Called before the error leaves, so a mismatch fails the cell without losing what it
+        paid for; a replay retries the fold once the harness reads the new shape.
+        """
+        session = self.session_dir(err.evidence.session_id)
+        pipeline.quarantine(
+            err,
+            session,
+            case=CaseRef.of(self.case, self.suite, self.prompt),
+            effort=self.cell.effort,
+            treatment=self.cell.treatment,
+        )
+        return session
+
     def output(self, result: RunResult, workspace: Path) -> CaseOutput:
         """The rollout as the grader sees it: the record, the workspace, and the seed list.
 
@@ -282,7 +298,11 @@ class CellRun:
         """
         workspace = self.materialise()
         try:
-            attempt = self.invoke(workspace)
+            try:
+                attempt = self.invoke(workspace)
+            except harness.UnfoldedRun as err:
+                self.quarantine(err)
+                raise
             session = self.store(attempt.result)
             try:
                 self.grade(attempt.result, workspace)

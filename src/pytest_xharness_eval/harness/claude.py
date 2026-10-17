@@ -25,12 +25,15 @@ from typing import TYPE_CHECKING, Any
 
 # Our Libraries
 from pytest_xharness_eval.harness import records as record_kinds
+from pytest_xharness_eval.harness import threads
 from pytest_xharness_eval.harness.base import (
     DEFAULT_TIMEOUT_S,
     TIMED_OUT,
+    Evidence,
     Harness,
     RunError,
     SessionLog,
+    UnfoldedRun,
     copy_skill,
     mark_timed_out,
     register,
@@ -180,10 +183,28 @@ def run_claude(
     if got != session_id:
         raise RunError(f"session id mismatch: harness minted {session_id}, envelope says {got}")
 
-    result = ClaudeSessionLog(log, envelope).to_result(workspace, ws.diff(before, after))
+    files_written = ws.diff(before, after)
+    transcripts = sorted(log.with_suffix("").glob("subagents/agent-*"))
+    idle = seconds_idle([log, *transcripts], ended_at) if timed_out else None
+    try:
+        result = ClaudeSessionLog(log, envelope).to_result(workspace, files_written)
+    except threads.SubagentMismatch as exc:
+        # Billed but unfoldable: hand the cell everything it needs to keep the evidence (ADR 0072).
+        evidence = Evidence(
+            harness="claude",
+            session_id=session_id,
+            log=log,
+            transcripts=tuple(transcripts),
+            workspace=workspace,
+            files_written=tuple(files_written),
+            exit_code=1 if envelope.get("is_error") else 0,
+            envelope=envelope,
+            timed_out_after_s=timeout_s if timed_out else None,
+            idle_before_timeout_s=idle,
+        )
+        raise UnfoldedRun(str(exc), evidence) from exc
     if timed_out:
-        logs = [log, *log.with_suffix("").glob("subagents/*.jsonl")]
-        mark_timed_out(result, timeout_s, seconds_idle(logs, ended_at))
+        mark_timed_out(result, timeout_s, idle)
     return result
 
 
@@ -238,7 +259,13 @@ class _Ledger:
         self._last_ts: str | None = None  # timestamp of the previous record, for per-call latency
 
     def seen(self, rec: dict[str, Any]) -> None:
-        """Remember the record's timestamp after it has been folded, for the next call's latency."""
+        """Remember the record's timestamp after it has been folded, for the next call's latency.
+
+        An attachment is not a request boundary: Claude Code writes one in the same millisecond
+        as the reply it precedes, which measured that call's latency as zero (ADR 0072).
+        """
+        if rec.get("type") == "attachment":
+            return
         self._last_ts = str(rec.get("timestamp") or self._last_ts or "") or None
 
     def _attribute(self, line: int, owner: Call | None = None) -> None:
@@ -384,11 +411,10 @@ class ClaudeSessionLog(SessionLog):
         model_id = model or str(envelope.get("model") or "")
         ttft = envelope.get("ttft_ms")
         api_ms = envelope.get("duration_api_ms")
-        spawns = {tool.id: call.n for call in calls for tool in call.tools if tool.id}
 
         return RunResult.folded(
             calls,
-            subagents_of(self.path, spawns),
+            subagents_of(self.path, records, calls),
             harness="claude",
             model=model_id,
             session_id=str(envelope.get("session_id") or ""),
@@ -404,7 +430,8 @@ class ClaudeSessionLog(SessionLog):
             reported_turns=int(num_turns) if num_turns is not None else None,
             reported_model_usage=dict(envelope.get("modelUsage") or {}),
             envelope={k: v for k, v in envelope.items() if k != "result"},
-            record_kinds=CLAUDE.census([rec for _, rec in records]),
+            record_kinds=(kinds := CLAUDE.census([rec for _, rec in records])),
+            compactions=record_kinds.compactions(kinds),
             context_window=_context_window(envelope, model_id),
             ttft_ms=int(ttft) if isinstance(ttft, int | float) else None,
             api_duration_ms=int(api_ms) if isinstance(api_ms, int | float) else None,
@@ -425,41 +452,114 @@ def model_of(records: Numbered) -> str:
     return ""
 
 
-def subagents_of(log: Path, spawns: dict[str, int]) -> list[Subagent]:
-    """Fold every subagent transcript beside a Claude session log.
+#: The tools whose call spawns a subagent (``Task`` is the name earlier Claude Code versions logged).
+SPAWN_TOOLS = frozenset({"Agent", "Task"})
+
+
+def spawns_in(thread: str, records: Numbered, calls: list[Call]) -> list[threads.Spawn]:
+    """Every spawning tool call one thread's ledger issued, keyed by its ``tool_use.id``.
+
+    A spawn whose tool result is an error owes no transcript, so it is not required.
+    """
+    failed = {
+        str(block.get("tool_use_id") or "")
+        for _, rec in records
+        if rec.get("type") == "user" and isinstance(content := (rec.get("message") or {}).get("content"), list)
+        for block in content
+        if isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error")
+    }
+    return [
+        threads.Spawn(thread=thread, turn=call.n, id=tool.id, key=tool.id, required=tool.id not in failed)
+        for call in calls
+        for tool in call.tools
+        if tool.name in SPAWN_TOOLS and tool.id
+    ]
+
+
+def own_records(records: Numbered, parent: Numbered) -> Numbered:
+    """A thread's own records: those it did not replay from the thread that spawned it.
+
+    A forked subagent (``agentType: "fork"``) opens its transcript with its parent's history,
+    restamped with its own ``agentId`` but keeping each record's ``uuid`` and each message's
+    ``id``. Folding that prefix would bill the parent's calls a second time, find the
+    parent's spawn of this very thread again, and start its span before it was spawned.
+    """
+    uuids = {rec["uuid"] for _, rec in parent if rec.get("uuid")}
+    messages = {msg["id"] for _, rec in parent if (msg := rec.get("message") or {}).get("id")}
+    return [
+        (line, rec)
+        for line, rec in records
+        if rec.get("uuid") not in uuids and (rec.get("message") or {}).get("id") not in messages
+    ]
+
+
+def sidecar_of(transcript: Path) -> dict[str, Any]:
+    """The ``agent-<id>.meta.json`` beside a transcript: it alone names the spawn, so it is required."""
+    sidecar = transcript.with_name(f"{transcript.stem}.meta.json")
+    try:
+        meta = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise threads.SubagentMismatch(f"subagent transcript {transcript.name} has no readable sidecar: {exc}") from exc
+    if not isinstance(meta, dict):
+        raise threads.SubagentMismatch(f"subagent sidecar {sidecar.name} is not a JSON object")
+    return meta
+
+
+def subagents_of(log: Path, primary: Numbered, primary_calls: list[Call]) -> list[Subagent]:
+    """Fold every subagent transcript beside a Claude session log, each linked to its spawn (ADR 0072).
 
     Native layout: ``<config>/projects/<slug>/<session-id>/subagents/agent-<id>.jsonl``,
     each with an ``agent-<id>.meta.json`` sidecar naming the agent type, the spawn
-    description, and the ``toolUseId`` of the Agent tool call that spawned it. Captured
-    layout: the same pairs under ``<session dir>/subagents/``. ``spawns`` maps tool-use
-    id -> the primary turn that issued it; the transcripts are the same record dialect
-    as the session log, so :func:`ledger_of` folds them unchanged.
+    description, the ``toolUseId`` of the tool call that spawned it, and the
+    ``parentAgentId`` of a subagent that spawned it. Captured layout: the same pairs under
+    ``<session dir>/subagents/``. Every thread's transcript is the session log's dialect,
+    so :func:`ledger_of` folds each one, and its spawns join the primary's for linking.
     """
     directory = next(
         (d for d in (log.parent / "subagents", log.with_suffix("") / "subagents") if d.is_dir()),
         None,
     )
-    if directory is None:
-        return []
-    subs: list[Subagent] = []
-    for transcript in sorted(directory.glob("agent-*.jsonl")):
-        meta: dict[str, Any] = {}
-        sidecar = transcript.with_name(f"{transcript.stem}.meta.json")
-        if sidecar.is_file():
-            try:
-                meta = json.loads(sidecar.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
-                meta = {}
+    spawns = spawns_in(threads.PRIMARY, primary, primary_calls)
+    read: dict[str, tuple[Path, dict[str, Any], Numbered]] = {}
+    for transcript in sorted(directory.glob("agent-*.jsonl")) if directory else []:
         records = read_jsonl_numbered(transcript)
-        calls, _tools = ledger_of(records)
         agent_id = str((records[0][1].get("agentId") if records else "") or transcript.stem.removeprefix("agent-"))
+        read[agent_id] = (transcript, sidecar_of(transcript), records)
+    folded: list[tuple[Path, dict[str, Any], Numbered, list[Call], str]] = []
+    for agent_id, (transcript, meta, raw) in read.items():
+        parent_id = str(meta.get("parentAgentId") or "")
+        parent_records = read[parent_id][2] if parent_id in read else primary
+        records = own_records(raw, parent_records)
+        calls, _tools = ledger_of(records)
+        spawns += spawns_in(agent_id, records, calls)
+        folded.append((transcript, meta, records, calls, agent_id))
+    links = threads.link(
+        spawns,
+        (
+            threads.Thread(
+                id=agent_id,
+                parent=str(meta.get("parentAgentId") or threads.PRIMARY),
+                keys=frozenset({str(meta.get("toolUseId") or "")}) - {""},
+            )
+            for _, meta, _, _, agent_id in folded
+        ),
+    )
+    subs: list[Subagent] = []
+    for transcript, meta, records, calls, agent_id in folded:
+        placed = links[agent_id]
+        started_at, ended_at = threads.span(records, transcript.name)
         subs.append(
             Subagent.folded(
                 calls,
                 agent=str(meta.get("agentType") or "subagent"),
                 id=agent_id,
                 log=str(transcript),
-                parent_turn=spawns.get(str(meta.get("toolUseId") or "")),
+                spawned_by=placed.spawn.id,
+                parent=placed.spawn.thread,
+                depth=placed.depth,
+                parent_turn=placed.parent_turn,
+                started_at=started_at,
+                ended_at=ended_at,
                 description=str(meta.get("description") or ""),
                 model=model_of(records),
             )
@@ -493,6 +593,8 @@ def _classify(rec: dict[str, Any]) -> str:
         return "claude/assistant/text"
     if rtype == "attachment":
         return f"claude/attachment/{(rec.get('attachment') or {}).get('type') or 'unknown'}"
+    if rtype == "system" and rec.get("subtype") == "compact_boundary":
+        return "claude/system/compact_boundary"
     return f"claude/{rtype}"
 
 

@@ -104,6 +104,12 @@ export interface Cell {
   turns: number | null;
   reported_turns: number | null;
   subagents?: number;
+  /** The Important Metrics a result carries beyond the fields above (ADR 0071); absent on an older index. */
+  subagent_token_share?: number | null;
+  subagent_cost_share?: number | null;
+  compactions?: number | null;
+  reasoning_share?: number | null;
+  output_tokens_per_sec_by_model?: Record<string, number>;
   tool_calls: number;
   duration_ms: number | null;
   files_written: string[];
@@ -112,11 +118,52 @@ export interface Cell {
   skill_coverage: SkillCoverageSummary;
 }
 
+/** How a metric's samples are distributed, which fixes its aggregates (`model/metrics.py`, ADR 0071). */
+export type MetricKind = "spread" | "fraction" | "rare" | "rate";
+
+/** What a metric's value is measured in. */
+export type MetricUnit = "usd" | "tokens" | "percent" | "share" | "count" | "ms" | "tokens_per_sec";
+
+/** One Important Metric as `model/metrics.py` declares it; `aggregates` lists its keys, headline first. */
+export interface ImportantMetric {
+  id: string;
+  label: string;
+  field: string;
+  per: string | null;
+  kind: MetricKind;
+  unit: MetricUnit;
+  why: string;
+  aggregates: string[];
+}
+
+/** One aggregate name -> its value over a cell's samples; every value but `n` is null with no samples. */
+export type Aggregates = Record<string, number | null>;
+
+/** One cell's samples reduced (`emit/samples.py`): its identity, sample count, and each metric's aggregates by id. */
+export interface CellSamples {
+  skill: string | null;
+  case: string;
+  harness: string;
+  model: string;
+  effort: string | null;
+  treatment: string | null;
+  samples: number;
+  metrics: Record<string, Aggregates>;
+}
+
+/** `index.json`'s `important_metrics`: the declared set and every cell's aggregates over it (ADR 0071). */
+export interface ImportantMetricsDoc {
+  metrics: ImportantMetric[];
+  cells: CellSamples[];
+}
+
 export interface Index {
   generated_at: string;
   captured: string;
   inline: boolean;
   cells: Cell[];
+  /** Absent on an index written before ADR 0071; `fromWire` folds that to an empty document. */
+  important_metrics?: ImportantMetricsDoc;
 }
 
 export interface Usage {
@@ -175,9 +222,10 @@ export interface Call {
 }
 
 /**
- * One parallel thread the session spawned, with its own captured transcript and ledger.
- * `parent_turn` is the primary turn whose tool call spawned it; its usage is already
- * folded into the run's `usage` (the whole bill), never double-counted here.
+ * One thread the session spawned, at any depth, with its own captured transcript and ledger,
+ * linked to the record that spawned it (ADR 0072). `parent_turn` is the primary turn it
+ * descends from; its usage is already folded into the run's `usage` (the whole bill), never
+ * double-counted here. The link and span fields are absent on a result written before ADR 0072.
  */
 export interface Subagent {
   agent: string;
@@ -188,6 +236,18 @@ export interface Subagent {
   description: string;
   usage: Usage;
   calls: Call[];
+  model?: string;
+  estimated_cost_usd?: number | null;
+  /** The spawn record's id: Claude's `tool_use.id`, Codex's `call_id` or `CollabAgentToolCall` item id. */
+  spawned_by?: string;
+  /** The spawning thread's id, empty for the primary. */
+  parent?: string;
+  /** 1 for a thread the primary spawned, one more per subagent in between. */
+  depth?: number;
+  started_at?: string;
+  ended_at?: string;
+  duration_ms?: number | null;
+  output_tokens_per_sec?: number | null;
 }
 
 /** A `.result.json`; only the fields the page reads are typed. */
@@ -221,6 +281,13 @@ export interface RunResult {
   files_written: string[];
   tool_calls: Record<string, number>;
   record_kinds: Record<string, number>;
+  /** Compactions of the primary thread's context (ADR 0071); absent on a result written before it. */
+  compactions?: number;
+  reasoning_share?: number | null;
+  subagent_token_share?: number | null;
+  subagent_cost_share?: number | null;
+  /** Output tokens per second of call latency, per model that answered (ADR 0071). */
+  output_tokens_per_sec_by_model?: Record<string, number>;
   skill_coverage: Record<string, unknown>;
   case: { suite?: string; name?: string; skill?: string; fixture?: string; task?: string; prompt?: string };
   subagents?: Subagent[];

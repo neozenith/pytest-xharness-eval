@@ -31,6 +31,7 @@ def ms_between(earlier: str | None, later: str | None) -> int | None:
     try:
         a = datetime.fromisoformat(earlier.replace("Z", "+00:00"))
         b = datetime.fromisoformat(later.replace("Z", "+00:00"))
-    except ValueError:
+        delta = b - a
+    except (ValueError, TypeError):  # TypeError: one stamp carries a zone and the other does not
         return None
-    return max(int((b - a).total_seconds() * 1000), 0)
+    return max(int(delta.total_seconds() * 1000), 0)

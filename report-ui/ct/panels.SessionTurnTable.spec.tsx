@@ -448,6 +448,36 @@ test.describe("subagents", () => {
     expect(second[9]).toBe("–");
   });
 
+  test("a linked thread shows its span, duration, throughput, cost and place in the spawn tree (ADR 0072)", async ({ mount }) => {
+    const linked = subagent({
+      started_at: "2026-10-07T03:34:24.601Z",
+      ended_at: "2026-10-07T03:34:49.516Z",
+      duration_ms: 24915,
+      output_tokens_per_sec: 53.2,
+      estimated_cost_usd: 0.0123,
+      model: "claude-haiku-4-5",
+      depth: 2,
+      parent: "a6bbeeaf1e9f6d011",
+      spawned_by: "toolu_01F7maPSAAoohmvJxvjwtKBj",
+    });
+    const c = await mount(<SessionTurnTable result={result({ subagents: [linked] })} {...plain} />);
+    const span = c.locator('[data-el="SubagentSpan"]');
+    const fact = (k: string) => span.locator(`[data-k="${k}"] dd`);
+    await expect(fact("duration_ms")).toHaveText("24.9s");
+    await expect(fact("output_tokens_per_sec")).toHaveText("53.2");
+    await expect(fact("estimated_cost_usd")).toHaveText("$0.0123");
+    await expect(fact("model")).toHaveText("claude-haiku-4-5");
+    await expect(fact("depth")).toHaveText("2");
+    await expect(fact("spawned_by")).toHaveText("toolu_01 in a6bbeeaf");
+    await expect(fact("started")).not.toHaveText("–");
+    await expect(fact("ended")).not.toHaveText("–");
+  });
+
+  test("a thread from a result written before ADR 0072 says its span is not recorded", async ({ mount }) => {
+    const c = await mount(<SessionTurnTable result={result({ subagents: [subagent()] })} {...plain} />);
+    await expect(c.locator('[data-el="SubagentSpan"]')).toHaveText("span not recorded (written before ADR 0072); replay the cache to link it");
+  });
+
   test("the band footer names the spawning turn and the band is ruled in the waterfall's `sub` colour", async ({ mount, page }) => {
     const c = await mount(<SessionTurnTable result={spawned()} {...plain} />);
     await expect(c.locator("tr.subagent-band-row").nth(0)).toContainText(`Spawned by turn 1 of 1feb573f`);

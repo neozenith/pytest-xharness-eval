@@ -133,6 +133,20 @@ from pytest_xharness_eval.harness import records
             "claude/user/prompt",
             "prompt",
         ),
+        # The two compaction markers, as each CLI writes them (ADR 0071).
+        (
+            "claude",
+            {"type": "system", "subtype": "compact_boundary", "compactMetadata": {"trigger": "auto"}},
+            "claude/system/compact_boundary",
+            "compaction",
+        ),
+        ("claude", {"type": "system", "subtype": "api_error"}, "claude/system", "harness_meta"),
+        (
+            "codex",
+            {"type": "compacted", "payload": {"message": "", "replacement_history": []}},
+            "codex/compacted",
+            "compaction",
+        ),
     ],
 )
 def test_classify_and_category(harness: str, rec: object, kind: str, category: str) -> None:
@@ -148,3 +162,16 @@ def test_every_catalogued_kind_has_a_category_with_a_pill_colour() -> None:
 def test_census_counts_kinds_in_sorted_order() -> None:
     recs = [{"type": "ai-title"}, {"type": "user", "message": {"content": "x"}}, {"type": "ai-title"}]
     assert harnesses.get("claude").census(recs) == {"claude/ai-title": 2, "claude/user/prompt": 1}
+
+
+def test_compactions_count_every_record_of_a_compaction_kind() -> None:
+    """Read off the census, so it counts exactly the records the report's pills show (ADR 0071)."""
+    recs = [
+        {"type": "system", "subtype": "compact_boundary"},
+        {"type": "user", "message": {"content": "x"}},
+        {"type": "system", "subtype": "compact_boundary"},
+        {"type": "system", "subtype": "api_error"},
+    ]
+    assert records.compactions(harnesses.get("claude").census(recs)) == 2
+    assert records.compactions({"codex/compacted": 1, "codex/event_msg/token_count": 9}) == 1
+    assert records.compactions({}) == 0

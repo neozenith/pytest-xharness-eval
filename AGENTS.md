@@ -52,11 +52,11 @@ this list:
 
 | Layer | What lives there |
 |-------|------------------|
-| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `treatment.py`, `catalogue.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
-| `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, and the record-kind catalogue `records.py` |
+| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `treatment.py`, `catalogue.py`, `metrics.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
+| `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, the spawn linker `threads.py`, and the record-kind catalogue `records.py` |
 | `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, `catalogue.py` (reads `prices/models.toml`), `feed.py` (LiteLLM's feed into price records, for the curator and live pricing), and the bundled `prices/prices-YYYYMMDD.toml` records |
 | `verify/` | what a *grader* is written with: `checks.py` (the shared `check_*` verifiers), `tolerance.py` (`Facet` and the six tolerances), `facets.py` (markdown/mermaid extractors), `golden.py` (`GoldenCase`) |
-| `emit/` | the documents that leave: `metrics.py`, `index.py`, `summary.py`, `tokens.py`, `page.py` |
+| `emit/` | the documents that leave: `metrics.py`, `index.py`, `samples.py`, `unfolded.py`, `summary.py`, `tokens.py`, `page.py` |
 | `runtime/` | how a sweep is wired: `settings.py`, `pipeline.py`, and the transitional `legacy.py` |
 
 A ruff `TID251` rule fails the build when a layer names one above it; the exceptions are
@@ -68,6 +68,8 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | How a skill is *named* to a CLI, or registered with it | `Harness.invoke` in `harness/<provider>.py` -- `/<skill> <task>` for claude (registered by `skill_plugin`'s `--plugin-dir` wrapper), `$<skill> <task>` for codex (copied into the private `CODEX_HOME/skills/`). The one edge from beneath is `model/registry.invocation` (ADR 0044) |
 | A whole new agent CLI | one module under `harness/`: subclass `Harness`, implement `run`, `session_from_capture`, `classify_record`, `shell_tools` / `persistent_shells` (and `shell_commands` if its shell tool wraps commands, ADR 0066), `efforts` / `effort_args` (an empty ladder is a coherent "no effort control", ADR 0049), then `register()` it in `harness/__init__.py`. Nothing else dispatches on the name (ADR 0034) |
 | How subagent transcripts are found, attributed and billed | `harness/claude.py` and `harness/codex.py` (`subagents_of` per dialect), `runtime/pipeline.py`'s `capture_subagents` (capture into `subagents/`) (ADR 0033) |
+| What counts as a spawn, or how a subagent is linked to it | the harness's `spawns_in` in `harness/<provider>.py` reads its dialect's spawn records; `harness/threads.py` (`link`) pairs them with the transcripts one to one and raises `SubagentMismatch` on anything else (ADR 0072) |
+| What happens to a billed run whose logs will not fold | the harness wraps the refusal in `UnfoldedRun` with its `Evidence` (`harness/base.py`); `CellRun.quarantine` and `pipeline.quarantine` copy the logs and write `emit/unfolded.py`'s `UnfoldedRecord` as `unfolded.json`; `replay.rebuild` retries it (ADR 0072) |
 | How a session log maps to `RunResult` fields | the harness's `SessionLog.to_result` in `harness/<provider>.py`; the primitives both dialects fold with are `harness/normalise.py` |
 | A new field on the run record | `model/runresult.py`, then `harness/claude.py` and `harness/codex.py` for both dialects |
 | A bundled model price | `derive/prices/` only, USD per MTok, rows under their harness's table. A price *change* never edits a closed record: set `effective_to` on the open one and add `prices-<date>.toml` whose `effective_from` is that date. `make prices` does both from LiteLLM's feed; the watched families are `WATCHES` in `.github/scripts/curate_prices.py`, and a row with a comment line starting `# curate: keep` is a local override it never re-prices. A long-context rate is a row's `long_context` sub-table, never a comment. A project overrides with `<harness>/<model>: ...` `xharness_prices` lines, optionally `from=`/`to=` bounded and with `long_context_above` / `long_*` keys (ADR 0030, ADR 0050, ADR 0051) |
@@ -85,6 +87,7 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | How an `eval_*.py` suite is imported, or a case found in one | `model/suite.py` (`EvalSuite`, `find_case`) -- one loader for collection and replay alike (ADR 0040) |
 | An ini key, or how a location is resolved for a sweep *and* a replay | `runtime/settings.py` (`Settings.from_config` / `from_cache`); `Settings.cache` is the `CacheLayout`, never a bare path (ADR 0034, ADR 0037) |
 | What happens to a `RunResult` after the CLI returns (price, coverage, case, evidence, metrics) | `runtime/pipeline.py` -- one sequence, run by both the live cell and a replay (ADR 0034) |
+| The Important Metrics a cell is judged by, a metric's kind or aggregates, or what counts as a sample | `model/metrics.py` (`IMPORTANT_METRICS`, `MetricKind`, `summarise`) declares them once; `emit/samples.py` groups each cell's history lines and writes the aggregates into `index.json`'s `important_metrics`; the page renders the declared columns and computes nothing (ADR 0071) |
 | The per-cell metrics record or the verbose status word | `emit/metrics.py` (`CellMetrics`; its keys are a wire format, pinned in `tests/emit/test_metrics.py`, ADR 0037) |
 | A directory or file name under the cache root, or the `{skill}/{harness}/{model}[--{effort}]/{run}/{session}` shape | `model/layout.py` (`CacheLayout`, `SessionDir`, `LocatedSession`, `model_level`) and nowhere else (ADR 0037, ADR 0038, ADR 0049) |
 | `report/index.json` or the aggregated `report/history.jsonl` | `emit/index.py` (`IndexRow`); the combine step that writes the microsite is `emit/page.py`, the design tokens `emit/tokens.py` (ADR 0032, ADR 0039) |
@@ -218,6 +221,7 @@ the code, add it to the glossary in the same change.
 | A harness's `efforts` ladder, or a word in `model/effort.py` | `README.md`'s alias table, `GLOSSARY.md`, `ARCHITECTURE.md`'s isolation-levers table, and `tests/model/test_effort.py` -- the ladder is ordered, so adding a rung moves what `mid` resolves to |
 | A decision recorded in an ADR | Write a new ADR that supersedes it; do not change the old one's argument (shape-only prose fixes to its `.yml` are allowed, ADR 0054) |
 | Any ADR `.yml`, or `docs/adrs/templates/` | `make adrs`, then `make adrs-check` and `make adrs-prose` (both run in CI) |
+| `IMPORTANT_METRICS` in `model/metrics.py` | `XHARNESS_UPDATE_GOLDEN=1 uv run pytest tests/model/test_metrics.py` (rewrites the page's fixture `report-ui/src/__tests__/important-metrics.json`), the aggregation tables in `assets/XHARNESS-REPORT-GLOSSARY.md`, and `GLOSSARY.md`'s Important Metrics row |
 | A key `emit/index.py` or `emit/metrics.py` writes | `report-ui/src/lib/types.ts`, the glossary's metric table, the frozen key lists in `tests/emit/test_metrics.py` and `tests/emit/test_index.py`, and the `SessionTable` column definitions if it is shown |
 | `report-ui/src/` | `make ui-check`, `make ui-test`, `make ui-ct` (and the component's `report-ui/ct/<Component>.spec.tsx`); a `TIER=small` sweep while iterating, `TIER=medium` before shipping, `large` when the change ripples wide |
 | A route param in `report-ui/src/lib/route.ts` | `report-ui/src/lib/permutations.ts` in the same change, or the e2e matrix silently stops covering it |
