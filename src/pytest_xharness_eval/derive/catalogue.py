@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 MODELS_FILE = PRICES_DIR / "models.toml"
 
 _MODEL_KEYS = frozenset({"line", "tier", "released"})
-_HARNESS_KEYS = frozenset({"feed_provider", "one_hour_cache_write_is_five_minute", "models"})
+_HARNESS_KEYS = frozenset({"feed_provider", "one_hour_cache_write_is_five_minute", "models", "excluded"})
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -81,6 +81,27 @@ def load_catalogue(lines: Iterable[str] = (), path: Path | None = None) -> Catal
         for model, spec in table.get("models", {}).items()
     ]
     return Catalogue.of(bundled, lines)
+
+
+def excluded(path: Path | None = None) -> dict[tuple[str, str], str]:
+    """Each priced model the catalogue leaves out on purpose, keyed ``(harness, model)``, with its reason (ADR 0067)."""
+    path = path or MODELS_FILE
+    found: dict[tuple[str, str], str] = {}
+    for harness, table in _read(path).items():
+        for model, reason in table.get("excluded", {}).items():
+            if not isinstance(reason, str) or not reason:
+                raise CatalogueError(f"{path} [{harness}.excluded]: {model!r} needs a reason string")
+            if model in table.get("models", {}):
+                raise CatalogueError(f"{path} [{harness}.excluded]: {model!r} is also catalogued")
+            found[(harness, model)] = reason
+    return found
+
+
+def undecided(priced: Iterable[tuple[str, str]], path: Path | None = None) -> list[str]:
+    """Every priced ``(harness, model)`` the catalogue neither lists nor excludes, as ``harness/model`` (ADR 0067)."""
+    path = path or MODELS_FILE
+    known = {(harness, spec.id) for harness, spec in load_catalogue(path=path)} | set(excluded(path))
+    return sorted(f"{h}/{m}" for h, m in set(priced) - known)
 
 
 def feeds(path: Path | None = None) -> tuple[Feed, ...]:

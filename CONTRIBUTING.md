@@ -11,10 +11,17 @@ and never invoke `python` directly.
 
 ```sh
 make format   # ruff format + isort
-make check    # ruff check + isort --check-only + mypy --strict
+make check    # repository-wide ruff check + isort --check-only + mypy --strict
 make test     # pytester-based suite, no mocks, coverage badge refresh
 make build    # wheel into dist/
+make prices-check # check whether a pricing PR is needed, without writing records
 ```
+
+Pricing updates start with `make prices-check` (ADR 0070).
+It prints `pricing PR needed: yes` or `no`, with the rate changes that justify the answer.
+An undecided release reports `catalogue decision required`, names the models, and stops with an error.
+Resolve those decisions in `models.toml`, then run `make prices` and `make test` before raising a PR.
+The check never creates a PR or issue, and pricing has no GitHub Action.
 
 The functions that spawn a CLI are excluded from coverage with a stated reason rather
 than faked: `harness.base.spawn`, `harness.claude.run_claude`,

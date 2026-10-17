@@ -400,7 +400,9 @@ def render(
             "title": r["title"],
             "status": r["status"],
             "status_note": r.get("status_note", ""),
-            "markdown": strip_frontmatter((source_dir / f"{r['id'].split('-')[-1]}-{r['slug']}.md").read_text(encoding="utf-8")),
+            "markdown": strip_frontmatter(
+                (source_dir / f"{r['id'].split('-')[-1]}-{r['slug']}.md").read_text(encoding="utf-8")
+            ),
         }
         for r in records
     }
@@ -428,9 +430,7 @@ def render(
 
 
 def main(args: argparse.Namespace) -> int:
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO, format="%(message)s", stream=sys.stderr
-    )
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(message)s", stream=sys.stderr)
     try:
         result = render(
             args.directory,
@@ -463,9 +463,7 @@ def main(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("directory", type=Path, help="bundle directory holding the .yml records")
-    parser.add_argument(
-        "--schema", type=Path, default=DEFAULT_SCHEMA, help="record schema (default: the skill's own)"
-    )
+    parser.add_argument("--schema", type=Path, default=DEFAULT_SCHEMA, help="record schema (default: the skill's own)")
     parser.add_argument(
         "--group-by",
         choices=["tag", "plan_id"],

@@ -1003,6 +1003,62 @@
     },
     {
       "data": {
+        "id": "ADR-0067",
+        "label": "0067",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0067-a-priced-release-is-catalogued-or-excluded-before-it-is-curated.md",
+        "title": "A priced first-party release is catalogued or excluded before the curator writes it",
+        "description": "A priced first-party release is catalogued or excluded before the curator writes it",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing, collection"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0068",
+        "label": "0068",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0068-imports-stay-in-the-top-import-section.md",
+        "title": "Imports stay in the top import section and Ruff checks the whole repository",
+        "description": "Imports stay in the top import section and Ruff checks the whole repository",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0069",
+        "label": "0069",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0069-decisions-endpoint-rates-do-not-price-agent-runs.md",
+        "title": "Decisions endpoint rates do not price agent runs",
+        "description": "Decisions endpoint rates do not price agent runs",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0070",
+        "label": "0070",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0070-pricing-updates-start-with-a-manual-check.md",
+        "title": "Pricing updates start with a manual Makefile check",
+        "description": "Pricing updates start with a manual Makefile check",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2669,6 +2725,66 @@
         "label": "extends",
         "relation": "extends",
         "note": "the difference lives on the harness class, never a name check"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0067-extends-ADR-0052",
+        "source": "ADR-0067",
+        "target": "ADR-0052",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0067-extends-ADR-0059",
+        "source": "ADR-0067",
+        "target": "ADR-0059",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0067-extends-ADR-0060",
+        "source": "ADR-0067",
+        "target": "ADR-0060",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0068-extends-ADR-0039",
+        "source": "ADR-0068",
+        "target": "ADR-0039",
+        "label": "extends",
+        "relation": "extends",
+        "note": ""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0069-extends-ADR-0051",
+        "source": "ADR-0069",
+        "target": "ADR-0051",
+        "label": "extends",
+        "relation": "extends",
+        "note": ""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0070-supersedes-ADR-0067",
+        "source": "ADR-0070",
+        "target": "ADR-0067",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": ""
       }
     }
   ],

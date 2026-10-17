@@ -54,17 +54,22 @@ from pathlib import Path
 # The feed conversion and the record format are the package's, shared with live pricing
 # (ADR 0060), so the two writers cannot disagree on how a feed entry becomes a row.
 from pytest_xharness_eval.derive import feed as shared
-from pytest_xharness_eval.derive.feed import (  # the constants are re-exported for the curator's own tests
-    LITELLM_FIELD,  # noqa: F401
-    LONG_CONTEXT,  # noqa: F401
-    THRESHOLD,  # noqa: F401
+from pytest_xharness_eval.derive import pricing
+from pytest_xharness_eval.derive.catalogue import load_catalogue, undecided
+
+# The constants are re-exported for the curator's own tests.
+from pytest_xharness_eval.derive.feed import LITELLM_FIELD  # noqa: F401
+from pytest_xharness_eval.derive.feed import LONG_CONTEXT  # noqa: F401
+from pytest_xharness_eval.derive.feed import THRESHOLD  # noqa: F401
+from pytest_xharness_eval.derive.feed import FeedError as CurationError
+from pytest_xharness_eval.derive.feed import (
     Row,
     close,
     open_record,
     read_rows,
     shown,
 )
-from pytest_xharness_eval.derive.feed import FeedError as CurationError
+from pytest_xharness_eval.model import matrix
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 PRICES_DIR = PROJECT_ROOT / "src" / "pytest_xharness_eval" / "derive" / "prices"
@@ -255,11 +260,6 @@ def stage(directory: Path, closes: tuple[Path, str] | None, new_name: str, new_t
 
 def validate(staged: Path, on: date) -> None:
     """The staged set must load exactly as the plugin loads it, and price every catalogued model (ADR 0057)."""
-    # Our Libraries
-    from pytest_xharness_eval.derive import pricing
-    from pytest_xharness_eval.derive.catalogue import load_catalogue
-    from pytest_xharness_eval.model import matrix
-
     table = pricing.PriceTable(tuple(pricing.load_records(staged)))
     table.validate_matrix(matrix.catalogued(load_catalogue()), on)
 
@@ -282,6 +282,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--always", action="store_true", help="write a record even when nothing changed")
     parser.add_argument(
+        "--check", action="store_true", help="report whether a pricing PR is needed; stage and write nothing"
+    )
+    parser.add_argument(
         "--when-catalogue-unpriced",
         action="store_true",
         help="curate only when a model in derive/prices/models.toml has no bundled price today; "
@@ -292,13 +295,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def catalogue_unpriced(on: date) -> list[str]:
     """Every catalogued model the bundled records leave unpriced on ``on``: the trigger for a new snapshot."""
-    # Our Libraries
-    from pytest_xharness_eval.derive import pricing
-    from pytest_xharness_eval.derive.catalogue import load_catalogue
-    from pytest_xharness_eval.model import matrix
-
     table = pricing.PriceTable(tuple(pricing.load_records(PRICES_DIR)))
     return [f"{h}/{m}" for h, m in table.unpriced(matrix.catalogued(load_catalogue()), on)]
+
+
+def catalogue_undecided(rows: list[Row]) -> list[str]:
+    """Every fed row models.toml neither catalogues nor excludes: a release nobody has decided on yet."""
+    return undecided((r.harness, r.model) for r in rows)
 
 
 def report_lines(report: dict[str, list[str]], unpriced: list[str]) -> list[str]:
@@ -310,6 +313,24 @@ def report_lines(report: dict[str, list[str]], unpriced: list[str]) -> list[str]
     lines.append(f" unpriced: {len(unpriced)} skipped")
     lines += [f"           {i}" for i in unpriced]
     return lines
+
+
+def select_decided(feed: dict) -> tuple[list[Row], list[str]]:
+    """Select feed rows, refusing unfamiliar ids and models with no catalogue decision."""
+    new_rows, unpriced, unrecognised = select(feed)
+    if unrecognised:
+        raise CurationError(
+            "first-party ids in a watched family fit no grammar; extend WATCHES rather than guess:\n  "
+            + "\n  ".join(unrecognised)
+        )
+    if undecided := catalogue_undecided(new_rows):
+        raise CurationError(
+            "pricing PR needed: catalogue decision required\n"
+            "first-party models the catalogue neither lists nor excludes; add each to models.toml's "
+            "[<harness>.models] or [<harness>.excluded] with a reason (ADR 0067):\n  "
+            + "\n  ".join(f"{u}  (source: {feed[u.split('/', 1)[1]].get('source', 'none in feed')})" for u in undecided)
+        )
+    return new_rows, unpriced
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -324,25 +345,23 @@ def main(argv: list[str] | None = None) -> int:
         feed, commit = json.loads(args.feed.read_text(encoding="utf-8")), args.ref or f"local file {args.feed}"
     else:
         feed, commit = fetch_feed(args.ref)
-    new_rows, unpriced, unrecognised = select(feed)
-    if unrecognised:
-        raise CurationError(
-            "first-party ids in a watched family fit no grammar; extend WATCHES rather than guess:\n  "
-            + "\n  ".join(unrecognised)
-        )
+    new_rows, unpriced = select_decided(feed)
     old_path = open_record(PRICES_DIR)
     old_rows = read_rows(old_path) if old_path else {}
+    merged, report = merge(new_rows, old_rows)
+    print("\n".join(report_lines(report, unpriced)))
+    if args.check:
+        print(f"pricing PR needed: {'yes' if changed(report) else 'no'}")
+        return 0
+    if not changed(report) and not args.always:
+        print(f"nothing changed since {old_path.name if old_path else 'no record'}; nothing written")
+        return 0
     if old_path is not None:
         opened = date.fromisoformat(str(tomllib.loads(old_path.read_text())["effective_from"]))
         if args.date <= opened:
             raise CurationError(
                 f"--date {args.date} must be after the open record's effective_from {opened} ({old_path.name})"
             )
-    merged, report = merge(new_rows, old_rows)
-    print("\n".join(report_lines(report, unpriced)))
-    if not changed(report) and not args.always:
-        print(f"nothing changed since {old_path.name if old_path else 'no record'}; nothing written")
-        return 0
     new_name = f"prices-{args.date:%Y%m%d}.toml"
     new_text = render(merged, args.date, commit, datetime.now(UTC).date())
     closes = (old_path, close(old_path.read_text(encoding="utf-8"), args.date)) if old_path else None

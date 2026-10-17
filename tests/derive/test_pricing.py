@@ -203,6 +203,32 @@ def _with_calls(model: str, usages: list[Usage], harness: str = "codex") -> RunR
     return r
 
 
+@pytest.mark.parametrize("model", ["claude-sonnet-4-5", "claude-sonnet-4-5-20250929"])
+def test_the_refreshed_record_removes_sonnets_retired_tier_without_changing_history(model: str) -> None:
+    table = pricing.load_table()
+    previous = table.resolve("claude", model, date(2026, 10, 11))
+    current = table.resolve("claude", model, date(2026, 10, 12))
+    assert previous.long_context is not None and previous.long_context.above_prompt_tokens == 200_000
+    assert current.long_context is None
+    assert (current.input, current.output, current.cache_read, current.cache_write, current.cache_write_1h) == (
+        3.0,
+        15.0,
+        0.3,
+        3.75,
+        6.0,
+    )
+
+
+@pytest.mark.parametrize("model", ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"])
+def test_the_refreshed_openai_rates_keep_the_prompt_threshold_and_full_request_multipliers(model: str) -> None:
+    row = pricing.load_table().resolve("codex", model, date(2026, 10, 12))
+    long = row.long_context
+    assert long is not None and long.above_prompt_tokens == 272_000
+    assert (long.input, long.cache_read, long.cache_write, long.output) == pytest.approx(
+        (row.input * 2, row.cache_read * 2, row.cache_write * 2, row.output * 1.5)
+    )
+
+
 def test_each_call_is_billed_at_the_tier_its_own_prompt_selects() -> None:
     """OpenAI: "Prompts with more than 272K input tokens are priced at 2x input and cache rates
     and 1.5x output for the full request." At exactly 272,000 the base tier still applies (ADR 0051).

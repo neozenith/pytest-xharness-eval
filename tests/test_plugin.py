@@ -81,7 +81,7 @@ def test_header_names_the_skills_root_and_matrix_source(pytester: pytest.Pyteste
     result.stdout.fnmatch_lines(
         [
             "xharness-eval: skills root = *skills, cache = *.xharness_eval_cache",
-            "xharness-eval: matrix = plugin default (11 of 14 catalogued models, output rate below $50/MTok)*",
+            "xharness-eval: matrix = plugin default (12 of 15 catalogued models, output rate below $50/MTok)*",
         ]
     )
 
@@ -99,6 +99,7 @@ def test_missing_skills_root_is_named_in_the_header_without_warning(pytester: py
 
 DEFAULT_CELLS = [
     "claude/claude-haiku-4-5-20251001",
+    "claude/claude-haiku-5-5",
     "claude/claude-sonnet-5",
     "claude/claude-sonnet-5-5",
     "claude/claude-opus-5",
@@ -122,7 +123,7 @@ def test_raising_the_output_rate_limit_opts_in_to_apex_models(pytester: pytest.P
     make_tree(pytester, matrix=None, ini="xharness_output_rate_limit = 51\n")
     ids = cell_ids(pytester.runpytest("--collect-only", "-q"))
     assert {"claude/claude-fable-5", "claude/claude-fable-5-1", "codex/gpt-6-astra"} <= set(ids)
-    assert len(ids) == 14
+    assert len(ids) == 15
 
 
 def test_an_uncatalogued_model_stops_collection_naming_the_line_that_adds_it(pytester: pytest.Pytester) -> None:

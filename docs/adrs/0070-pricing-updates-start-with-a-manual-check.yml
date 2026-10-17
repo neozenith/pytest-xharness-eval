@@ -1,0 +1,44 @@
+# Authored record (ADR 0047). Run make adrs to generate its markdown.
+id: ADR-0070
+slug: pricing-updates-start-with-a-manual-check
+title: Pricing updates start with a manual Makefile check
+status: accepted
+status_note: |-
+  accepted, 2026-10-13.
+  Supersedes [0067](0067-a-priced-release-is-catalogued-or-excluded-before-it-is-curated.md) only on the weekly workflow and issue automation.
+  Its catalogue decision gate remains in force.
+accepted_on: '2026-10-13'
+last_changed_on: '2026-10-13'
+group: pricing
+tags:
+- pricing
+lens: |-
+  Detect a review need without publishing anything.
+  Let a person or their agent choose when to check and when to raise the resulting PR.
+relates_to:
+- relation: supersedes
+  target: ADR-0067
+body:
+  context: |-
+    The maintainer wants pricing discovery on demand, run directly or delegated to an agent.
+    A weekly GitHub Action that publishes issues and PRs is outside that intended workflow.
+    The existing curator already knows which rates changed and which releases need a catalogue decision.
+  decision: |-
+    **Remove the pricing GitHub Action.** Neither a schedule nor a manually dispatched pricing workflow remains.
+    The existing build, test and release workflows keep their purposes.
+
+    **`make prices-check` runs the curator with `--check`.** It fetches the feed, applies the catalogue gate and compares its rows with the open record.
+    It reports `pricing PR needed: yes` or `no`, with the changes, and exits successfully for either completed comparison.
+    It stages and writes no price records, and creates no issues or PRs.
+    Detection works on the open record's day because it does not create a dated interval.
+
+    **An undecided release still stops before writes.** The error reports `pricing PR needed: catalogue decision required`, with the model ids and source links.
+    Other feed failures remain errors rather than being labelled as successful comparisons.
+
+    **Publication is a separate step.** Decide the catalogue entries, run `make prices` and `make test`, then raise a PR for review.
+    The existing offline `prices-sync` test prerequisite remains unchanged.
+  consequences: |-
+    A person or agent can ask whether a pricing PR is needed without changing bundled records.
+    Pricing checks run when requested, and do not publish repository content on a timer.
+    Successful comparisons use their explicit output to distinguish changes from no changes.
+    Unknown releases continue to require an adoption decision before curation can write them.

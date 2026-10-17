@@ -16,11 +16,11 @@ agent-skills-update:
 ######################################################################
 
 format: .venv/deps
-	uvx ruff format src/ tests/ --respect-gitignore --line-length 120
+	uv run ruff format src/ tests/ --respect-gitignore --line-length 120
 	uvx isort src/ tests/ --profile 'black'
 
 check: .venv/deps
-	uvx ruff check src/ tests/
+	uv run ruff check .
 	uvx isort src/ tests/ --check-only
 	uv run mypy src/
 
@@ -114,6 +114,9 @@ ui-promote: ui-check ui-test ui-ct ui-build
 prices: .venv/deps
 	uv run .github/scripts/curate_prices.py $(ARGS)
 
+prices-check: .venv/deps
+	uv run .github/scripts/curate_prices.py --check $(ARGS)
+
 ######################################################################
 # DECISION RECORDS (ADR 0047)
 # Records are authored as docs/adrs/NNNN-slug.yml; every .md, index.md,
@@ -165,4 +168,4 @@ clean:
 	rm -rf .mmdc_cache/
 	rm -rf node_modules/
 
-.PHONY: format check prices-sync test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-ct ui-e2e ui-promote prices adrs adrs-check adrs-prose
+.PHONY: format check prices-sync test show_coverage docs build publish publish-test clean agent-skills-update ui-install ui-dev ui-format ui-check ui-test ui-build ui-smoke ui-ct ui-e2e ui-promote prices prices-check adrs adrs-check adrs-prose
