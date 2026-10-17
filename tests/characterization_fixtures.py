@@ -227,6 +227,22 @@ def codex_capture(session_dir: Path) -> Path:
             },
             {
                 "type": "event_msg",
+                "timestamp": "2026-08-22T00:00:04Z",
+                "payload": {
+                    "type": "item_completed",
+                    # A code-mode exec spawning the scout: the record that links its rollout (ADR 0072).
+                    "item": {
+                        "type": "CollabAgentToolCall",
+                        "id": "exec-spawn-1",
+                        "tool": "spawn_agent",
+                        "status": "completed",
+                        "sender_thread_id": "codex-sid-1",
+                        "receiver_thread_ids": ["codex-sub-1"],
+                    },
+                },
+            },
+            {
+                "type": "event_msg",
                 "timestamp": "2026-08-22T00:00:05Z",
                 "payload": {
                     "type": "token_count",
@@ -306,11 +322,20 @@ def _codex_subagent(session_dir: Path) -> None:
                 "payload": {
                     "id": "codex-sub-1",
                     "forked_from_id": "codex-sid-1",
-                    "agent_nickname": "scout",
-                    "agent_path": "agents/scout.md",
-                    "source": {"subagent": {"thread_spawn": {}}},
+                    "source": {
+                        "subagent": {
+                            "thread_spawn": {
+                                "parent_thread_id": "codex-sid-1",
+                                "depth": 1,
+                                "agent_path": "/root/scout",
+                                "agent_nickname": "scout",
+                            }
+                        }
+                    },
                 },
             },
+            # A fork replays its parent's session_meta after its own; the id is still the fork's.
+            {"type": "session_meta", "timestamp": "2026-08-22T00:00:03Z", "payload": {"id": "codex-sid-1"}},
             {"type": "turn_context", "timestamp": "2026-08-22T00:00:03Z", "payload": {"model": CODEX_MODEL}},
             {
                 "type": "event_msg",

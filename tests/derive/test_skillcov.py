@@ -12,13 +12,12 @@ import pytest
 from pytest_xharness_eval import (
     Call,
     ExecutedCommand,
-    Subagent,
     ToolCall,
     ToolResult,
     Usage,
 )
 from pytest_xharness_eval.derive import skillcov
-from tests.support import _result, _skill
+from tests.support import _result, _skill, _subagent
 
 
 def test_a_coverage_row_widens_the_catalogued_file_by_exactly_the_two_access_lists() -> None:
@@ -345,27 +344,23 @@ def test_a_script_a_subagent_ran_is_credited_to_the_turn_that_spawned_it(tmp_pat
     r.workspace = "/x/ws"
     r.calls = [Call(n=1, at="t"), Call(n=2, at="t")]
     r.subagents = [
-        Subagent(
-            agent="general-purpose",
-            id="a1",
-            log="subagents/agent-a1.jsonl",
+        _subagent(
+            [Call(n=1, at="t", tools=[ToolCall("Bash", "", {"command": "bun run /x/skills/demo/scripts/check.ts"})])],
             parent_turn=2,
-            calls=[
-                Call(n=1, at="t", tools=[ToolCall("Bash", "", {"command": "bun run /x/skills/demo/scripts/check.ts"})])
-            ],
         ),
-        # A spawn the harness could not match to a turn keeps the subagent's own turn number.
-        Subagent(
-            agent="general-purpose",
+        # A subagent's subagent descends from the same primary turn, so its work is credited there too.
+        _subagent(
+            [Call(n=3, at="t", tools=[ToolCall("Read", "", {"file_path": "/x/skills/demo/resources/guide.md"})])],
             id="a2",
-            log="subagents/agent-a2.jsonl",
-            calls=[Call(n=3, at="t", tools=[ToolCall("Read", "", {"file_path": "/x/skills/demo/resources/guide.md"})])],
+            parent="a1",
+            depth=2,
+            parent_turn=2,
         ),
     ]
     cov = skillcov.annotate("demo", files, r)
     by = {f.path: f for f in cov.files}
     assert by["scripts/check.ts"].run == [2]
-    assert by["resources/guide.md"].loaded == [3]
+    assert by["resources/guide.md"].loaded == [2]
     assert cov.run == ["scripts/check.ts"]
 
 

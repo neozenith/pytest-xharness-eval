@@ -4,7 +4,7 @@
 
 Browse it interactively in [graph.html](graph.html): click a node to read its record.
 
-70 decision records, 173 typed edges, grouped into 11 groups.
+73 decision records, 184 typed edges, grouped into 11 groups.
 Every edge comes from a record's `relates_to` block, so this view cannot drift from the records.
 
 ```cytoscape
@@ -166,3 +166,12 @@ These are gaps in the record set, not rendering artifacts.
 * `ADR-0068` declares `extends ADR-0039`, but `ADR-0039` has no `extended_by ADR-0068`
 * `ADR-0069` declares `extends ADR-0051`, but `ADR-0051` has no `extended_by ADR-0069`
 * `ADR-0070` declares `supersedes ADR-0067`, but `ADR-0067` has no `superseded_by ADR-0070`
+* `ADR-0071` declares `extends ADR-0021`, but `ADR-0021` has no `extended_by ADR-0071`
+* `ADR-0071` declares `extends ADR-0037`, but `ADR-0037` has no `extended_by ADR-0071`
+* `ADR-0071` declares `extends ADR-0065`, but `ADR-0065` has no `extended_by ADR-0071`
+* `ADR-0072` declares `extends ADR-0033`, but `ADR-0033` has no `extended_by ADR-0072`
+* `ADR-0072` declares `extends ADR-0056`, but `ADR-0056` has no `extended_by ADR-0072`
+* `ADR-0072` declares `extends ADR-0065`, but `ADR-0065` has no `extended_by ADR-0072`
+* `ADR-0073` declares `extends ADR-0022`, but `ADR-0022` has no `extended_by ADR-0073`
+* `ADR-0073` declares `extends ADR-0065`, but `ADR-0065` has no `extended_by ADR-0073`
+* `ADR-0073` declares `extends ADR-0072`, but `ADR-0072` has no `extended_by ADR-0073`

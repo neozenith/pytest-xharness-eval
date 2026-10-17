@@ -34,6 +34,7 @@ from pytest_xharness_eval import harness
 from pytest_xharness_eval.derive import pricing, skillcov
 from pytest_xharness_eval.emit import page
 from pytest_xharness_eval.emit.metrics import CellMetrics
+from pytest_xharness_eval.harness.threads import SubagentMismatch
 from pytest_xharness_eval.model.catalogue import ModelSpec
 from pytest_xharness_eval.model.layout import SessionDir
 from pytest_xharness_eval.model.runresult import CaseRef
@@ -64,14 +65,17 @@ def rebuild_result(
     settings: Settings | None = None,
     *,
     run_date: date | None,
+    stored: Path | None = None,
 ) -> RunResult:
     """Re-derive one session's result from its captured log and stored envelope.
 
     ``run_date`` is the day the session's ``{run}`` stamp names, so the capture is priced
-    from the record in effect when it ran rather than from today's (ADR 0050).
+    from the record in effect when it ran rather than from today's (ADR 0050). ``stored`` is
+    the record read back, ``result.json`` unless a quarantined run's ``unfolded.json`` is
+    being retried (ADR 0072): its keys are the same.
     """
     session = SessionDir(session_dir)
-    old = json.loads(session.result.read_text(encoding="utf-8"))
+    old = json.loads((stored or session.result).read_text(encoding="utf-8"))
     if not session.log.is_file():
         raise FileNotFoundError(f"no captured session log beside {session.result}: {session.log.name}")
     workspace = Path(old.get("workspace") or "")
@@ -174,15 +178,29 @@ def rebuild(
     catalogs: dict[str, list[skillcov.SkillFile]] = {}
 
     rewritten: list[Path] = []
+    still_unfolded: list[str] = []
     for session in settings.cache.sessions():
-        if not session.result.is_file():
+        retrying = not session.result.is_file() and session.unfolded.is_file()
+        if not session.result.is_file() and not retrying:
             continue
         skill = session.skill
         if skill not in catalogs:
             skill_dir = settings.skill_dir(skill)
             catalogs[skill] = skillcov.catalog(skill_dir, ignore=settings.skill_ignore) if skill_dir.is_dir() else []
-        result = rebuild_result(session.path, table, catalogs[skill], skill, settings, run_date=session.run_date)
+        stored = session.unfolded if retrying else None
+        try:
+            result = rebuild_result(
+                session.path, table, catalogs[skill], skill, settings, run_date=session.run_date, stored=stored
+            )
+        except SubagentMismatch as exc:
+            if not retrying:
+                raise
+            still_unfolded.append(f"{session.path.relative_to(cache)}: {exc}")
+            continue
         result.write(session.result)
+        if retrying:
+            # The harness now folds what it once refused: the capture is an ordinary result.
+            session.unfolded.unlink()
         rewritten.append(session.result)
 
         previous = CellMetrics.stored(session.history)
@@ -200,6 +218,12 @@ def rebuild(
 
     report_page = page.write(settings.cache, design_tokens=design_tokens, inline=inline)
     log.info("report: %s%s", report_page, " (inline)" if inline else "")
+    if still_unfolded:
+        # Everything else is rebuilt and the page written first, so a quarantined capture never
+        # holds the rest hostage; it still fails the replay, because it is still unaccounted for.
+        raise harness.RunError(
+            f"{len(still_unfolded)} quarantined session(s) still do not fold (ADR 0072):\n" + "\n".join(still_unfolded)
+        )
     return rewritten
 
 

@@ -31,6 +31,9 @@ if TYPE_CHECKING:
     # Our Libraries
     from pytest_xharness_eval.model.layout import CacheLayout, LocatedSession
 
+#: The case a session is listed under when neither its result nor its record names one.
+UNKNOWN_CASE = "(unknown case)"
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class IndexRow:
@@ -88,6 +91,13 @@ class IndexRow:
     turns: int | None = None
     reported_turns: int | None = None
     subagents: int = 0
+    # The Important Metrics a result carries beyond the fields above (ADR 0071); None, or
+    # empty, on a capture written before they existed.
+    subagent_token_share: float | None = None
+    subagent_cost_share: float | None = None
+    compactions: int | None = None
+    reasoning_share: float | None = None
+    output_tokens_per_sec_by_model: dict[str, float] = field(default_factory=dict)
     tool_calls: int = 0
     duration_ms: int | None = None
     files_written: list[str] = field(default_factory=list)
@@ -107,7 +117,7 @@ class IndexRow:
         tool_calls = result.get("tool_calls") or {}
         meta = result.get("case") or {}
         return cls(
-            case=meta.get("name") or (hist.case if hist else None) or "(unknown case)",
+            case=meta.get("name") or (hist.case if hist else None) or UNKNOWN_CASE,
             run=session.run,
             suite=meta.get("suite"),
             skill=meta.get("skill"),
@@ -142,6 +152,11 @@ class IndexRow:
             turns=result.get("turns"),
             reported_turns=result.get("reported_turns"),
             subagents=len(result.get("subagents") or []),
+            subagent_token_share=result.get("subagent_token_share"),
+            subagent_cost_share=result.get("subagent_cost_share"),
+            compactions=result.get("compactions"),
+            reasoning_share=result.get("reasoning_share"),
+            output_tokens_per_sec_by_model=result.get("output_tokens_per_sec_by_model") or {},
             tool_calls=sum(int(v) for v in tool_calls.values()),
             duration_ms=result.get("duration_ms"),
             files_written=result.get("files_written") or [],

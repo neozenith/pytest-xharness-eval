@@ -11,7 +11,11 @@ import pytest
 # Our Libraries
 from pytest_xharness_eval import replay
 from pytest_xharness_eval.derive.catalogue import load_catalogue
-from tests.support import _jsonl, _skill
+from pytest_xharness_eval.harness import RunError
+from pytest_xharness_eval.model.layout import SessionDir
+from pytest_xharness_eval.model.runresult import CaseRef
+from pytest_xharness_eval.runtime import pipeline
+from tests.support import _jsonl, _late_transcript, _skill, _unfoldable
 
 
 def _stale_cache(tmp_path: Path) -> tuple[Path, Path]:
@@ -132,6 +136,31 @@ def test_replay_rebuilds_results_history_and_report_from_cached_logs(tmp_path: P
     ]
     assert [rec["session_id"] for rec in aggregated] == ["sid1"]
     assert (cache / "report" / "report.html").is_file()
+
+
+def test_replay_retries_a_quarantined_run_failing_loudly_until_it_folds(tmp_path: Path) -> None:
+    """An ``unfolded.json`` capture is retried after every other session is rebuilt (ADR 0072)."""
+    cache, healthy = _stale_cache(tmp_path)
+    quarantined = SessionDir(healthy.parent / "sid-u")
+    err = _unfoldable(tmp_path / "native")
+    case = CaseRef(suite="s.py", name="eval_demo", skill="demo", fixture="seed", task="go", prompt="/demo go")
+    pipeline.quarantine(err, quarantined, case=case, effort=None, treatment=None)
+
+    with pytest.raises(RunError, match=r"(?s)1 quarantined session\(s\) still do not fold.*sid-u.*tu_x"):
+        replay.rebuild(cache)
+    assert (healthy / "result.json").is_file() and (cache / "report" / "report.html").is_file()
+    assert quarantined.unfolded.is_file() and not quarantined.result.exists()
+
+    _late_transcript(quarantined.subagents)  # what a reader that now folds this capture sees
+    assert quarantined.result in replay.rebuild(cache)
+    fresh = json.loads(quarantined.result.read_text(encoding="utf-8"))
+    assert (fresh["final_text"], fresh["harness_reported_cost_usd"], fresh["case"]["name"]) == (
+        "done",
+        0.5,
+        "eval_demo",
+    )
+    assert [s["spawned_by"] for s in fresh["subagents"]] == ["tu_x"]
+    assert not quarantined.unfolded.exists()
 
 
 def test_replay_main_rebuilds_the_cache_named_on_its_command_line(tmp_path: Path) -> None:

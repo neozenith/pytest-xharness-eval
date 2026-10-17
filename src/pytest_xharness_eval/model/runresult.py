@@ -22,6 +22,9 @@ from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, NotRequired, Self, TypedDict, Unpack
 
+# Our Libraries
+from pytest_xharness_eval.model.clock import ms_between
+
 if TYPE_CHECKING:
     # Standard Library
     from collections.abc import Iterable, Mapping
@@ -33,6 +36,7 @@ if TYPE_CHECKING:
     # layer stays strictly above this one (ADR 0039).
     from pytest_xharness_eval.derive.pricing import AppliedRates, CostEstimate
     from pytest_xharness_eval.derive.skillcov import SkillCoverage
+    from pytest_xharness_eval.derive.toolcost import SkillUse, ToolCost
     from pytest_xharness_eval.model.case import EvalCase
 
 
@@ -103,6 +107,15 @@ class ToolCall:
     summary: str
     input: Any = None
     id: str = ""
+    #: When the log recorded the call, and when it recorded the call's result (ADR 0073). Empty
+    #: when the log has no such record: a run killed before the result came back has no end.
+    started_at: str = ""
+    ended_at: str = ""
+
+    @property
+    def duration_ms(self) -> int | None:
+        """Wall time from the call to its result: the tool's run, as the log saw it; None without both."""
+        return ms_between(self.started_at, self.ended_at)
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +146,8 @@ class ToolResult:
     tool: str
     chars: int
     content: str
+    #: The tool call this answers (Claude ``tool_use_id``, Codex ``call_id``); empty when unmatched.
+    id: str = ""
 
 
 @dataclass(slots=True)
@@ -188,28 +203,46 @@ class SubagentFields(TypedDict):
     agent: str
     id: str
     log: str
-    parent_turn: NotRequired[int | None]
+    spawned_by: str
+    parent: str
+    depth: int
+    parent_turn: int
+    started_at: str
+    ended_at: str
     description: NotRequired[str]
     model: NotRequired[str]
 
 
 @dataclass(slots=True)
 class Subagent:
-    """One parallel thread the primary session spawned, with its own captured transcript.
+    """One thread the session spawned, linked to the record that spawned it (ADR 0072).
 
     Claude writes each subagent to ``<session>/subagents/agent-<id>.jsonl`` beside the
     session log; Codex forks one rollout per spawned thread. Both fold through the same
     ledger machinery as the primary, so a subagent carries its own :class:`Call` list and
-    :class:`Usage`. ``parent_turn`` is the primary turn whose tool call spawned it
-    (matched by tool-use id on Claude, by spawn timestamp on Codex). ``log`` is the
-    captured transcript path relative to the session directory (``subagents/<name>``),
-    absolute only before capture.
+    :class:`Usage`. ``log`` is the captured transcript path relative to the session
+    directory (``subagents/<name>``), absolute only before capture.
+
+    Every field of its link is required, because a thread the fold cannot link to its spawn
+    stops the fold (``harness/threads.py``): there is no unlinked subagent to describe.
     """
 
     agent: str
     id: str
     log: str
-    parent_turn: int | None = None
+    #: The id of the record that spawned it: Claude's ``tool_use.id``, Codex's ``call_id`` or
+    #: ``CollabAgentToolCall`` item id.
+    spawned_by: str
+    #: The id of the thread that spawned it, empty for the primary; a subagent can spawn its own.
+    parent: str
+    #: 1 for a thread the primary spawned, one more for each subagent between it and the primary.
+    depth: int
+    #: The primary turn its spawn descends from: its own spawning turn at depth 1, else its
+    #: depth-1 ancestor's. The run is credited with the thread's work at that turn (ADR 0056).
+    parent_turn: int
+    #: The first and last timestamps its transcript records, ISO-8601 as the log wrote them.
+    started_at: str
+    ended_at: str
     turns: int = 0
     description: str = ""
     usage: Usage = field(default_factory=Usage)
@@ -230,6 +263,26 @@ class Subagent:
         supplies, checked field by field by the type checker.
         """
         return cls(turns=len(calls), usage=Usage.total(c.usage for c in calls), calls=calls, **fields)
+
+    @property
+    def duration_ms(self) -> int | None:
+        """Wall time from the thread's first record to its last; None when either is unparseable."""
+        return ms_between(self.started_at, self.ended_at)
+
+    @property
+    def output_tokens_per_sec(self) -> float | None:
+        """The thread's output tokens over the summed latency of its calls that measured one.
+
+        Generation speed, as :attr:`RunResult.output_tokens_per_sec_by_model` measures it, so
+        the two compare. Not over :attr:`duration_ms`: the span includes tool runs and, for a
+        thread with its own subagents, waiting on them (ADR 0072). None when no call measured
+        a latency.
+        """
+        timed = [c for c in self.calls if c.latency_ms]
+        millis = sum(c.latency_ms or 0 for c in timed)
+        if not millis:
+            return None
+        return round(sum(c.usage.output_tokens for c in timed) / (millis / 1000), 2)
 
 
 class CostStatus(StrEnum):
@@ -334,6 +387,7 @@ class RunResultFields(TypedDict):
     reported_model_usage: NotRequired[dict[str, Any]]
     envelope: NotRequired[dict[str, Any]]
     record_kinds: NotRequired[dict[str, int]]
+    compactions: NotRequired[int]
     context_window: NotRequired[int | None]
     ttft_ms: NotRequired[int | None]
     api_duration_ms: NotRequired[int | None]
@@ -383,8 +437,16 @@ class RunResult:
     envelope: dict[str, Any] = field(default_factory=dict)
     # How many session-log records of each kind the run produced (ADR 0022; see ``records.py``).
     record_kinds: dict[str, int] = field(default_factory=dict)
+    # How many times the primary thread compacted its context, counted off ``record_kinds`` by
+    # the harness that knows which of its kinds mark one (ADR 0071).
+    compactions: int = 0
     # Which of the skill's files the run loaded or ran, per turn, and which it never touched (ADR 0022).
     skill_coverage: SkillCoverage | None = None
+    # Every tool call of every thread, timed and priced two ways, and the skill under test's span
+    # and cost built from the calls that touched it (ADR 0073). Attached by the derivation
+    # pipeline once the run is priced; empty and None until then.
+    tool_costs: list[ToolCost] = field(default_factory=list)
+    skill_use: SkillUse | None = None
     # The model's context window as the harness reported it, and the run's timing (ADR 0024).
     context_window: int | None = None
     ttft_ms: int | None = None
@@ -412,8 +474,9 @@ class RunResult:
     # at the kill, never folded from a log. None on a run that finished on its own.
     timed_out_after_s: int | None = None
     idle_before_timeout_s: float | None = None
-    # Parallel threads the session spawned, each with its own ledger. Their usage is folded
-    # into ``usage`` (the run's billed total); ``turns`` and ``calls`` stay the primary's.
+    # Threads the session spawned, at any depth, each with its own ledger and linked to its
+    # spawn (ADR 0072). Their usage is folded into ``usage`` (the run's billed total);
+    # ``turns`` and ``calls`` stay the primary's.
     subagents: list[Subagent] = field(default_factory=list)
 
     @classmethod
@@ -426,7 +489,7 @@ class RunResult:
         ``fields`` is :class:`RunResultFields`: the dialect's own observations, every one
         of them checked by name and type against the dataclass.
         """
-        subs = sorted(subagents, key=lambda s: (s.parent_turn or 0, s.agent, s.id))
+        subs = sorted(subagents, key=lambda s: (s.parent_turn, s.started_at, s.id))
         return cls(
             turns=len(calls),
             usage=Usage.total(c.usage for c in calls) + Usage.total(s.usage for s in subs),
@@ -496,6 +559,55 @@ class RunResult:
             return None
         return round(self.usage.output_tokens / (ms / 1000), 2)
 
+    @property
+    def reasoning_share(self) -> float | None:
+        """Reasoning tokens over output tokens, whole run (ADR 0071); None when nothing was generated.
+
+        Both providers bill reasoning inside output, so this is a share of a whole, in ``[0, 1]``.
+        """
+        if not self.usage.output_tokens:
+            return None
+        return round(self.usage.reasoning_tokens / self.usage.output_tokens, 4)
+
+    @property
+    def subagent_token_share(self) -> float | None:
+        """The subagents' part of the run's billed tokens, in ``[0, 1]`` (ADR 0071); None on an empty bill."""
+        total = self.usage.accumulative_billed_tokens
+        if not total:
+            return None
+        return round(sum(s.usage.accumulative_billed_tokens for s in self.subagents) / total, 4)
+
+    @property
+    def subagent_cost_share(self) -> float | None:
+        """The subagents' part of the estimated cost, in ``[0, 1]`` (ADR 0071).
+
+        None while the run is unpriced, when it cost nothing, or when a subagent carries no
+        estimate of its own: a share of an unknown is not zero.
+        """
+        if not self.estimated_cost_usd:
+            return None
+        costs = [s.estimated_cost_usd for s in self.subagents]
+        if any(c is None for c in costs):
+            return None
+        return round(sum(c for c in costs if c is not None) / self.estimated_cost_usd, 4)
+
+    @property
+    def output_tokens_per_sec_by_model(self) -> dict[str, float]:
+        """Output tokens per second of call latency, per model that answered (ADR 0071).
+
+        A subagent that names no model of its own ran on the parent's. Only calls with a
+        measured latency count, on both sides of the division; a model with none is absent.
+        """
+        tokens: dict[str, int] = {}
+        millis: dict[str, int] = {}
+        threads = [(self.model, self.calls)] + [(s.model or self.model, s.calls) for s in self.subagents]
+        for model, calls in threads:
+            for call in calls:
+                if call.latency_ms:
+                    tokens[model] = tokens.get(model, 0) + call.usage.output_tokens
+                    millis[model] = millis.get(model, 0) + call.latency_ms
+        return {model: round(tokens[model] / (millis[model] / 1000), 2) for model in sorted(millis)}
+
     def to_dict(self) -> dict[str, Any]:
         """A JSON-ready mapping, with the derived token and timing figures included.
 
@@ -505,7 +617,7 @@ class RunResult:
         one straight to the field. An absent record has always serialised as ``{}``.
         """
         d = asdict(self)
-        for absent in ("case", "skill_coverage", "rates_applied"):
+        for absent in ("case", "skill_coverage", "rates_applied", "skill_use"):
             d[absent] = d[absent] or {}
         d["usage"]["accumulative_billed_tokens"] = self.usage.accumulative_billed_tokens
         d["baseline_tokens"] = self.baseline_tokens
@@ -514,13 +626,23 @@ class RunResult:
         d["context_window_pct"] = self.context_window_pct
         d["final_context_pct"] = self.final_context_pct
         d["output_tokens_per_sec"] = self.output_tokens_per_sec
+        d["output_tokens_per_sec_by_model"] = self.output_tokens_per_sec_by_model
+        d["reasoning_share"] = self.reasoning_share
+        d["subagent_token_share"] = self.subagent_token_share
+        d["subagent_cost_share"] = self.subagent_cost_share
         for call, raw in zip(self.calls, d["calls"], strict=True):
+            for tool, raw_tool in zip(call.tools, raw["tools"], strict=True):
+                raw_tool["duration_ms"] = tool.duration_ms
             raw["context_tokens"] = call.context_tokens
             raw["context_pct"] = self.pct_of_window(call.context_tokens)
             raw["output_tokens_per_sec"] = call.output_tokens_per_sec
         for sub, raw_sub in zip(self.subagents, d["subagents"], strict=True):
             raw_sub["usage"]["accumulative_billed_tokens"] = sub.usage.accumulative_billed_tokens
+            raw_sub["duration_ms"] = sub.duration_ms
+            raw_sub["output_tokens_per_sec"] = sub.output_tokens_per_sec
             for call, raw in zip(sub.calls, raw_sub["calls"], strict=True):
+                for tool, raw_tool in zip(call.tools, raw["tools"], strict=True):
+                    raw_tool["duration_ms"] = tool.duration_ms
                 raw["context_tokens"] = call.context_tokens
                 raw["context_pct"] = self.pct_of_window(call.context_tokens)
                 raw["output_tokens_per_sec"] = call.output_tokens_per_sec

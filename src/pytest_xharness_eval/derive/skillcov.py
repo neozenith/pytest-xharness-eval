@@ -50,7 +50,7 @@ from pytest_xharness_eval.model.registry import Shells
 
 if TYPE_CHECKING:
     # Standard Library
-    from collections.abc import Callable
+    from collections.abc import Iterator
 
     # Our Libraries
     from pytest_xharness_eval.model.runresult import Call, RunResult, ToolCall
@@ -448,56 +448,77 @@ def annotate(skill: str, files: list[SkillFile], result: RunResult, shells: Shel
     Ignored files are still annotated (a run may well touch them); what that means for the
     missed sets and the summary is :meth:`SkillCoverage.over`'s to decide, not this walk's.
     """
-    vocab = shells if shells is not None else Shells.of(result.harness)
     rows = [FileCoverage.of(f) for f in files]
-    workspace = str(result.workspace) or None if result.workspace else None
-
-    def touch(tool: str, text: str, turn: int) -> None:
-        for row in rows:
-            access = _access(tool, text, skill, row, vocab)
-            if access is not None:
-                row.touch(access, turn)
-
-    _walk(result.calls, lambda call: call.n, touch, skill, vocab, workspace)
-    # A subagent's file reads and script runs are the run's too: the run is billed for its
-    # tokens, so it is credited with its work, at the primary turn that spawned it (ADR 0056).
-    # Each subagent has a shell of its own, so its walk starts back in the workspace.
-    for sub in result.subagents:
-        _walk(sub.calls, _spawned_at(sub.parent_turn), touch, skill, vocab, workspace)
+    by_path = {row.path: row for row in rows}
+    for hit in accesses(skill, files, result, shells):
+        by_path[hit.path].touch(hit.access, hit.turn)
     return SkillCoverage.over(skill, rows)
 
 
-def _spawned_at(parent_turn: int | None) -> Callable[[Call], int]:
-    """A subagent's calls credit the primary turn that spawned it, or their own turn when no match was found."""
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SkillAccess:
+    """One touch of one catalogued file: which thread's turn, through which tool call (ADR 0073)."""
 
-    def turn_of(call: Call) -> int:
-        return parent_turn if parent_turn is not None else call.n
+    #: The thread that touched it: empty for the primary, else the subagent's id.
+    thread: str
+    #: That thread's own turn (``Call.n``).
+    call: int
+    #: The primary turn it is credited to: its own turn on the primary, the spawning turn under a subagent.
+    turn: int
+    #: The tool call that touched it, or empty for a command the shell reported running that no
+    #: single tool call of its turn can be credited with.
+    tool_id: str
+    tool: str
+    path: str
+    access: Access
 
-    return turn_of
+
+def accesses(
+    skill: str, files: list[SkillFile], result: RunResult, shells: Shells | None = None
+) -> Iterator[SkillAccess]:
+    """Every touch of every catalogued file across the run's threads, in ledger order.
+
+    A subagent's file reads and script runs are the run's too: the run is billed for its
+    tokens, so it is credited with its work, at the primary turn it descends from (ADR 0056,
+    ADR 0072). Each subagent has a shell of its own, so its walk starts back in the workspace.
+    """
+    vocab = shells if shells is not None else Shells.of(result.harness)
+    rows = [FileCoverage.of(f) for f in files]
+    workspace = str(result.workspace) or None if result.workspace else None
+    threads = [("", result.calls, None)] + [(s.id, s.calls, s.parent_turn) for s in result.subagents]
+    for thread, calls, parent_turn in threads:
+        for call, tool, text, tool_id in _walk(calls, skill, vocab, workspace):
+            for row in rows:
+                access = _access(tool, text, skill, row, vocab)
+                if access is not None:
+                    yield SkillAccess(
+                        thread=thread,
+                        call=call.n,
+                        turn=call.n if parent_turn is None else parent_turn,
+                        tool_id=tool_id,
+                        tool=tool,
+                        path=row.path,
+                        access=access,
+                    )
 
 
-def _walk(
-    calls: list[Call],
-    turn_of: Callable[[Call], int],
-    touch: Callable[[str, str, int], None],
-    skill: str,
-    vocab: Shells,
-    workspace: str | None,
-) -> None:
-    """Touch every file one ledger reaches, crediting each access to ``turn_of`` its call."""
+def _walk(calls: list[Call], skill: str, vocab: Shells, workspace: str | None) -> Iterator[tuple[Call, str, str, str]]:
+    """Each text one ledger's tools are matched against: ``(call, tool name, text, tool id)``."""
     # The persistent shell's working directory, per ledger: it starts in the workspace
     # and follows every ``cd`` of a persistent shell tool until the harness resets it.
     cwd: str | None = workspace
     for call in calls:
         for tool in call.tools:
             text, cwd = _tool_text(tool, skill, vocab, cwd, workspace)
-            touch(tool.name, text, turn_of(call))
+            yield call, tool.name, text, tool.id
+        shell_calls = [t.id for t in call.tools if t.name in vocab.tools]
         for ran in call.executed:
             # What the harness reports its shell as having actually run, already expanded:
             # no variable, template literal or wrapper language stands between it and the
-            # path (ADR 0048). Its own ``cwd`` resolves what is still relative in it.
+            # path (ADR 0048). Its own ``cwd`` resolves what is still relative in it. No
+            # record links it to a tool call, so it is that call's only when its turn had one.
             resolved, _after = resolve_command(ran.command, skill, ran.cwd or workspace)
-            touch(ran.tool, f"{ran.command}\n{resolved}", turn_of(call))
+            yield call, ran.tool, f"{ran.command}\n{resolved}", shell_calls[0] if len(shell_calls) == 1 else ""
         for res in call.results_in:
             m = _CWD_RESET.search(res.content or "")
             if m:

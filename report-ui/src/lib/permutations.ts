@@ -223,9 +223,9 @@ export function enumeratePermutations(
       description: "SweepOverview sorted by estimated cost",
     });
     perms.push({
-      slug: "overview--summary-sort-billed",
-      search: overviewSearch(null, null, null, { key: "billed", dir: "desc" }),
-      description: "SweepOverview with the SessionSummaryTable sorted by mean billed tokens",
+      slug: "overview--summary-sort-tokens",
+      search: overviewSearch(null, null, null, { key: "tokens", dir: "desc" }),
+      description: "SweepOverview with the Important Metrics table sorted by median billed tokens",
     });
     /*
      * Both tables sorted at once, on their own pairs. This is the permutation that would catch a

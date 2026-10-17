@@ -98,6 +98,9 @@ that only checks `exists` passes for a run that did nothing at all.
 | `run.peak_context_tokens` | The largest prompt any one call processed. |
 | `run.context_window` / `context_window_pct` | The window the harness reported, and how close the run came to it. |
 | `run.ttft_ms`, `run.output_tokens_per_sec` | Timing. |
+| `run.output_tokens_per_sec_by_model` | `dict[str, float]`: throughput per model that answered, over calls with a measured latency; a subagent naming no model counts under its parent's (ADR 0071). |
+| `run.reasoning_share` | `reasoning_tokens / output_tokens`, in `[0, 1]`; `None` when nothing was generated (ADR 0071). |
+| `run.compactions` | `int`: how many times the primary thread compacted its context, counted off `record_kinds` (ADR 0071). |
 
 `docs/token-accounting.md` has the derivation and the provider quotations behind it.
 
@@ -123,7 +126,29 @@ every turn, the quick way to ask "did it ever call Bash".
 with its own `.calls`, `.usage`, `.parent_turn` and captured `.log`. Their usage is
 already folded into `run.usage`, so the run's bill is the whole bill. Each also names the
 `.model` that answered it and carries its own `.estimated_cost_usd`, priced at that model's
-rates rather than its parent's (ADR 0065).
+rates rather than its parent's (ADR 0065). `run.subagent_token_share` and
+`run.subagent_cost_share` are their part of the billed tokens and of the estimate, in
+`[0, 1]`; the cost share is `None` while the run is unpriced or a subagent carries no
+estimate (ADR 0071).
+
+Every subagent is linked to the record that spawned it, at any depth, or the run fails
+with `SubagentMismatch` rather than grading (ADR 0072). `.spawned_by` is that record's id,
+`.parent` the spawning thread's id (empty for the primary), `.depth` 1 for a thread the
+primary spawned, and `.parent_turn` the primary turn it descends from. `.started_at` and
+`.ended_at` are its transcript's earliest and latest timestamps; `.duration_ms` is the span
+and `.output_tokens_per_sec` its output tokens over the summed latency of its timed calls.
+
+### Tool calls and skill use
+
+Each `ToolCall` carries `.started_at`, `.ended_at` and `.duration_ms`, read off the records
+that issued it and answered it (ADR 0073). `run.tool_costs` is one `ToolCost` per tool
+call of every thread (`.thread` empty for the primary): `.issuing_cost_usd` is the issuing
+call's cost split across its tools, and `.context_cost_usd` is its result's share of every
+later prompt that carried it, with `.trace` per turn, `.cache_rereads` and the estimated
+`.result_tokens`. Both are attributions, never part of `run.estimated_cost_usd`.
+`run.skill_use` is the skill under test's `SkillUse` (`None` when nothing triggered it):
+`.trigger`, `.triggered_turn`, `.last_turn`, `.duration_ms`, `.tool_calls`, both costs,
+and `.events`, one per skill file access.
 
 ### Skill coverage
 

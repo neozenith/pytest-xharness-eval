@@ -1,0 +1,66 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0073
+slug: a-tool-call-is-timed-and-costed-as-issued-and-as-carried
+title: A tool call is timed, and costed both as issued and as carried in context, and so is the skill under test
+status: accepted
+status_note: |-
+  accepted, 2026-10-18.
+  Extends [0022](0022-record-kind-catalogue-and-skill-coverage.md) (skill coverage), whose file accesses each skill event names.
+  Extends [0065](0065-a-subagent-is-priced-at-its-own-models-rates.md) (each thread at its own model's rates) and [0072](0072-every-subagent-is-linked-to-its-spawn-or-the-fold-stops.md) (every thread is linked).
+  So a subagent's tool calls are priced and placed like the primary's.
+accepted_on: '2026-10-18'
+last_changed_on: '2026-10-18'
+group: accounting
+tags:
+- accounting
+- evidence
+lens: |-
+  Providers bill tokens, never tools, so a tool's cost is an attribution.
+  Make it two ways and name both: what it cost to ask for, and what its output cost to keep.
+relates_to:
+- relation: extends
+  target: ADR-0022
+  note: the record's status line says "extends"
+- relation: extends
+  target: ADR-0065
+  note: the record's status line says "extends"
+- relation: extends
+  target: ADR-0072
+  note: the record's status line says "extends"
+body:
+  context: |-
+    A run recorded which tools each turn issued, but not when each ran, how long it took or what it cost.
+    Skill coverage recorded which turns touched each skill file, but not when the skill came into use, for how long, or at what cost.
+    Neither provider bills a tool call, so no log reports one's cost.
+    A tool's result is billed again on every later call that carries it, and from the prompt cache that charge is small but repeated.
+  decision: |-
+    **A tool call is timed from its log.** `ToolCall.started_at` is the record that issued it and `ended_at` the record of its result, matched by tool-use id.
+    `duration_ms` is the gap between them.
+    A tool whose result was never logged has no end, never a guessed one.
+
+    **A tool call is costed two ways, side by side.** `issuing_cost_usd` is the billed cost of the model call that asked for it, split evenly across the tools that call issued.
+    `context_cost_usd` is what carrying its result cost.
+    The result's tokens are estimated from its characters, four to a token.
+    That estimate is bounded by the prompt growth measured at the call that first read it.
+    At each call from then on, the result is charged its share of that call's prompt cost.
+    The charges stop at the first call whose prompt is smaller than where the result entered, which is a compaction.
+    Each charge is kept as a per-turn `trace`, so its downstream impact can be followed turn by turn.
+    `cache_rereads` counts the later calls that re-read it from the prompt cache.
+
+    **Every thread's tool calls are costed at that thread's model's rates.** `derive/toolcost.py` writes `RunResult.tool_costs`, one `ToolCost` per tool call of the primary and of every subagent, after pricing.
+
+    **The skill under test has a span and a cost.** `RunResult.skill_use` starts at its first trigger.
+    That is the run's first turn when the run's own invocation named the skill, else the first tool call that touched one of its files.
+    The span ends at the last such touch.
+    Its totals sum each tool call that touched a skill file once.
+    Its `events` list every access, with the figures of the tool call that made it.
+    A command Codex's shell reports running is credited to its turn's shell tool when that turn issued exactly one, and carries no figures otherwise.
+  consequences: |-
+    A session shows when every tool ran, how long it took, what it cost to ask for and what its output cost to keep.
+    A small result read early can be seen costing more than a large one read late.
+
+    Both costs are attributions, not bills, and they overlap: an issuing call's prompt already carries earlier results.
+    Neither is summed into the run's estimate, which stays the billed total.
+    The token estimate is bounded by what was measured but is still an estimate, and the page says so.

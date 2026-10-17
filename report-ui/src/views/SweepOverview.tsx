@@ -49,6 +49,29 @@ export function SweepOverview({ index }: { index: Index }) {
     <View render="section" id="SweepOverview" gap={16} data-el="SweepOverview">
       <OverviewFilters cells={index.cells} />
       {/*
+       * The report leads with the Important Metrics (ADR 0071): the first thing a reader meets is
+       * how each cell did across its samples, not a picture of one bill growing. The charts below
+       * then explain a row the reader has already picked out.
+       */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            Important Metrics{" "}
+            <Text render={<span id="SummaryCount" />} color="$muted" fontWeight="400">
+              ({groups} {groups === 1 ? "group" : "groups"})
+            </Text>
+            <El name="SessionSummaryTable" />
+          </CardTitle>
+          <CardDescription>
+            How each cell of the experiment did across its samples: one row per skill × case × harness × model × effort × treatment, the same runs the Sessions
+            table lists. Each metric shows its own aggregate (a median for a cost, a mean for a share, a pass rate for the verdict); hover a cell for the rest.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SessionSummaryTable cells={cells} metrics={index.important_metrics} shortModel={shortModel} />
+        </CardContent>
+      </Card>
+      {/*
        * The two charts read as one row because they are one question asked two ways over the same
        * filtered population: how fast the bill grows, and where it went. Side by side a reader
        * compares a spike in the accumulation against the category that caused it without holding
@@ -75,24 +98,6 @@ export function SweepOverview({ index }: { index: Index }) {
           </CardContent>
         </Card>
       </View>
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Summary{" "}
-            <Text render={<span id="SummaryCount" />} color="$muted" fontWeight="400">
-              ({groups} {groups === 1 ? "group" : "groups"})
-            </Text>
-            <El name="SessionSummaryTable" />
-          </CardTitle>
-          <CardDescription>
-            The same runs the table below lists, aggregated one row per line of the chart above: skill × case × harness × model × effort × treatment, with a run
-            count and the mean of each measure over the runs that carry it.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SessionSummaryTable cells={cells} shortModel={shortModel} />
-        </CardContent>
-      </Card>
       <Card>
         <CardHeader>
           <CardTitle>

@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CopyId } from "@/components/CopyId";
 import { El } from "@/components/El";
-import { fmt, pct, short } from "@/lib/format";
+import { dec, fmt, NONE, pct, secs, short, usd } from "@/lib/format";
 import type { Call, RunResult, Subagent } from "@/lib/types";
 import { clock, ms, ranges, turnId } from "./helpers";
 
@@ -158,6 +158,44 @@ const billedOf = (s: Subagent): number =>
   s.usage.accumulative_billed_tokens ?? s.usage.input_tokens + s.usage.output_tokens + s.usage.cache_read_tokens + s.usage.cache_write_tokens;
 
 /**
+ * One thread's span and figures (ADR 0072): when its transcript started and ended, its wall
+ * duration, its output tokens per second of call latency, its cost at its own model's rates,
+ * and where it sits in the spawn tree. A result written before ADR 0072 carries none of the
+ * span, and says so rather than showing a blank.
+ */
+function SubagentSpan({ s }: { s: Subagent }) {
+  if (s.started_at == null) {
+    return (
+      <span data-el="SubagentSpan" className="muted" style={{ fontSize: 12 }}>
+        span not recorded (written before ADR 0072); replay the cache to link it
+      </span>
+    );
+  }
+  const facts: [string, string][] = [
+    ["started", clock(s.started_at)],
+    ["ended", clock(s.ended_at)],
+    ["duration_ms", secs(s.duration_ms)],
+    ["output_tokens_per_sec", s.output_tokens_per_sec == null ? NONE : dec(s.output_tokens_per_sec, 1)],
+    ["estimated_cost_usd", usd(s.estimated_cost_usd)],
+    ["model", s.model || "parent's"],
+    ["depth", s.depth == null ? NONE : String(s.depth)],
+    ["spawned_by", s.parent ? `${short(s.spawned_by)} in ${short(s.parent)}` : short(s.spawned_by)],
+  ];
+  return (
+    <dl data-el="SubagentSpan" className="num muted" style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", margin: 0, fontSize: 12 }}>
+      {facts.map(([k, v]) => (
+        <div key={k} data-k={k} style={{ display: "flex", gap: 4 }}>
+          <dt>{k}</dt>
+          <dd style={{ margin: 0, fontVariantNumeric: "tabular-nums" }} className="strong">
+            {v}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
  * The parallel threads a turn spawned, rendered beneath it: each subagent's own per-call
  * ledger, indented and bordered in the waterfall's `sub` colour so the band reads as a
  * fork off the primary thread (glossary: `SubagentBand`).
@@ -186,6 +224,8 @@ function SubagentBand({ result, subs, unattributed = false }: { result: RunResul
               {s.turns} turn{s.turns === 1 ? "" : "s"} · {fmt(billedOf(s))} billed tokens
             </span>
           </XStack>
+          <SubagentSpan s={s} />
+
           {s.calls.length ? (
             <Table className="subagent-turns">
               <TableHeader>

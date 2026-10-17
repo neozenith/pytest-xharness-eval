@@ -31,11 +31,11 @@ test("two rungs of one model are two summary rows, in ladder order, never one av
     // `high` sorts before `low` by spelling: only a ladder comparator puts it after
     cell({ session_id: "5", effort: "high", estimated_cost_usd: 4 }),
   ]);
-  expect(rows.map((r) => [r.effort, r.runs, r.mean_estimated_cost_usd])).toEqual([
-    ["low", 2, 2],
-    ["high", 1, 4],
-    ["max", 1, 9],
-    [null, 1, 5],
+  expect(rows.map((r) => [r.effort, r.runs])).toEqual([
+    ["low", 2],
+    ["high", 1],
+    ["max", 1],
+    [null, 1],
   ]);
   // a rung-less group keeps the key it had before the axis existed
   expect(rows[3]!.key).toBe("discovery|eval_case|claude|claude-opus-5");

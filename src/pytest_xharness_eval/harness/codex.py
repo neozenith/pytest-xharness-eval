@@ -27,12 +27,15 @@ from typing import TYPE_CHECKING, Any
 
 # Our Libraries
 from pytest_xharness_eval.harness import records as record_kinds
+from pytest_xharness_eval.harness import threads
 from pytest_xharness_eval.harness.base import (
     DEFAULT_TIMEOUT_S,
     TIMED_OUT,
+    Evidence,
     Harness,
     RunError,
     SessionLog,
+    UnfoldedRun,
     copy_skill,
     mark_timed_out,
     register,
@@ -41,6 +44,7 @@ from pytest_xharness_eval.harness.base import (
 )
 from pytest_xharness_eval.harness.normalise import (
     Numbered,
+    ended,
     join_text,
     read_jsonl_numbered,
     summarise,
@@ -217,14 +221,33 @@ def run_codex(
 
     # A run killed at the wall (ADR 0064) folds the same way: codex writes its rollouts as it
     # goes, so what it wrote up to the kill is still the run, and it was billed.
-    session = CodexSessionLog(rollout, proc.returncode, sub_rollouts=[r for r in rollouts if r != rollout])
-    result = session.to_result(workspace, ws.diff(before, after))
+    forks = [r for r in rollouts if r != rollout]
+    files_written = ws.diff(before, after)
+    timed_out = proc.returncode == TIMED_OUT
+    idle = seconds_idle(rollouts, ended_at) if timed_out else None
+    try:
+        result = CodexSessionLog(rollout, proc.returncode, sub_rollouts=forks).to_result(workspace, files_written)
+    except threads.SubagentMismatch as exc:
+        # Billed but unfoldable: the private CODEX_HOME is torn down with the run directory, so
+        # the cell must copy these rollouts out before it fails (ADR 0072).
+        evidence = Evidence(
+            harness="codex",
+            session_id=fold(read_jsonl_numbered(rollout))[0],
+            log=rollout,
+            transcripts=tuple(forks),
+            workspace=workspace,
+            files_written=tuple(files_written),
+            exit_code=proc.returncode,
+            timed_out_after_s=timeout_s if timed_out else None,
+            idle_before_timeout_s=idle,
+        )
+        raise UnfoldedRun(str(exc), evidence) from exc
     if not result.duration_ms:
         result.duration_ms = wall_ms
     if not result.session_id:
         raise RunError(f"rollout {rollouts[0]} carries no session_meta id")
-    if proc.returncode == TIMED_OUT:
-        mark_timed_out(result, timeout_s, seconds_idle(rollouts, ended_at))
+    if timed_out:
+        mark_timed_out(result, timeout_s, idle)
     return result
 
 
@@ -287,19 +310,29 @@ class _Ledger:
         if isinstance(window, int):
             self.context_window = window
 
-    def response_item(self, p: dict[str, Any]) -> None:
+    def response_item(self, p: dict[str, Any], at: str = "") -> None:
         ptype = p.get("type")
         if ptype in _CALL_ITEMS:
             name = str(p.get("name") or ptype)
             self._call_names[str(p.get("call_id") or "")] = name
             args = p.get("input") if "input" in p else p.get("arguments")
             self._tool_calls.append(
-                ToolCall(name=name, summary=summarise(name, args), input=args, id=str(p.get("call_id") or ""))
+                ToolCall(
+                    name=name,
+                    summary=summarise(name, args),
+                    input=args,
+                    id=str(p.get("call_id") or ""),
+                    started_at=at,
+                )
             )
         elif ptype in _OUTPUT_ITEMS:
+            call_id = str(p.get("call_id") or "")
             text = text_of(p.get("output"))
-            tool = self._call_names.get(str(p.get("call_id") or ""), "unknown")
-            self._outputs.append(ToolResult(tool=tool, chars=len(text), content=text))
+            tool = self._call_names.get(call_id, "unknown")
+            self._outputs.append(ToolResult(tool=tool, chars=len(text), content=text, id=call_id))
+            # Normally still pending (outputs precede their turn's count); else the turn just closed.
+            if not ended(self._tool_calls, call_id, at) and self.calls:
+                ended(self.calls[-1].tools, call_id, at)
         elif ptype == "message" and p.get("role") == "assistant":
             self._text = join_text(self._text, text_of(p.get("content")))
         elif ptype == "reasoning":
@@ -390,24 +423,28 @@ class _Ledger:
 
 
 def fold(records: Numbered) -> tuple[str, str, _Ledger]:
-    """Fold one rollout's records into a ledger; returns (session id, model, ledger)."""
-    session_id = ""
+    """Fold one rollout's records into a ledger; returns (session id, model, ledger).
+
+    The session id is the first ``session_meta``'s: a forked rollout writes its own and then
+    replays its parent's, and the later one names the parent (ADR 0072).
+    """
+    session_id: str | None = None
     model = ""
     ledger = _Ledger()
     for line, rec in records:
         ledger.line(line)
         rtype = rec.get("type")
         payload = rec.get("payload") or {}
-        if rtype == "session_meta":
-            session_id = str(payload.get("id") or session_id)
+        if rtype == "session_meta" and session_id is None:
+            session_id = str(payload.get("id") or "")
         elif rtype == "turn_context":
             model = str(payload.get("model") or model)
         elif rtype == "response_item":
-            ledger.response_item(payload)
+            ledger.response_item(payload, str(rec.get("timestamp") or ""))
         elif rtype == "event_msg":
             ledger.event(rec, payload)
     ledger.finish()
-    return session_id, model, ledger
+    return session_id or "", model, ledger
 
 
 class CodexSessionLog(SessionLog):
@@ -435,7 +472,7 @@ class CodexSessionLog(SessionLog):
 
         return RunResult.folded(
             ledger.calls,
-            subagents_of(forks, ledger.calls),
+            subagents_of(forks, session_id, records, ledger.calls, self.path.name),
             harness="codex",
             model=model,
             session_id=session_id,
@@ -449,46 +486,118 @@ class CodexSessionLog(SessionLog):
             harness_reported_cost_usd=None,
             reported_usage=reported,
             reported_turns=ledger.tasks,
-            record_kinds=CODEX.census([rec for _, rec in records]),
+            record_kinds=(kinds := CODEX.census([rec for _, rec in records])),
+            compactions=record_kinds.compactions(kinds),
             context_window=ledger.context_window,
             ttft_ms=ledger.ttft_ms,
             api_duration_ms=ledger.duration_ms or None,
         )
 
 
-def subagents_of(rollouts: list[Path], primary_calls: list[Call]) -> list[Subagent]:
-    """Fold each forked rollout into a subagent ledger.
+#: The tool a thread calls to spawn another, under either spawn shape.
+SPAWN_TOOL = "spawn_agent"
 
-    A sub-rollout's ``session_meta`` carries the spawn (``source.subagent.thread_spawn``:
-    nickname, agent path) and its timestamp. The primary turn that owns it is the first
-    call measured at or after that moment — a turn's tool calls run before its
-    ``token_count`` is written — else the last turn.
+
+def spawns_in(thread: str, own_id: str, records: Numbered, calls: list[Call], where: str) -> list[threads.Spawn]:
+    """Every spawn one thread's rollout logged, in either of Codex's two shapes.
+
+    A code-mode ``exec`` that calls the spawn tool completes a ``CollabAgentToolCall`` item
+    naming each new thread's id in ``receiver_thread_ids``. A direct ``spawn_agent`` call is
+    answered by an output naming the new thread's ``task_name``, which is the spawned
+    rollout's ``agent_path``. Only an item this thread sent is its own spawn, and a direct
+    call whose output names no task spawned nothing.
     """
-    subs: list[Subagent] = []
+    spawns: list[threads.Spawn] = []
+    direct: dict[str, int] = {}  # call_id -> the line of the spawn call
+    for line, rec in records:
+        payload = rec.get("payload") or {}
+        item = payload.get("item") or {}
+        if (
+            payload.get("type") == "item_completed"
+            and item.get("type") == "CollabAgentToolCall"
+            and item.get("tool") == SPAWN_TOOL
+            and item.get("sender_thread_id") == own_id
+        ):
+            turn = threads.turn_of_line(calls, line, where)
+            spawns += [
+                threads.Spawn(thread=thread, turn=turn, id=str(item.get("id") or ""), key=str(receiver))
+                for receiver in item.get("receiver_thread_ids") or []
+            ]
+        elif rec.get("type") != "response_item":
+            continue
+        elif payload.get("type") in _CALL_ITEMS and payload.get("name") == SPAWN_TOOL:
+            direct[str(payload.get("call_id") or "")] = line
+        elif payload.get("type") in _OUTPUT_ITEMS and (call_id := str(payload.get("call_id") or "")) in direct:
+            task = _task_name(payload.get("output"))
+            if task:
+                turn = threads.turn_of_line(calls, direct[call_id], where)
+                spawns.append(threads.Spawn(thread=thread, turn=turn, id=call_id, key=task))
+    return spawns
+
+
+def _task_name(output: Any) -> str:
+    """The ``task_name`` a direct spawn's output names, or empty for an output that spawned nothing."""
+    try:
+        parsed = json.loads(text_of(output))
+    except json.JSONDecodeError:
+        return ""
+    return str(parsed.get("task_name") or "") if isinstance(parsed, dict) else ""
+
+
+def subagents_of(
+    rollouts: list[Path], primary_id: str, primary: Numbered, primary_calls: list[Call], where: str
+) -> list[Subagent]:
+    """Fold each forked rollout into a subagent ledger, linked to its spawn (ADR 0072).
+
+    A fork's ``session_meta`` carries its own id and, under ``source.subagent.thread_spawn``,
+    the ``parent_thread_id`` that spawned it, its ``agent_path`` and nickname. Its spawn is
+    found in that parent's rollout by either id or path (:func:`spawns_in`), so a fork that
+    spawns its own threads is linked exactly as the primary's are.
+    """
+    spawns = spawns_in(threads.PRIMARY, primary_id, primary, primary_calls, where)
+    folded: list[tuple[Path, dict[str, Any], Numbered, str, str, _Ledger]] = []
     for rollout in rollouts:
         records = read_jsonl_numbered(rollout)
-        meta: dict[str, Any] = {}
-        spawn_at = ""
-        for _, rec in records:
-            if rec.get("type") == "session_meta":
-                meta = rec.get("payload") or {}
-                spawn_at = str(rec.get("timestamp") or meta.get("timestamp") or "")
-                break
+        meta = next((rec.get("payload") or {} for _, rec in records if rec.get("type") == "session_meta"), {})
         # The last turn_context is the thread's own: a fork first replays its parent's, so
         # the earlier one names the parent's model, not the one that answered (ADR 0065).
         session_id, model, ledger = fold(records)
-        parent = next(
-            (c.n for c in primary_calls if spawn_at and c.at and c.at >= spawn_at),
-            primary_calls[-1].n if primary_calls else None,
+        thread_id = session_id or str(meta.get("id") or "")
+        spawns += spawns_in(thread_id, thread_id, records, ledger.calls, rollout.name)
+        folded.append((rollout, meta, records, thread_id, model, ledger))
+
+    def thread(meta: dict[str, Any], thread_id: str, name: str) -> threads.Thread:
+        source = meta.get("source")
+        spawn = ((source.get("subagent") or {}).get("thread_spawn") or {}) if isinstance(source, dict) else {}
+        parent = str(spawn.get("parent_thread_id") or "")
+        if not parent:
+            raise threads.SubagentMismatch(f"forked rollout {name} names no parent_thread_id")
+        path = str(spawn.get("agent_path") or "")
+        return threads.Thread(
+            id=thread_id,
+            parent=threads.PRIMARY if parent == primary_id else parent,
+            keys=frozenset({thread_id, path}) - {""},
         )
+
+    links = threads.link(spawns, (thread(meta, tid, r.name) for r, meta, _, tid, _, _ in folded))
+    subs: list[Subagent] = []
+    for rollout, meta, records, thread_id, model, ledger in folded:
+        placed = links[thread_id]
+        started_at, ended_at = threads.span(records, rollout.name)
+        spawn = ((meta.get("source") or {}).get("subagent") or {}).get("thread_spawn") or {}
         subs.append(
             Subagent.folded(
                 ledger.calls,
-                agent=str(meta.get("agent_nickname") or "subagent"),
-                id=session_id or str(meta.get("id") or ""),
+                agent=str(spawn.get("agent_nickname") or meta.get("agent_nickname") or "subagent"),
+                id=thread_id,
                 log=str(rollout),
-                parent_turn=parent,
-                description=str(meta.get("agent_path") or ""),
+                spawned_by=placed.spawn.id,
+                parent=placed.spawn.thread,
+                depth=placed.depth,
+                parent_turn=placed.parent_turn,
+                started_at=started_at,
+                ended_at=ended_at,
+                description=str(spawn.get("agent_path") or meta.get("agent_path") or ""),
                 model=model,
             )
         )

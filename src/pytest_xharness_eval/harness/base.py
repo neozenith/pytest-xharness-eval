@@ -27,6 +27,7 @@ import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from collections import Counter
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
 # Our Libraries
@@ -46,6 +47,36 @@ DEFAULT_TIMEOUT_S = 600
 
 class RunError(RuntimeError):
     """A cell failed in a way that must not be graded (fail loud, never degrade)."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Evidence:
+    """What a paid run left behind when its logs would not fold: enough to capture and replay it.
+
+    The run was billed, so its logs are kept even though no :class:`RunResult` describes them
+    (ADR 0072). ``transcripts`` are every subagent file to copy beside the log, sidecars
+    included; ``envelope`` is the CLI's stdout envelope where the dialect has one, and the exit
+    code is the one fact a Codex rollout cannot record.
+    """
+
+    harness: str
+    session_id: str
+    log: Path
+    transcripts: tuple[Path, ...]
+    workspace: Path
+    files_written: tuple[str, ...]
+    exit_code: int
+    envelope: dict[str, Any] = field(default_factory=dict)
+    timed_out_after_s: int | None = None
+    idle_before_timeout_s: float | None = None
+
+
+class UnfoldedRun(RunError):
+    """A run whose logs exist and were billed, but do not fold: the cell captures them, then fails."""
+
+    def __init__(self, message: str, evidence: Evidence) -> None:
+        super().__init__(message)
+        self.evidence = evidence
 
 
 class UnknownHarness(LookupError):

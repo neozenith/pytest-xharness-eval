@@ -7,8 +7,22 @@
  * vary is an override, never a second fixture that drifts from this one.
  */
 import type { Page } from "@playwright/test";
-import type { Call, Cell, DesignTokens, Index, InlineData, RunResult, Subagent, Usage } from "../src/lib/types";
+import type {
+  Aggregates,
+  Call,
+  Cell,
+  DesignTokens,
+  ImportantMetric,
+  ImportantMetricsDoc,
+  Index,
+  InlineData,
+  RunResult,
+  Subagent,
+  Usage,
+} from "../src/lib/types";
+import { groupKey } from "../src/lib/summary";
 import tokens from "../../src/pytest_xharness_eval/assets/report.tokens.json" with { type: "json" };
+import declared from "../src/__tests__/important-metrics.json" with { type: "json" };
 
 export const SID = "1feb573f-ba51-4e77-845f-12c4bcb08252";
 
@@ -182,7 +196,89 @@ export const treatedSweep = (): Cell[] => [
   catalogued({ session_id: "dddddddd-0003", effort: "high", treatment: "agents-md", estimated_cost_usd: 1.4, verdict: "fail" }),
 ];
 
-export const index = (cells: Cell[] = sweep()): Index => ({ generated_at: "2026-09-24T01:00:00Z", captured: ".xharness_eval_cache", inline: true, cells });
+// ---- the Important Metrics a fixture sweep's index carries (ADR 0071) ----------------------
+
+/** The plugin's real declaration, held to `model/metrics.py` by `tests/model/test_metrics.py`. */
+export const IMPORTANT_METRICS = declared as ImportantMetric[];
+
+/** A session row as its `history.json` record would name its fields: the shape a metric's `field` reads. */
+const asRecord = (c: Cell): Record<string, unknown> => ({
+  ...c,
+  skill_files: c.skill_coverage.files,
+  skill_files_loaded: c.skill_coverage.loaded,
+  skill_scripts: c.skill_coverage.scripts,
+  skill_scripts_run: c.skill_coverage.run,
+});
+
+const valueOf = (metric: ImportantMetric, record: Record<string, unknown>): number | null => {
+  const raw = record[metric.field];
+  if (metric.kind === "rate") return raw === "pass" ? 1 : raw === "fail" || raw === "error" ? 0 : null;
+  if (typeof raw !== "number") return null;
+  if (!metric.per) return raw;
+  const per = record[metric.per];
+  return typeof per === "number" && per ? raw / per : null;
+};
+
+const quantile = (sorted: number[], q: number): number => {
+  const at = (sorted.length - 1) * q;
+  const lo = Math.floor(at);
+  return sorted[lo]! + (sorted[Math.ceil(at)]! - sorted[lo]!) * (at - lo);
+};
+
+/**
+ * A FIXTURE's stand-in for `emit/samples.py`, so a component test states sessions and reads the
+ * aggregates they imply. The page itself never reduces anything; the arithmetic that ships is
+ * Python's and is tested there. The Wilson interval is left out: no rendering test reads it.
+ */
+const reduce = (metric: ImportantMetric, values: number[]): Aggregates => {
+  const n = values.length;
+  const out: Aggregates = Object.fromEntries(metric.aggregates.map((a) => [a, null]));
+  out.n = n;
+  if (!n) return out;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mean = values.reduce((sum, v) => sum + v, 0) / n;
+  if (metric.kind === "spread") return { ...out, median: quantile(sorted, 0.5), p25: quantile(sorted, 0.25), p75: quantile(sorted, 0.75) };
+  if (metric.kind === "fraction") return { ...out, mean, min: sorted[0]!, max: sorted[n - 1]! };
+  if (metric.kind === "rare") return { ...out, mean, share: values.filter((v) => v >= 1).length / n };
+  return { ...out, pass_rate: mean };
+};
+
+/** The `important_metrics` an index of `cells` carries: one aggregated cell per group of graded sessions. */
+export const metricsFor = (cells: Cell[]): ImportantMetricsDoc => {
+  const groups = new Map<string, Cell[]>();
+  for (const c of cells.filter((c) => c.verdict === "pass" || c.verdict === "fail" || c.verdict === "error")) {
+    groups.set(groupKey(c), [...(groups.get(groupKey(c)) ?? []), c]);
+  }
+  return {
+    metrics: IMPORTANT_METRICS,
+    cells: [...groups.values()].map((group) => ({
+      skill: group[0]!.skill,
+      case: group[0]!.case,
+      harness: group[0]!.harness,
+      model: group[0]!.model,
+      effort: group[0]!.effort,
+      treatment: group[0]!.treatment,
+      samples: group.length,
+      metrics: Object.fromEntries(
+        IMPORTANT_METRICS.map((m) => [
+          m.id,
+          reduce(
+            m,
+            group.map((c) => valueOf(m, asRecord(c))).filter((v): v is number => v != null),
+          ),
+        ]),
+      ),
+    })),
+  };
+};
+
+export const index = (cells: Cell[] = sweep()): Index => ({
+  generated_at: "2026-09-24T01:00:00Z",
+  captured: ".xharness_eval_cache",
+  inline: true,
+  cells,
+  important_metrics: metricsFor(cells),
+});
 
 /** The inline payload: every cell served the same result (its identity overridden) and log. */
 export const inline = (cells: Cell[] = sweep()): InlineData => ({

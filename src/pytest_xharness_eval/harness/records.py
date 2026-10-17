@@ -35,6 +35,7 @@ CATEGORIES: dict[str, str] = {
     "harness_meta": "#475569",
     "session_meta": "#1e3a8a",
     "lifecycle": "#b91c1c",
+    "compaction": "#7c2d12",
     "unknown": "#374151",
 }
 
@@ -60,9 +61,14 @@ KINDS: dict[str, str] = {
     "claude/last-prompt": "harness_meta",
     "claude/queue-operation": "harness_meta",
     "claude/system": "harness_meta",
+    # Claude Code's marker that it summarised the conversation to free the window: one per
+    # compaction, carrying the token counts before and after (ADR 0071).
+    "claude/system/compact_boundary": "compaction",
     "codex/session_meta": "session_meta",
     "codex/turn_context": "session_meta",
     "codex/world_state": "harness_meta",
+    # Codex's replacement history after it compacted the thread: one per compaction (ADR 0071).
+    "codex/compacted": "compaction",
     "codex/response_item/message/user": "prompt",
     # A user-role message whose text opens with an XML tag (<environment_context>, <recommended_plugins>)
     # was written by the harness, not typed by the person; it is context, not the prompt under test.
@@ -134,3 +140,12 @@ def category_of(kind: str) -> str:
         if kind.startswith(prefix):
             return category
     return "unknown"
+
+
+def compactions(kinds: dict[str, int]) -> int:
+    """How many times a run compacted its context: the records of every ``compaction`` kind (ADR 0071).
+
+    Read off a census rather than a second walk of the log, so it counts exactly what the
+    report's record pills show.
+    """
+    return sum(n for kind, n in kinds.items() if category_of(kind) == "compaction")

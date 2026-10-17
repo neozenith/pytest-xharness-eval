@@ -5,7 +5,9 @@ holding ``log.jsonl``, ``result.json`` and ``history.json``. :func:`write` walks
 tree -- every skill, every run -- and produces the microsite (ADR 0020, ADR 0032):
 
 * ``index.json``: one :class:`~pytest_xharness_eval.emit.index.IndexRow` per captured
-  session, pointing at its result and log by relative path (``../results/...``).
+  session, pointing at its result and log by relative path (``../results/...``), and under
+  ``important_metrics`` every cell's samples reduced by
+  :class:`~pytest_xharness_eval.emit.samples.ImportantMetrics` (ADR 0071).
 * ``history.jsonl``: every per-session ``history.json`` record, sorted by ``at``.
 * ``report.html``: the self-contained page that fetches ``index.json`` and drills into
   each session's ledger.
@@ -26,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 # Our Libraries
 from pytest_xharness_eval.emit.index import aggregate_history, cells
+from pytest_xharness_eval.emit.samples import ImportantMetrics
 from pytest_xharness_eval.emit.tokens import load_tokens
 from pytest_xharness_eval.model.clock import now_iso
 from pytest_xharness_eval.model.layout import GLOSSARY_NAME, PAGE_NAME, REPORT_DIR
@@ -77,7 +80,13 @@ def write(cache: CacheLayout, design_tokens: Path | None = None, inline: bool = 
     """
     report_dir = cache.report
     report_dir.mkdir(parents=True, exist_ok=True)
-    index = {"generated_at": now_iso(), "captured": str(cache.root), "inline": inline, "cells": cells(cache)}
+    index = {
+        "generated_at": now_iso(),
+        "captured": str(cache.root),
+        "inline": inline,
+        "cells": cells(cache),
+        "important_metrics": ImportantMetrics.stored(cache).to_dict(),
+    }
     cache.index.write_text(json.dumps(index, indent=1, sort_keys=True), encoding="utf-8")
     cache.history.write_text(
         "".join(json.dumps(rec.to_dict(), sort_keys=True) + "\n" for rec in aggregate_history(cache)), encoding="utf-8"

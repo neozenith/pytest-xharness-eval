@@ -23,6 +23,7 @@ export const CATEGORIES: Record<string, string> = {
   harness_meta: "#475569",
   session_meta: "#1e3a8a",
   lifecycle: "#b91c1c",
+  compaction: "#7c2d12",
   unknown: "#374151",
 };
 
@@ -46,9 +47,11 @@ export const KINDS: Record<string, string> = {
   "claude/last-prompt": "harness_meta",
   "claude/queue-operation": "harness_meta",
   "claude/system": "harness_meta",
+  "claude/system/compact_boundary": "compaction",
   "codex/session_meta": "session_meta",
   "codex/turn_context": "session_meta",
   "codex/world_state": "harness_meta",
+  "codex/compacted": "compaction",
   "codex/response_item/message/user": "prompt",
   "codex/response_item/message/user/injected": "harness_context",
   "codex/response_item/message/developer": "harness_context",
@@ -87,6 +90,7 @@ export const NICE: Record<string, string> = {
   harness_meta: "harness meta",
   session_meta: "session meta",
   lifecycle: "lifecycle",
+  compaction: "compaction",
   unknown: "unknown",
 };
 

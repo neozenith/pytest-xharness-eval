@@ -13,6 +13,7 @@ from pytest_xharness_eval import (
 )
 from pytest_xharness_eval import harness as harnesses
 from pytest_xharness_eval.harness import codex as codex_harness
+from pytest_xharness_eval.harness.threads import SubagentMismatch
 from tests.support import _jsonl
 
 
@@ -160,58 +161,159 @@ def test_from_codex_diffs_cumulative_counts_when_last_usage_is_absent(tmp_path: 
     assert r.harness_reported_cost_usd is None
 
 
-def test_from_codex_folds_forked_rollouts_and_attributes_the_spawning_turn(tmp_path: Path) -> None:
-    """Forked rollouts become Subagent ledgers named by ``agent_nickname``; the parent turn
-    is the first primary call measured at or after the fork's ``session_meta`` timestamp."""
+def _count(at: str, last: dict[str, int]) -> dict[str, object]:
+    info = {"last_token_usage": last, "total_token_usage": last}
+    return {"type": "event_msg", "timestamp": at, "payload": {"type": "token_count", "info": info}}
 
-    def count(at: str, last: dict[str, int]) -> dict[str, object]:
-        info = {"last_token_usage": last, "total_token_usage": last}
-        return {"type": "event_msg", "timestamp": at, "payload": {"type": "token_count", "info": info}}
 
-    _jsonl(
+def _direct_spawn(call_id: str, task_name: str | None) -> list[dict[str, object]]:
+    """A direct ``spawn_agent`` call and its output, which names the new thread's path."""
+    output = json.dumps({"task_name": task_name}) if task_name else "spawn refused: depth limit"
+    return [
+        {"type": "response_item", "payload": {"type": "function_call", "name": "spawn_agent", "call_id": call_id}},
+        {"type": "response_item", "payload": {"type": "function_call_output", "call_id": call_id, "output": output}},
+    ]
+
+
+def _collab_spawn(item_id: str, sender: str, receiver: str) -> dict[str, object]:
+    """The ``CollabAgentToolCall`` a code-mode ``exec`` completes when it spawns a thread."""
+    item = {
+        "type": "CollabAgentToolCall",
+        "id": item_id,
+        "tool": "spawn_agent",
+        "status": "completed",
+        "sender_thread_id": sender,
+        "receiver_thread_ids": [receiver],
+    }
+    return {"type": "event_msg", "payload": {"type": "item_completed", "item": item}}
+
+
+def _fork(
+    at: str, thread: str, parent: str, path: str, nickname: str, *body: dict[str, object]
+) -> list[dict[str, object]]:
+    """A forked rollout: its own ``session_meta``, then its parent's replayed, as Codex writes one."""
+    spawn = {"parent_thread_id": parent, "depth": 1, "agent_path": path, "agent_nickname": nickname}
+    return [
+        {
+            "type": "session_meta",
+            "timestamp": at,
+            "payload": {"id": thread, "source": {"subagent": {"thread_spawn": spawn}}},
+        },
+        {"type": "session_meta", "timestamp": at, "payload": {"id": parent}},
+        {"type": "turn_context", "payload": {"model": "gpt-5.6-luna"}},
+        *body,
+    ]
+
+
+def _primary(tmp_path: Path, *turn2: dict[str, object]) -> Path:
+    """A two-turn primary whose second turn logs ``turn2`` before its count."""
+    return _jsonl(
         tmp_path / "log.jsonl",
         [
-            {"type": "session_meta", "payload": {"id": "01a0-primary"}},
+            {"type": "session_meta", "timestamp": "2026-08-28T00:00:00Z", "payload": {"id": "01a0-primary"}},
             {"type": "turn_context", "payload": {"model": "gpt-5.6-sol"}},
-            count("2026-08-28T00:00:05Z", {"input_tokens": 100, "output_tokens": 10}),
-            count("2026-08-28T00:00:20Z", {"input_tokens": 200, "output_tokens": 20}),
+            _count("2026-08-28T00:00:05Z", {"input_tokens": 100, "output_tokens": 10}),
+            *turn2,
+            _count("2026-08-28T00:00:20Z", {"input_tokens": 200, "output_tokens": 20}),
         ],
     )
-    sub = _jsonl(
-        tmp_path / "subagents" / "rollout-sub.jsonl",
-        [
-            {
-                "type": "session_meta",
-                "timestamp": "2026-08-28T00:00:07Z",  # after t1's count: turn 2 spawned it
-                "payload": {
-                    "id": "01a0-sub",
-                    "forked_from_id": "01a0-primary",
-                    "source": {"subagent": {"thread_spawn": {"agent_nickname": "Curie", "depth": 1}}},
-                    "agent_nickname": "Curie",
-                    "agent_path": "/root/external_research",
-                },
-            },
-            {"type": "turn_context", "payload": {"model": "gpt-5.6-sol"}},
-            count("2026-08-28T00:00:12Z", {"input_tokens": 50, "cached_input_tokens": 40, "output_tokens": 5}),
-        ],
+
+
+def test_from_codex_links_each_fork_to_the_turn_whose_record_spawned_it(tmp_path: Path) -> None:
+    """A fork is linked by its spawn record, never by a timestamp, and carries its span (ADR 0072).
+
+    Turn 2 spawns one thread directly (output names its path) and one through a code-mode
+    ``exec`` (the item names its id); the second spawns its own subagent in turn.
+    """
+    _primary(tmp_path, *_direct_spawn("call_1", "/root/research"), _collab_spawn("exec-1", "01a0-primary", "01a0-b"))
+    a = _jsonl(
+        tmp_path / "subagents" / "rollout-a.jsonl",
+        _fork(
+            "2026-08-28T00:00:07Z",
+            "01a0-a",
+            "01a0-primary",
+            "/root/research",
+            "Curie",
+            _count("2026-08-28T00:00:12Z", {"input_tokens": 50, "cached_input_tokens": 40, "output_tokens": 5}),
+        ),
+    )
+    _jsonl(
+        tmp_path / "subagents" / "rollout-b.jsonl",
+        _fork(
+            "2026-08-28T00:00:08Z",
+            "01a0-b",
+            "01a0-primary",
+            "/root/checks",
+            "Kuhn",
+            *_direct_spawn("call_2", "/root/checks/inner"),
+            _count("2026-08-28T00:00:18Z", {"input_tokens": 30, "output_tokens": 50}),
+        ),
+    )
+    _jsonl(
+        tmp_path / "subagents" / "rollout-c.jsonl",
+        _fork(
+            "2026-08-28T00:00:09Z",
+            "01a0-c",
+            "01a0-b",
+            "/root/checks/inner",
+            "Pasteur",
+            _count("2026-08-28T00:00:11Z", {}),
+        ),
     )
     # sub_rollouts=None discovers the captured layout: <session dir>/subagents/*.jsonl
     r = codex_harness.CodexSessionLog(tmp_path / "log.jsonl", 0).to_result(tmp_path, [])
-    (agent,) = r.subagents
-    assert (agent.agent, agent.id, agent.description, agent.parent_turn, agent.turns) == (
-        "Curie",
-        "01a0-sub",
-        "/root/external_research",
-        2,
-        1,
+    links = {s.id: (s.agent, s.spawned_by, s.parent, s.depth, s.parent_turn) for s in r.subagents}
+    assert links == {
+        "01a0-a": ("Curie", "call_1", "", 1, 2),
+        "01a0-b": ("Kuhn", "exec-1", "", 1, 2),
+        "01a0-c": ("Pasteur", "call_2", "01a0-b", 2, 2),
+    }
+    first = r.subagents[0]
+    assert (first.id, first.log, first.description) == ("01a0-a", str(a), "/root/research")
+    assert (first.started_at, first.ended_at, first.duration_ms) == (
+        "2026-08-28T00:00:07Z",
+        "2026-08-28T00:00:12Z",
+        5000,
     )
-    assert agent.log == str(sub)
-    assert agent.usage == Usage(input_tokens=10, output_tokens=5, cache_read_tokens=40)
-    assert r.usage == Usage(input_tokens=310, output_tokens=35, cache_read_tokens=40)
+    assert first.usage == Usage(input_tokens=10, output_tokens=5, cache_read_tokens=40)
+    assert r.usage == Usage(input_tokens=340, output_tokens=85, cache_read_tokens=40)
     assert r.turns == 2
     # The runner path passes the forks explicitly; the ledger is identical either way.
-    explicit = codex_harness.CodexSessionLog(tmp_path / "log.jsonl", 0, sub_rollouts=[sub]).to_result(tmp_path, [])
-    assert explicit.subagents[0].usage == agent.usage
+    explicit = codex_harness.CodexSessionLog(
+        tmp_path / "log.jsonl", 0, sub_rollouts=sorted((tmp_path / "subagents").glob("*.jsonl"))
+    ).to_result(tmp_path, [])
+    assert [s.usage for s in explicit.subagents] == [s.usage for s in r.subagents]
+
+
+def test_a_codex_fork_no_spawn_names_stops_the_fold(tmp_path: Path) -> None:
+    _primary(tmp_path)
+    _jsonl(
+        tmp_path / "subagents" / "rollout-a.jsonl",
+        _fork("2026-08-28T00:00:07Z", "01a0-a", "01a0-primary", "/root/a", "Curie", _count("2026-08-28T00:00:12Z", {})),
+    )
+    with pytest.raises(SubagentMismatch, match="01a0-a is named by 0 spawn records"):
+        codex_harness.CodexSessionLog(tmp_path / "log.jsonl", 0).to_result(tmp_path, [])
+
+
+def test_a_codex_spawn_with_no_fork_stops_the_fold_unless_its_output_spawned_nothing(tmp_path: Path) -> None:
+    _primary(tmp_path, *_direct_spawn("call_1", "/root/a"))
+    with pytest.raises(SubagentMismatch, match="no captured subagent transcript: call_1"):
+        codex_harness.CodexSessionLog(tmp_path / "log.jsonl", 0).to_result(tmp_path, [])
+    refused = tmp_path / "refused"
+    _primary(refused, *_direct_spawn("call_1", None))
+    assert codex_harness.CodexSessionLog(refused / "log.jsonl", 0).to_result(refused, []).subagents == []
+
+
+def test_a_codex_fork_naming_a_parent_that_did_not_spawn_it_stops_the_fold(tmp_path: Path) -> None:
+    _primary(tmp_path, *_direct_spawn("call_1", "/root/a"))
+    _jsonl(
+        tmp_path / "subagents" / "rollout-a.jsonl",
+        _fork(
+            "2026-08-28T00:00:07Z", "01a0-a", "01a0-elsewhere", "/root/a", "Curie", _count("2026-08-28T00:00:12Z", {})
+        ),
+    )
+    with pytest.raises(SubagentMismatch, match="names 01a0-elsewhere as its parent"):
+        codex_harness.CodexSessionLog(tmp_path / "log.jsonl", 0).to_result(tmp_path, [])
 
 
 def test_codex_usage_splits_openai_inclusive_input_into_disjoint_tiers() -> None:

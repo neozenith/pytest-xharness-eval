@@ -137,6 +137,15 @@ class CellMetrics:
     ttft_ms: int | None = None
     output_tokens_per_sec: float | None = None
     record_kinds: dict[str, int] = field(default_factory=dict)
+    # The Important Metrics no field above already carried (ADR 0071). None on every record
+    # written before they existed, so an old sample drops out of a metric's ``n`` rather than
+    # counting as a run that never delegated, compacted or thought.
+    subagents: int | None = None
+    subagent_token_share: float | None = None
+    subagent_cost_share: float | None = None
+    compactions: int | None = None
+    reasoning_share: float | None = None
+    output_tokens_per_sec_by_model: dict[str, float] = field(default_factory=dict)
     # Which of the skill's files it reached (ADR 0022).
     skill_files: int | None = None
     skill_files_loaded: int | None = None
@@ -200,6 +209,12 @@ class CellMetrics:
             ttft_ms=result.ttft_ms,
             output_tokens_per_sec=result.output_tokens_per_sec,
             record_kinds=dict(result.record_kinds),
+            subagents=len(result.subagents),
+            subagent_token_share=result.subagent_token_share,
+            subagent_cost_share=result.subagent_cost_share,
+            compactions=result.compactions,
+            reasoning_share=result.reasoning_share,
+            output_tokens_per_sec_by_model=result.output_tokens_per_sec_by_model,
             skill_files=summary.files if summary else None,
             skill_files_loaded=summary.loaded if summary else None,
             skill_scripts=summary.scripts if summary else None,

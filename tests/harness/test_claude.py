@@ -13,6 +13,9 @@ from pytest_xharness_eval import (
 )
 from pytest_xharness_eval.harness import claude as claude_harness
 from pytest_xharness_eval.harness import records
+from pytest_xharness_eval.harness.normalise import read_jsonl_numbered
+from pytest_xharness_eval.harness.threads import SubagentMismatch
+from pytest_xharness_eval.model.runresult import Subagent
 from tests.support import _jsonl
 
 
@@ -299,7 +302,13 @@ def test_from_claude_folds_subagent_transcripts_and_bills_them(tmp_path: Path) -
     _jsonl(
         sub_dir / "agent-abc123.jsonl",
         [
-            {"type": "user", "isSidechain": True, "agentId": "abc123", "message": {"content": "research"}},
+            {
+                "type": "user",
+                "isSidechain": True,
+                "agentId": "abc123",
+                "timestamp": "2026-08-28T00:00:02Z",
+                "message": {"content": "research"},
+            },
             {
                 "type": "assistant",
                 "isSidechain": True,
@@ -330,10 +339,117 @@ def test_from_claude_folds_subagent_transcripts_and_bills_them(tmp_path: Path) -
         1,
     )
     assert sub.log == str(sub_dir / "agent-abc123.jsonl")
+    assert (sub.spawned_by, sub.parent, sub.depth) == ("tu_agent", "", 1)
+    assert (sub.started_at, sub.ended_at, sub.duration_ms) == ("2026-08-28T00:00:02Z", "2026-08-28T00:00:03Z", 1000)
+    assert sub.output_tokens_per_sec == 20.0
     assert sub.usage == Usage(input_tokens=30, output_tokens=20, cache_read_tokens=400)
     # The run's usage is primary (12, 13, 220) plus the subagent: the whole bill.
     assert r.usage == Usage(input_tokens=42, output_tokens=33, cache_read_tokens=620)
     assert r.turns == 2  # turns stay the primary thread's own
+
+
+def _claude_spawning(log: Path, *tool_ids: str, failed: tuple[str, ...] = ()) -> Path:
+    """A primary whose first turn calls ``Agent`` once per id; ``failed`` ids get an error result."""
+    spawn = {
+        "id": "m1",
+        "model": "claude-opus-5",
+        "usage": {"input_tokens": 1, "output_tokens": 1},
+        "content": [{"type": "tool_use", "id": t, "name": "Agent", "input": {}} for t in tool_ids],
+    }
+    errors = [{"type": "tool_result", "tool_use_id": t, "is_error": True, "content": "refused"} for t in failed]
+    return _jsonl(
+        log,
+        [
+            {"type": "assistant", "uuid": "p1", "timestamp": "2026-08-28T00:00:01Z", "message": spawn},
+            {"type": "user", "uuid": "p2", "timestamp": "2026-08-28T00:00:02Z", "message": {"content": errors}},
+        ],
+    )
+
+
+def _claude_thread(sub_dir: Path, agent: str, meta: dict[str, object] | None, *spawns: str) -> None:
+    """One subagent transcript, optionally spawning its own threads, and its sidecar unless ``meta`` is None."""
+    message = {
+        "id": f"m-{agent}",
+        "model": "claude-haiku-4-5",
+        "usage": {"input_tokens": 1, "output_tokens": 4},
+        "content": [{"type": "tool_use", "id": t, "name": "Agent", "input": {}} for t in spawns],
+    }
+    _jsonl(
+        sub_dir / f"agent-{agent}.jsonl",
+        [
+            {"type": "user", "agentId": agent, "timestamp": "2026-08-28T00:00:03Z", "message": {"content": "go"}},
+            {"type": "assistant", "agentId": agent, "timestamp": "2026-08-28T00:00:05Z", "message": message},
+        ],
+    )
+    if meta is not None:
+        (sub_dir / f"agent-{agent}.meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+
+def _fold_claude(tmp_path: Path) -> list[Subagent]:
+    return (
+        claude_harness.ClaudeSessionLog(tmp_path / "log.jsonl", {"session_id": "sid"}).to_result(tmp_path, []).subagents
+    )
+
+
+def test_a_claude_subagents_own_subagent_is_linked_to_it_and_credited_to_the_primary_turn(tmp_path: Path) -> None:
+    _claude_spawning(tmp_path / "log.jsonl", "tu_a")
+    _claude_thread(tmp_path / "subagents", "a", {"toolUseId": "tu_a"}, "tu_b")
+    _claude_thread(tmp_path / "subagents", "b", {"toolUseId": "tu_b", "parentAgentId": "a"})
+    links = {s.id: (s.spawned_by, s.parent, s.depth, s.parent_turn) for s in _fold_claude(tmp_path)}
+    assert links == {"a": ("tu_a", "", 1, 1), "b": ("tu_b", "a", 2, 1)}
+
+
+def test_a_claude_spawn_without_a_transcript_stops_the_fold_unless_it_failed(tmp_path: Path) -> None:
+    _claude_spawning(tmp_path / "log.jsonl", "tu_a", "tu_refused", failed=("tu_refused",))
+    with pytest.raises(SubagentMismatch, match="no captured subagent transcript: tu_a"):
+        _fold_claude(tmp_path)
+    _claude_thread(tmp_path / "subagents", "a", {"toolUseId": "tu_a"})
+    assert [s.id for s in _fold_claude(tmp_path)] == ["a"]
+
+
+def test_a_fork_that_replays_its_parent_is_billed_and_timed_for_its_own_records_only(tmp_path: Path) -> None:
+    """A ``fork`` opens with its parent's history, restamped with its agentId but keeping each
+    ``uuid`` and message id, the spawning ``Agent`` call included (ADR 0072)."""
+    primary = _claude_spawning(tmp_path / "log.jsonl", "tu_f")
+    _claude_thread(tmp_path / "subagents", "f", {"agentType": "fork", "toolUseId": "tu_f"})
+    transcript = tmp_path / "subagents" / "agent-f.jsonl"
+    replay = [{**json.loads(line), "agentId": "f"} for line in primary.read_text().splitlines()[:2]]
+    replay[0]["uuid"] = "restamped"  # the spawn's record gets a new uuid; its message id gives it away
+    _jsonl(transcript, replay + [json.loads(line) for line in transcript.read_text().splitlines()[:2]])
+    (fork,) = _fold_claude(tmp_path)
+    assert (fork.turns, fork.usage.output_tokens, fork.spawned_by) == (1, 4, "tu_f")
+    assert (fork.started_at, fork.ended_at) == ("2026-08-28T00:00:03Z", "2026-08-28T00:00:05Z")
+
+
+def test_an_attachment_stamped_with_the_reply_does_not_zero_the_calls_latency(tmp_path: Path) -> None:
+    reply = {"id": "m1", "model": "claude-opus-5", "usage": {"output_tokens": 30}, "content": [{"type": "text"}]}
+    log = _jsonl(
+        tmp_path / "log.jsonl",
+        [
+            {"type": "user", "timestamp": "2026-08-28T00:00:00Z", "message": {"content": "go"}},
+            {"type": "attachment", "timestamp": "2026-08-28T00:00:03Z", "attachment": {"type": "skill_listing"}},
+            {"type": "assistant", "timestamp": "2026-08-28T00:00:03Z", "message": reply},
+        ],
+    )
+    (call,) = claude_harness.ledger_of(read_jsonl_numbered(log))[0]
+    assert (call.latency_ms, call.output_tokens_per_sec) == (3000, 10.0)
+
+
+@pytest.mark.parametrize(
+    ("meta", "error"),
+    [
+        (None, "has no readable sidecar"),
+        ({"toolUseId": "tu_other"}, "is named by 0 spawn records"),
+        ({"toolUseId": "tu_a", "parentAgentId": "ghost"}, "names ghost as its parent"),
+    ],
+)
+def test_a_claude_transcript_that_does_not_link_to_its_spawn_stops_the_fold(
+    tmp_path: Path, meta: dict[str, object] | None, error: str
+) -> None:
+    _claude_spawning(tmp_path / "log.jsonl", "tu_a")
+    _claude_thread(tmp_path / "subagents", "a", meta)
+    with pytest.raises(SubagentMismatch, match=error):
+        _fold_claude(tmp_path)
 
 
 def test_the_workspace_is_added_so_its_own_claude_md_is_read_and_nothing_above_it(tmp_path: Path) -> None:

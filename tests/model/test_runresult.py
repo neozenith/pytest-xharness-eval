@@ -14,7 +14,7 @@ from pytest_xharness_eval import (
 )
 from pytest_xharness_eval.model import runresult
 from pytest_xharness_eval.model.runresult import Subagent
-from tests.support import _result
+from tests.support import _result, _subagent
 
 
 def test_accumulative_billed_tokens_sums_the_four_priced_tiers_only() -> None:
@@ -71,7 +71,17 @@ def test_each_runresult_field_has_exactly_one_owner() -> None:
     """
     derived = {"turns", "usage", "calls", "subagents"}
     priced = {"estimated_cost_usd", "cost_status", "cost_by_tier", "rates_applied", "long_context_calls"}
-    attached = {"case", "effort", "treatment", "line", "family_tier", "released", "skill_coverage"}
+    attached = {
+        "case",
+        "effort",
+        "treatment",
+        "line",
+        "family_tier",
+        "released",
+        "skill_coverage",
+        "tool_costs",
+        "skill_use",
+    }
     # Observed at the spawn when the CLI is killed at the wall, by `harness.mark_timed_out` (ADR 0064).
     killed = {"timed_out_after_s", "idle_before_timeout_s"}
     supplied = _typed_dict_keys(runresult.RunResultFields)
@@ -99,3 +109,85 @@ def test_window_unknown_means_no_percentages() -> None:
         None,
     )
     assert r.to_dict()["calls"][0]["context_pct"] is None
+
+
+# -- the Important Metrics a run derives (ADR 0071) ----------------------------------------
+
+
+def _call(n: int, output: int, latency_ms: int | None) -> Call:
+    return Call(n=n, at="", usage=Usage(input_tokens=10, output_tokens=output), latency_ms=latency_ms)
+
+
+def _with_subagent(sub_model: str = "haiku", sub_cost: float | None = 0.25) -> RunResult:
+    sub = _subagent([_call(1, 20, 1000)], model=sub_model)
+    sub.estimated_cost_usd = sub_cost
+    result = RunResult.folded(
+        [_call(1, 50, 500), _call(2, 50, None)],
+        [sub],
+        harness="claude",
+        model="opus",
+        session_id="s",
+        session_log="l",
+        workspace="w",
+        exit_code=0,
+        duration_ms=1,
+        final_text="",
+    )
+    result.estimated_cost_usd = 1.0
+    return result
+
+
+def test_reasoning_share_is_reasoning_over_output_and_none_with_nothing_generated() -> None:
+    assert _result("m", Usage(output_tokens=200, reasoning_tokens=50)).reasoning_share == 0.25
+    assert _result("m", Usage(input_tokens=5)).reasoning_share is None
+
+
+def test_the_subagents_shares_of_tokens_and_cost() -> None:
+    result = _with_subagent()
+    # Primary: two calls of 10 in + 50 out; the subagent: 10 in + 20 out.
+    assert result.subagent_token_share == round(30 / 150, 4)
+    assert result.subagent_cost_share == 0.25
+    assert _result("m", Usage(1, 1)).subagent_token_share == 0.0
+
+
+def test_a_cost_share_of_an_unknown_is_none_never_zero() -> None:
+    assert _with_subagent(sub_cost=None).subagent_cost_share is None
+    unpriced = _with_subagent()
+    unpriced.estimated_cost_usd = None
+    assert unpriced.subagent_cost_share is None
+
+
+def test_throughput_is_split_by_the_model_that_answered_and_counts_only_timed_calls() -> None:
+    # Opus: 50 tokens over 0.5s (the untimed call counts on neither side); haiku: 20 over 1s.
+    assert _with_subagent().output_tokens_per_sec_by_model == {"haiku": 20.0, "opus": 100.0}
+    # A subagent that names no model ran on its parent's, so both threads pool under it.
+    assert _with_subagent(sub_model="").output_tokens_per_sec_by_model == {"opus": round(70 / 1.5, 2)}
+
+
+def test_the_derived_metrics_reach_result_json() -> None:
+    data = _with_subagent().to_dict()
+    assert {"reasoning_share", "subagent_token_share", "subagent_cost_share", "output_tokens_per_sec_by_model"} <= set(
+        data
+    )
+    assert data["compactions"] == 0
+
+
+# -- a subagent's span (ADR 0072) ----------------------------------------------------------
+
+
+def test_a_subagents_duration_is_its_span_and_its_throughput_its_generation_speed() -> None:
+    # 30 tokens over 1.5s of measured latency; the untimed call counts on neither side, and
+    # the ten-second span (tool runs included) is not the divisor.
+    sub = _subagent([_call(1, 20, 1000), _call(2, 10, 500), _call(3, 99, None)])
+    assert (sub.duration_ms, sub.output_tokens_per_sec) == (10_000, 20.0)
+
+
+def test_a_subagent_with_no_timed_call_or_an_unreadable_span_says_so() -> None:
+    assert _subagent([_call(1, 20, None)]).output_tokens_per_sec is None
+    assert _subagent(started_at="soon").duration_ms is None
+
+
+def test_a_subagents_span_and_link_reach_result_json() -> None:
+    (raw,) = _with_subagent().to_dict()["subagents"]
+    assert raw["duration_ms"] == 10_000 and raw["output_tokens_per_sec"] == 20.0
+    assert {"spawned_by", "parent", "depth", "parent_turn", "started_at", "ended_at"} <= set(raw)

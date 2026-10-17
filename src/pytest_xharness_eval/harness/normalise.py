@@ -25,11 +25,15 @@ from __future__ import annotations
 
 # Standard Library
 import json
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     # Standard Library
     from pathlib import Path
+
+    # Our Libraries
+    from pytest_xharness_eval.model.runresult import ToolCall
 
 SUMMARY_CHARS = 120
 
@@ -93,3 +97,17 @@ def summarise(name: str, arguments: Any) -> str:
 
 def join_text(existing: str, more: str) -> str:
     return (existing + "\n" + more).strip() if more else existing
+
+
+def ended(tools: list[ToolCall], tool_id: str, at: str) -> bool:
+    """Stamp the tool ``tool_id`` among ``tools`` with the moment its result was logged (ADR 0073).
+
+    A :class:`ToolCall` is frozen, so its stamped copy replaces it in place. The first result
+    wins: a tool answered twice is still timed from its first answer. True when it was found.
+    """
+    for i, tool in enumerate(tools):
+        if tool.id == tool_id:
+            if at and not tool.ended_at:
+                tools[i] = replace(tool, ended_at=at)
+            return True
+    return False

@@ -153,6 +153,12 @@ with `--dry-run` before a sweep. The design rationale lives in
    beside it. Serve it with `python3 -m http.server --directory .xharness_eval_cache`
    and open `/report/report.html`; it fetches the JSON beside it.
 
+   The page leads with each cell's **Important Metrics**: cost, tokens, peak context,
+   subagent delegation, compactions, turns, skill coverage, thinking share, throughput,
+   wall clock and the pass rate. Every graded run of a cell is one **sample** of it, so
+   run the sweep again to add samples; each metric is then reduced by its own aggregate,
+   a median for a cost and a pass rate with its interval for the verdict (ADR 0071).
+
 `run` is a `RunResult`: session id, log path, token usage by tier, tool calls, files
 written, and USD cost. The reference case, with its assertions written as a tutorial,
 is

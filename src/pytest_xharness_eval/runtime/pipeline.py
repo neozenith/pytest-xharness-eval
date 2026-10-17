@@ -18,8 +18,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 # Our Libraries
-from pytest_xharness_eval.derive import pricing, skillcov
+from pytest_xharness_eval import harness
+from pytest_xharness_eval.derive import pricing, skillcov, toolcost
 from pytest_xharness_eval.emit.metrics import CellMetrics
+from pytest_xharness_eval.emit.unfolded import UnfoldedRecord
 from pytest_xharness_eval.model.layout import SUBAGENTS_DIR
 
 if TYPE_CHECKING:
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
     # Our Libraries
     from pytest_xharness_eval.derive.skillcov import SkillFile
     from pytest_xharness_eval.emit.metrics import Outcome
+    from pytest_xharness_eval.harness.base import UnfoldedRun
     from pytest_xharness_eval.model.catalogue import ModelSpec
     from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
     from pytest_xharness_eval.model.runresult import CaseRef, RunResult
@@ -73,6 +76,21 @@ def derive(
     result.line = spec.line if spec else None
     result.family_tier = spec.family_tier if spec else None
     result.released = spec.released.isoformat() if spec else None
+    # Last, because a skill's use reads the costs and the case: the run's own invocation of the
+    # skill is its first trigger (ADR 0073).
+    result.tool_costs = toolcost.run_tool_costs(result, table, run_date)
+    invoked = (
+        case is not None
+        and case.skill == skill
+        and result.calls
+        and case.prompt == harness.get(result.harness).invoke(skill=skill, task=case.task)
+    )
+    result.skill_use = toolcost.SkillUse.of(
+        skill,
+        skillcov.accesses(skill, skill_files, result),
+        result.tool_costs,
+        prompt_at=result.calls[0].at if invoked else None,
+    )
     return result
 
 
@@ -87,9 +105,9 @@ def capture_subagents(result: RunResult, session: SessionDir) -> None:
     directory = session.subagents
     directory.mkdir(parents=True, exist_ok=True)
     for sub in result.subagents:
+        # Every subagent was folded from its transcript (ADR 0072), so one that has gone is a
+        # lost piece of evidence, and the capture stops rather than writing a result without it.
         source = Path(sub.log)
-        if not source.is_file():
-            continue
         (directory / source.name).write_bytes(source.read_bytes())
         sidecar = source.with_name(f"{source.stem}.meta.json")
         if sidecar.is_file():
@@ -108,6 +126,25 @@ def capture(result: RunResult, session: SessionDir) -> SessionDir:
     session.log.write_bytes(Path(result.session_log).read_bytes())
     capture_subagents(result, session)
     result.write(session.result)
+    return session
+
+
+def quarantine(
+    err: UnfoldedRun, session: SessionDir, *, case: CaseRef, effort: str | None, treatment: str | None
+) -> SessionDir:
+    """Keep a billed run whose logs would not fold: the log, every transcript, and why (ADR 0072).
+
+    The ``unfolded.json`` written in place of ``result.json`` leaves the directory a partial
+    capture, so the report skips it, and carries what a replay needs to retry the fold.
+    """
+    evidence = err.evidence
+    session.mkdir()
+    session.log.write_bytes(evidence.log.read_bytes())
+    if evidence.transcripts:
+        session.subagents.mkdir(parents=True, exist_ok=True)
+        for source in evidence.transcripts:
+            (session.subagents / source.name).write_bytes(source.read_bytes())
+    UnfoldedRecord.of(evidence, str(err), case=case, effort=effort, treatment=treatment).write(session.unfolded)
     return session
 
 

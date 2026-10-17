@@ -25,7 +25,8 @@
         6,
         7,
         8,
-        9
+        9,
+        10
       ],
       "results_in": [],
       "stop_reason": "tool_use",
@@ -33,6 +34,8 @@
       "thinking": "read the skill",
       "tools": [
         {
+          "duration_ms": 1000,
+          "ended_at": "2026-08-22T00:00:04Z",
           "id": "c1",
           "input": {
             "command": [
@@ -43,6 +46,7 @@
             "workdir": "/w"
           },
           "name": "shell",
+          "started_at": "2026-08-22T00:00:03Z",
           "summary": "['bash', '-lc', 'cat demo/SKILL.md']"
         }
       ],
@@ -65,16 +69,17 @@
       "n": 2,
       "output_tokens_per_sec": 7.5,
       "records": [
-        10,
         11,
         12,
         13,
-        14
+        14,
+        15
       ],
       "results_in": [
         {
           "chars": 12,
           "content": "# demo skill",
+          "id": "c1",
           "tool": "shell"
         }
       ],
@@ -83,6 +88,8 @@
       "thinking": "",
       "tools": [
         {
+          "duration_ms": 1000,
+          "ended_at": "2026-08-22T00:00:07Z",
           "id": "c2",
           "input": {
             "command": [
@@ -93,6 +100,7 @@
             "workdir": "/w"
           },
           "name": "shell",
+          "started_at": "2026-08-22T00:00:06Z",
           "summary": "['bash', '-lc', 'uv run demo/scripts/check.py']"
         }
       ],
@@ -115,6 +123,7 @@
     "suite": "skills/demo/evals/eval_codex.py",
     "task": "grade the skill"
   },
+  "compactions": 0,
   "context_window": 400000,
   "context_window_pct": 0.65,
   "cost_by_tier": {
@@ -144,6 +153,9 @@
   "long_context_calls": 0,
   "model": "gpt-5.6-sol",
   "output_tokens_per_sec": 8.7,
+  "output_tokens_per_sec_by_model": {
+    "gpt-5.6-sol": 8.33
+  },
   "peak_context_tokens": 2600,
   "rates_applied": {
     "applied_at": "<stamp>",
@@ -160,7 +172,9 @@
     "source": "xharness_prices",
     "unit": "usd_per_mtok"
   },
+  "reasoning_share": 0.2874,
   "record_kinds": {
+    "codex/event_msg/item_completed/CollabAgentToolCall": 1,
     "codex/event_msg/item_completed/CommandExecution": 1,
     "codex/event_msg/task_complete": 1,
     "codex/event_msg/task_started": 1,
@@ -251,6 +265,59 @@
       "tests": 0
     }
   },
+  "skill_use": {
+    "cache_rereads": 0,
+    "context_cost_usd": 1e-06,
+    "duration_ms": 3000,
+    "events": [
+      {
+        "access": "loaded",
+        "context_cost_usd": 1e-06,
+        "duration_ms": 1000,
+        "issuing_cost_usd": 0.001175,
+        "path": "SKILL.md",
+        "started_at": "2026-08-22T00:00:03Z",
+        "thread": "",
+        "tool": "shell",
+        "tool_id": "c1",
+        "turn": 1
+      },
+      {
+        "access": "loaded",
+        "context_cost_usd": 1e-06,
+        "duration_ms": 1000,
+        "issuing_cost_usd": 0.001175,
+        "path": "SKILL.md",
+        "started_at": "2026-08-22T00:00:03Z",
+        "thread": "",
+        "tool": "CommandExecution",
+        "tool_id": "c1",
+        "turn": 1
+      },
+      {
+        "access": "run",
+        "context_cost_usd": 0,
+        "duration_ms": 1000,
+        "issuing_cost_usd": 0.00085,
+        "path": "scripts/check.py",
+        "started_at": "2026-08-22T00:00:06Z",
+        "thread": "",
+        "tool": "shell",
+        "tool_id": "c2",
+        "turn": 2
+      }
+    ],
+    "issuing_cost_usd": 0.002025,
+    "last_at": "2026-08-22T00:00:06Z",
+    "last_turn": 2,
+    "skill": "demo",
+    "tool_calls": 2,
+    "trigger": "shell",
+    "triggered_at": "2026-08-22T00:00:03Z",
+    "triggered_turn": 1
+  },
+  "subagent_cost_share": 0.1316,
+  "subagent_token_share": 0.1115,
   "subagents": [
     {
       "agent": "scout",
@@ -266,7 +333,8 @@
           "records": [
             1,
             2,
-            3
+            3,
+            4
           ],
           "results_in": [],
           "stop_reason": "end_turn",
@@ -284,12 +352,19 @@
           }
         }
       ],
-      "description": "agents/scout.md",
+      "depth": 1,
+      "description": "/root/scout",
+      "duration_ms": 1000,
+      "ended_at": "2026-08-22T00:00:04Z",
       "estimated_cost_usd": 0.000307,
       "id": "codex-sub-1",
       "log": "<tmp>/results/codex/sid/subagents/rollout-sub1.jsonl",
       "model": "gpt-5.6-sol",
+      "output_tokens_per_sec": null,
+      "parent": "",
       "parent_turn": 1,
+      "spawned_by": "exec-spawn-1",
+      "started_at": "2026-08-22T00:00:03Z",
       "turns": 1,
       "usage": {
         "accumulative_billed_tokens": 612,
@@ -307,6 +382,44 @@
   "tool_calls": {
     "CommandExecution": 1
   },
+  "tool_costs": [
+    {
+      "cache_rereads": 0,
+      "context_cost_usd": 1e-06,
+      "duration_ms": 1000,
+      "ended_at": "2026-08-22T00:00:04Z",
+      "id": "c1",
+      "issuing_cost_usd": 0.001175,
+      "name": "shell",
+      "result_tokens": 3,
+      "started_at": "2026-08-22T00:00:03Z",
+      "summary": "['bash', '-lc', 'cat demo/SKILL.md']",
+      "thread": "",
+      "trace": [
+        {
+          "cached": false,
+          "turn": 2,
+          "usd": 1e-06
+        }
+      ],
+      "turn": 1
+    },
+    {
+      "cache_rereads": 0,
+      "context_cost_usd": 0,
+      "duration_ms": 1000,
+      "ended_at": "2026-08-22T00:00:07Z",
+      "id": "c2",
+      "issuing_cost_usd": 0.00085,
+      "name": "shell",
+      "result_tokens": 0,
+      "started_at": "2026-08-22T00:00:06Z",
+      "summary": "['bash', '-lc', 'uv run demo/scripts/check.py']",
+      "thread": "",
+      "trace": [],
+      "turn": 2
+    }
+  ],
   "treatment": null,
   "ttft_ms": 1100,
   "turns": 2,

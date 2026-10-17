@@ -49,13 +49,13 @@ test("an arm label appends +treatment only when treated, so a control's label is
   expect(sessionLabel(cell({ session_id: "abcdef123", treatment: "lean-ci" }))).toContain("+lean-ci");
 });
 
-test("a control and its treated twins are separate summary rows, control first, never one blended mean", () => {
+test("a control and its treated twins are separate summary rows, control first, never one blended row", () => {
   const rows = summaryRows(treated());
-  expect(rows.map((r) => [r.harness, r.treatment, r.runs, r.mean_estimated_cost_usd])).toEqual([
-    ["claude", null, 2, 6],
-    ["claude", "agents-md", 1, 3],
-    ["claude", "lean-ci", 1, 2],
-    ["codex", null, 1, 1],
+  expect(rows.map((r) => [r.harness, r.treatment, r.runs])).toEqual([
+    ["claude", null, 2],
+    ["claude", "agents-md", 1],
+    ["claude", "lean-ci", 1],
+    ["codex", null, 1],
   ]);
   // a control keeps the key every group had before the axis; a twin rides the cache's `+`
   expect(rows[0]!.key).toBe("discovery|eval_case|claude|claude-opus-5");

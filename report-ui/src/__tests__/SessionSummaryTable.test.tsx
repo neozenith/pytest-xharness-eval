@@ -4,12 +4,13 @@ import { cell } from "./cells";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SessionSummaryTable } from "@/components/SessionSummaryTable";
 import { NO_MATCH } from "@/lib/facets";
-import type { Cell } from "@/lib/types";
+import type { Cell, ImportantMetricsDoc } from "@/lib/types";
+import { aggregated, doc } from "./metricsDoc";
 
-const mount = (cells: Cell[]) =>
+const mount = (cells: Cell[], metrics: ImportantMetricsDoc = doc()) =>
   render(
     <TooltipProvider>
-      <SessionSummaryTable cells={cells} />
+      <SessionSummaryTable cells={cells} metrics={metrics} />
     </TooltipProvider>,
   );
 
@@ -24,31 +25,39 @@ test("one row per group, in key order, keyed by the group", () => {
   expect(rows[0]).toHaveTextContent("2");
 });
 
-test("a token figure is abbreviated in the cell and exact on its title, with the window named there too", () => {
-  mount([cell({ session_id: "1", peak_context_tokens: 120_245, context_window_pct: 12.02, context_window: 1_000_000 })]);
-  // the abbreviation is what the column shows; the precision it gave up is one hover away, and
-  // the window label moved to the same place rather than being dropped
+test("a metric prints its headline in the cell and spells out every aggregate on its title", () => {
+  const c = cell({ session_id: "1" });
+  mount([c], doc(aggregated(c, { tokens: { median: 120_245, p25: 100_000, p75: 150_000, n: 3 } }, 3)));
+  // the median is what the column shows; the spread it summarises is one hover away
   const shown = screen.getByText("120.2k");
-  // The gap between a figure and its qualifier is a margin on `.qual`, not a character: an
-  // inline-block collapses leading white space, so the markup carries none and jsdom (which
-  // applies no stylesheet) sees the two runs adjacent. The spacing is asserted in the e2e pass.
-  expect(shown.closest("td")).toHaveTextContent("120.2k· 12.0%");
-  expect(shown.closest("span")).toHaveAttribute("title", "120,245 of a 1M window");
+  expect(shown).toHaveAttribute("title", "median 120.2k · p25 100.0k · p75 150.0k · n 3");
 });
 
-test("the pass rate is over the runs that carry a verdict, and says how many do not", () => {
-  mount([cell({ session_id: "1", verdict: "pass" }), cell({ session_id: "2", verdict: "fail" }), cell({ session_id: "3", verdict: null })]);
+test("the pass rate is passes over samples, and the samples cell says how many sessions were not graded", () => {
+  const sessions = [cell({ session_id: "1", verdict: "pass" }), cell({ session_id: "2", verdict: "fail" }), cell({ session_id: "3", verdict: null })];
+  mount(sessions, doc(aggregated(sessions[0]!, { verdict: { pass_rate: 0.5, ci_low: 0.09, ci_high: 0.91, n: 2 } }, 2)));
   const row = screen.getAllByRole("row")[1]!;
-  expect(row).toHaveTextContent("1/2 · 50.0%");
-  expect(row).toHaveTextContent("1 no history");
+  expect(row).toHaveTextContent("2 · 1 not graded");
+  const rate = screen.getByText("1/2");
+  // a cell that did not pass clean is the one the reader must not miss
+  expect(rate).toHaveClass("bad");
+  expect(rate.closest("[title]")).toHaveAttribute("title", "pass rate 50.0% · 95% CI low 9.0% · 95% CI high 91.0% · n 2");
 });
 
-test("a null aggregate is the muted glyph, never a zero", () => {
-  mount([cell({ session_id: "1", estimated_cost_usd: null, output_tokens_per_sec: null, skill_coverage: {} })]);
+test("a cell with no aggregates, or an aggregate no sample carried, is the muted glyph, never a zero", () => {
+  const c = cell({ session_id: "1" });
+  mount([c], doc(aggregated(c, { cost: { median: null, p25: null, p75: null, n: 0 } }, 1)));
   const row = screen.getAllByRole("row")[1]!;
-  expect(row).not.toHaveTextContent("$0.0000");
-  expect(row.querySelectorAll("td .muted")).not.toHaveLength(0);
+  expect(row).not.toHaveTextContent("$0.000");
+  expect(row.querySelectorAll("td .muted").length).toBeGreaterThan(10);
   expect(row).toHaveTextContent("–");
+});
+
+test("every declared metric is a column, in declaration order, after the samples rule", () => {
+  mount([cell({ session_id: "1" })]);
+  const heads = [...document.querySelectorAll("#SessionSummaryTable thead th")].map((th) => th.getAttribute("data-k"));
+  const metrics = doc().metrics.map((m) => m.id);
+  expect(heads.slice(heads.indexOf("samples") + 1)).toEqual(metrics);
 });
 
 test("every head is a sort, and its definition reaches a screen reader without costing a tab stop", () => {
@@ -77,17 +86,16 @@ test("every head is a sort, and its definition reaches a screen reader without c
 
 test("a head click sorts on ssort/sdir, and the fixed-order banding switches off when it does", () => {
   const rows = () => [...document.querySelectorAll("#SessionSummaryTable tbody tr")];
-  mount([
-    cell({ session_id: "1", skill: "alpha", case: "eval_a", estimated_cost_usd: 9 }),
-    cell({ session_id: "2", skill: "beta", case: "eval_b", estimated_cost_usd: 1 }),
-  ]);
+  const alpha = cell({ session_id: "1", skill: "alpha", case: "eval_a" });
+  const beta = cell({ session_id: "2", skill: "beta", case: "eval_b" });
+  mount([alpha, beta], doc(aggregated(alpha, { cost: { median: 9, p25: 9, p75: 9, n: 1 } }), aggregated(beta, { cost: { median: 1, p25: 1, p75: 1, n: 1 } })));
   // key order first: alpha before beta, and the change of skill opens a band
   expect(rows().map((r) => r.getAttribute("data-key"))).toEqual(["alpha|eval_a|claude|claude-opus-5", "beta|eval_b|claude|claude-opus-5"]);
   expect(rows()[1]).toHaveAttribute("data-band", "skill");
 
   const meanCost = document.querySelector<HTMLButtonElement>("#SessionSummaryTable thead th[data-k='cost'] button")!;
   fireEvent.click(meanCost);
-  // a fresh measure opens descending — the largest mean first, which is the question being asked
+  // a fresh measure opens descending — the costliest cell first, which is the question being asked
   expect(location.search).toContain("ssort=cost&sdir=desc");
   expect(rows().map((r) => r.getAttribute("data-key"))).toEqual(["alpha|eval_a|claude|claude-opus-5", "beta|eval_b|claude|claude-opus-5"]);
   // and the banding is gone: under any other order "the row above" is whatever was last clicked
@@ -111,10 +119,12 @@ test("the scroll box is a labelled region, because no row in the table is focusa
   expect(box.parentElement).toHaveClass("table-scroll-ring");
 });
 
-test("a head answers to its canonical `mean <field>` name", () => {
+test("a head answers to its headline's operation and the field it reduces", () => {
   mount([cell({ session_id: "1" })]);
-  expect(screen.getByLabelText(/mean accumulative_billed_tokens/)).toBeInTheDocument();
-  expect(screen.getByLabelText(/mean wall_ms/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/median accumulative_billed_tokens/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/median wall_ms/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/mean skill_files_loaded \/ skill_files/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/pass rate verdict/)).toBeInTheDocument();
 });
 
 test("filtered to nothing the table keeps its id and its head, and says why the body is empty", () => {

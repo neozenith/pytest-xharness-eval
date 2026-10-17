@@ -1,20 +1,24 @@
 /**
- * `SessionSummaryTable`: the rolled-up view of exactly the cells `SessionTable` lists, one row per
- * skill × case × harness × model × effort (ADR 0042, ADR 0049). It sorts on its own `ssort`/`sdir`
- * pair, and only in its fixed key order does it band by skill and mute a repeated skill. Each test
- * states its cells and, where the order matters, a `hooksConfig.search`.
+ * `SessionSummaryTable`: the Important Metrics of exactly the cells `SessionTable` lists, one row
+ * per skill × case × harness × model × effort × treatment (ADR 0042, ADR 0049, ADR 0071). Its
+ * measure columns are the declared metrics, each showing its headline aggregate. It sorts on its
+ * own `ssort`/`sdir` pair, and only in its fixed key order does it band by skill and mute a
+ * repeated skill. Each test states its sessions and mounts `Summary`, which hands the table the
+ * aggregates those sessions imply (`metricsFor`), exactly as `SweepOverview` hands it `index.json`'s.
  */
 import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
 import { SessionSummaryTable } from "../src/components/SessionSummaryTable";
-import { cell, sweep, treatedSweep } from "./fixtures";
+import { cell, IMPORTANT_METRICS, sweep, treatedSweep } from "./fixtures";
+import { Summary } from "./SessionSummaryTable.story";
 
 const MUTED = { light: "rgb(91, 96, 112)", dark: "rgb(154, 160, 176)" };
 const BAD = { light: "rgb(185, 28, 28)", dark: "rgb(248, 113, 113)" };
 const NONE = "–";
 const NO_MATCH = "No session matches the current filters.";
 
-const KEYS = ["skill", "case", "harness", "model", "effort", "runs", "pass", "cost", "billed", "peak", "turns", "tools", "coverage", "tps", "wall"];
+const METRICS = IMPORTANT_METRICS.map((m) => m.id);
+const KEYS = ["skill", "case", "harness", "model", "effort", "samples", ...METRICS];
 const col = (key: string) => KEYS.indexOf(key);
 
 /** The sweep fixture's groups, in the fixed key order: skill, case, harness, model, then the ladder. */
@@ -40,32 +44,31 @@ const td = (page: Page, key: string, column: string) => row(page, key).locator("
 
 test.describe("SessionSummaryTable: rendering", () => {
   test("renders one row per group, in the fixed key order, with every column", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     expect(await keys(page)).toEqual(SWEEP_KEYS);
     expect(await page.locator("#SessionSummaryTable thead th").evaluateAll((ths) => ths.map((th) => th.getAttribute("data-k")))).toEqual(KEYS);
     await expect(page.locator('#SessionSummaryTable thead th[aria-sort="none"]')).toHaveCount(KEYS.length);
   });
 
-  test("the caption says once what every measure head no longer prints", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+  test("the caption says once how each metric is reduced, which the short heads no longer print", async ({ mount, page }) => {
+    await mount(<Summary cells={sweep()} />);
     const caption = page.locator("#SessionSummaryTable caption");
-    await expect(caption).toHaveText("every measure is the arithmetic mean over the runs in its group that carry that field");
-    await expect(caption.locator(".const")).toHaveText("arithmetic mean");
+    await expect(caption).toContainText("each metric is reduced over the cell's samples by its own aggregate");
+    await expect(caption.locator(".const")).toHaveText(["median", "mean", "pass rate"]);
     await expect(caption).toHaveCSS("caption-side", "top");
   });
 
-  test("every measure head answers to `mean <field>` in full, while printing the short label", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+  test("every measure head answers to its headline's operation and field in full, while printing the short label", async ({ mount, page }) => {
+    await mount(<Summary cells={sweep()} />);
     for (const [label, name] of [
-      ["cost", "mean estimated_cost_usd"],
-      ["billed", "mean accumulative_billed_tokens"],
-      ["peak ctx", "mean peak_context_tokens"],
-      ["turns", "mean turns"],
-      ["tools", "mean tool_calls"],
-      ["coverage", "mean skill_coverage loaded share"],
-      ["tok/s", "mean output_tokens_per_sec"],
-      ["wall", "mean wall_ms"],
-      ["pass rate", "verdict pass rate"],
+      ["cost", "median estimated_cost_usd"],
+      ["billed tokens", "median accumulative_billed_tokens"],
+      ["peak context", "mean context_window_pct"],
+      ["compactions", "mean compactions"],
+      ["files loaded", "mean skill_files_loaded / skill_files"],
+      ["tok/s", "median output_tokens_per_sec"],
+      ["wall clock", "median wall_ms"],
+      ["pass rate", "pass rate verdict"],
     ]) {
       const button = page.getByRole("button", { name: `${label} — ${name}` });
       await expect(button).toBeVisible();
@@ -76,18 +79,24 @@ test.describe("SessionSummaryTable: rendering", () => {
     await expect(effort).toHaveAccessibleDescription(/^effort — the reasoning rung every run in this group was sent/);
   });
 
-  test("the metrics half opens on runs, which draws the dividing rule", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+  test("the metrics half opens on samples, which draws the dividing rule", async ({ mount, page }) => {
+    await mount(<Summary cells={sweep()} />);
     const grouped = page.locator('#SessionSummaryTable thead th[data-group="metrics"]');
     await expect(grouped).toHaveCount(1);
-    await expect(grouped).toHaveAttribute("data-k", "runs");
+    await expect(grouped).toHaveAttribute("data-k", "samples");
     await expect(grouped).toHaveCSS("border-left-width", "1px");
-    await expect(td(page, SWEEP_KEYS[0]!, "runs")).toHaveCSS("text-align", "right");
+    await expect(td(page, SWEEP_KEYS[0]!, "samples")).toHaveCSS("text-align", "right");
   });
 
-  test("a group's measures are the means over its runs", async ({ mount, page }) => {
+  test("with no Important Metrics document the table still lists its cells, with no measure columns", async ({ mount, page }) => {
+    await mount(<SessionSummaryTable cells={sweep()} />);
+    expect(await keys(page)).toEqual(SWEEP_KEYS);
+    expect(await page.locator("#SessionSummaryTable thead th").evaluateAll((ths) => ths.map((th) => th.getAttribute("data-k")))).toEqual(KEYS.slice(0, 6));
+  });
+
+  test("a cell's measures are its headline aggregates, every aggregate on the cell's title", async ({ mount, page }) => {
     await mount(
-      <SessionSummaryTable
+      <Summary
         cells={[
           cell({ session_id: "m-1", effort: "high", estimated_cost_usd: 1, turns: 2, tool_calls: 10, wall_ms: 10_000, output_tokens_per_sec: 50 }),
           cell({ session_id: "m-2", effort: "high", estimated_cost_usd: 3, turns: 5, tool_calls: 11, wall_ms: 20_000, output_tokens_per_sec: 60 }),
@@ -95,30 +104,33 @@ test.describe("SessionSummaryTable: rendering", () => {
       />,
     );
     const key = `${OPUS}|high`;
-    await expect(td(page, key, "runs")).toHaveText("2");
-    await expect(td(page, key, "cost")).toHaveText("$2.0000");
+    await expect(td(page, key, "samples")).toHaveText("2");
+    // spreads print their median: the midpoint of two samples
+    await expect(td(page, key, "cost")).toHaveText("$2.000");
     await expect(td(page, key, "turns")).toHaveText("3.5");
-    await expect(td(page, key, "tools")).toHaveText("10.5");
     await expect(td(page, key, "wall")).toHaveText("15.0s");
-    await expect(td(page, key, "tps")).toHaveText("55.00");
-    await expect(td(page, key, "coverage")).toHaveText("40.0%");
-    await expect(td(page, key, "billed").locator("span")).toHaveText("1.5M");
-    await expect(td(page, key, "billed").locator("span")).toHaveAttribute("title", "1,504,090");
-    await expect(td(page, key, "peak")).toContainText("· 12.0%");
+    await expect(td(page, key, "throughput")).toHaveText("55.0");
+    await expect(td(page, key, "cost").locator("span")).toHaveAttribute("title", "median $2.000 · p25 $1.500 · p75 $2.500 · n 2");
+    // shares print their mean: 2 of 5 files loaded, 1 of 2 scripts run, 12% of the window
+    await expect(td(page, key, "skill_loaded")).toHaveText("40.0%");
+    await expect(td(page, key, "skill_run")).toHaveText("50.0%");
+    await expect(td(page, key, "context")).toHaveText("12.0%");
+    await expect(td(page, key, "tokens")).toHaveText("1.5M");
     await expect(td(page, key, "model").locator("code")).toHaveText("opus-5");
     await expect(td(page, key, "model").locator("code")).toHaveAttribute("title", "claude-opus-5");
     await expect(td(page, key, "case").locator("span")).toHaveText("dual_density");
   });
 
-  test("a mean is over the runs that carry the field, never counting a missing one as zero", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={[cell({ session_id: "p-1", estimated_cost_usd: 2 }), cell({ session_id: "p-2", estimated_cost_usd: null })]} />);
-    await expect(td(page, OPUS, "runs")).toHaveText("2");
-    await expect(td(page, OPUS, "cost")).toHaveText("$2.0000");
+  test("an aggregate is over the samples that carry the field, never counting a missing one as zero", async ({ mount, page }) => {
+    await mount(<Summary cells={[cell({ session_id: "p-1", estimated_cost_usd: 2 }), cell({ session_id: "p-2", estimated_cost_usd: null })]} />);
+    await expect(td(page, OPUS, "samples")).toHaveText("2");
+    await expect(td(page, OPUS, "cost")).toHaveText("$2.000");
+    await expect(td(page, OPUS, "cost").locator("span")).toHaveAttribute("title", /n 1$/);
   });
 
   test("a measure no run carries is the muted glyph", async ({ mount, page }) => {
     await mount(
-      <SessionSummaryTable
+      <Summary
         cells={[
           cell({
             estimated_cost_usd: null,
@@ -133,7 +145,7 @@ test.describe("SessionSummaryTable: rendering", () => {
         ]}
       />,
     );
-    for (const key of ["pass", "cost", "billed", "peak", "turns", "coverage", "tps", "wall"]) {
+    for (const key of ["verdict", "cost", "tokens", "context", "turns", "skill_loaded", "throughput", "wall"]) {
       const glyph = td(page, OPUS, key).locator("> span.muted");
       await expect(glyph, key).toHaveText(NONE);
       await expect(glyph, key).toHaveCSS("color", MUTED.light);
@@ -141,7 +153,7 @@ test.describe("SessionSummaryTable: rendering", () => {
   });
 
   test("an empty set of cells keeps the head and caption and says why the body is empty", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={[]} />);
+    await mount(<Summary cells={[]} />);
     await expect(rows(page)).toHaveCount(0);
     const empty = page.locator("#SessionSummaryTable td.empty");
     await expect(empty).toHaveText(NO_MATCH);
@@ -151,55 +163,54 @@ test.describe("SessionSummaryTable: rendering", () => {
   });
 
   test("the head is pinned to the top of its own scroll box", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     await expect(head(page, "skill")).toHaveCSS("position", "sticky");
   });
 
   test("renders in dark mode with the dark tokens", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={[cell({ session_id: "d-1", effort: "high", verdict: "fail" }), cell({ session_id: "d-2" })]} />, {
+    await mount(<Summary cells={[cell({ session_id: "d-1", effort: "high", verdict: "fail" }), cell({ session_id: "d-2" })]} />, {
       hooksConfig: { mode: "dark" },
     });
     await expect(rows(page)).toHaveCount(2);
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(15, 17, 23)");
-    await expect(td(page, `${OPUS}|high`, "pass").locator(".bad")).toHaveCSS("color", BAD.dark);
+    await expect(td(page, `${OPUS}|high`, "verdict").locator(".bad")).toHaveCSS("color", BAD.dark);
     await expect(td(page, OPUS, "effort").locator("> span.muted")).toHaveCSS("color", MUTED.dark);
     await expect(td(page, OPUS, "skill")).toHaveCSS("color", MUTED.dark);
   });
 });
 
 test.describe("SessionSummaryTable: pass rate", () => {
-  test("a group that did not pass clean takes the bad ink at 600 weight; the percentage stays muted", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={[cell({ session_id: "f-1", verdict: "pass" }), cell({ session_id: "f-2", verdict: "fail" })]} />);
-    const cellEl = td(page, OPUS, "pass");
-    await expect(cellEl).toHaveText("1/2 · 50.0%");
+  test("a cell that did not pass clean takes the bad ink at 600 weight; the rate and interval are its title", async ({ mount, page }) => {
+    await mount(<Summary cells={[cell({ session_id: "f-1", verdict: "pass" }), cell({ session_id: "f-2", verdict: "fail" })]} />);
+    const cellEl = td(page, OPUS, "verdict");
+    await expect(cellEl).toHaveText("1/2");
     const fraction = cellEl.locator("span.bad.strong");
     await expect(fraction).toHaveText("1/2");
     await expect(fraction).toHaveCSS("color", BAD.light);
     await expect(fraction).toHaveCSS("font-weight", "600");
-    await expect(cellEl.locator("span.muted")).toHaveCSS("color", MUTED.light);
+    await expect(cellEl.locator("[title]")).toHaveAttribute("title", /^pass rate 50\.0% · /);
   });
 
-  test("a clean group stays quiet", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={[cell({ session_id: "c-1" }), cell({ session_id: "c-2" })]} />);
-    const cellEl = td(page, OPUS, "pass");
-    await expect(cellEl).toHaveText("2/2 · 100.0%");
-    await expect(cellEl.locator(".bad")).toHaveCount(0);
-    await expect(cellEl.locator("span").first()).not.toHaveCSS("font-weight", "600");
-  });
-
-  test("an ungraded run is never a failure: it is counted beside the rate", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={[cell({ session_id: "u-1" }), cell({ session_id: "u-2", verdict: null })]} />);
-    const cellEl = td(page, OPUS, "pass");
-    await expect(cellEl).toHaveText("1/1 · 100.0% · 1 no history");
+  test("a clean cell stays quiet", async ({ mount, page }) => {
+    await mount(<Summary cells={[cell({ session_id: "c-1" }), cell({ session_id: "c-2" })]} />);
+    const cellEl = td(page, OPUS, "verdict");
+    await expect(cellEl).toHaveText("2/2");
     await expect(cellEl.locator(".bad")).toHaveCount(0);
   });
 
-  test("an error verdict counts as graded and not passed", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={[cell({ session_id: "e-1" }), cell({ session_id: "e-2", verdict: "error" })]} />);
-    await expect(td(page, OPUS, "pass").locator(".bad")).toHaveText("1/2");
+  test("an ungraded session is never a failure: it is no sample, and the samples cell counts it", async ({ mount, page }) => {
+    await mount(<Summary cells={[cell({ session_id: "u-1" }), cell({ session_id: "u-2", verdict: null })]} />);
+    await expect(td(page, OPUS, "verdict")).toHaveText("1/1");
+    await expect(td(page, OPUS, "verdict").locator(".bad")).toHaveCount(0);
+    await expect(td(page, OPUS, "samples")).toHaveText("1 · 1 not graded");
   });
 
-  test("sorting by pass rate ranks the share, an ungraded group last in both directions", async ({ mount, page }) => {
+  test("an error verdict is a sample that did not pass", async ({ mount, page }) => {
+    await mount(<Summary cells={[cell({ session_id: "e-1" }), cell({ session_id: "e-2", verdict: "error" })]} />);
+    await expect(td(page, OPUS, "verdict").locator(".bad")).toHaveText("1/2");
+  });
+
+  test("sorting by pass rate ranks the share, an ungraded cell last in both directions", async ({ mount, page }) => {
     const cells = [
       cell({ session_id: "r-half-1", effort: "low", verdict: "pass" }),
       cell({ session_id: "r-half-2", effort: "low", verdict: "fail" }),
@@ -207,18 +218,18 @@ test.describe("SessionSummaryTable: pass rate", () => {
       cell({ session_id: "r-all", effort: "high", verdict: "pass" }),
       cell({ session_id: "r-zero", effort: "max", verdict: "fail" }),
     ];
-    const c = await mount(<SessionSummaryTable cells={cells} />, { hooksConfig: { search: "?ssort=pass&sdir=desc" } });
+    const c = await mount(<Summary cells={cells} />, { hooksConfig: { search: "?ssort=verdict&sdir=desc" } });
     expect(await keys(page)).toEqual([`${OPUS}|high`, `${OPUS}|low`, `${OPUS}|max`, `${OPUS}|medium`]);
-    await head(page, "pass").locator("button").click();
-    await expect.poll(() => search(page)).toBe("?ssort=pass&sdir=asc");
-    await c.update(<SessionSummaryTable cells={cells} />);
+    await head(page, "verdict").locator("button").click();
+    await expect.poll(() => search(page)).toBe("?ssort=verdict&sdir=asc");
+    await c.update(<Summary cells={cells} />);
     expect(await keys(page)).toEqual([`${OPUS}|max`, `${OPUS}|low`, `${OPUS}|high`, `${OPUS}|medium`]);
   });
 });
 
 test.describe("SessionSummaryTable: banding and repeat muting", () => {
   test("in key order, the first row of each new skill opens a band", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     const bands = await rows(page).evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-band")));
     expect(bands).toEqual([null, "skill", null, null, null, null, null]);
     const banded = row(page, `${OPUS}|low`).locator("td").first();
@@ -227,7 +238,7 @@ test.describe("SessionSummaryTable: banding and repeat muting", () => {
   });
 
   test("in key order, a skill repeating the row above's recedes to the muted ink but is still printed", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     const repeats = await rows(page).evaluateAll((trs) => trs.map((tr) => (tr.children[0] as HTMLElement).getAttribute("data-repeat")));
     expect(repeats).toEqual([null, null, "true", "true", "true", "true", "true"]);
     expect(await column(page, "skill")).toEqual(["discovery", ...Array(6).fill("mermaidjs-diagrams")]);
@@ -236,7 +247,7 @@ test.describe("SessionSummaryTable: banding and repeat muting", () => {
   });
 
   test("only the skill column mutes a repeat: case, harness and model always print at full ink", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     await expect(page.locator("#SessionSummaryTable tbody td[data-repeat]")).toHaveCount(5);
     for (const key of ["case", "harness", "model", "effort"]) {
       await expect(td(page, `${OPUS}|high`, key)).not.toHaveAttribute("data-repeat", /.*/);
@@ -244,29 +255,29 @@ test.describe("SessionSummaryTable: banding and repeat muting", () => {
   });
 
   test("a sorted table draws neither bands nor muted repeats: 'the row above' is no longer a group", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />, { hooksConfig: { search: "?ssort=skill&sdir=asc" } });
+    await mount(<Summary cells={sweep()} />, { hooksConfig: { search: "?ssort=skill&sdir=asc" } });
     await expect(page.locator("#SessionSummaryTable tbody tr[data-band]")).toHaveCount(0);
     await expect(page.locator("#SessionSummaryTable tbody td[data-repeat]")).toHaveCount(0);
     await expect(td(page, `${OPUS}|high`, "skill")).not.toHaveCSS("color", MUTED.light);
   });
 
   test("clicking any head switches banding and muting off", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     await expect(page.locator("#SessionSummaryTable tbody td[data-repeat]")).toHaveCount(5);
-    await head(page, "runs").locator("button").click();
+    await head(page, "samples").locator("button").click();
     await expect(page.locator("#SessionSummaryTable tbody td[data-repeat]")).toHaveCount(0);
     await expect(page.locator("#SessionSummaryTable tbody tr[data-band]")).toHaveCount(0);
   });
 
   test("an unknown ssort key is no sort: the fixed order, its bands and nothing marked sorted", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />, { hooksConfig: { search: "?ssort=bogus&sdir=desc" } });
+    await mount(<Summary cells={sweep()} />, { hooksConfig: { search: "?ssort=bogus&sdir=desc" } });
     expect(await keys(page)).toEqual(SWEEP_KEYS);
     await expect(page.locator("#SessionSummaryTable tbody tr[data-band]")).toHaveCount(1);
     await expect(page.locator('#SessionSummaryTable thead th[aria-sort="none"]')).toHaveCount(KEYS.length);
   });
 
   test("a group with no skill sorts after every skill and prints the muted glyph", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={[cell({ session_id: "ns", skill: null }), cell({ session_id: "s" })]} />);
+    await mount(<Summary cells={[cell({ session_id: "ns", skill: null }), cell({ session_id: "s" })]} />);
     expect(await keys(page)).toEqual([OPUS, "|eval_dual_density|claude|claude-opus-5"]);
     await expect(td(page, "|eval_dual_density|claude|claude-opus-5", "skill").locator("span.muted")).toHaveText(NONE);
   });
@@ -274,7 +285,7 @@ test.describe("SessionSummaryTable: banding and repeat muting", () => {
 
 test.describe("SessionSummaryTable: sorting", () => {
   test("a fresh text head opens ascending and a fresh measure descending; a second click flips", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     await expect(head(page, "harness").locator("svg.sort-ico")).toHaveClass(/lucide-arrow-up/);
     await expect(head(page, "cost").locator("svg.sort-ico")).toHaveClass(/lucide-arrow-down/);
     await head(page, "harness").locator("button").click();
@@ -288,52 +299,55 @@ test.describe("SessionSummaryTable: sorting", () => {
     await expect(head(page, "harness")).toHaveAttribute("aria-sort", "none");
   });
 
-  test("sorting by mean cost ranks groups, largest first; ties keep the key order", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />, { hooksConfig: { search: "?ssort=cost&sdir=desc" } });
-    // Fixture costs: max 3.1, high 1.2, pre-axis 1.0, luna 1.0276 (default), sol 0.9, sonnet 0.6, low 0.4.
-    expect(await keys(page)).toEqual([`${OPUS}|max`, `${OPUS}|high`, SWEEP_KEYS[0], OPUS, SWEEP_KEYS[6], SWEEP_KEYS[5], `${OPUS}|low`]);
+  test("sorting by cost ranks cells by their median, largest first; a cell with no samples last", async ({ mount, page }) => {
+    await mount(<Summary cells={sweep()} />, { hooksConfig: { search: "?ssort=cost&sdir=desc" } });
+    // Fixture costs: max 3.1, high 1.2, luna 1.0276 (default), sol 0.9, sonnet 0.6, low 0.4. The
+    // pre-axis session carries no verdict, so its cell has no samples and no cost to rank.
+    expect(await keys(page)).toEqual([`${OPUS}|max`, `${OPUS}|high`, SWEEP_KEYS[0], SWEEP_KEYS[6], SWEEP_KEYS[5], `${OPUS}|low`, OPUS]);
     await expect(head(page, "cost")).toHaveAttribute("aria-sort", "descending");
     await expect(head(page, "cost").locator("svg.sort-ico")).toHaveAttribute("data-active", "true");
   });
 
   test("equal values keep the alphabetical key order under a sort", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />, { hooksConfig: { search: "?ssort=runs&sdir=desc" } });
-    expect(await keys(page)).toEqual(SWEEP_KEYS);
+    await mount(<Summary cells={[cell({ session_id: "t-1", effort: "low" }), cell({ session_id: "t-2", effort: "high" })]} />, {
+      hooksConfig: { search: "?ssort=samples&sdir=desc" },
+    });
+    expect(await keys(page)).toEqual([`${OPUS}|low`, `${OPUS}|high`]);
   });
 
-  test("peak context ranks by the mean share of the window, not raw tokens", async ({ mount, page }) => {
+  test("peak context ranks by the mean share of the window, never by raw tokens", async ({ mount, page }) => {
     await mount(
-      <SessionSummaryTable
+      <Summary
         cells={[
           cell({ session_id: "w-big", effort: "low", peak_context_tokens: 60_000, context_window_pct: 6 }),
           cell({ session_id: "w-small", effort: "high", peak_context_tokens: 68_000, context_window: 200_000, context_window_pct: 34 }),
         ]}
       />,
-      { hooksConfig: { search: "?ssort=peak&sdir=desc" } },
+      { hooksConfig: { search: "?ssort=context&sdir=desc" } },
     );
     expect(await keys(page)).toEqual([`${OPUS}|high`, `${OPUS}|low`]);
   });
 
   test("a sort click writes only the summary's pair, carrying the session sort, facets and theme", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />, { hooksConfig: { search: "?sort=turns&dir=asc&harness=claude&effort=high&theme=dark" } });
+    await mount(<Summary cells={sweep()} />, { hooksConfig: { search: "?sort=turns&dir=asc&harness=claude&effort=high&theme=dark" } });
     await head(page, "cost").locator("button").click();
     await expect.poll(() => search(page)).toBe("?sort=turns&dir=asc&ssort=cost&sdir=desc&harness=claude&effort=high&theme=dark");
   });
 
   test("a missing sdir reads as ascending", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />, { hooksConfig: { search: "?ssort=effort" } });
+    await mount(<Summary cells={sweep()} />, { hooksConfig: { search: "?ssort=effort" } });
     await expect(head(page, "effort")).toHaveAttribute("aria-sort", "ascending");
   });
 
   test("the SessionTable's own sort never reorders this table", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />, { hooksConfig: { search: "?sort=estimated_cost_usd&dir=desc" } });
+    await mount(<Summary cells={sweep()} />, { hooksConfig: { search: "?sort=estimated_cost_usd&dir=desc" } });
     expect(await keys(page)).toEqual(SWEEP_KEYS);
     await expect(page.locator('#SessionSummaryTable thead th[aria-sort="none"]')).toHaveCount(KEYS.length);
   });
 
   for (const key of ["Enter", "Space"]) {
     test(`${key} on a focused head sorts it`, async ({ mount, page }) => {
-      await mount(<SessionSummaryTable cells={sweep()} />);
+      await mount(<Summary cells={sweep()} />);
       await head(page, "turns").locator("button").focus();
       await page.keyboard.press(key);
       await expect.poll(() => search(page)).toBe("?ssort=turns&sdir=desc");
@@ -342,35 +356,33 @@ test.describe("SessionSummaryTable: sorting", () => {
 });
 
 test.describe("SessionSummaryTable: the effort axis (ADR 0049)", () => {
-  test("two rungs of one model are two rows, never one averaged row", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+  test("two rungs of one model are two rows, never one blended row", async ({ mount, page }) => {
+    await mount(<Summary cells={sweep()} />);
     const opus = (await keys(page)).filter((k) => k?.startsWith(OPUS));
     expect(opus).toEqual([`${OPUS}|low`, `${OPUS}|high`, `${OPUS}|max`, OPUS]);
-    await expect(td(page, `${OPUS}|max`, "cost")).toHaveText("$3.1000");
-    await expect(td(page, `${OPUS}|low`, "cost")).toHaveText("$0.4000");
+    await expect(td(page, `${OPUS}|max`, "cost")).toHaveText("$3.100");
+    await expect(td(page, `${OPUS}|low`, "cost")).toHaveText("$0.400");
   });
 
   test("runs of the same rung roll up into one row", async ({ mount, page }) => {
     await mount(
-      <SessionSummaryTable
+      <Summary
         cells={[cell({ session_id: "h-1", effort: "high" }), cell({ session_id: "h-2", effort: "high" }), cell({ session_id: "l-1", effort: "low" })]}
       />,
     );
     expect(await keys(page)).toEqual([`${OPUS}|low`, `${OPUS}|high`]);
-    await expect(td(page, `${OPUS}|high`, "runs")).toHaveText("2");
-    await expect(td(page, `${OPUS}|low`, "runs")).toHaveText("1");
+    await expect(td(page, `${OPUS}|high`, "samples")).toHaveText("2");
+    await expect(td(page, `${OPUS}|low`, "samples")).toHaveText("1");
   });
 
   test("a pre-axis sweep keeps its pre-axis group keys: no effort segment at all", async ({ mount, page }) => {
-    await mount(
-      <SessionSummaryTable cells={[cell({ session_id: "old-1" }), cell({ session_id: "old-2" }), cell({ session_id: "old-3", model: "claude-sonnet-5" })]} />,
-    );
+    await mount(<Summary cells={[cell({ session_id: "old-1" }), cell({ session_id: "old-2" }), cell({ session_id: "old-3", model: "claude-sonnet-5" })]} />);
     expect(await keys(page)).toEqual([OPUS, "mermaidjs-diagrams|eval_dual_density|claude|claude-sonnet-5"]);
-    await expect(td(page, OPUS, "runs")).toHaveText("2");
+    await expect(td(page, OPUS, "samples")).toHaveText("2");
   });
 
   test("a rung-less group shows the muted glyph in the effort column", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     const glyph = td(page, OPUS, "effort").locator("> span");
     await expect(glyph).toHaveClass("muted");
     await expect(glyph).toHaveText(NONE);
@@ -379,25 +391,25 @@ test.describe("SessionSummaryTable: the effort axis (ADR 0049)", () => {
   });
 
   test("in key order, rungs of one model follow the ladder and the rung-less group comes last", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={["max", null, "xhigh", "low", "high", "medium"].map((effort, i) => cell({ session_id: `k-${i}`, effort }))} />);
+    await mount(<Summary cells={["max", null, "xhigh", "low", "high", "medium"].map((effort, i) => cell({ session_id: `k-${i}`, effort }))} />);
     expect(await column(page, "effort")).toEqual(["low", "medium", "high", "xhigh", "max", NONE]);
   });
 
   test("sorting by effort ascending follows the ladder, a null last", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />, { hooksConfig: { search: "?ssort=effort&sdir=asc" } });
+    await mount(<Summary cells={sweep()} />, { hooksConfig: { search: "?ssort=effort&sdir=asc" } });
     expect(await column(page, "effort")).toEqual(["low", "low", "medium", "high", "xhigh", "max", NONE]);
     // The two `low` groups tie, and keep the key order: discovery before mermaidjs-diagrams.
     expect((await keys(page)).slice(0, 2)).toEqual([SWEEP_KEYS[0], `${OPUS}|low`]);
   });
 
   test("sorting by effort descending reverses the ladder, a null still last", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />, { hooksConfig: { search: "?ssort=effort&sdir=desc" } });
+    await mount(<Summary cells={sweep()} />, { hooksConfig: { search: "?ssort=effort&sdir=desc" } });
     expect(await column(page, "effort")).toEqual(["max", "xhigh", "high", "medium", "low", "low", NONE]);
     expect((await keys(page)).slice(4, 6)).toEqual([SWEEP_KEYS[0], `${OPUS}|low`]);
   });
 
   test("clicking the effort head sorts by rung position, never alphabetically", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     await head(page, "effort").locator("button").click();
     await expect.poll(() => search(page)).toBe("?ssort=effort&sdir=asc");
     const asc = await column(page, "effort");
@@ -410,9 +422,7 @@ test.describe("SessionSummaryTable: the effort axis (ADR 0049)", () => {
 
   test("a rung the page does not know sorts after the ladder and before a null", async ({ mount, page }) => {
     await mount(
-      <SessionSummaryTable
-        cells={[cell({ session_id: "x-1", effort: null }), cell({ session_id: "x-2", effort: "turbo" }), cell({ session_id: "x-3", effort: "max" })]}
-      />,
+      <Summary cells={[cell({ session_id: "x-1", effort: null }), cell({ session_id: "x-2", effort: "turbo" }), cell({ session_id: "x-3", effort: "max" })]} />,
     );
     expect(await column(page, "effort")).toEqual(["max", "turbo", NONE]);
   });
@@ -420,10 +430,11 @@ test.describe("SessionSummaryTable: the effort axis (ADR 0049)", () => {
 
 test.describe("SessionSummaryTable: keyboard access to a clipped table", () => {
   test("a table that fits costs no tab stop: the scroll box is not focusable", async ({ mount, page }) => {
-    await page.setViewportSize({ width: 1600, height: 900 });
+    // Wide enough for every Important Metric column (ADR 0071): at common widths the table scrolls.
+    await page.setViewportSize({ width: 2560, height: 900 });
     await mount(
       <div style={{ padding: 20 }}>
-        <SessionSummaryTable cells={sweep()} />
+        <Summary cells={sweep()} />
       </div>,
     );
     const region = page.getByRole("region", { name: "Summary table, scrollable" });
@@ -437,7 +448,7 @@ test.describe("SessionSummaryTable: keyboard access to a clipped table", () => {
     await page.setViewportSize({ width: 640, height: 800 });
     await mount(
       <div style={{ padding: 20 }}>
-        <SessionSummaryTable cells={sweep()} />
+        <Summary cells={sweep()} />
       </div>,
     );
     const region = page.getByRole("region", { name: "Summary table, scrollable" });
@@ -454,7 +465,7 @@ test.describe("SessionSummaryTable: keyboard access to a clipped table", () => {
   });
 
   test("the rows are a readout: no row is focusable and none carries a click affordance", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     const focusable = await rows(page).evaluateAll((trs) => trs.filter((tr) => tr.hasAttribute("tabindex")).length);
     expect(focusable).toBe(0);
     await rows(page).first().click();
@@ -464,12 +475,12 @@ test.describe("SessionSummaryTable: keyboard access to a clipped table", () => {
 
 test.describe("SessionSummaryTable: the treatment axis (ADR 0055)", () => {
   test("an untreated sweep shows no treatment column", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     await expect(head(page, "treatment")).toHaveCount(0);
   });
 
   test("a control and its treated twins are adjacent rows, the control first, named, never blended", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={treatedSweep()} />);
+    await mount(<Summary cells={treatedSweep()} />);
     const heads = await page.locator("#SessionSummaryTable thead th").evaluateAll((ths) => ths.map((th) => th.getAttribute("data-k")));
     expect(heads.indexOf("treatment")).toBe(heads.indexOf("effort") + 1);
     const all = await keys(page);
@@ -478,16 +489,16 @@ test.describe("SessionSummaryTable: the treatment axis (ADR 0055)", () => {
     const cell = (key: string, k: string) => row(page, key).locator("td").nth(heads.indexOf(k));
     await expect(cell(`${OPUS}|high`, "treatment")).toHaveText("control");
     await expect(cell(`${OPUS}|high+lean-ci`, "treatment")).toHaveText("lean-ci");
-    // the twin's two runs are their own mean, not pooled with the control's
-    await expect(cell(`${OPUS}|high+lean-ci`, "runs")).toHaveText("2");
-    await expect(cell(`${OPUS}|high`, "runs")).toHaveText("1");
+    // the twin's two runs are its own samples, never pooled with the control's
+    await expect(cell(`${OPUS}|high+lean-ci`, "samples")).toHaveText("2");
+    await expect(cell(`${OPUS}|high`, "samples")).toHaveText("1");
   });
 });
 
 // ADR 0057: the tier marks a group's model and never splits a group.
 test.describe("SessionSummaryTable: the family tier (ADR 0057)", () => {
   test("a group's model carries its T<n> mark; the tier is no column and no key", async ({ mount, page }) => {
-    await mount(<SessionSummaryTable cells={sweep()} />);
+    await mount(<Summary cells={sweep()} />);
     await expect(td(page, `${OPUS}|high`, "model").locator(".tier-badge")).toHaveText("T3");
     await expect(td(page, "mermaidjs-diagrams|eval_dual_density|claude|claude-sonnet-5|medium", "model").locator(".tier-badge")).toHaveText("T2");
     // the rung-less group is the pre-catalogue session: no mark
@@ -500,7 +511,7 @@ test.describe("SessionSummaryTable: the family tier (ADR 0057)", () => {
       cell({ session_id: "x1", effort: "high", line: "opus", family_tier: 3, released: "2026-05-14" }),
       cell({ session_id: "x2", effort: "high" }),
     ];
-    await mount(<SessionSummaryTable cells={cells} />);
+    await mount(<Summary cells={cells} />);
     await expect(rows(page)).toHaveCount(1);
   });
 });

@@ -22,7 +22,7 @@ Shorthand in conversation: `S:87c58138` for a session, `S:87c58138/t3` for a tur
 ```text
 report.html                                           SweepOverview
 report.html?sort=turns&dir=desc                       SweepOverview, SessionTable sorted by that column
-report.html?ssort=cost&sdir=desc                      SweepOverview, SessionSummaryTable sorted by that column
+report.html?ssort=cost&sdir=desc                      SweepOverview, SessionSummaryTable sorted by that column (a metric id, or a key column)
 report.html?skill=discovery                           SweepOverview, only that skill
 report.html?harness=claude,codex                      SweepOverview, either harness (comma-separated multi-select)
 report.html?effort=high,xhigh                         SweepOverview, either effort rung (ADR 0049)
@@ -141,6 +141,22 @@ matching `history.jsonl` lines (verdict, timestamps, wall clock kept), and regen
 | `output_tokens_per_sec` | generation rate | output tokens over `api_duration_ms` (Claude `duration_api_ms`; Codex `task_complete.duration_ms`), else agent `duration_ms` |
 | per-turn `latency_ms`, `output_tokens_per_sec` | how long a turn took | wall time from the previous log record to the turn's first record (request + generation; on Claude this includes harness time between tool result and request), and output over it |
 | `record_kinds` | census of the session log | count of log lines per record kind (see the catalogue below) |
+| `compactions` | how many times the run compacted its context (ADR 0071) | the records of the `compaction` category in `record_kinds`: Claude's `system` record with `subtype: compact_boundary`, Codex's `compacted` record. Primary thread only. Null on a history line written before it |
+| `reasoning_share` | how much of the output was reasoning (ADR 0071) | `reasoning_tokens / output_tokens` over the whole run, in `[0, 1]`; both providers bill reasoning inside output. Claude reports it as `usage.output_tokens_details.thinking_tokens`, Codex as `reasoning_output_tokens`. Null when nothing was generated |
+| `subagents` | spawned threads, at any depth | the count of `subagents` in `result.json`; on the history line since ADR 0071. Each is linked one to one to its spawn record, or the run fails with `SubagentMismatch` (ADR 0072) |
+| `subagents[].spawned_by`, `.parent`, `.depth` | where a thread sits in the spawn tree (ADR 0072) | the spawn record's id (Claude `tool_use.id`; Codex `call_id` or `CollabAgentToolCall` item id), the spawning thread's id (empty for the primary), and 1 for a thread the primary spawned |
+| `subagents[].started_at`, `.ended_at`, `.duration_ms` | when a thread ran (ADR 0072) | the earliest and latest `timestamp` of its own transcript records (a fork's replay of its parent is excluded), and the milliseconds between them |
+| `subagents[].output_tokens_per_sec` | a thread's generation speed (ADR 0072) | its output tokens over the summed `latency_ms` of its calls that measured one; not over `duration_ms`, which includes tool runs and waiting on its own subagents |
+| `subagents[].estimated_cost_usd` | what a thread cost (ADR 0065) | its own calls priced at the rates of the model that answered it |
+| `calls[].tools[].started_at`, `.ended_at`, `.duration_ms` | when a tool ran and how long it took (ADR 0073) | the log record that issued it and the record of its result, matched by tool-use id; no end when its result was never logged |
+| `tool_costs[].issuing_cost_usd` | what asking for a tool cost (ADR 0073) | the billed cost of the call that issued it over the number of tools that call issued |
+| `tool_costs[].result_tokens` | how much a tool's result added to the context (ADR 0073) | its characters over 4, bounded by the prompt growth at the call that first read it, net of the previous call's output; an estimate |
+| `tool_costs[].context_cost_usd`, `.trace`, `.cache_rereads` | what keeping a tool's result cost (ADR 0073) | at every call from the one that first read it until the prompt shrank below where it entered: `result_tokens / context_tokens` of that call's prompt cost; the trace lists each call's share, and `cache_rereads` counts the later calls that read it from cache. An attribution, never added to `estimated_cost_usd` |
+| `skill_use` | when the skill under test was in use, and what its tool calls cost (ADR 0073) | from its first trigger (the run's own invocation of it, else the first tool call touching a skill file) to its last touch; the costs sum each touching tool call once; `{}` when nothing triggered it |
+| `subagent_token_share` | how much of the work was delegated (ADR 0071) | the subagents' `accumulative_billed_tokens` over the run's, in `[0, 1]`; `0` with no subagents; null on an empty bill |
+| `subagent_cost_share` | how much of the cost was delegated (ADR 0071) | the subagents' `estimated_cost_usd`, each at its own model's rates (ADR 0065), over the run's; null while unpriced, when the run cost nothing, or when a subagent carries no estimate |
+| `output_tokens_per_sec_by_model` | throughput per model that answered (ADR 0071) | per model: the output tokens of its calls that have a measured `latency_ms` over the sum of those latencies; a subagent naming no model counts under its parent's. Shown in the `SessionMetaTable` |
+| `important_metrics` (on `index.json`) | every cell's samples reduced (ADR 0071) | `metrics`: the declared set, each with `id`, `label`, `field` (and `per` for a ratio), `kind`, `unit`, `why` and its `aggregates`; `cells`: per cell, its six key fields, `samples`, and each metric's aggregates by id. Written by the combine step from every session's history line; see "How `SessionSummaryTable` aggregates" |
 | `skill_coverage` | which skill files the run touched | per file: `ignored` flag, `loaded` turns, `run` turns; derived `not_loaded` and `not_run` sets (ignored files excluded); `summary` counts incl. `ignored`. History carries `skill_files`, `skill_files_loaded`, `skill_scripts`, `skill_scripts_run`, `skill_not_loaded`, `skill_not_run` |
 
 ### How skill coverage is detected
@@ -190,10 +206,10 @@ xharness_skill_ignore = [
 | `Report` | `ReportHeader`, `NavSidebar`, `SweepOverview`, `SessionView` | the page |
 | `NavSidebar` | `NavToggle`, an Overview link, then skill → suite → harness → model (one branch per effort rung, `model · rung`, in ladder order; a cell that named no rung keeps the bare model; a treated arm is its own branch, `model · rung +treatment`, directly after its control) → one entry per session (verdict dot, case, short id); the open session lists section jump-links | the collapsible left navigation; every tree level starts collapsed (the reader opts in, and the active session's ancestors open themselves); collapse is remembered locally, never routed |
 | `ReportHeader` | `ReportTitle`, `ReportMeta`, `ThemeToggle` | sticky chrome; `ReportTitle` is the report's name on the sweep and the `eval · session · harness · model [· effort]` tuple inside a `SessionView`, the rung (`ReportTitleEffort`) only when the cell was sent one, and `+treatment` (`ReportTitleTreatment`) only when it ran under one; the browser tab keeps the page's fixed title |
-| `SweepOverview` | `OverviewFilters`, `OverviewCharts`, `SessionSummaryTable`, `SessionTable` | every captured session at a glance; the header meta names every skill the sweep spans; the view owns the filtering and hands the same filtered cells to all three consumers |
+| `SweepOverview` | `OverviewFilters`, `SessionSummaryTable` (titled **Important Metrics**), `OverviewCharts`, `SessionTable` | every captured session at a glance, leading with how each cell did across its samples (ADR 0071); the header meta names every skill the sweep spans; the view owns the filtering and hands the same filtered cells to all three consumers |
 | `OverviewCharts` | `TokenAccumulationChart` and `TokenWaterfallAggregateChart`, side by side | the pair is one question asked two ways over the same filtered population — how fast the bill grows, and where it went — so they are read against each other rather than one at a time. A `repeat(auto-fit, minmax(460px, 1fr))` grid: side by side from ~1150px, stacked below it rather than squeezed to a width their axes cannot carry, and each chart's legend wraps beneath its own plot once its column is narrower than plot + legend rail. Both notes reserve four lines so the two plots start on the same line at every width the pair is a row |
 | `OverviewFilters` | one chip row per facet — skill, harness, model, effort, treatment (only on a sweep with a treated cell; `control` first, then the treatments alphabetically), tier (only on a sweep the model catalogue described; chips read `tier 3`, ascending by number) — each chip carrying its cross-filtered session count, and a status cluster holding `OverviewFiltersClear` and, set to the card's right edge, `OverviewFilterCount` | the one global filter on the overview, held in the URL, rippling through all three consumers. It is chrome, not a panel: an eyebrow heading in the page's eyebrow voice — 12/600/0.5 uppercase, muted, the same spec the `NavSidebar` sets — rather than a card title, so the data below it is not pushed down the page. `OverviewFilterCount` reads `N of M sessions` while a filter is on and `M sessions` when none is, so the selection is legible without reading the chips; a selected chip carries a mark as well as the accent, so lit and unlit are told apart at a glance and a chip is the same width either way; a facet with one distinct value says so; a chip that would select nothing is hollowed out, not hidden, and stays clickable; a *selected* value the sweep does not contain — what a stale deeplink leaves behind — still renders as a chip, lit, dashed and counting 0, so a selection is never invisible. Nothing in the bar changes size when it lights up, at any width: the chip mark is always in the DOM; `OverviewFiltersClear` is always rendered and merely hidden (`aria-hidden`, out of the tab order) while nothing is selected, so its box is reserved in both states; `OverviewFilterCount` holds a hidden sizer printing the widest sentence it can ever say, so its box is too; and each facet key holds a fixed column outside the wrapping chip box, so a wrapped chip line starts where every other chip line starts. The undo sits before the count so the count, the one part always present, holds the right edge in both states. `OverviewFilterCount` is a `role="status"` live region, so a chip toggle announces the new N of M; `OverviewFiltersClear` hands focus to the first chip as it unmounts |
-| `SessionSummaryTable` | one row per skill × case × harness × model × effort × treatment group (two rungs of one model are two experiments, never one averaged row; a control and its treated twin are two adjacent rows, the control first) with its run count and its mean measures; `SummaryCount` in the title says how many groups, as `SessionCount` says how many sessions | the aggregate view of exactly the runs `SessionTable` lists, one row per line of `TokenAccumulationChart`; every mean is named `mean <field>` and is over the runs that carry that field. Sortable on its OWN param pair (`ssort=`/`sdir=`), because a reader ranks groups by mean cost while ranking sessions by when they ran, and a shared pair would make every click here silently reorder the table below. Unsorted, rows come out in a fixed key order and are banded by skill, and a value repeating the row above's recedes to the muted ink so the first row of each band leads; **both the banding and the repeat muting switch off the moment a column is sorted**, because under any other order "the row above" is whatever the reader last clicked and a band would be drawing a grouping the table is no longer in. A group that did not pass clean takes `bad` ink on its `pass rate` fraction, which is this table's answer to the `VerdictBadge` rail one table below. Its rows are a readout, not links: unlike `SessionTable`'s they take no hover wash and go nowhere, which is the whole of the altitude difference between the pair. Its heads are the same `ColumnHead` component `SessionTable`'s are, so the pair's heads are one object rather than two that happen to agree: the printed label is the short form, the accessible name keeps the canonical field name beside it, and the definition reaches a pointer through the tooltip and a screen reader through `aria-describedby` on a visually-hidden span (the tooltip alone opens for pointer events only, which left the only spelling-out of `mean output_tokens_per_sec` unreachable by keyboard). Nothing in its *body* is focusable, so its scroll box is itself the tab stop — `role="region"`, labelled, and focusable only while columns are actually clipped — or the data past its right edge would be reachable by pointer alone |
+| `SessionSummaryTable` | one row per cell, skill × case × harness × model × effort × treatment (two rungs of one model are two experiments, never one blended row; a control and its treated twin are two adjacent rows, the control first), with its `samples` and one column per Important Metric showing that metric's headline aggregate, every aggregate on the cell's `title`; `SummaryCount` in the title says how many groups, as `SessionCount` says how many sessions | the Important Metrics of exactly the runs `SessionTable` lists, one row per line of `TokenAccumulationChart` (ADR 0071); its measure columns are the metrics `index.json` declares, in declaration order, each head named by its headline's operation and the field it reduces (`median estimated_cost_usd`). Sortable on its OWN param pair (`ssort=`/`sdir=`), because a reader ranks groups by mean cost while ranking sessions by when they ran, and a shared pair would make every click here silently reorder the table below. Unsorted, rows come out in a fixed key order and are banded by skill, and a value repeating the row above's recedes to the muted ink so the first row of each band leads; **both the banding and the repeat muting switch off the moment a column is sorted**, because under any other order "the row above" is whatever the reader last clicked and a band would be drawing a grouping the table is no longer in. A cell that did not pass clean takes `bad` ink on its `pass rate` fraction (`passes/n`), which is this table's answer to the `VerdictBadge` rail one table below. Its rows are a readout, not links: unlike `SessionTable`'s they take no hover wash and go nowhere, which is the whole of the altitude difference between the pair. Its heads are the same `ColumnHead` component `SessionTable`'s are, so the pair's heads are one object rather than two that happen to agree: the printed label is the short form, the accessible name keeps the canonical field name beside it, and the definition reaches a pointer through the tooltip and a screen reader through `aria-describedby` on a visually-hidden span (the tooltip alone opens for pointer events only, which left the only spelling-out of `median output_tokens_per_sec` unreachable by keyboard). Nothing in its *body* is focusable, so its scroll box is itself the tab stop — `role="region"`, labelled, and focusable only while columns are actually clipped — or the data past its right edge would be reachable by pointer alone |
 | `SessionTable` | one `SessionRow` per session | sortable (`sort=`/`dir=`); a row opens its `SessionView`. **Scrolls sideways inside its card when wider than it**, with no pinned column, and `SessionTableColumns` above it lets the reader turn columns off (ADR 0061). Every metric is present, but the session id is no longer a column (the row opens the view that prints it beside a `CopyId`; `data-sid` still carries it), `estimated_cost_usd` and `harness_reported_cost_usd` are one `cost` column reading the estimate with the harness's own figure as a muted signed drift from it, token counts are abbreviated (`1.5M`, `29.4k`) with the exact figure on the cell's `title`, `model` drops its vendor prefix and `case` the `eval_` every case shares, `model` prints its whole id and is followed by its own sortable `tier` column (`family_tier`), each cell a `TierBadge` (`T3`) with the line and release date on its `title` (a collapsed model's caption reads `opus-5 (tier 3)`), `effort` is the reasoning rung the CLI was asked for on that harness's own ladder and reads `–` for a cell that named none and sorts by ladder position (`low` before `max`, a rung-less cell last), `treatment` (head `treat.`) sits beside it on a treated sweep only, reading `control` for the untreated arm and sorting it first and printing its full name, and each head prints the shortest form that still reads while keeping the canonical field name in its tooltip and accessible name. `accumulative_billed_tokens (billed)` is the cross-turn billed sum and `peak ctx` reads `peak_context_tokens · context_window_pct` (the window itself on the title), two different quantities; the `coverage` column reads `loaded/files · run/scripts` |
 | `SessionView` | in order: `SessionHeader`, `TokenWaterfallChart`, `ContextWindowChart`, `ReconciliationPanel`, `CostByTierPanel`, `OutputPerTurnChart`, `TurnTiersChart`, `SkillCoveragePanel`, `RecordKindsPanel`, `SessionTurnTable`, `FinalMessagePanel` | one session |
 | `SessionTableColumns` | a `columns n/m` disclosure above `SessionTable`: one checkbox per column (`data-k`), with **Select all** (`data-action="select-all"`) and **Deselect all** (`data-action="deselect-all"`) | the reader's own choice of which `SessionTable` columns to show (ADR 0061). `verdict` and `case` are always shown and their boxes are locked. The choice is a per-browser preference in `localStorage` (`xharness.sessionTable.hiddenColumns.v1`), not part of a shared link; blocked storage shows every column |
@@ -208,10 +224,13 @@ xharness_skill_ignore = [
 | `TokenWaterfallChart` | per turn: `baseline_tokens`, then per turn cache read, new context, thinking, visible output and the whole bill of any subagents that turn spawned, ending at `accumulative_billed_tokens`; per line: the same categories as a stacked step area of cumulative tokens; the right-hand axis carries the running `estimated_cost_usd` as a line | where the tokens (and dollars) went |
 | `OutputPerTurnChart` | thinking and visible output stacked, per turn or at each turn's measuring line | how much of each turn's output was reasoning |
 | `TurnTiersChart` | the four billing tiers stacked, per turn or at each turn's measuring line | what each turn was billed for |
+| `SkillUsePanel` | the skill's `trigger`, `triggered` and `last used` turn and time, `duration_ms`, `tool_calls`, `issuing_cost_usd`, `context_cost_usd` and `cache_rereads`, then one `SkillUseEvent` per file access with its tool call's figures | when the skill under test came into use, for how long, and what its tool calls cost (`skill_use` in `result.json`, ADR 0073); an access shows its tool call's figures, so the totals count each call once |
+| `ToolCostTable` | one `ToolCostRow` per tool call of every thread: thread, turn, tool, `started`, `duration_ms`, `issuing_cost_usd`, `result_tokens`, `context_cost_usd`, `cache_rereads`, and a folded `ToolCostTrace` (`t<turn>` per later call, `c` when re-read from cache) | when each tool ran, how long it took, what asking for it cost and what keeping its output cost (`tool_costs` in `result.json`, ADR 0073) |
 | `SkillCoveragePanel` | `SkillCoverageSummary` chips (the `files`, `loaded`, `run`, `not_loaded`, `not_run`, `ignored` chips are filters; click again to clear), one row per catalogued skill file with its loaded / run turns and status | which decision paths the run took through the skill |
 | `RecordKindsPanel` | one pill per record kind with its count | the census of this session's log |
 | `SessionTurnTable` | `ViewToggle`, `RecordViewToggle`, one `SessionTurnRow` per turn, each with a `SessionTurnDetails`; a turn that spawned subagents is followed by a `SubagentBand` | the ledger; Summary shows rows, Detailed expands every turn. Harness-specific: `SessionTurnTableClaude` carries the explicit cache-write tiers (`cache_write`, `1h`), `SessionTurnTableCodex` drops them (implicit caching) and shows `cached input` / `input (uncached)`; the panel carries `data-harness` |
-| `SubagentBand` | per spawned thread: an agent pill in the waterfall's `sub` colour, its id, the spawn description, its turn/billed-token totals, and one `SubagentTurnRow` per call of its own ledger | the parallel threads a turn spawned (`subagents` in `result.json`); each thread's transcript is captured under `subagents/` beside `log.jsonl` and its bill is folded into the session's `usage` and `estimated_cost_usd`, attributed to the spawning turn (`parent_turn`) |
+| `SubagentBand` | per spawned thread: an agent pill in the waterfall's `sub` colour, its id, the spawn description, its turn/billed-token totals, a `SubagentSpan`, and one `SubagentTurnRow` per call of its own ledger | the parallel threads a turn spawned (`subagents` in `result.json`); each thread's transcript is captured under `subagents/` beside `log.jsonl` and its bill is folded into the session's `usage` and `estimated_cost_usd`, attributed to the primary turn it descends from (`parent_turn`) |
+| `SubagentSpan` | per thread: `started`, `ended`, `duration_ms`, `output_tokens_per_sec`, `estimated_cost_usd`, `model`, `depth`, `spawned_by` (and the parent thread for a nested one) | when the thread ran, how fast it generated, what it cost and what spawned it (ADR 0072); a result written before ADR 0072 says its span is not recorded |
 | `SessionTurnDetails` | `TurnRawRecords` | the session-log records attributed to that turn, untruncated |
 | `TurnRawRecords` | the turn's line range, then one `RecordCard` per log line (`records` in the ledger) | the evidence itself, line-numbered |
 | `RecordCard` | header: category-coloured kind pill, `L<line>`, the record's timestamp (`HH:MM:SS.mmm`), size, a context annotation (`ctx 7.2%` = the turn's measured prompt; `→ t4 7.5%` on a tool result = the next turn's prompt it became part of), a `raw`/`nice` flip and a permalink button (sets `line=` in the fragment and copies the URL); body: the rendered view or the raw JSON | one log line; `RecordViewToggle` flips every card at once. Harness-specific bases: `RecordCardClaude` renders the `claude/*` catalogue, `RecordCardCodex` the `codex/*` one; the card carries `data-harness` |
@@ -236,34 +255,46 @@ it had before the axis; a treated group's appends `+<treatment>`. The family tie
 **not** in the key: it is a property of the model, every run of a group ran the same model, and
 the group's `model` cell carries its `TierBadge`.
 
-**The one mean rule**, applied to every `mean_*` column: the arithmetic mean over the
-runs in the group that carry a value. A missing value is skipped, never zero-filled,
-and the divisor is the count of present values rather than `runs`; an aggregate over
-nothing is `–`, never `0`, so a sparse column reads as sparse.
+**A sample is one graded session of a cell** (ADR 0071): its verdict is `pass`, `fail` or
+`error`. A dry run, and a session whose history line names no verdict, is listed by
+`SessionTable` but is no sample, and the `samples` cell counts it as `not graded`.
 
-**Mean, not median**, deliberately: the chart beside it already draws a mean line with
-a min–max envelope, and a median row would disagree with that picture by construction;
-cost and tokens are additive, so `mean × runs` is the group's total — the arithmetic a
-reader actually does — while a median has no such relation; and a median over the group
-sizes this data produces (1–2) is either the single value or the mean of the two. The
-column names say `mean …` in full (ADR 0021), so the choice is never inferred.
+**Each Important Metric declares its own aggregates**, by the shape of its distribution,
+and Python reduces every cell once (`emit/samples.py`, written into `index.json`): the page
+looks the numbers up and computes none. This supersedes the single arithmetic mean of
+ADR 0042: a mean of a heavy-tailed cost lets one runaway session drag the whole row.
 
-The **pass rate**'s denominator is the runs that carry a verdict, not `runs`: an
-ungraded run is never counted as a failure, and the cell says how many have no history.
+| Kind | Aggregates, headline first | For |
+|------|----------------------------|-----|
+| `spread` | `median`, `p25`, `p75`, `n` | heavy-tailed measures: cost, tokens, turns, throughput, wall clock |
+| `fraction` | `mean`, `min`, `max`, `n` | shares of a whole and percentages of the window |
+| `rare` | `mean`, `share` (of samples with at least one), `n` | counts of rare events: subagents, compactions |
+| `rate` | `pass_rate`, `ci_low`, `ci_high` (Wilson 95%), `n` | the verdict |
 
-| Column | What it is |
-|--------|------------|
-| `skill`, `case`, `harness`, `model`, `effort`, `treatment` | the group's key; `model` carries its `TierBadge` when the catalogue describes it; `effort` reads `–` for a group that named no rung; `treatment` reads `control` for the untreated arm and is shown only when a group in view is treated |
-| `runs` | captured sessions in this group; every mean below is over these runs |
-| `verdict pass rate` | runs whose verdict is `pass`, over the runs that carry a verdict |
-| `mean estimated_cost_usd` | arithmetic mean of `estimated_cost_usd` |
-| `mean accumulative_billed_tokens` | arithmetic mean of the cross-turn billed sum; a spend figure, not a context figure |
-| `mean peak_context_tokens` | arithmetic mean of the largest prompt one turn processed, with the mean `context_window_pct` and the window |
-| `mean turns` | arithmetic mean of model API calls |
-| `mean tool_calls` | arithmetic mean of tool invocations issued |
-| `mean skill_coverage loaded share` | arithmetic mean of `loaded/files` per run, ignored files excluded, runs with no catalogue skipped |
-| `mean output_tokens_per_sec` | arithmetic mean of output tokens per second of API time |
-| `mean wall_ms` | arithmetic mean of wall clock around the subprocess |
+`n` is the samples that **recorded** the metric. A sample that did not (an unpriced run, a
+capture written before the field existed) drops out of `n`, never zero-filled, and an
+aggregate over nothing is `–`. The quartiles are the inclusive method; a single sample is
+its own median and quartiles. The Wilson interval is honest at every `n`: at one sample it
+is simply wide.
+
+| Column | Metric | Aggregates over the samples of |
+|--------|--------|--------------------------------|
+| `skill`, `case`, `harness`, `model`, `effort`, `treatment` | | the cell's key; `model` carries its `TierBadge` when the catalogue describes it; `effort` reads `–` for a cell that named no rung; `treatment` reads `control` for the untreated arm and is shown only when a cell in view is treated |
+| `samples` | | graded sessions of the cell, with how many listed sessions were not graded |
+| `cost` | `cost` (spread) | `estimated_cost_usd` |
+| `billed tokens` | `tokens` (spread) | `accumulative_billed_tokens` |
+| `peak context` | `context` (fraction) | `context_window_pct` |
+| `subagents` | `subagents` (rare) | `subagents` |
+| `subagent tokens` | `subagent_tokens` (fraction) | `subagent_token_share` |
+| `subagent cost` | `subagent_cost` (fraction) | `subagent_cost_share` |
+| `compactions` | `compactions` (rare) | `compactions` |
+| `turns` | `turns` (spread) | `turns` |
+| `files loaded` | `skill_loaded` (fraction) | `skill_files_loaded / skill_files` |
+| `scripts run` | `skill_run` (fraction) | `skill_scripts_run / skill_scripts` |
+| `thinking share` | `thinking` (fraction) | `reasoning_share` |
+| `tok/s` | `throughput` (spread) | `output_tokens_per_sec` |
+| `wall clock` | `wall` (spread) | `wall_ms` |
+| `pass rate` | `verdict` (rate) | the verdict, `pass` as 1 and `fail` or `error` as 0, printed `passes/n` |
 
 ### How a `RecordCard` is rendered
 
@@ -311,6 +342,7 @@ changes exactly when the category of information changes. The catalogue lives in
 | `harness_meta` | `#475569` | bookkeeping: titles, reminders, queue operations, world state |
 | `session_meta` | `#1e3a8a` | session and turn configuration: cwd, model, sandbox, base instructions |
 | `lifecycle` | `#b91c1c` | task started / completed |
+| `compaction` | `#7c2d12` | the harness summarised the conversation to free the window; counted into `compactions` (ADR 0071) |
 | `unknown` | `#374151` | a shape not in the catalogue |
 
 | Kind | Category | Rendered view shows |
@@ -351,6 +383,8 @@ changes exactly when the category of information changes. The catalogue lives in
 | `codex/event_msg/item_completed/UserMessage` | prompt | the prompt text |
 | `codex/event_msg/item_completed/UserMessage/injected` | harness_context | the event mirror of an injected user-role message |
 | `codex/world_state` | harness_meta | whether the snapshot is full, then each state flag as ✓ / ✗ |
+| `claude/system/compact_boundary` | compaction | Claude Code's compaction marker: the trigger and the token counts before and after |
+| `codex/compacted` | compaction | Codex's replacement history after compacting the thread |
 
 Also catalogued without a live example yet: `claude/system`,
 `codex/response_item/message/system`, `codex/response_item/function_call`,
@@ -384,7 +418,9 @@ treemap-beta
         "OutputPerTurnChart":::session
         "TurnTiersChart":::session
         "SkillCoveragePanel":::session
+        "SkillUsePanel":::session
         "RecordKindsPanel":::session
+        "ToolCostTable":::session
         "FinalMessagePanel":::session
         "SessionTurnTable":::turns
             "ViewToggle":::turns
@@ -394,6 +430,7 @@ treemap-beta
                     "TurnRawRecords":::details
                         "RecordCard":::details
                 "SubagentBand":::turns
+                    "SubagentSpan":::turns
                     "SubagentTurnRow":::turns
 classDef page fill:#1e3a8a,stroke:#bfdbfe,color:#fff
 classDef chrome fill:#475569,stroke:#e2e8f0,color:#fff

@@ -19,6 +19,7 @@
   },
   "codex": {
     "categories": {
+      "codex/event_msg/item_completed/CollabAgentToolCall": "lifecycle",
       "codex/event_msg/item_completed/CommandExecution": "tool_exec",
       "codex/event_msg/task_complete": "lifecycle",
       "codex/event_msg/task_started": "lifecycle",
@@ -32,6 +33,7 @@
       "codex/turn_context": "session_meta"
     },
     "census": {
+      "codex/event_msg/item_completed/CollabAgentToolCall": 1,
       "codex/event_msg/item_completed/CommandExecution": 1,
       "codex/event_msg/task_complete": 1,
       "codex/event_msg/task_started": 1,

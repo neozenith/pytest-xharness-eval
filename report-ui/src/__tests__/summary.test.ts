@@ -1,6 +1,7 @@
 import { cell } from "./cells";
 import { accumulationGroups } from "@/lib/series";
 import { summaryRows } from "@/lib/summary";
+import type { ImportantMetricsDoc } from "@/lib/types";
 import { result } from "./charts.series.test";
 
 test("rows group by skill × case × harness × model, in that key order, a null skill last", () => {
@@ -21,42 +22,32 @@ test("rows group by skill × case × harness × model, in that key order, a null
   expect(rows[1]!.runs).toBe(1);
 });
 
-test("a mean skips missing values and is null — never zero — when the whole group is missing", () => {
-  const two = summaryRows([cell({ session_id: "1", estimated_cost_usd: 4 }), cell({ session_id: "2", estimated_cost_usd: null })]);
-  // the divisor is the count of PRESENT values, not `runs`: 4, not 2
-  expect(two[0]!.mean_estimated_cost_usd).toBe(4);
-  const none = summaryRows([cell({ session_id: "1", estimated_cost_usd: null }), cell({ session_id: "2", estimated_cost_usd: null })]);
-  expect(none[0]!.mean_estimated_cost_usd).toBeNull();
-  const both = summaryRows([cell({ session_id: "1", wall_ms: 1000 }), cell({ session_id: "2", wall_ms: 3000 })]);
-  expect(both[0]!.mean_wall_ms).toBe(2000);
+test("a row reads its cell's aggregates from index.json by the same key, and has none when the doc lacks the cell", () => {
+  const sessions = [cell({ session_id: "1", effort: "high" }), cell({ session_id: "2", effort: "high", verdict: null }), cell({ session_id: "3" })];
+  const doc: ImportantMetricsDoc = {
+    metrics: [],
+    cells: [
+      {
+        skill: sessions[0]!.skill,
+        case: sessions[0]!.case,
+        harness: sessions[0]!.harness,
+        model: sessions[0]!.model,
+        effort: "high",
+        treatment: null,
+        samples: 1,
+        metrics: { cost: { median: 2, p25: 2, p75: 2, n: 1 } },
+      },
+    ],
+  };
+  const [high, defaulted] = summaryRows(sessions, doc);
+  // Two sessions listed, one of them graded: the aggregates are over the one sample.
+  expect(high).toMatchObject({ effort: "high", runs: 2, samples: 1, metrics: { cost: { median: 2 } } });
+  // The rung-less cell has no aggregated twin: zero samples and no metrics, never borrowed ones.
+  expect(defaulted).toMatchObject({ effort: null, runs: 1, samples: 0, metrics: {} });
 });
 
-test("the pass rate's denominator is the runs that carry a verdict", () => {
-  const graded = summaryRows([
-    cell({ session_id: "1", verdict: "pass" }),
-    cell({ session_id: "2", verdict: "fail" }),
-    cell({ session_id: "3", verdict: null }),
-  ]);
-  expect(graded[0]).toMatchObject({ runs: 3, pass: 1, graded: 2 });
-  const ungraded = summaryRows([cell({ session_id: "1", verdict: null })]);
-  expect(ungraded[0]).toMatchObject({ runs: 1, pass: 0, graded: 0 });
-});
-
-test("the context share is the mean of the cells' own context_window_pct, beside the first window", () => {
-  const rows = summaryRows([
-    cell({ session_id: "1", peak_context_tokens: 100_000, context_window_pct: 10, context_window: null }),
-    cell({ session_id: "2", peak_context_tokens: 300_000, context_window_pct: 30, context_window: 1_000_000 }),
-  ]);
-  expect(rows[0]!.mean_peak_context_tokens).toBe(200_000);
-  expect(rows[0]!.mean_context_window_pct).toBe(20);
-  expect(rows[0]!.context_window).toBe(1_000_000);
-});
-
-test("the coverage share is loaded/files per run and skips a run with no catalogue", () => {
-  const rows = summaryRows([cell({ session_id: "1", skill_coverage: { files: 18, loaded: 6 } }), cell({ session_id: "2", skill_coverage: {} })]);
-  // 6/18, not 3/18: a missing catalogue is skipped, never counted as zero coverage
-  expect(rows[0]!.mean_skill_coverage_share).toBeCloseTo(6 / 18, 12);
-  expect(summaryRows([cell({ session_id: "1", skill_coverage: {} })])[0]!.mean_skill_coverage_share).toBeNull();
+test("with no Important Metrics document at all, every group still lists, with nothing aggregated", () => {
+  expect(summaryRows([cell({ session_id: "1" })])).toMatchObject([{ runs: 1, samples: 0, metrics: {} }]);
 });
 
 test("one summary row is one line of the chart above it", () => {
