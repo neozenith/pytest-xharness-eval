@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 # Our Libraries
-from pytest_xharness_eval.derive import pricing, skillcov
+from pytest_xharness_eval import harness
+from pytest_xharness_eval.derive import pricing, skillcov, toolcost
 from pytest_xharness_eval.emit.metrics import CellMetrics
 from pytest_xharness_eval.emit.unfolded import UnfoldedRecord
 from pytest_xharness_eval.model.layout import SUBAGENTS_DIR
@@ -75,6 +76,21 @@ def derive(
     result.line = spec.line if spec else None
     result.family_tier = spec.family_tier if spec else None
     result.released = spec.released.isoformat() if spec else None
+    # Last, because a skill's use reads the costs and the case: the run's own invocation of the
+    # skill is its first trigger (ADR 0073).
+    result.tool_costs = toolcost.run_tool_costs(result, table, run_date)
+    invoked = (
+        case is not None
+        and case.skill == skill
+        and result.calls
+        and case.prompt == harness.get(result.harness).invoke(skill=skill, task=case.task)
+    )
+    result.skill_use = toolcost.SkillUse.of(
+        skill,
+        skillcov.accesses(skill, skill_files, result),
+        result.tool_costs,
+        prompt_at=result.calls[0].at if invoked else None,
+    )
     return result
 
 

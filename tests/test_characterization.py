@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 
 # Our Libraries
-from pytest_xharness_eval import RunResult, harness, normalise, pricing, records, replay, skillcov
+from pytest_xharness_eval import CaseRef, RunResult, harness, normalise, pricing, records, replay, skillcov
 from pytest_xharness_eval.derive.catalogue import load_catalogue
 from pytest_xharness_eval.runtime import pipeline
 from tests.characterization_fixtures import (
@@ -41,15 +41,15 @@ def _table() -> pricing.PriceTable:
     return pricing.load_table(rows=PRICE_ROWS)
 
 
-def _case(name: str) -> dict[str, Any]:
-    return {
-        "suite": f"skills/{SKILL}/evals/eval_{name}.py",
-        "name": f"eval_{name}",
-        "skill": SKILL,
-        "fixture": "seed",
-        "task": "grade the skill",
-        "prompt": f"/{SKILL} grade the skill",
-    }
+def _case(name: str) -> CaseRef:
+    return CaseRef(
+        suite=f"skills/{SKILL}/evals/eval_{name}.py",
+        name=f"eval_{name}",
+        skill=SKILL,
+        fixture="seed",
+        task="grade the skill",
+        prompt=f"/{SKILL} grade the skill",
+    )
 
 
 def _finish(result: RunResult, files: list[dict[str, Any]], name: str) -> RunResult:

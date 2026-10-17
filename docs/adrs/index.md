@@ -89,6 +89,7 @@ Edit the YAML; never the markdown.
 | [0070](0070-pricing-updates-start-with-a-manual-check.md) | Pricing updates start with a manual Makefile check | accepted, 2026-10-13. Supersedes [0067](0067-a-priced-release-is-catalogued-or-excluded-before-it-is-curated.md) only on the weekly workflow and issue automation. Its catalogue decision gate remains in force. |
 | [0071](0071-a-cell-is-judged-by-its-important-metrics-over-its-samples.md) | A cell is judged by its Important Metrics, each reduced over the cell's samples by its own aggregates | accepted, 2026-10-17. Supersedes part 3 of [0042](0042-the-overview-is-filtered-by-the-url.md): the summary no longer aggregates every measure by one arithmetic mean. Extends [0021](0021-metric-names-carry-unit-and-provenance.md) (a metric name carries its unit and its source) and [0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md) (the emitted records are types). Extends [0065](0065-a-subagent-is-priced-at-its-own-models-rates.md), whose per-subagent estimate the cost share divides. |
 | [0072](0072-every-subagent-is-linked-to-its-spawn-or-the-fold-stops.md) | Every subagent is linked to the record that spawned it, or the fold stops | accepted, 2026-10-17. Extends [0033](0033-subagent-transcripts-are-captured-and-billed.md) (subagent transcripts are captured and billed) and [0056](0056-a-run-is-credited-with-its-subagents-work.md) (a run is credited with its subagents' work). Extends [0065](0065-a-subagent-is-priced-at-its-own-models-rates.md), whose per-thread estimate each subagent now shows beside its span. |
+| [0073](0073-a-tool-call-is-timed-and-costed-as-issued-and-as-carried.md) | A tool call is timed, and costed both as issued and as carried in context, and so is the skill under test | accepted, 2026-10-18. Extends [0022](0022-record-kind-catalogue-and-skill-coverage.md) (skill coverage), whose file accesses each skill event names. Extends [0065](0065-a-subagent-is-priced-at-its-own-models-rates.md) (each thread at its own model's rates) and [0072](0072-every-subagent-is-linked-to-its-spawn-or-the-fold-stops.md) (every thread is linked). So a subagent's tool calls are priced and placed like the primary's. |
 ## The typed relation graph
 
 Open [graph.html](graph.html) to browse it: records cluster by domain, selecting one renders it beside the graph, and a link inside a record navigates to it.
@@ -279,3 +280,6 @@ The same edge set is [graph.md](graph.md) and, as raw data, [graph.json](graph.j
 - ADR-0072 --extends--> ADR-0033
 - ADR-0072 --extends--> ADR-0056
 - ADR-0072 --extends--> ADR-0065
+- ADR-0073 --extends--> ADR-0022
+- ADR-0073 --extends--> ADR-0065
+- ADR-0073 --extends--> ADR-0072

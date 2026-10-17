@@ -148,6 +148,11 @@ matching `history.jsonl` lines (verdict, timestamps, wall clock kept), and regen
 | `subagents[].started_at`, `.ended_at`, `.duration_ms` | when a thread ran (ADR 0072) | the earliest and latest `timestamp` of its own transcript records (a fork's replay of its parent is excluded), and the milliseconds between them |
 | `subagents[].output_tokens_per_sec` | a thread's generation speed (ADR 0072) | its output tokens over the summed `latency_ms` of its calls that measured one; not over `duration_ms`, which includes tool runs and waiting on its own subagents |
 | `subagents[].estimated_cost_usd` | what a thread cost (ADR 0065) | its own calls priced at the rates of the model that answered it |
+| `calls[].tools[].started_at`, `.ended_at`, `.duration_ms` | when a tool ran and how long it took (ADR 0073) | the log record that issued it and the record of its result, matched by tool-use id; no end when its result was never logged |
+| `tool_costs[].issuing_cost_usd` | what asking for a tool cost (ADR 0073) | the billed cost of the call that issued it over the number of tools that call issued |
+| `tool_costs[].result_tokens` | how much a tool's result added to the context (ADR 0073) | its characters over 4, bounded by the prompt growth at the call that first read it, net of the previous call's output; an estimate |
+| `tool_costs[].context_cost_usd`, `.trace`, `.cache_rereads` | what keeping a tool's result cost (ADR 0073) | at every call from the one that first read it until the prompt shrank below where it entered: `result_tokens / context_tokens` of that call's prompt cost; the trace lists each call's share, and `cache_rereads` counts the later calls that read it from cache. An attribution, never added to `estimated_cost_usd` |
+| `skill_use` | when the skill under test was in use, and what its tool calls cost (ADR 0073) | from its first trigger (the run's own invocation of it, else the first tool call touching a skill file) to its last touch; the costs sum each touching tool call once; `{}` when nothing triggered it |
 | `subagent_token_share` | how much of the work was delegated (ADR 0071) | the subagents' `accumulative_billed_tokens` over the run's, in `[0, 1]`; `0` with no subagents; null on an empty bill |
 | `subagent_cost_share` | how much of the cost was delegated (ADR 0071) | the subagents' `estimated_cost_usd`, each at its own model's rates (ADR 0065), over the run's; null while unpriced, when the run cost nothing, or when a subagent carries no estimate |
 | `output_tokens_per_sec_by_model` | throughput per model that answered (ADR 0071) | per model: the output tokens of its calls that have a measured `latency_ms` over the sum of those latencies; a subagent naming no model counts under its parent's. Shown in the `SessionMetaTable` |
@@ -219,6 +224,8 @@ xharness_skill_ignore = [
 | `TokenWaterfallChart` | per turn: `baseline_tokens`, then per turn cache read, new context, thinking, visible output and the whole bill of any subagents that turn spawned, ending at `accumulative_billed_tokens`; per line: the same categories as a stacked step area of cumulative tokens; the right-hand axis carries the running `estimated_cost_usd` as a line | where the tokens (and dollars) went |
 | `OutputPerTurnChart` | thinking and visible output stacked, per turn or at each turn's measuring line | how much of each turn's output was reasoning |
 | `TurnTiersChart` | the four billing tiers stacked, per turn or at each turn's measuring line | what each turn was billed for |
+| `SkillUsePanel` | the skill's `trigger`, `triggered` and `last used` turn and time, `duration_ms`, `tool_calls`, `issuing_cost_usd`, `context_cost_usd` and `cache_rereads`, then one `SkillUseEvent` per file access with its tool call's figures | when the skill under test came into use, for how long, and what its tool calls cost (`skill_use` in `result.json`, ADR 0073); an access shows its tool call's figures, so the totals count each call once |
+| `ToolCostTable` | one `ToolCostRow` per tool call of every thread: thread, turn, tool, `started`, `duration_ms`, `issuing_cost_usd`, `result_tokens`, `context_cost_usd`, `cache_rereads`, and a folded `ToolCostTrace` (`t<turn>` per later call, `c` when re-read from cache) | when each tool ran, how long it took, what asking for it cost and what keeping its output cost (`tool_costs` in `result.json`, ADR 0073) |
 | `SkillCoveragePanel` | `SkillCoverageSummary` chips (the `files`, `loaded`, `run`, `not_loaded`, `not_run`, `ignored` chips are filters; click again to clear), one row per catalogued skill file with its loaded / run turns and status | which decision paths the run took through the skill |
 | `RecordKindsPanel` | one pill per record kind with its count | the census of this session's log |
 | `SessionTurnTable` | `ViewToggle`, `RecordViewToggle`, one `SessionTurnRow` per turn, each with a `SessionTurnDetails`; a turn that spawned subagents is followed by a `SubagentBand` | the ledger; Summary shows rows, Detailed expands every turn. Harness-specific: `SessionTurnTableClaude` carries the explicit cache-write tiers (`cache_write`, `1h`), `SessionTurnTableCodex` drops them (implicit caching) and shows `cached input` / `input (uncached)`; the panel carries `data-harness` |
@@ -411,7 +418,9 @@ treemap-beta
         "OutputPerTurnChart":::session
         "TurnTiersChart":::session
         "SkillCoveragePanel":::session
+        "SkillUsePanel":::session
         "RecordKindsPanel":::session
+        "ToolCostTable":::session
         "FinalMessagePanel":::session
         "SessionTurnTable":::turns
             "ViewToggle":::turns

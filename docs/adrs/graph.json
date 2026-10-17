@@ -1087,6 +1087,20 @@
     },
     {
       "data": {
+        "id": "ADR-0073",
+        "label": "0073",
+        "parent": "group-accounting",
+        "colour": "#ea580c",
+        "file": "0073-a-tool-call-is-timed-and-costed-as-issued-and-as-carried.md",
+        "title": "A tool call is timed, and costed both as issued and as carried in context, and so is the skill under test",
+        "description": "A tool call is timed, and costed both as issued and as carried in context, and so is the skill under test",
+        "status": "accepted",
+        "group": "accounting",
+        "tags": "accounting, evidence"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -2890,6 +2904,36 @@
         "id": "ADR-0072-extends-ADR-0065",
         "source": "ADR-0072",
         "target": "ADR-0065",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0073-extends-ADR-0022",
+        "source": "ADR-0073",
+        "target": "ADR-0022",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0073-extends-ADR-0065",
+        "source": "ADR-0073",
+        "target": "ADR-0065",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0073-extends-ADR-0072",
+        "source": "ADR-0073",
+        "target": "ADR-0072",
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"extends\""

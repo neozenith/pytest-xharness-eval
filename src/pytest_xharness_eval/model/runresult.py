@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     # layer stays strictly above this one (ADR 0039).
     from pytest_xharness_eval.derive.pricing import AppliedRates, CostEstimate
     from pytest_xharness_eval.derive.skillcov import SkillCoverage
+    from pytest_xharness_eval.derive.toolcost import SkillUse, ToolCost
     from pytest_xharness_eval.model.case import EvalCase
 
 
@@ -106,6 +107,15 @@ class ToolCall:
     summary: str
     input: Any = None
     id: str = ""
+    #: When the log recorded the call, and when it recorded the call's result (ADR 0073). Empty
+    #: when the log has no such record: a run killed before the result came back has no end.
+    started_at: str = ""
+    ended_at: str = ""
+
+    @property
+    def duration_ms(self) -> int | None:
+        """Wall time from the call to its result: the tool's run, as the log saw it; None without both."""
+        return ms_between(self.started_at, self.ended_at)
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +146,8 @@ class ToolResult:
     tool: str
     chars: int
     content: str
+    #: The tool call this answers (Claude ``tool_use_id``, Codex ``call_id``); empty when unmatched.
+    id: str = ""
 
 
 @dataclass(slots=True)
@@ -430,6 +442,11 @@ class RunResult:
     compactions: int = 0
     # Which of the skill's files the run loaded or ran, per turn, and which it never touched (ADR 0022).
     skill_coverage: SkillCoverage | None = None
+    # Every tool call of every thread, timed and priced two ways, and the skill under test's span
+    # and cost built from the calls that touched it (ADR 0073). Attached by the derivation
+    # pipeline once the run is priced; empty and None until then.
+    tool_costs: list[ToolCost] = field(default_factory=list)
+    skill_use: SkillUse | None = None
     # The model's context window as the harness reported it, and the run's timing (ADR 0024).
     context_window: int | None = None
     ttft_ms: int | None = None
@@ -600,7 +617,7 @@ class RunResult:
         one straight to the field. An absent record has always serialised as ``{}``.
         """
         d = asdict(self)
-        for absent in ("case", "skill_coverage", "rates_applied"):
+        for absent in ("case", "skill_coverage", "rates_applied", "skill_use"):
             d[absent] = d[absent] or {}
         d["usage"]["accumulative_billed_tokens"] = self.usage.accumulative_billed_tokens
         d["baseline_tokens"] = self.baseline_tokens
@@ -614,6 +631,8 @@ class RunResult:
         d["subagent_token_share"] = self.subagent_token_share
         d["subagent_cost_share"] = self.subagent_cost_share
         for call, raw in zip(self.calls, d["calls"], strict=True):
+            for tool, raw_tool in zip(call.tools, raw["tools"], strict=True):
+                raw_tool["duration_ms"] = tool.duration_ms
             raw["context_tokens"] = call.context_tokens
             raw["context_pct"] = self.pct_of_window(call.context_tokens)
             raw["output_tokens_per_sec"] = call.output_tokens_per_sec
@@ -622,6 +641,8 @@ class RunResult:
             raw_sub["duration_ms"] = sub.duration_ms
             raw_sub["output_tokens_per_sec"] = sub.output_tokens_per_sec
             for call, raw in zip(sub.calls, raw_sub["calls"], strict=True):
+                for tool, raw_tool in zip(call.tools, raw["tools"], strict=True):
+                    raw_tool["duration_ms"] = tool.duration_ms
                 raw["context_tokens"] = call.context_tokens
                 raw["context_pct"] = self.pct_of_window(call.context_tokens)
                 raw["output_tokens_per_sec"] = call.output_tokens_per_sec

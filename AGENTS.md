@@ -54,7 +54,7 @@ this list:
 |-------|------------------|
 | `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `treatment.py`, `catalogue.py`, `metrics.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
 | `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, the spawn linker `threads.py`, and the record-kind catalogue `records.py` |
-| `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `ignorerules.py`, `catalogue.py` (reads `prices/models.toml`), `feed.py` (LiteLLM's feed into price records, for the curator and live pricing), and the bundled `prices/prices-YYYYMMDD.toml` records |
+| `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `toolcost.py`, `ignorerules.py`, `catalogue.py` (reads `prices/models.toml`), `feed.py` (LiteLLM's feed into price records, for the curator and live pricing), and the bundled `prices/prices-YYYYMMDD.toml` records |
 | `verify/` | what a *grader* is written with: `checks.py` (the shared `check_*` verifiers), `tolerance.py` (`Facet` and the six tolerances), `facets.py` (markdown/mermaid extractors), `golden.py` (`GoldenCase`) |
 | `emit/` | the documents that leave: `metrics.py`, `index.py`, `samples.py`, `unfolded.py`, `summary.py`, `tokens.py`, `page.py` |
 | `runtime/` | how a sweep is wired: `settings.py`, `pipeline.py`, and the transitional `legacy.py` |
@@ -97,6 +97,7 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | Context window, TTFT or tokens-per-second figures | `model/runresult.py` (the properties) and `harness/<provider>.py` (where each harness reports them); the derivation and its provider sources are `docs/token-accounting.md`, update it with them |
 | A name, metric definition or id on the report | `assets/XHARNESS-REPORT-GLOSSARY.md` (shipped beside the page), then the element ids in `report-ui/src/` and the checklist in `report-ui/e2e/inline.spec.ts` |
 | A session-log record kind, its category or pill colour | the harness's `classify_record` in `harness/<provider>.py` for the kind, `harness/records.py` for the catalogue and category, then the mirrored tables in `report-ui/src/lib/records.ts` (and the local map in `report-ui/src/components/panels/helpers.ts`), then the glossary |
+| When a tool call ran and what it cost, or the skill under test's span and cost | the fold stamps `ToolCall.started_at` / `ended_at` in `harness/<provider>.py` (through `normalise.ended`); `derive/toolcost.py` attributes `issuing_cost_usd` and `context_cost_usd` per tool call and builds `SkillUse` from `skillcov.accesses`; `runtime/pipeline.py` attaches both last (ADR 0073) |
 | Which skill files count as loaded or run | `derive/skillcov.py` (`SkillFile` catalogued, `FileCoverage` annotated, `SkillCoverage` derived); the shell vocabulary it attributes with arrives as a `model.registry.Shells` value (ADR 0027, ADR 0039) |
 | How `xharness_skill_ignore` lines (`<pattern>` or `<skill>: <pattern>`) select and match | `derive/ignorerules.py` (ADR 0035) |
 | Rebuilding cached results without a paid run | `replay.py` (`uv run -m pytest_xharness_eval.replay <cache dir>`) |

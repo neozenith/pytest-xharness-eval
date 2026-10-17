@@ -42,6 +42,7 @@ from pytest_xharness_eval.harness.base import (
 )
 from pytest_xharness_eval.harness.normalise import (
     Numbered,
+    ended,
     join_text,
     read_jsonl_numbered,
     summarise,
@@ -288,8 +289,11 @@ class _Ledger:
                     tool_use_id = str(block.get("tool_use_id") or "")
                     text = text_of(block.get("content"))
                     tool = self._tool_names.get(tool_use_id, "unknown")
-                    self._pending.append(ToolResult(tool=tool, chars=len(text), content=text))
-                    owner = owner or self._tool_owner.get(tool_use_id)
+                    self._pending.append(ToolResult(tool=tool, chars=len(text), content=text, id=tool_use_id))
+                    issuer = self._tool_owner.get(tool_use_id)
+                    if issuer is not None:
+                        ended(issuer.tools, tool_use_id, str(rec.get("timestamp") or ""))
+                    owner = owner or issuer
         self._attribute(line, owner)
 
     def assistant(self, line: int, rec: dict[str, Any]) -> None:
@@ -337,6 +341,8 @@ class _Ledger:
                         summary=summarise(name, block.get("input")),
                         input=block.get("input"),
                         id=str(block.get("id") or ""),
+                        # The block's own record: a message's blocks are written as they finish.
+                        started_at=str(rec.get("timestamp") or ""),
                     )
                 )
             elif kind == "text":

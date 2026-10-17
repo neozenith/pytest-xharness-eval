@@ -135,8 +135,20 @@ Every subagent is linked to the record that spawned it, at any depth, or the run
 with `SubagentMismatch` rather than grading (ADR 0072). `.spawned_by` is that record's id,
 `.parent` the spawning thread's id (empty for the primary), `.depth` 1 for a thread the
 primary spawned, and `.parent_turn` the primary turn it descends from. `.started_at` and
-`.ended_at` are its transcript's first and last timestamps; `.duration_ms` is the span
-and `.output_tokens_per_sec` its output tokens over that span.
+`.ended_at` are its transcript's earliest and latest timestamps; `.duration_ms` is the span
+and `.output_tokens_per_sec` its output tokens over the summed latency of its timed calls.
+
+### Tool calls and skill use
+
+Each `ToolCall` carries `.started_at`, `.ended_at` and `.duration_ms`, read off the records
+that issued it and answered it (ADR 0073). `run.tool_costs` is one `ToolCost` per tool
+call of every thread (`.thread` empty for the primary): `.issuing_cost_usd` is the issuing
+call's cost split across its tools, and `.context_cost_usd` is its result's share of every
+later prompt that carried it, with `.trace` per turn, `.cache_rereads` and the estimated
+`.result_tokens`. Both are attributions, never part of `run.estimated_cost_usd`.
+`run.skill_use` is the skill under test's `SkillUse` (`None` when nothing triggered it):
+`.trigger`, `.triggered_turn`, `.last_turn`, `.duration_ms`, `.tool_calls`, both costs,
+and `.events`, one per skill file access.
 
 ### Skill coverage
 

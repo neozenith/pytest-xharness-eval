@@ -44,6 +44,7 @@ from pytest_xharness_eval.harness.base import (
 )
 from pytest_xharness_eval.harness.normalise import (
     Numbered,
+    ended,
     join_text,
     read_jsonl_numbered,
     summarise,
@@ -309,19 +310,29 @@ class _Ledger:
         if isinstance(window, int):
             self.context_window = window
 
-    def response_item(self, p: dict[str, Any]) -> None:
+    def response_item(self, p: dict[str, Any], at: str = "") -> None:
         ptype = p.get("type")
         if ptype in _CALL_ITEMS:
             name = str(p.get("name") or ptype)
             self._call_names[str(p.get("call_id") or "")] = name
             args = p.get("input") if "input" in p else p.get("arguments")
             self._tool_calls.append(
-                ToolCall(name=name, summary=summarise(name, args), input=args, id=str(p.get("call_id") or ""))
+                ToolCall(
+                    name=name,
+                    summary=summarise(name, args),
+                    input=args,
+                    id=str(p.get("call_id") or ""),
+                    started_at=at,
+                )
             )
         elif ptype in _OUTPUT_ITEMS:
+            call_id = str(p.get("call_id") or "")
             text = text_of(p.get("output"))
-            tool = self._call_names.get(str(p.get("call_id") or ""), "unknown")
-            self._outputs.append(ToolResult(tool=tool, chars=len(text), content=text))
+            tool = self._call_names.get(call_id, "unknown")
+            self._outputs.append(ToolResult(tool=tool, chars=len(text), content=text, id=call_id))
+            # Normally still pending (outputs precede their turn's count); else the turn just closed.
+            if not ended(self._tool_calls, call_id, at) and self.calls:
+                ended(self.calls[-1].tools, call_id, at)
         elif ptype == "message" and p.get("role") == "assistant":
             self._text = join_text(self._text, text_of(p.get("content")))
         elif ptype == "reasoning":
@@ -429,7 +440,7 @@ def fold(records: Numbered) -> tuple[str, str, _Ledger]:
         elif rtype == "turn_context":
             model = str(payload.get("model") or model)
         elif rtype == "response_item":
-            ledger.response_item(payload)
+            ledger.response_item(payload, str(rec.get("timestamp") or ""))
         elif rtype == "event_msg":
             ledger.event(rec, payload)
     ledger.finish()

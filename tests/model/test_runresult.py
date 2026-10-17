@@ -71,7 +71,17 @@ def test_each_runresult_field_has_exactly_one_owner() -> None:
     """
     derived = {"turns", "usage", "calls", "subagents"}
     priced = {"estimated_cost_usd", "cost_status", "cost_by_tier", "rates_applied", "long_context_calls"}
-    attached = {"case", "effort", "treatment", "line", "family_tier", "released", "skill_coverage"}
+    attached = {
+        "case",
+        "effort",
+        "treatment",
+        "line",
+        "family_tier",
+        "released",
+        "skill_coverage",
+        "tool_costs",
+        "skill_use",
+    }
     # Observed at the spawn when the CLI is killed at the wall, by `harness.mark_timed_out` (ADR 0064).
     killed = {"timed_out_after_s", "idle_before_timeout_s"}
     supplied = _typed_dict_keys(runresult.RunResultFields)

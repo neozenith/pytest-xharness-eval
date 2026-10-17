@@ -34,6 +34,8 @@
       "thinking": "read the skill",
       "tools": [
         {
+          "duration_ms": 1000,
+          "ended_at": "2026-08-22T00:00:04Z",
           "id": "c1",
           "input": {
             "command": [
@@ -44,6 +46,7 @@
             "workdir": "/w"
           },
           "name": "shell",
+          "started_at": "2026-08-22T00:00:03Z",
           "summary": "['bash', '-lc', 'cat demo/SKILL.md']"
         }
       ],
@@ -76,6 +79,7 @@
         {
           "chars": 12,
           "content": "# demo skill",
+          "id": "c1",
           "tool": "shell"
         }
       ],
@@ -84,6 +88,8 @@
       "thinking": "",
       "tools": [
         {
+          "duration_ms": 1000,
+          "ended_at": "2026-08-22T00:00:07Z",
           "id": "c2",
           "input": {
             "command": [
@@ -94,6 +100,7 @@
             "workdir": "/w"
           },
           "name": "shell",
+          "started_at": "2026-08-22T00:00:06Z",
           "summary": "['bash', '-lc', 'uv run demo/scripts/check.py']"
         }
       ],
@@ -258,6 +265,57 @@
       "tests": 0
     }
   },
+  "skill_use": {
+    "cache_rereads": 0,
+    "context_cost_usd": 1e-06,
+    "duration_ms": 3000,
+    "events": [
+      {
+        "access": "loaded",
+        "context_cost_usd": 1e-06,
+        "duration_ms": 1000,
+        "issuing_cost_usd": 0.001175,
+        "path": "SKILL.md",
+        "started_at": "2026-08-22T00:00:03Z",
+        "thread": "",
+        "tool": "shell",
+        "tool_id": "c1",
+        "turn": 1
+      },
+      {
+        "access": "loaded",
+        "context_cost_usd": 1e-06,
+        "duration_ms": 1000,
+        "issuing_cost_usd": 0.001175,
+        "path": "SKILL.md",
+        "started_at": "2026-08-22T00:00:03Z",
+        "thread": "",
+        "tool": "CommandExecution",
+        "tool_id": "c1",
+        "turn": 1
+      },
+      {
+        "access": "run",
+        "context_cost_usd": 0,
+        "duration_ms": 1000,
+        "issuing_cost_usd": 0.00085,
+        "path": "scripts/check.py",
+        "started_at": "2026-08-22T00:00:06Z",
+        "thread": "",
+        "tool": "shell",
+        "tool_id": "c2",
+        "turn": 2
+      }
+    ],
+    "issuing_cost_usd": 0.002025,
+    "last_at": "2026-08-22T00:00:06Z",
+    "last_turn": 2,
+    "skill": "demo",
+    "tool_calls": 2,
+    "trigger": "shell",
+    "triggered_at": "2026-08-22T00:00:03Z",
+    "triggered_turn": 1
+  },
   "subagent_cost_share": 0.1316,
   "subagent_token_share": 0.1115,
   "subagents": [
@@ -324,6 +382,44 @@
   "tool_calls": {
     "CommandExecution": 1
   },
+  "tool_costs": [
+    {
+      "cache_rereads": 0,
+      "context_cost_usd": 1e-06,
+      "duration_ms": 1000,
+      "ended_at": "2026-08-22T00:00:04Z",
+      "id": "c1",
+      "issuing_cost_usd": 0.001175,
+      "name": "shell",
+      "result_tokens": 3,
+      "started_at": "2026-08-22T00:00:03Z",
+      "summary": "['bash', '-lc', 'cat demo/SKILL.md']",
+      "thread": "",
+      "trace": [
+        {
+          "cached": false,
+          "turn": 2,
+          "usd": 1e-06
+        }
+      ],
+      "turn": 1
+    },
+    {
+      "cache_rereads": 0,
+      "context_cost_usd": 0,
+      "duration_ms": 1000,
+      "ended_at": "2026-08-22T00:00:07Z",
+      "id": "c2",
+      "issuing_cost_usd": 0.00085,
+      "name": "shell",
+      "result_tokens": 0,
+      "started_at": "2026-08-22T00:00:06Z",
+      "summary": "['bash', '-lc', 'uv run demo/scripts/check.py']",
+      "thread": "",
+      "trace": [],
+      "turn": 2
+    }
+  ],
   "treatment": null,
   "ttft_ms": 1100,
   "turns": 2,

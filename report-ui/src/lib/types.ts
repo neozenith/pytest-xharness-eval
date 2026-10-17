@@ -183,6 +183,69 @@ export interface ToolCall {
   summary?: string;
   /** The harness's tool-use id (Claude `tool_use.id`, Codex `call_id`); a subagent points back at it. */
   id?: string;
+  /** When the log recorded the call and its result (ADR 0073); empty when it has no such record, absent before. */
+  started_at?: string;
+  ended_at?: string;
+  duration_ms?: number | null;
+}
+
+/** One later call's share of carrying a tool's result (ADR 0073). */
+export interface ToolCharge {
+  turn: number;
+  /** Re-read from the prompt cache, rather than read fresh. */
+  cached: boolean;
+  usd: number;
+}
+
+/** One tool call of any thread: timed, and priced as issued and as carried in context (ADR 0073). */
+export interface ToolCost {
+  /** Empty for the primary, else the subagent's id. */
+  thread: string;
+  /** That thread's turn that issued it. */
+  turn: number;
+  id: string;
+  name: string;
+  summary: string;
+  started_at: string;
+  ended_at: string;
+  duration_ms: number | null;
+  issuing_cost_usd: number;
+  result_tokens: number;
+  context_cost_usd: number;
+  cache_rereads: number;
+  trace: ToolCharge[];
+}
+
+/** One touch of one skill file, with the figures of the tool call that made it (ADR 0073). */
+export interface SkillEvent {
+  thread: string;
+  /** The primary turn it is credited to. */
+  turn: number;
+  tool_id: string;
+  tool: string;
+  path: string;
+  access: "loaded" | "run";
+  started_at: string;
+  duration_ms: number | null;
+  issuing_cost_usd: number | null;
+  context_cost_usd: number | null;
+}
+
+/** When the skill under test was triggered, how long it was in use, and its tool calls' cost (ADR 0073). */
+export interface SkillUse {
+  skill: string;
+  /** `prompt` when the run's invocation named it, else the first tool that touched it. */
+  trigger: string;
+  triggered_turn: number;
+  triggered_at: string;
+  last_turn: number;
+  last_at: string;
+  duration_ms: number | null;
+  tool_calls: number;
+  issuing_cost_usd: number;
+  context_cost_usd: number;
+  cache_rereads: number;
+  events: SkillEvent[];
 }
 
 /**
@@ -200,6 +263,8 @@ export interface ResultIn {
   tool: string;
   chars: number;
   content: string;
+  /** The tool call it answers (ADR 0073); absent on a result written before it. */
+  id?: string;
 }
 
 /** One model call of the per-call ledger (ADR 0019, ADR 0023). */
@@ -289,6 +354,10 @@ export interface RunResult {
   /** Output tokens per second of call latency, per model that answered (ADR 0071). */
   output_tokens_per_sec_by_model?: Record<string, number>;
   skill_coverage: Record<string, unknown>;
+  /** Every tool call of every thread, timed and priced (ADR 0073); absent on a result written before it. */
+  tool_costs?: ToolCost[];
+  /** The skill under test's span and cost; `{}` when nothing triggered it, absent before ADR 0073. */
+  skill_use?: SkillUse | Record<string, never>;
   case: { suite?: string; name?: string; skill?: string; fixture?: string; task?: string; prompt?: string };
   subagents?: Subagent[];
   [key: string]: unknown;

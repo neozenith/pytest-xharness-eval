@@ -13,6 +13,8 @@ import {
   RecordKindsPanel,
   SessionTurnTable,
   SkillCoveragePanel,
+  SkillUsePanel,
+  ToolCostTable,
   type SkillCoverage,
   type TurnView,
 } from "@/components/panels";
@@ -272,6 +274,9 @@ export function SessionView({ cell, route }: Props) {
               <SkillCoveragePanel coverage={result.skill_coverage as unknown as SkillCoverage} />
             </View>
             <View style={{ gridColumn: "1 / -1" }}>
+              <SkillUsePanel result={result} />
+            </View>
+            <View style={{ gridColumn: "1 / -1" }}>
               <RecordKindsPanel recordKinds={result.record_kinds} />
             </View>
           </View>
@@ -286,6 +291,7 @@ export function SessionView({ cell, route }: Props) {
             toolbarExtra={<RecordViewToggle view={recordView} onChange={changeRecordView} />}
             renderTurnRecords={(call) => <TurnRawRecords result={result} call={call} lines={lines} view={recordView} />}
           />
+          <ToolCostTable result={result} />
           <FinalMessagePanel text={result.final_text} />
         </>
       ) : error ? null : (
