@@ -31,7 +31,7 @@ from pytest_xharness_eval.model import treatment
 from pytest_xharness_eval.model import workspace as ws
 from pytest_xharness_eval.model.catalogue import CatalogueError
 from pytest_xharness_eval.model.layout import run_date
-from pytest_xharness_eval.model.scenario import GenerationContext, stored_scenarios, write_scenario
+from pytest_xharness_eval.model.scenario import GenerationContext
 from pytest_xharness_eval.model.suite import EvalSuite
 from pytest_xharness_eval.plugin.cell import CellRun, run_stamp
 from pytest_xharness_eval.plugin.results import RECORD_KEY
@@ -130,7 +130,7 @@ class EvalFile(pytest.File):
         case, evals_dir = shared.case, self.path.parent
         for scenario in scenarios:
             fixture_dir = (
-                settings.cache.scenarios(shared.suite, case.name) / scenario.id
+                settings.cache.scenario_store(shared.suite, case.name).tree(scenario.id)
                 if scenario is not None
                 else evals_dir / "fixtures" / case.fixture_name
             )
@@ -178,12 +178,12 @@ class EvalFile(pytest.File):
         generator = case.generator
         if generator is None:
             return [None]
-        store = settings.cache.scenarios(suite, case.name)
+        store = settings.cache.scenario_store(suite, case.name)
         context = GenerationContext(
             evals_dir=self.path.parent,
             case=case.name,
             outcomes=scenario_outcomes(settings.cache, suite, case.name),
-            stored=stored_scenarios(store),
+            store=store,
         )
         try:
             scenarios = list(generator.scenarios(context))
@@ -214,7 +214,7 @@ class EvalFile(pytest.File):
             dupes = sorted({i for i in ids if ids.count(i) > 1})
             raise pytest.UsageError(f"{self.path}: {case.name}: two scenarios share an id: {dupes}")
         for scenario in scenarios:
-            write_scenario(scenario, store)
+            store.write(scenario)
         return list(scenarios)
 
     def _require_catalogued(self, catalogue: Catalogue, case: EvalCase, cells: list[mx.Cell]) -> None:

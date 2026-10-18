@@ -21,12 +21,11 @@ paid run at all, and history deciding which seeds to mutate.
 from __future__ import annotations
 
 # Standard Library
-import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Final
 
 # Our Libraries
-from pytest_xharness_eval.model.scenario import PROVENANCE_SUFFIX, Draw, Files, Scenario, read_tree
+from pytest_xharness_eval.model.scenario import MUTATION_KEY, Draw, Files, Scenario, ScenarioStore, read_tree
 
 if TYPE_CHECKING:
     # Standard Library
@@ -128,16 +127,9 @@ class Promoted:
     may_be_empty: ClassVar[bool] = True
 
     def scenarios(self, context: GenerationContext) -> list[Scenario]:
-        fixtures = context.evals_dir / "fixtures"
-        found = [
-            Scenario.promoted(meta.with_name(meta.name.removesuffix(PROVENANCE_SUFFIX)))
-            for meta in sorted(fixtures.glob(f"*{PROVENANCE_SUFFIX}"))
-        ]
+        # A suite's committed fixtures are a scenario store once a failure is promoted into it.
+        found = [Scenario.promoted(tree) for tree in ScenarioStore(context.evals_dir / "fixtures").stored().values()]
         return [s for s in found if self.source is None or s.generator == self.source]
-
-
-#: The params key an adversarial mutant records its parent and mutators under.
-MUTATION_KEY: Final = "mutation"
 
 
 def _name(fn: Callable[..., Any]) -> str:
@@ -197,13 +189,17 @@ class Adversarial:
 
     def _confirm(self, context: GenerationContext) -> list[Scenario]:
         """Stored past mutants of this generator that failed, worst first, up to half the budget."""
+        stored = context.stored
         failed = [
             (fails / runs, sid)
             for sid, (fails, runs) in context.outcomes.items()
-            if fails and sid in context.stored and _stored_generator(context.stored[sid]) == self.name
+            if fails
+            and sid in stored
+            and context.store is not None
+            and context.store.provenance(sid).generator == self.name
         ]
         chosen = [sid for _, sid in sorted(failed, key=lambda x: (-x[0], x[1]))][: self.budget // 2]
-        return [Scenario.promoted(context.stored[sid]) for sid in chosen]
+        return [Scenario.promoted(stored[sid]) for sid in chosen]
 
     def _explore(
         self, parents: list[Scenario], context: GenerationContext, room: int, taken: set[str], *, generation: int
@@ -257,14 +253,10 @@ class Adversarial:
 def _lineage(context: GenerationContext) -> dict[str, tuple[int, int]]:
     """``(failed, sampled)`` per scenario id, each stored mutant's samples also credited to its parent."""
     out = dict(context.outcomes)
+    parents = context.store.lineage() if context.store is not None else {}
     for sid, (failed, sampled) in context.outcomes.items():
-        path = context.stored.get(sid)
-        if path is None:
-            continue
-        params = json.loads(path.with_name(path.name + PROVENANCE_SUFFIX).read_text(encoding="utf-8"))["params"]
-        mutation = params.get(MUTATION_KEY)
-        parent = mutation.get("parent") if isinstance(mutation, dict) else None
-        if isinstance(parent, str):
+        parent = parents.get(sid)
+        if parent is not None:
             f, n = out.get(parent, (0, 0))
             out[parent] = (f + failed, n + sampled)
     return out
@@ -278,12 +270,6 @@ def _weighted(items: Sequence[Scenario], weights: Sequence[float], draw: Draw) -
         if point < 0:
             return item
     return items[-1]
-
-
-def _stored_generator(path: Path) -> str:
-    """The generator a stored scenario directory's provenance names."""
-    meta = json.loads(path.with_name(path.name + PROVENANCE_SUFFIX).read_text(encoding="utf-8"))
-    return str(meta["generator"])
 
 
 # -- mutators: generic text perturbations an adversary composes ------------------------

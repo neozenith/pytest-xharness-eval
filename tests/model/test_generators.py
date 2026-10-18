@@ -15,7 +15,7 @@ from pytest_xharness_eval.model.scenario import (
     Files,
     GenerationContext,
     Scenario,
-    stored_scenarios,
+    ScenarioStore,
     write_scenario,
     write_tree,
 )
@@ -169,7 +169,7 @@ def test_an_adversary_reruns_stored_failures_worst_first_up_to_half_its_budget(t
         write_scenario(s, store)
     foreign = write_scenario(Scenario(generator="other", params={"i": 1}, files={"x.md": "x"}), store)
     outcomes = {past[0].id: (1, 3), past[1].id: (2, 2), past[2].id: (1, 2), past[3].id: (0, 4), foreign.name: (5, 5)}
-    context = _context(tmp_path, outcomes=outcomes, stored=stored_scenarios(store))
+    context = _context(tmp_path, outcomes=outcomes, store=ScenarioStore(store))
 
     now = _adversary().scenarios(context)
 
@@ -202,7 +202,7 @@ def test_a_second_sweep_explores_ids_never_sampled_and_does_not_exhaust(tmp_path
     seen: set[str] = set()
     outcomes: dict[str, tuple[int, int]] = {}
     for _ in range(3):
-        context = _context(tmp_path, outcomes=outcomes, stored=stored_scenarios(tmp_path / "store"))
+        context = _context(tmp_path, outcomes=outcomes, store=ScenarioStore(tmp_path / "store"))
         now = _adversary().scenarios(context)
         assert len(now) == 6  # every sweep spends its whole budget: nothing failed, nothing to confirm
         assert not seen & {s.id for s in now}
@@ -214,7 +214,7 @@ def test_a_second_sweep_explores_ids_never_sampled_and_does_not_exhaust(tmp_path
 def test_confirmed_and_explored_mutants_never_share_an_id_or_repeat_a_sampled_one(tmp_path: Path) -> None:
     first = _adversary().scenarios(_context(tmp_path))
     outcomes = _swept(tmp_path, first, (0, 2)) | _swept(tmp_path, first[:4], (2, 2))
-    context = _context(tmp_path, outcomes=outcomes, stored=stored_scenarios(tmp_path / "store"))
+    context = _context(tmp_path, outcomes=outcomes, store=ScenarioStore(tmp_path / "store"))
     now = _adversary().scenarios(context)
     confirmed, explored = now[:3], now[3:]
     assert {s.id for s in confirmed} <= {s.id for s in first[:4]}
@@ -231,7 +231,7 @@ def test_a_mutants_samples_are_credited_to_the_parent_it_was_bred_from(tmp_path:
     outcomes: dict[str, tuple[int, int]] = {}
     for s in first:
         outcomes |= _swept(tmp_path, [s], (5, 5) if _parent(s) == weak else (0, 1))
-    context = _context(tmp_path, outcomes=outcomes, stored=stored_scenarios(tmp_path / "store"))
+    context = _context(tmp_path, outcomes=outcomes, store=ScenarioStore(tmp_path / "store"))
     explored = [s for s in _adversary(budget=60).scenarios(context) if s.params[gen.MUTATION_KEY]["generation"]]
     parents = Counter(_parent(s) for s in explored)
     strong = parents.keys() - {weak}

@@ -47,7 +47,7 @@ def test_a_stored_scenario_is_promoted_with_its_provenance_beside_not_inside(tmp
     assert target == evals / "fixtures" / SCENARIO.id
     assert sorted(p.name for p in target.iterdir()) == ["doc.md"]
     meta = json.loads((evals / "fixtures" / f"{SCENARIO.id}{PROVENANCE_SUFFIX}").read_text(encoding="utf-8"))
-    assert meta == SCENARIO.provenance() | {"promoted_from": {}}
+    assert meta == SCENARIO.provenance().to_dict() | {"promoted_from": {}}
     back = Scenario.promoted(target)  # what Promoted(...) reads: the same input, frozen
     assert (back.id, back.fingerprint, back.task) == (SCENARIO.id, SCENARIO.fingerprint, "Fix")
 

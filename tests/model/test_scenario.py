@@ -9,9 +9,12 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval.model.scenario import (
+    MUTATION_KEY,
     PROVENANCE_SUFFIX,
     Draw,
+    Provenance,
     Scenario,
+    ScenarioStore,
     fingerprint,
     read_tree,
     slug,
@@ -147,7 +150,7 @@ def test_a_written_scenario_keeps_its_provenance_beside_the_tree_not_inside(tmp_
     assert tree == tmp_path / "store" / s.id
     assert sorted(p.name for p in tree.iterdir()) == ["doc.md", "sub"]
     meta = json.loads((tmp_path / "store" / f"{s.id}{PROVENANCE_SUFFIX}").read_text(encoding="utf-8"))
-    assert meta == s.provenance()
+    assert meta == s.provenance().to_dict()
     assert (meta["generator"], meta["id"], meta["task"], meta["fingerprint"]) == (
         "gen",
         s.id,
@@ -225,7 +228,7 @@ def test_expectations_reach_the_grader_merged_but_never_move_the_id() -> None:
     assert strict.id == plain.id and strict.key == plain.key
     assert strict.merged == {"a": 1, "b": "two", "recall": 0.9}
     assert plain.merged == {"a": 1, "b": "two"} and dict(plain.expect) == {}
-    assert strict.provenance()["expect"] == {"recall": 0.9}
+    assert strict.provenance().expect == {"recall": 0.9}
 
 
 def test_a_key_that_is_both_a_param_and_an_expectation_is_refused() -> None:
@@ -251,3 +254,17 @@ def test_a_provenance_written_before_expectations_existed_reads_back_with_none(t
     del old["expect"]
     meta.write_text(json.dumps(old), encoding="utf-8")
     assert dict(Scenario.promoted(tree).expect) == {}
+
+
+def test_a_store_reads_back_each_scenarios_provenance_and_each_mutants_parent(tmp_path: Path) -> None:
+    """One owner for the layout: the provenance a store wrote is the one it, and a promotion, read back."""
+    store = ScenarioStore(tmp_path / "store")
+    seed = _scenario()
+    mutant = _scenario(params={"a": 1, MUTATION_KEY: {"parent": seed.id, "mutators": ["crlf"]}})
+    for s in (seed, mutant):
+        store.write(s)
+    assert store.provenance(seed.id) == seed.provenance() and seed.provenance().parent is None
+    assert store.lineage() == {mutant.id: seed.id}
+    promoted = Provenance(**{**seed.provenance().to_dict(), "promoted_from": {"session": "s"}})
+    assert Provenance.read(promoted.write(tmp_path / f"x{PROVENANCE_SUFFIX}").with_name("x")) == promoted
+    assert "promoted_from" not in seed.provenance().to_dict()

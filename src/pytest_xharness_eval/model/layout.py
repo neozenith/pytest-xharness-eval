@@ -26,6 +26,7 @@ from pathlib import PurePath, PurePosixPath
 from typing import TYPE_CHECKING
 
 # Our Libraries
+from pytest_xharness_eval.model.scenario import ScenarioStore
 from pytest_xharness_eval.model.treatment import TREATMENT_SEP
 
 if TYPE_CHECKING:
@@ -259,6 +260,10 @@ class CacheLayout:
         rel = PurePosixPath(PurePath(suite).as_posix()).with_suffix("")
         parts = [part for part in rel.parts if part not in ("/", "..")]
         return self.root.joinpath(SCENARIOS_DIR, *parts, case)
+
+    def scenario_store(self, suite: str, case: str) -> ScenarioStore:
+        """The store at :meth:`scenarios`: every reader and writer of a case's stored scenarios goes through it."""
+        return ScenarioStore(self.scenarios(suite, case))
 
     # -- the evidence tree -------------------------------------------------------------
 

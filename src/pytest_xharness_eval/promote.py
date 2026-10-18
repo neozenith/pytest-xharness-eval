@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 from pytest_xharness_eval.emit.metrics import CellMetrics
 from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
 from pytest_xharness_eval.model.runresult import CaseRef
-from pytest_xharness_eval.model.scenario import PROVENANCE_SUFFIX, Scenario, stored_scenarios
+from pytest_xharness_eval.model.scenario import Provenance, Scenario
 
 if TYPE_CHECKING:
     # Standard Library
@@ -47,10 +48,10 @@ def scenario_of_session(session_dir: Path) -> tuple[Path, dict[str, Any]]:
     if case is None or not case.scenario:
         raise ValueError(f"{session_dir} ran on a committed fixture, not a generated scenario; nothing to promote")
     cache = CacheLayout.holding(session_dir)
-    store = cache.scenarios(case.suite, case.name)
-    found = stored_scenarios(store).get(case.scenario)
+    store = cache.scenario_store(case.suite, case.name)
+    found = store.stored().get(case.scenario)
     if found is None:
-        raise FileNotFoundError(f"scenario {case.scenario} is no longer stored under {store}")
+        raise FileNotFoundError(f"scenario {case.scenario} is no longer stored under {store.root}")
     history = CellMetrics.stored(session.history)
     return found, {
         "session": str(session_dir),
@@ -74,10 +75,7 @@ def promote(source: Path, evals_dir: Path, name: str | None = None) -> Path:
     if target.exists():
         raise FileExistsError(f"{target} already exists; promote under another --name rather than overwrite it")
     scenario.write(target)
-    meta = scenario.provenance() | {"promoted_from": session_facts}
-    target.with_name(target.name + PROVENANCE_SUFFIX).write_text(
-        json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    replace(scenario.provenance(), promoted_from=session_facts).write(Provenance.path_for(target))
     return target
 
 

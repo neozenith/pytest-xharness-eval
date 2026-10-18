@@ -44,6 +44,9 @@ Files = dict[str, str | bytes]
 #: it: anything inside a fixture is copied into every workspace (ADR 0018).
 PROVENANCE_SUFFIX: Final = ".provenance.json"
 
+#: The params key an adversarial mutant records its parent and mutators under (ADR 0074).
+MUTATION_KEY: Final = "mutation"
+
 _SLUG: Final = re.compile(r"[^a-z0-9]+")
 _SKIPPED: Final = frozenset({"__pycache__", "node_modules", ".git"})
 
@@ -203,9 +206,73 @@ class Scenario:
         """Write the file tree under ``dest``."""
         return write_tree(self.files, dest)
 
-    def provenance(self) -> dict[str, Any]:
-        """What a promoted copy of this scenario keeps beside its committed bytes."""
-        return {
+    def provenance(self) -> Provenance:
+        """What a stored or promoted copy of this scenario keeps beside its bytes."""
+        return Provenance(
+            generator=self.generator,
+            version=self.version,
+            id=self.id,
+            label=self.label,
+            params=dict(self.params),
+            expect=dict(self.expect),
+            task=self.task,
+            fingerprint=self.fingerprint,
+        )
+
+    @classmethod
+    def promoted(cls, fixture: Path) -> Self:
+        """The scenario a stored or promoted fixture directory holds, read with its provenance file."""
+        meta = Provenance.read(fixture)
+        scenario = cls(
+            generator=meta.generator,
+            version=meta.version,
+            params=dict(meta.params),
+            files=read_tree(fixture),
+            label=meta.label,
+            task=meta.task,
+            expect=dict(meta.expect),
+        )
+        if scenario.fingerprint != meta.fingerprint:
+            raise ValueError(
+                f"{fixture}: its bytes no longer match the fingerprint they were promoted with; "
+                "a promoted fixture is a frozen reproduction, so re-promote it rather than editing it"
+            )
+        return scenario
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Provenance:
+    """How a stored scenario was made: the ``<id>.provenance.json`` beside its tree, never inside it.
+
+    One type for the store collection writes, the history an adversary reads back, and the
+    committed fixture promotion freezes. ``promoted_from`` names the session a promoted copy
+    came from, and is absent (None, and no key) on a scenario that was only stored.
+    """
+
+    generator: str
+    version: int
+    id: str
+    label: str | None
+    params: Mapping[str, Any]
+    expect: Mapping[str, Any]
+    task: str | None
+    fingerprint: str
+    promoted_from: Mapping[str, Any] | None = None
+
+    @staticmethod
+    def path_for(tree: Path) -> Path:
+        """Where the provenance of the scenario tree ``tree`` lives: beside it."""
+        return tree.with_name(tree.name + PROVENANCE_SUFFIX)
+
+    @property
+    def parent(self) -> str | None:
+        """The scenario an adversarial mutant was bred from, None for anything else (ADR 0074)."""
+        mutation = self.params.get(MUTATION_KEY)
+        parent = mutation.get("parent") if isinstance(mutation, dict) else None
+        return parent if isinstance(parent, str) else None
+
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {
             "generator": self.generator,
             "version": self.version,
             "id": self.id,
@@ -215,86 +282,120 @@ class Scenario:
             "task": self.task,
             "fingerprint": self.fingerprint,
         }
+        if self.promoted_from is not None:
+            out["promoted_from"] = dict(self.promoted_from)
+        return out
 
     @classmethod
-    def promoted(cls, fixture: Path) -> Self:
-        """The scenario a promoted fixture directory holds, read with its provenance file."""
-        meta = json.loads(fixture.with_name(fixture.name + PROVENANCE_SUFFIX).read_text(encoding="utf-8"))
-        scenario = cls(
+    def read(cls, tree: Path) -> Self:
+        """The provenance beside ``tree``."""
+        meta = json.loads(cls.path_for(tree).read_text(encoding="utf-8"))
+        promoted = meta.get("promoted_from")
+        return cls(
             generator=str(meta["generator"]),
             version=int(meta["version"]),
-            params=dict(meta["params"]),
-            files=read_tree(fixture),
+            id=str(meta.get("id") or tree.name),
             label=meta.get("label"),
-            task=meta.get("task"),
+            params=dict(meta["params"]),
             expect=dict(meta.get("expect") or {}),
+            task=meta.get("task"),
+            fingerprint=str(meta["fingerprint"]),
+            promoted_from=dict(promoted) if isinstance(promoted, dict) else None,
         )
-        if scenario.fingerprint != meta["fingerprint"]:
-            raise ValueError(
-                f"{fixture}: its bytes no longer match the fingerprint they were promoted with; "
-                "a promoted fixture is a frozen reproduction, so re-promote it rather than editing it"
-            )
-        return scenario
+
+    def write(self, path: Path) -> Path:
+        """Write this record to ``path`` as indented, sorted JSON."""
+        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return path
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioStore:
+    """A directory of scenario trees, each with its :class:`Provenance` beside it.
+
+    ``<cache>/scenarios/<suite path>/<case>/`` is one (``CacheLayout.scenario_store``), and so
+    is a suite's ``evals/fixtures/`` once a failure has been promoted into it. Every reader
+    and writer of the layout goes through here, so the file names have one owner.
+    """
+
+    root: Path
+
+    def tree(self, scenario_id: str) -> Path:
+        """Where the scenario ``scenario_id`` is, or would be, stored."""
+        return self.root / scenario_id
+
+    def write(self, scenario: Scenario) -> Path:
+        """Write ``scenario`` as ``<root>/<id>/`` with ``<id>.provenance.json`` beside it.
+
+        The provenance file sits beside the tree, never in it, so materialising the tree into
+        a workspace hands the agent the scenario's files and nothing about how they were made.
+
+        Every xdist worker collects, so several processes write the same scenario at once. The
+        write is therefore idempotent and atomic: a stored copy whose provenance carries this
+        fingerprint is left alone, and a new one is staged under a process-unique name and
+        renamed into place, so no reader ever sees a half-written tree. The provenance file is
+        renamed last, which makes it the marker that the tree beside it is complete.
+        """
+        tree = self.tree(scenario.id)
+        meta = Provenance.path_for(tree)
+        if tree.is_dir() and meta.is_file() and Provenance.read(tree).fingerprint == scenario.fingerprint:
+            return tree
+        unique = f"{os.getpid()}.{uuid.uuid4().hex[:8]}"
+        staged = self.root / f".{scenario.id}.{unique}"
+        scenario.write(staged)
+        if tree.is_dir():
+            # A tree with no provenance is a crashed earlier write, never complete. Otherwise:
+            # same id, new bytes: a seed file the generator reads was edited. The records keep
+            # the fingerprint they ran with, so the Analyzer never pools the two (ADR 0074).
+            stale = self.root / f".{scenario.id}.stale.{unique}"
+            try:
+                tree.rename(stale)
+            except FileNotFoundError:
+                pass  # another worker moved it aside first; the rename below races it fairly
+            else:
+                shutil.rmtree(stale)
+        try:
+            staged.rename(tree)
+        except OSError:
+            # Another worker renamed its identical copy into place first; keep that one.
+            if not tree.is_dir():
+                raise
+            shutil.rmtree(staged)
+        scenario.provenance().write(Provenance.path_for(staged)).replace(meta)
+        return tree
+
+    def stored(self) -> dict[str, Path]:
+        """Every scenario tree under the store that has its provenance beside it, by id."""
+        if not self.root.is_dir():
+            return {}
+        trees = (
+            meta.with_name(meta.name.removesuffix(PROVENANCE_SUFFIX))
+            for meta in sorted(self.root.glob(f"*{PROVENANCE_SUFFIX}"))
+        )
+        return {tree.name: tree for tree in trees if tree.is_dir()}
+
+    def provenance(self, scenario_id: str) -> Provenance:
+        """The provenance of the stored scenario ``scenario_id``."""
+        return Provenance.read(self.tree(scenario_id))
+
+    def lineage(self) -> dict[str, str]:
+        """Each stored adversarial mutant's id, mapped to the id of the scenario it was bred from."""
+        out: dict[str, str] = {}
+        for sid in self.stored():
+            parent = self.provenance(sid).parent
+            if parent is not None:
+                out[sid] = parent
+        return out
 
 
 def write_scenario(scenario: Scenario, store: Path) -> Path:
-    """Write ``scenario`` as ``<store>/<id>/`` with ``<id>.provenance.json`` beside it.
-
-    The provenance file sits beside the tree, never in it, so materialising the tree into a
-    workspace hands the agent the scenario's files and nothing about how they were made.
-
-    Every xdist worker collects, so several processes write the same scenario at once. The
-    write is therefore idempotent and atomic: a stored copy whose provenance carries this
-    fingerprint is left alone, and a new one is staged under a process-unique name and
-    renamed into place, so no reader ever sees a half-written tree. The provenance file is
-    renamed last, which makes it the marker that the tree beside it is complete.
-    """
-    tree = store / scenario.id
-    meta = tree.with_name(tree.name + PROVENANCE_SUFFIX)
-    if tree.is_dir() and meta.is_file() and _stored_fingerprint(meta) == scenario.fingerprint:
-        return tree
-    unique = f"{os.getpid()}.{uuid.uuid4().hex[:8]}"
-    staged = store / f".{scenario.id}.{unique}"
-    scenario.write(staged)
-    if tree.is_dir():
-        # A tree with no provenance is a crashed earlier write, never complete. Otherwise:
-        # same id, new bytes: a seed file the generator reads was edited. The records keep
-        # the fingerprint they ran with, so the Analyzer never pools the two (ADR 0074).
-        stale = store / f".{scenario.id}.stale.{unique}"
-        try:
-            tree.rename(stale)
-        except FileNotFoundError:
-            pass  # another worker moved it aside first; the rename below races it fairly
-        else:
-            shutil.rmtree(stale)
-    try:
-        staged.rename(tree)
-    except OSError:
-        # Another worker renamed its identical copy into place first; keep that one.
-        if not tree.is_dir():
-            raise
-        shutil.rmtree(staged)
-    staged_meta = staged.with_name(staged.name + PROVENANCE_SUFFIX)
-    staged_meta.write_text(json.dumps(scenario.provenance(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    staged_meta.replace(meta)
-    return tree
-
-
-def _stored_fingerprint(meta: Path) -> str | None:
-    """The fingerprint a stored scenario's provenance records."""
-    found = json.loads(meta.read_text(encoding="utf-8")).get("fingerprint")
-    return str(found) if found else None
+    """``ScenarioStore(store).write(scenario)``: the scenario's tree, with its provenance beside it."""
+    return ScenarioStore(store).write(scenario)
 
 
 def stored_scenarios(store: Path) -> dict[str, Path]:
-    """Every scenario directory under ``store`` that has its provenance beside it, by id."""
-    if not store.is_dir():
-        return {}
-    return {
-        meta.name.removesuffix(PROVENANCE_SUFFIX): meta.with_name(meta.name.removesuffix(PROVENANCE_SUFFIX))
-        for meta in sorted(store.glob(f"*{PROVENANCE_SUFFIX}"))
-        if meta.with_name(meta.name.removesuffix(PROVENANCE_SUFFIX)).is_dir()
-    }
+    """``ScenarioStore(store).stored()``: every complete scenario tree under ``store``, by id."""
+    return ScenarioStore(store).stored()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -303,14 +404,20 @@ class GenerationContext:
 
     ``outcomes`` maps a scenario id to ``(failed, sampled)`` over every stored record of the
     case, so an adversarial generator can spend its budget where the subject already breaks.
-    ``stored`` maps a scenario id to the directory collection wrote it to, so a past scenario
-    can be re-run from its bytes after the generator that made it has moved on.
+    ``store`` is where collection writes the case's scenarios, so a past scenario can be re-run
+    from its bytes after the generator that made it has moved on; None for a generator asked
+    outside a sweep, which then sees no history.
     """
 
     evals_dir: Path
     case: str
     outcomes: Mapping[str, tuple[int, int]] = field(default_factory=dict)
-    stored: Mapping[str, Path] = field(default_factory=dict)
+    store: ScenarioStore | None = None
+
+    @property
+    def stored(self) -> dict[str, Path]:
+        """Every complete scenario tree in the case's store, by id; empty without a store."""
+        return self.store.stored() if self.store is not None else {}
 
 
 @runtime_checkable
