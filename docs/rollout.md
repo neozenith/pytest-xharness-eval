@@ -324,14 +324,17 @@ and for some crashes alike, and only a report tells them apart.
 `check_all(output, *checkers)` runs every `Checker` (`Callable[[CaseOutput], None]`) and
 raises one `AssertionError` listing each failure under the checker's name, so one failure
 never masks another. Any other exception propagates at once, unchanged. The output is
-passed first, so bind keywords with `functools.partial` and positionals with a lambda:
+passed first, so bind keywords with `functools.partial` and positionals with a lambda. A
+partial is named by its function and bound arguments; a bare lambda has no readable name,
+so its failure is reported by its own message alone, or under a label you give it as a
+`(label, checker)` pair:
 
 ```python
 check_all(
     output,
     check_rollout,
     lambda o: check_files_written(o, "NOTES.md"),
-    lambda o: check_content_kept(o, "NOTES.md", seed_text=output.seed("NOTES.md")),
+    ("NOTES.md kept its seed", lambda o: check_content_kept(o, "NOTES.md", seed_text=output.seed("NOTES.md"))),
     partial(check_cost_within, usd=0.50),
     partial(check_tool_clean, argv=[*LINT, "--json", output.path("NOTES.md")]),
 )

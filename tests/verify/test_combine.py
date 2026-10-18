@@ -33,17 +33,18 @@ def test_every_failure_is_reported_not_just_the_first(output: CaseOutput) -> Non
             output,
             lambda o: verify.check_files_written(o, "b.md"),
             partial(verify.check_turns_within, at_most=5),
-            lambda o: verify.check_matches(o, "a.md", "goodbye"),
+            ("goodbye in a.md", lambda o: verify.check_matches(o, "a.md", "goodbye")),
             partial(verify.check_skill_triggered, by="prompt"),
         )
     text = str(failed.value)
-    lam = "test_every_failure_is_reported_not_just_the_first.<locals>.<lambda>"
-    # The first line is what a cell record keeps, so it names the first failure, not a count.
-    assert text.splitlines()[0] == f"[{lam}] the run did not write ['b.md']; it wrote ['a.md'] (+2 more)"
+    # The first line is what a cell record keeps, so it names the first failure, not a count;
+    # a bare lambda has no readable name, so its own message stands without a prefix.
+    assert text.splitlines()[0] == "the run did not write ['b.md']; it wrote ['a.md'] (+2 more)"
     assert text.splitlines()[1] == "3 of 4 checks failed:"
-    assert f"1. [{lam}] the run did not write ['b.md']" in text
-    assert f"2. [{lam}] a.md matches 'goodbye' 0 time(s)" in text
+    assert "1. the run did not write ['b.md']" in text
+    assert "2. [goodbye in a.md] a.md matches 'goodbye' 0 time(s)" in text
     assert "3. [check_skill_triggered(by='prompt')] the skill under test was never triggered" in text
+    assert "<lambda>" not in text
 
 
 def test_all_passing_returns(output: CaseOutput) -> None:
@@ -70,3 +71,5 @@ def test_an_error_propagates_unchanged_and_at_once(output: CaseOutput) -> None:
 def test_partials_are_named_with_their_bound_arguments() -> None:
     assert checker_name(partial(verify.check_cost_within, usd=0.5)) == "check_cost_within(usd=0.5)"
     assert checker_name(verify.check_rollout) == "check_rollout"
+    assert checker_name(lambda o: None) is None and checker_name(partial(lambda o, n: None, n=1)) is None
+    assert checker_name(("label", verify.check_rollout)) == "label"
