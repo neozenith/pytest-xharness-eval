@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any, Final, Self, Union, get_args, get_origin,
 # Our Libraries
 from pytest_xharness_eval.model.case import CaseKind
 from pytest_xharness_eval.model.documents import read_json_object
+from pytest_xharness_eval.model.metrics import Direction, MetricKind, fact, measured
 from pytest_xharness_eval.model.runresult import CostStatus
 from pytest_xharness_eval.model.verdict import Verdict
 
@@ -110,7 +111,7 @@ class CellMetrics:
     # What kind of model this was, from the catalogue (ADR 0057). None on a record of a
     # model the catalogue never described, and on every record written before it.
     line: str | None = None
-    family_tier: int | None = None
+    family_tier: int | None = fact(None)
     released: str | None = None
     session_id: str = ""
     verdict: str = ""
@@ -123,104 +124,104 @@ class CellMetrics:
     scenario_fingerprint: str | None = None
     subject_version: str | None = None
     # What it did.
-    turns: int = 0
-    reported_turns: int | None = None
+    turns: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    reported_turns: int | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
     # ``tool_calls`` and ``tool_calls_by_name`` are the primary thread's, as the harness
     # counted them (the wire format since ADR 0018); ``tool_calls_by_name_all`` counts every
     # thread's ledger, the same calls ``tool_ms_by_name`` and the tool cost maps sum over, so
     # a per-call average divides like by like.
-    tool_calls: int = 0
+    tool_calls: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
     tool_calls_by_name: dict[str, int] = field(default_factory=dict)
     tool_calls_by_name_all: dict[str, int] = field(default_factory=dict)
-    duration_ms: int = 0
+    duration_ms: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
     # The harness-reported API time, where it reports one; None otherwise.
-    api_duration_ms: int | None = None
-    wall_ms: int = 0
+    api_duration_ms: int | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    wall_ms: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
     # How the CLI ended (ADR 0063, ADR 0064): its exit code, whether it reached the model at
     # all (1 or 0), and -- for a run killed at the wall -- the limit and how long its logs had
     # been silent. None on a record written before them; the timeout pair is None on a run
     # that finished on its own.
-    exit_code: int | None = None
-    attempted: int | None = None
-    timed_out_after_s: int | None = None
-    idle_before_timeout_s: float | None = None
+    exit_code: int | None = fact(None)
+    attempted: int | None = measured(None, MetricKind.FRACTION, Direction.HIGHER)
+    timed_out_after_s: int | None = fact(None)
+    idle_before_timeout_s: float | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
     # What it cost, and the rates that say so (ADR 0021).
-    estimated_cost_usd: float | None = None
-    harness_reported_cost_usd: float | None = None
+    estimated_cost_usd: float | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    harness_reported_cost_usd: float | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
     rates_applied: dict[str, Any] = field(default_factory=dict)
     # Calls billed at the long-context tier; None while unpriced (ADR 0051).
-    long_context_calls: int | None = None
+    long_context_calls: int | None = measured(None, MetricKind.RARE, Direction.LOWER)
     # What it spent, tier by tier (ADR 0029).
-    accumulative_billed_tokens: int = 0
-    baseline_tokens: int = 0
-    input_tokens: int = 0
-    output_tokens: int = 0
-    reasoning_tokens: int = 0
-    cache_read_tokens: int = 0
-    cache_write_tokens: int = 0
-    cache_write_1h_tokens: int = 0
-    cache_write_5m_tokens: int = 0
-    files_written: int = 0
+    accumulative_billed_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    baseline_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    input_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    output_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    reasoning_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    cache_read_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    cache_write_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    cache_write_1h_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    cache_write_5m_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    files_written: int = measured(0, MetricKind.SPREAD, None)
     # How close it came to the window, and how fast it ran (ADR 0024).
-    context_window: int | None = None
-    peak_context_tokens: int = 0
-    final_context_tokens: int | None = None
-    context_window_pct: float | None = None
-    final_context_pct: float | None = None
-    ttft_ms: int | None = None
-    output_tokens_per_sec: float | None = None
+    context_window: int | None = fact(None)
+    peak_context_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    final_context_tokens: int | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    context_window_pct: float | None = measured(None, MetricKind.FRACTION, Direction.LOWER)
+    final_context_pct: float | None = measured(None, MetricKind.FRACTION, Direction.LOWER)
+    ttft_ms: int | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    output_tokens_per_sec: float | None = measured(None, MetricKind.SPREAD, Direction.HIGHER)
     record_kinds: dict[str, int] = field(default_factory=dict)
     # The Important Metrics no field above already carried (ADR 0071). None on every record
     # written before they existed, so an old sample drops out of a metric's ``n`` rather than
     # counting as a run that never delegated, compacted or thought.
-    subagents: int | None = None
-    subagent_token_share: float | None = None
-    subagent_cost_share: float | None = None
-    compactions: int | None = None
-    reasoning_share: float | None = None
+    subagents: int | None = measured(None, MetricKind.RARE, None)
+    subagent_token_share: float | None = measured(None, MetricKind.FRACTION, None)
+    subagent_cost_share: float | None = measured(None, MetricKind.FRACTION, Direction.LOWER)
+    compactions: int | None = measured(None, MetricKind.RARE, Direction.LOWER)
+    reasoning_share: float | None = measured(None, MetricKind.FRACTION, None)
     output_tokens_per_sec_by_model: dict[str, float] = field(default_factory=dict)
     # Which of the skill's files it reached (ADR 0022).
-    skill_files: int | None = None
-    skill_files_loaded: int | None = None
-    skill_scripts: int | None = None
-    skill_scripts_run: int | None = None
+    skill_files: int | None = fact(None)
+    skill_files_loaded: int | None = measured(None, MetricKind.SPREAD, Direction.HIGHER)
+    skill_scripts: int | None = fact(None)
+    skill_scripts_run: int | None = measured(None, MetricKind.SPREAD, Direction.HIGHER)
     skill_not_loaded: list[str] = field(default_factory=list)
     skill_not_run: list[str] = field(default_factory=list)
     # Whether the skill under test triggered at all: 1 when it did, 0 on a skill case where
     # nothing triggered it, None on a scenario case (no skill) and every record written before it.
-    skill_triggered: int | None = None
+    skill_triggered: int | None = measured(None, MetricKind.FRACTION, Direction.HIGHER)
     # When the skill under test was triggered and what its use cost (ADR 0073). None when
     # nothing triggered it, on a scenario case, and on records written before it.
     # ``skill_cost_share`` is the *issuing* cost of the skill's tool calls over the run's
     # estimate; ``skill_context_cost_share`` the cost of carrying their results through later
     # prompts over the same estimate. Both are attributions inside the estimate, not additions.
     skill_trigger: str | None = None
-    skill_triggered_turn: int | None = None
-    skill_duration_ms: int | None = None
-    skill_tool_calls: int | None = None
-    skill_issuing_cost_usd: float | None = None
-    skill_context_cost_usd: float | None = None
-    skill_cost_share: float | None = None
-    skill_context_cost_share: float | None = None
+    skill_triggered_turn: int | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    skill_duration_ms: int | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    skill_tool_calls: int | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    skill_issuing_cost_usd: float | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    skill_context_cost_usd: float | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    skill_cost_share: float | None = measured(None, MetricKind.FRACTION, Direction.LOWER)
+    skill_context_cost_share: float | None = measured(None, MetricKind.FRACTION, Direction.LOWER)
     # Every tool call's time and cost, summed and split by tool name (ADR 0073).
-    tool_issuing_cost_usd: float | None = None
-    tool_context_cost_usd: float | None = None
+    tool_issuing_cost_usd: float | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    tool_context_cost_usd: float | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
     tool_ms_by_name: dict[str, int] = field(default_factory=dict)
     tool_issuing_cost_usd_by_name: dict[str, float] = field(default_factory=dict)
     tool_context_cost_usd_by_name: dict[str, float] = field(default_factory=dict)
-    cache_rereads: int | None = None
+    cache_rereads: int | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
     # The share of prompt tokens served from the cache: how well the run reused its context.
-    cache_read_share: float | None = None
+    cache_read_share: float | None = measured(None, MetricKind.FRACTION, Direction.HIGHER)
     # The subagents' spans and per-thread extremes (ADR 0072). One convention: a count or a
     # span over zero subagents is 0, consistent with ``subagents = 0``; a figure that needs a
     # measurement the run lacks (a price, a context window) is None. None on every record
     # written before them. The peak context share is each thread's largest prompt over the
     # run's reported window, the window of the model the primary ran on.
-    subagent_ms: int | None = None
-    subagent_max_depth: int | None = None
-    subagent_max_ms: int | None = None
-    subagent_max_cost_usd: float | None = None
-    subagent_peak_context_pct: float | None = None
+    subagent_ms: int | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    subagent_max_depth: int | None = measured(None, MetricKind.RARE, Direction.LOWER)
+    subagent_max_ms: int | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    subagent_max_cost_usd: float | None = measured(None, MetricKind.SPREAD, Direction.LOWER)
+    subagent_peak_context_pct: float | None = measured(None, MetricKind.FRACTION, Direction.LOWER)
     # Which cache root to run the combine step against; a declared field rather than a key
     # written onto the record afterwards (ADR 0032, ADR 0037). Empty means "combine
     # nothing", which is how a dry run stays free of evidence.

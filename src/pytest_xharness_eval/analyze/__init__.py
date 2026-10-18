@@ -34,12 +34,12 @@ from pytest_xharness_eval.model.analysis import (
     AnalyzerSpec,
     Change,
     Comparison,
-    Direction,
     Estimate,
     Finding,
     ParetoPoint,
     analyzer,
 )
+from pytest_xharness_eval.model.metrics import Direction
 from pytest_xharness_eval.model.verdict import Verdict
 
 if TYPE_CHECKING:

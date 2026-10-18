@@ -12,12 +12,12 @@ from pytest_xharness_eval.model.analysis import (
     AnalyzerSpec,
     Change,
     Comparison,
-    Direction,
     Estimate,
     Finding,
     ParetoPoint,
     analyzer,
 )
+from pytest_xharness_eval.model.metrics import Direction
 
 EST = Estimate(point=0.5, low=0.2366123, high=0.7633877, n=10, method="wilson")
 

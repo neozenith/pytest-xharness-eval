@@ -30,8 +30,8 @@ from typing import TYPE_CHECKING, Any
 from pytest_xharness_eval.analyze import stats
 from pytest_xharness_eval.analyze.estimate import centre, of_cells, of_values
 from pytest_xharness_eval.analyze.samples import CELL_FIELDS, COST_PER_PASS, WASTED_COST, kind_of
-from pytest_xharness_eval.model.analysis import Change, Comparison, Direction, Estimate
-from pytest_xharness_eval.model.metrics import MetricKind
+from pytest_xharness_eval.model.analysis import Change, Comparison, Estimate
+from pytest_xharness_eval.model.metrics import Direction, MetricKind
 
 if TYPE_CHECKING:
     # Standard Library

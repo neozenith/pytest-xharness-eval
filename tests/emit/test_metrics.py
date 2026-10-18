@@ -4,6 +4,8 @@
 import dataclasses
 import json
 from pathlib import Path
+from types import UnionType
+from typing import get_args, get_type_hints
 
 # Our Libraries
 from pytest_xharness_eval import (
@@ -21,6 +23,7 @@ from pytest_xharness_eval.model import clock
 from pytest_xharness_eval.model import matrix as mx
 from pytest_xharness_eval.model.case import CaseKind
 from pytest_xharness_eval.model.layout import CacheLayout
+from pytest_xharness_eval.model.metrics import roles
 from pytest_xharness_eval.model.verdict import Verdict
 from tests.support import _applied_rates, _metrics, _result, _subagent
 
@@ -395,3 +398,17 @@ def test_a_failure_reason_and_the_scenario_facts_ride_the_record_and_round_trip(
     assert record.scenario_fingerprint == "f" * 64
     back = CellMetrics.stored(record.write(tmp_path / "history.json"))
     assert back is not None and back.outcome == outcome  # a replay carries the reason forward
+
+
+def test_every_numeric_field_declares_its_role_so_the_analyzer_never_guesses_one() -> None:
+    """Kind and better direction, neutral, or a fact about the cell: declared on the field (ADR 0076)."""
+
+    def numeric(hint: object) -> bool:
+        parts = get_args(hint) if isinstance(hint, UnionType) else (hint,)
+        return any(part in (int, float) for part in parts)
+
+    numeric_fields = {name for name, hint in get_type_hints(CellMetrics).items() if numeric(hint)}
+    declared = roles(CellMetrics)
+    assert numeric_fields == set(declared)
+    assert not declared["family_tier"].is_metric and declared["turns"].is_metric
+    assert declared["subagents"].better is None  # neutral: delegation is neither good nor bad

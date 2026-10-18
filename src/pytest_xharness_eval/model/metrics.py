@@ -33,7 +33,7 @@ from __future__ import annotations
 # Standard Library
 import math
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field, fields
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Final
 
@@ -85,6 +85,53 @@ class Unit(StrEnum):
 
 
 #: Which aggregates each kind reports, headline first: a reader showing one number shows the first.
+class Direction(StrEnum):
+    """Whether a larger value of a metric is the better one."""
+
+    HIGHER = "higher"
+    LOWER = "lower"
+
+
+#: The ``dataclasses.field`` metadata key a record's numeric field declares its role under.
+ROLE_KEY: Final = "xharness_role"
+
+
+@dataclass(frozen=True, slots=True)
+class FieldRole:
+    """What a numeric field of a metrics record is: a measurement of a kind and direction, or a fact.
+
+    ``kind`` is None for a fact about the cell (a family tier, a window size, an exit code):
+    summarising one across samples answers no question, so the Analyzer refuses it.
+    ``better`` is None for a neutral measurement -- more delegation or more thinking is
+    neither good nor bad in itself -- and for a fact.
+    """
+
+    kind: MetricKind | None
+    better: Direction | None
+
+    @property
+    def is_metric(self) -> bool:
+        return self.kind is not None
+
+
+def measured(default: Any, kind: MetricKind, better: Direction | None) -> Any:
+    """A record field that is a measurement: ``x: int = measured(0, MetricKind.SPREAD, Direction.LOWER)``.
+
+    ``better=None`` declares it neutral, so ranking by it needs the direction named.
+    """
+    return field(default=default, metadata={ROLE_KEY: FieldRole(kind, better)})
+
+
+def fact(default: Any) -> Any:
+    """A numeric record field that is a fact about the cell, not a measurement of the run."""
+    return field(default=default, metadata={ROLE_KEY: FieldRole(None, None)})
+
+
+def roles(record_type: type) -> dict[str, FieldRole]:
+    """Every field of a dataclass ``record_type`` that declares a :class:`FieldRole`, by name."""
+    return {f.name: f.metadata[ROLE_KEY] for f in fields(record_type) if ROLE_KEY in f.metadata}
+
+
 AGGREGATES: Final[dict[MetricKind, tuple[Aggregate, ...]]] = {
     MetricKind.SPREAD: (Aggregate.MEDIAN, Aggregate.P25, Aggregate.P75, Aggregate.N),
     MetricKind.FRACTION: (Aggregate.MEAN, Aggregate.MIN, Aggregate.MAX, Aggregate.N),

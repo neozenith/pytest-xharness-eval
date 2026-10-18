@@ -35,16 +35,22 @@ the plain field, so ``where(scenario="lint-3")`` still selects every fingerprint
 from __future__ import annotations
 
 # Standard Library
-from types import UnionType
-from typing import TYPE_CHECKING, Any, Final, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Any, Final
 
 # Our Libraries
 from pytest_xharness_eval.analyze import stats
 from pytest_xharness_eval.emit.index import aggregate_history
 from pytest_xharness_eval.emit.metrics import CellMetrics
 from pytest_xharness_eval.emit.samples import is_sample
-from pytest_xharness_eval.model.analysis import Direction
-from pytest_xharness_eval.model.metrics import IMPORTANT_METRICS, ImportantMetric, MetricKind, rate_value
+from pytest_xharness_eval.model.metrics import (
+    IMPORTANT_METRICS,
+    Direction,
+    FieldRole,
+    ImportantMetric,
+    MetricKind,
+    rate_value,
+    roles,
+)
 from pytest_xharness_eval.model.verdict import Verdict
 
 if TYPE_CHECKING:
@@ -72,59 +78,17 @@ _GROUP_STATISTICS: Final = frozenset({COST_PER_PASS, WASTED_COST})
 
 _FIELDS: Final = frozenset(CellMetrics.__dataclass_fields__)
 _IMPORTANT: Final = {m.id: m for m in IMPORTANT_METRICS}
-#: Metrics where more is better; every other metric (cost, tokens, time, turns) is better smaller.
-_HIGHER: Final = frozenset(
-    {
-        "verdict",
-        PASSED,
-        "skill_loaded",
-        "skill_run",
-        "skill_triggered",
-        "cache",
-        "throughput",
-        "output_tokens_per_sec",
-        "cache_read_share",
-        "skill_files_loaded",
-        "skill_scripts_run",
-        "attempted",
-    }
-)
-#: Metrics with no better direction: more delegation, more files or more thinking is neither
-#: good nor bad in itself, so ranking or a frontier needs the direction named explicitly.
-_NEUTRAL: Final = frozenset(
-    {"files_written", "subagents", "reasoning_share", "thinking", "subagent_token_share", TOOL_TIME_SHARE}
-)
-#: Numeric fields that are not measurements: identities, limits and catalogue facts. Summarising
-#: a model's family tier or a context window's size across samples answers no question.
-_NOT_METRICS: Final = frozenset(
-    {
-        "family_tier",
-        "context_window",
-        "released",
-        "skill_files",
-        "skill_scripts",
-        "exit_code",
-        "timed_out_after_s",
-    }
-)
-#: Numeric fields whose kind the name-based rule would get wrong.
-_KINDS: Final = {
-    "subagent_max_depth": MetricKind.RARE,
-    "cache_rereads": MetricKind.SPREAD,
-    "long_context_calls": MetricKind.RARE,
-    "attempted": MetricKind.FRACTION,
-    "skill_triggered": MetricKind.FRACTION,
-    TOOL_TIME_SHARE: MetricKind.FRACTION,
-    CONTEXT_COST_SHARE: MetricKind.FRACTION,
+#: Each record field's role -- kind, better direction or neutral, or a fact about the cell --
+#: declared once, on the field itself (``emit/metrics.py``), so no name list here can drift.
+_ROLES: Final = roles(CellMetrics)
+#: The derived metrics' roles: they are no field, so they are declared beside their derivation.
+_DERIVED: Final = {
+    PASSED: FieldRole(MetricKind.RATE, Direction.HIGHER),
+    TOOL_TIME_SHARE: FieldRole(MetricKind.FRACTION, None),
+    CONTEXT_COST_SHARE: FieldRole(MetricKind.FRACTION, Direction.LOWER),
+    COST_PER_PASS: FieldRole(MetricKind.SPREAD, Direction.LOWER),
+    WASTED_COST: FieldRole(MetricKind.SPREAD, Direction.LOWER),
 }
-
-
-def _numeric(hint: Any) -> bool:
-    parts = get_args(hint) if get_origin(hint) in (UnionType, Union) else (hint,)
-    return any(part in (int, float) for part in parts)
-
-
-_NUMERIC: Final = frozenset(name for name, hint in get_type_hints(CellMetrics).items() if _numeric(hint))
 
 
 def important(metric: str) -> ImportantMetric | None:
@@ -132,43 +96,52 @@ def important(metric: str) -> ImportantMetric | None:
     return _IMPORTANT.get(metric)
 
 
-def kind_of(metric: str) -> MetricKind:
-    """How a metric's samples are summarised: its declared kind, or one inferred from its name.
+def _role(metric: str) -> tuple[MetricKind, Direction | None]:
+    """The role of a metric: an Important Metric's, a derived metric's, or a record field's.
+
+    An Important Metric keeps its declared kind; its direction is its field's, except a rate,
+    which is better higher for the pass rate and lower for the error rate.
 
     Raises:
-        ValueError: for a name that is no Important Metric, derived metric or numeric field.
+        ValueError: for a fact about the cell, and for a name that is none of the three.
     """
     declared = important(metric)
     if declared is not None:
-        return declared.kind
-    if metric == PASSED:
-        return MetricKind.RATE
-    if metric in _GROUP_STATISTICS:
-        return MetricKind.SPREAD
-    if metric in _NOT_METRICS:
+        if declared.kind is MetricKind.RATE:
+            return declared.kind, Direction.HIGHER if declared.counts is Verdict.PASS else Direction.LOWER
+        return declared.kind, _ROLES[declared.field].better
+    role = _DERIVED.get(metric) or _ROLES.get(metric)
+    if role is None:
+        raise ValueError(
+            f"unknown metric {metric!r}: name an Important Metric id ({', '.join(_IMPORTANT)}), "
+            f"{PASSED!r}, {COST_PER_PASS!r}, {WASTED_COST!r}, {TOOL_TIME_SHARE!r}, {CONTEXT_COST_SHARE!r}, "
+            "or a numeric CellMetrics field"
+        )
+    if role.kind is None:
         raise ValueError(f"{metric!r} is a fact about the cell, not a measurement of the run; group by it instead")
-    if metric in _KINDS:
-        return _KINDS[metric]
-    if metric in _NUMERIC:
-        return MetricKind.FRACTION if metric.endswith(("_share", "_pct")) else MetricKind.SPREAD
-    raise ValueError(
-        f"unknown metric {metric!r}: name an Important Metric id ({', '.join(_IMPORTANT)}), "
-        f"{PASSED!r}, {COST_PER_PASS!r}, {WASTED_COST!r}, {TOOL_TIME_SHARE!r}, {CONTEXT_COST_SHARE!r}, "
-        "or a numeric CellMetrics field"
-    )
+    return role.kind, role.better
+
+
+def kind_of(metric: str) -> MetricKind:
+    """How a metric's samples are summarised: the kind its declaration names.
+
+    Raises:
+        ValueError: for a name that is no Important Metric, derived metric or measured field.
+    """
+    return _role(metric)[0]
 
 
 def direction_of(metric: str) -> Direction:
-    """Which way is better for a metric: higher for pass rates, coverage and throughput, else lower.
+    """Which way is better for a metric, as its declaration names it.
 
     Raises:
         ValueError: for an unknown metric, and for a neutral one (delegation, files written,
             thinking share), which has no better direction to assume: name it explicitly.
     """
-    kind_of(metric)
-    if metric in _NEUTRAL:
+    better = _role(metric)[1]
+    if better is None:
         raise ValueError(f"{metric!r} has no better direction; pass direction=Direction.HIGHER or LOWER explicitly")
-    return Direction.HIGHER if metric in _HIGHER else Direction.LOWER
+    return better
 
 
 def _ratio(part: float | int | None, whole: float | int | None) -> float | None:

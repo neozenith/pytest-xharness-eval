@@ -51,7 +51,8 @@ from pytest_xharness_eval.analyze.samples import (
     direction_of,
     kind_of,
 )
-from pytest_xharness_eval.model.analysis import Change, Comparison, Direction, Estimate, ParetoPoint
+from pytest_xharness_eval.model.analysis import Change, Comparison, Estimate, ParetoPoint
+from pytest_xharness_eval.model.metrics import Direction
 from pytest_xharness_eval.model.verdict import Verdict
 
 if TYPE_CHECKING:

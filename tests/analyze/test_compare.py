@@ -6,7 +6,8 @@ import pytest
 # Our Libraries
 from pytest_xharness_eval.analyze.compare import Arms, compare
 from pytest_xharness_eval.analyze.samples import Samples
-from pytest_xharness_eval.model.analysis import Change, Direction
+from pytest_xharness_eval.model.analysis import Change
+from pytest_xharness_eval.model.metrics import Direction
 from tests.analyze import batch, record
 
 BY = ("harness", "model")

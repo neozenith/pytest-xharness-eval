@@ -15,9 +15,8 @@ from pytest_xharness_eval.analyze.samples import (
     record_value,
     scenario_identity,
 )
-from pytest_xharness_eval.model.analysis import Direction
 from pytest_xharness_eval.model.layout import CacheLayout
-from pytest_xharness_eval.model.metrics import MetricKind
+from pytest_xharness_eval.model.metrics import Direction, MetricKind
 from pytest_xharness_eval.model.verdict import Verdict
 from tests.analyze import batch, record
 

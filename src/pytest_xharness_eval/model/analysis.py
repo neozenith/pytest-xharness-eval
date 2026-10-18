@@ -9,7 +9,8 @@ this module holds the vocabulary every layer above it shares and the result noun
 * :class:`Change` -- the four words a comparison may conclude, and no fifth. A tiny sample
   is :attr:`Change.INSUFFICIENT`, never a coin-flip "improved"; anything the evidence does
   not settle is :attr:`Change.INCONCLUSIVE`, which is the default.
-* :class:`Direction` -- whether more of a metric is better.
+* :class:`~pytest_xharness_eval.model.metrics.Direction` -- whether more of a metric is better,
+  declared with the metrics in ``model/metrics.py`` and used here by :class:`Comparison`.
 * :class:`Estimate`, :class:`Comparison`, :class:`ParetoPoint`, :class:`Finding` -- frozen
   results, each with the ``to_dict`` its JSON is.
 * :func:`analyzer` -- the decorator an ``eval_*.py`` module declares an ``analyze_*``
@@ -22,6 +23,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, overload
+
+# Our Libraries
+from pytest_xharness_eval.model.metrics import Direction
 
 if TYPE_CHECKING:
     # Standard Library
@@ -44,13 +48,6 @@ class Change(StrEnum):
     REGRESSED = "regressed"
     INCONCLUSIVE = "inconclusive"
     INSUFFICIENT = "insufficient"
-
-
-class Direction(StrEnum):
-    """Whether a larger value of a metric is the better one."""
-
-    HIGHER = "higher"
-    LOWER = "lower"
 
 
 def _round(value: float | None) -> float | None:
