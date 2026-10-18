@@ -21,8 +21,8 @@ beneath them, each depending only on the ones below it:
 * ``runtime/`` -- how a sweep is wired: settings, and the steps after the CLI returns.
 
 Names re-exported here are the package's public API: the case decorator and the record
-types a grader is handed, the fixture generators and the Analyzer, plus the layer modules a project writing its own harness
-or grader imports by name.
+types a grader is handed, the fixture generators and the Analyzer, plus the layer modules
+a project writing its own harness or grader imports by name.
 """
 
 from __future__ import annotations
