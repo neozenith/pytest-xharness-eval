@@ -45,7 +45,7 @@ def _case(name: str) -> CaseRef:
     return CaseRef(
         suite=f"skills/{SKILL}/evals/eval_{name}.py",
         name=f"eval_{name}",
-        skill=SKILL,
+        subject=SKILL,
         fixture="seed",
         task="grade the skill",
         prompt=f"/{SKILL} grade the skill",
@@ -58,7 +58,6 @@ def _finish(result: RunResult, files: list[dict[str, Any]], name: str) -> RunRes
         result,
         table=_table(),
         run_date=RUN_DATE,
-        skill=SKILL,
         skill_files=files,
         case=_case(name),
         spec=load_catalogue().get(result.harness, result.model),

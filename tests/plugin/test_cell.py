@@ -1,6 +1,7 @@
 """``plugin.cell``: one cell's live run, step by step (ADR 0002, ADR 0040)."""
 
 # Standard Library
+import contextlib
 import dataclasses
 import json
 import os
@@ -24,39 +25,14 @@ from pytest_xharness_eval import (
 )
 from pytest_xharness_eval.derive import skillcov
 from pytest_xharness_eval.emit.metrics import CellMetrics
+from pytest_xharness_eval.model.generators import Table
 from pytest_xharness_eval.model.layout import CacheLayout
+from pytest_xharness_eval.model.scenario import Scenario, write_scenario
 from pytest_xharness_eval.model.verdict import Verdict
 from pytest_xharness_eval.plugin import cell as cellrun
 from pytest_xharness_eval.runtime import settings
+from pytest_xharness_eval.runtime.plan import CellPlan
 from tests.support import _late_transcript, _result, _skill, _unfoldable
-
-
-def test_two_cells_of_one_case_differing_only_in_effort_get_their_own_workspaces(tmp_path: Path) -> None:
-    """A shared build directory would have the pair overwrite each other's workspace."""
-    fixture = tmp_path / "fixture"
-    fixture.mkdir()
-    (fixture / "seed.md").write_text("seed", encoding="utf-8")
-    names = set()
-    for rung in ("high", "low", None):
-        run = cellrun.CellRun(
-            case=_case_for_cell_id(),
-            cell=Cell(harness="claude", model="opus", effort=rung),
-            settings=settings.Settings(rootpath=tmp_path, skills_root=tmp_path, cache=CacheLayout(tmp_path / "cache")),
-            skill_dir=tmp_path,
-            fixture_dir=fixture,
-            node="n",
-            suite="s",
-        )
-        names.add(run.cell_id)
-    assert names == {"eval_thing-claude-opus-high", "eval_thing-claude-opus-low", "eval_thing-claude-opus"}
-
-
-def _case_for_cell_id() -> Any:
-    @evalcase(task="t", skill="s", fixture="f")
-    def eval_thing(output: CaseOutput) -> None:
-        pass
-
-    return eval_thing
 
 
 def eval_ok(output: CaseOutput) -> None:
@@ -85,16 +61,19 @@ def _cell_run(tmp_path: Path, grader: Any = eval_ok) -> cellrun.CellRun:
     (fixture_dir / "README.md").write_text("seed\n", encoding="utf-8")
     case = evalcase(task="go", skill="demo", fixture="seed")(grader)
     return cellrun.CellRun(
-        case=case,
-        cell=Cell(harness="claude", model="claude-opus-5"),
+        plan=CellPlan(
+            case=case,
+            cell=Cell(harness="claude", model="claude-opus-5"),
+            skill_dir=skill,
+            fixture_dir=fixture_dir,
+            node="skills/demo/evals/eval_demo.py::eval_demo[claude/claude-opus-5]",
+            suite="skills/demo/evals/eval_demo.py",
+            subject="demo",
+            skill_files=tuple(skillcov.catalog(skill)),
+        ),
         settings=settings.Settings(
             rootpath=tmp_path, skills_root=tmp_path / "skills", cache=CacheLayout(tmp_path / "cache")
         ),
-        skill_dir=skill,
-        fixture_dir=fixture_dir,
-        node="skills/demo/evals/eval_demo.py::eval_demo[claude/claude-opus-5]",
-        suite="skills/demo/evals/eval_demo.py",
-        skill_files=skillcov.catalog(skill),
     )
 
 
@@ -202,7 +181,7 @@ def test_a_cells_record_carries_a_plain_string_verdict_beside_its_evidence(
     record = run.record(cellrun.Attempt(result=result, started_at="2026-08-28T00:00:00+00:00", wall_ms=4321), session)
 
     assert record.verdict == "pass" and type(record.verdict) is str
-    assert (record.node, record.wall_ms, record.at) == (run.node, 4321, "2026-08-28T00:00:00+00:00")
+    assert (record.node, record.wall_ms, record.at) == (run.plan.node, 4321, "2026-08-28T00:00:00+00:00")
     assert record.cache == str(tmp_path / "cache")
     assert CellMetrics.stored(session.history) == record
 
@@ -213,8 +192,9 @@ def test_a_treated_cell_stacks_its_overlay_and_counts_it_as_seeded(tmp_path: Pat
     overlay = tmp_path / "skills" / "demo" / "evals" / "treatments" / "lean-ci"
     overlay.mkdir(parents=True)
     (overlay / "AGENTS.md").write_text("use cheap subagents\n", encoding="utf-8")
-    run.cell = Cell(harness="claude", model="claude-opus-5", treatment="lean-ci")
-    run.overlays = [overlay]
+    run.plan = dataclasses.replace(
+        run.plan, cell=Cell(harness="claude", model="claude-opus-5", treatment="lean-ci"), overlays=(overlay,)
+    )
     workspace = run.materialise()
     assert workspace.name == "eval_ok-claude-claude-opus-5-lean-ci"
     assert (workspace / "AGENTS.md").is_file()
@@ -284,3 +264,92 @@ def test_a_run_killed_at_the_wall_fails_if_still_active_and_errors_if_stalled(
     with pytest.raises(raised, match=match):
         run.grade(result, run.materialise())
     assert run.verdict is verdict
+
+
+# -- scenario cases and the failure reason (ADR 0074) ------------------------------
+
+
+@pytest.mark.parametrize(
+    ("exc", "line"),
+    [
+        (AssertionError("\n  doc.md still fails  \nsecond line"), "doc.md still fails"),
+        (RuntimeError("boom"), "RuntimeError: boom"),
+        (AssertionError(), "AssertionError"),
+        (AssertionError("x" * 400), "x" * cellrun.FAILURE_CHARS),
+    ],
+    ids=["first-line", "typed", "empty", "truncated"],
+)
+def test_a_failure_line_is_the_first_thing_the_exception_says(exc: BaseException, line: str) -> None:
+    assert cellrun.failure_line(exc) == line
+
+
+@pytest.mark.parametrize(
+    ("grader", "failure"),
+    [(eval_ok, None), (eval_fails, "the agent did not do the thing"), (eval_errors, "RuntimeError: boom")],
+)
+def test_grading_records_why_a_cell_did_not_pass(tmp_path: Path, grader: Any, failure: str | None) -> None:
+    run = _cell_run(tmp_path, grader)
+    with contextlib.suppress(AssertionError, RuntimeError):
+        run.grade(_captured_run(tmp_path), tmp_path / "ws")
+    assert run.failure == failure
+
+
+def eval_quotes_paths(output: CaseOutput) -> None:
+    """A grader whose failure names the per-cell paths, as a seed check's message does."""
+    ws = output.workspace
+    raise RuntimeError(f"the seed {ws.parent}/.{ws.name}.scratch/a.md under {ws}/b.md in {ws.parents[1]}/c")
+
+
+def test_a_recorded_failure_redacts_the_per_cell_paths_so_one_cause_groups_as_one(tmp_path: Path) -> None:
+    run = _cell_run(tmp_path, eval_quotes_paths)
+    workspace = tmp_path / "cache" / "build" / "eval_demo-claude-claude-opus-5"
+    with contextlib.suppress(RuntimeError):
+        run.grade(_captured_run(tmp_path), workspace)
+    assert run.failure == "RuntimeError: the seed <scratch>/a.md under <workspace>/b.md in <cache>/c"
+    # Redacted before truncation, longest path first, and nothing else touched.
+    assert cellrun.redact("/a/b/c and /a/b", [("/a/b", "<x>"), ("/a/b/c", "<y>"), ("", "<z>")]) == "<y> and <x>"
+    long = AssertionError(f"{workspace}/" + "x" * 400)
+    assert (
+        cellrun.failure_line(long, run.redactions(workspace)) == ("<workspace>/" + "x" * 400)[: cellrun.FAILURE_CHARS]
+    )
+
+
+SCENARIO = Scenario(generator="rows", params={"target": "doc.md"}, files={"doc.md": "# bad\n"}, label="doc")
+
+
+def _scenario_run(tmp_path: Path, scenario: Scenario = SCENARIO) -> cellrun.CellRun:
+    """A scenario case's cell: no skill, the subject is the tool's directory, the fixture a stored scenario."""
+    cache = CacheLayout(tmp_path / "cache")
+    table = Table(name="rows", rows=[dict(scenario.params)], build=lambda row: dict(scenario.files))
+    return cellrun.CellRun(
+        plan=CellPlan(
+            case=evalcase(task="Clear every lint finding in doc.md", fixture=table)(eval_ok),
+            cell=Cell(harness="codex", model="gpt-5.6-sol"),
+            fixture_dir=write_scenario(scenario, cache.scenarios("eval_lint", "eval_ok")),
+            node="n",
+            suite="skills/lint/evals/eval_lint.py",
+            subject="lint",
+            scenario=scenario,
+            subject_version="abc123",
+        ),
+        settings=settings.Settings(rootpath=tmp_path, skills_root=tmp_path / "skills", cache=cache),
+    )
+
+
+def test_a_scenario_cells_grader_reads_the_scenario_and_its_seed(tmp_path: Path) -> None:
+    run = _scenario_run(tmp_path)
+    workspace = run.materialise()
+    output = run.output(_captured_run(tmp_path), workspace)
+    assert output.scenario is SCENARIO and output.params == {"target": "doc.md"}
+    assert output.seed("doc.md") == "# bad\n" and output.seeded == {"doc.md"}
+    assert not any(p.name.endswith(".provenance.json") for p in workspace.iterdir())
+
+
+def test_a_scenario_cell_stores_no_skill_coverage_or_skill_use(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(cellrun.RUN_STAMP_ENV, "20261028T000000Z")
+    result = _captured_run(tmp_path)
+    result.harness, result.model = "codex", "gpt-5.6-sol"
+    session = _scenario_run(tmp_path).store(result)
+    assert session.rel == "lint/codex/gpt-5.6-sol/20261028T000000Z/sid-1"
+    assert (result.skill_coverage, result.skill_use) == (None, None)
+    assert result.case is not None and result.case.kind == "scenario"

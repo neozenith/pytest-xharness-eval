@@ -64,7 +64,7 @@ class UnfoldedRecord:
             final_text=str(envelope.get("result") or ""),
             duration_ms=int(duration) if isinstance(duration, int | float) else 0,
             harness_reported_cost_usd=float(cost) if isinstance(cost, int | float) else None,
-            case=asdict(case),
+            case=case.to_dict(),
             effort=effort,
             treatment=treatment,
             timed_out_after_s=evidence.timed_out_after_s,

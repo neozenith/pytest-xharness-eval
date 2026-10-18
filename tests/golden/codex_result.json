@@ -1,6 +1,7 @@
 {
   "api_duration_ms": 10000,
   "baseline_tokens": 2200,
+  "cache_read_share": 0.87037,
   "calls": [
     {
       "at": "2026-08-22T00:00:05Z",
@@ -117,9 +118,14 @@
   ],
   "case": {
     "fixture": "seed",
+    "kind": "",
     "name": "eval_codex",
     "prompt": "/demo grade the skill",
+    "scenario": null,
+    "scenario_fingerprint": null,
+    "scenario_params": {},
     "skill": "demo",
+    "subject_version": null,
     "suite": "skills/demo/evals/eval_codex.py",
     "task": "grade the skill"
   },

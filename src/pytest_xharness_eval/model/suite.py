@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Self
 
 # Our Libraries
 from pytest_xharness_eval.model.case import EvalCase
+from pytest_xharness_eval.model.findings import AnalyzerSpec
 
 if TYPE_CHECKING:
     # Standard Library
@@ -61,6 +62,11 @@ class EvalSuite:
         """
         digest = hashlib.sha1(str(path).encode("utf-8")).hexdigest()[:8]
         name = f"{MODULE_PREFIX}_{path.stem}_{digest}"
+        # A suite's own helper modules (``_gate.py`` beside ``eval_*.py``) import by bare name,
+        # as they would beside a test module, without a ``conftest.py`` that edits sys.path.
+        evals_dir = str(path.parent.resolve())
+        if evals_dir not in sys.path:
+            sys.path.insert(0, evals_dir)
         spec = importlib.util.spec_from_file_location(name, path)
         if spec is None or spec.loader is None:
             raise ImportError(f"cannot load eval module {path}")
@@ -73,6 +79,11 @@ class EvalSuite:
     def cases(self) -> list[EvalCase]:
         """Every ``@evalcase`` the module declares, in the order it declares them."""
         return [value for value in vars(self.module).values() if isinstance(value, EvalCase)]
+
+    @property
+    def analyzers(self) -> list[AnalyzerSpec]:
+        """Every ``@analyzer`` the module declares, in the order it declares them (ADR 0075)."""
+        return [value for value in vars(self.module).values() if isinstance(value, AnalyzerSpec)]
 
     def case_named(self, name: str) -> EvalCase | None:
         """The case whose grader function is called ``name``, or None when it declares no such case."""

@@ -20,7 +20,7 @@ from pytest_xharness_eval.derive import pricing
 from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome
 from pytest_xharness_eval.harness.threads import SubagentMismatch
 from pytest_xharness_eval.model.layout import CacheLayout
-from pytest_xharness_eval.model.runresult import Call, Subagent
+from pytest_xharness_eval.model.runresult import Call, CaseRef, Subagent
 from pytest_xharness_eval.model.verdict import Verdict
 
 
@@ -143,6 +143,32 @@ def _metrics(
         outcome=Outcome(node=node, verdict=verdict, wall_ms=wall_ms, started_at=started_at),
         cache=CacheLayout(Path(cache)),
     )
+
+
+def _case_record(
+    cache: CacheLayout, *, suite: str, case: str, session: str, verdict: Verdict = Verdict.PASS
+) -> CellMetrics:
+    """A graded cell's record naming its ``suite`` and ``case``, as the pipeline builds one."""
+    result = _result("claude-opus-5", Usage(10, 20))
+    result.case = CaseRef(suite=suite, name=case, subject=Path(suite).parent.parent.name, fixture="seed")
+    result.session_id = session
+    outcome = Outcome(
+        node=f"{suite}::{case}[{session}]", verdict=verdict, wall_ms=1, started_at=f"2026-10-18T{session}"
+    )
+    return CellMetrics.of(result, outcome=outcome, cache=cache)
+
+
+def _store_record(cache: CacheLayout, record: CellMetrics) -> Path:
+    """Write ``record`` where a sweep leaves it: ``history.json`` in its session directory under ``results/``."""
+    session = cache.session(
+        skill=record.skill or "s",
+        harness=record.harness,
+        model=record.model,
+        run="20261018T000000Z",
+        session=record.session_id,
+    )
+    session.mkdir()
+    return record.write(session.history)
 
 
 def _jsonl(path: Path, records: list[dict[str, object]]) -> Path:

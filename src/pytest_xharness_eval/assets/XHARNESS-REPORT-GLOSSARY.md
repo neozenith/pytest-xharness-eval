@@ -153,6 +153,17 @@ matching `history.jsonl` lines (verdict, timestamps, wall clock kept), and regen
 | `tool_costs[].result_tokens` | how much a tool's result added to the context (ADR 0073) | its characters over 4, bounded by the prompt growth at the call that first read it, net of the previous call's output; an estimate |
 | `tool_costs[].context_cost_usd`, `.trace`, `.cache_rereads` | what keeping a tool's result cost (ADR 0073) | at every call from the one that first read it until the prompt shrank below where it entered: `result_tokens / context_tokens` of that call's prompt cost; the trace lists each call's share, and `cache_rereads` counts the later calls that read it from cache. An attribution, never added to `estimated_cost_usd` |
 | `skill_use` | when the skill under test was in use, and what its tool calls cost (ADR 0073) | from its first trigger (the run's own invocation of it, else the first tool call touching a skill file) to its last touch; the costs sum each touching tool call once; `{}` when nothing triggered it |
+| `skill_triggered` | whether the skill under test triggered at all | `1` when `skill_use` is set, `0` on a skill case where nothing triggered it; null on a scenario case and on history lines written before it |
+| `skill_cost_share`, `skill_context_cost_share` | the skill's share of the run's cost (ADR 0073) | `skill_issuing_cost_usd` and `skill_context_cost_usd` over `estimated_cost_usd`: issuing is what the calls that touched the skill cost, context what carrying their results cost; attributions inside the estimate |
+| `cache_read_share` | how well the run reused its context | `cache_read / (input + cache_read + cache_write)` over the whole run, subagents included; the same figure on `result.json`; null with no prompt tokens |
+| `tool_calls_by_name_all` | tool calls per name, every thread | counted off every thread's ledger, the same calls `tool_ms_by_name` and the tool cost maps sum over; `tool_calls` and `tool_calls_by_name` stay the primary thread's harness count |
+| `tool_issuing_cost_usd`, `tool_context_cost_usd`, `cache_rereads` | every tool call's attributed cost, summed (ADR 0073) | `0` on a priced run that called no tool; null only while unpriced |
+| `exit_code`, `attempted` | how the CLI ended (ADR 0063) | the CLI's exit code, and `1` when it exited cleanly or made a model call, else `0` |
+| `timed_out_after_s`, `idle_before_timeout_s` | a run killed at the wall (ADR 0064) | the limit it ran into and how long its logs had been silent; null on a run that finished on its own |
+| `api_duration_ms` | harness-reported API time | Claude `duration_api_ms`; Codex `task_complete.duration_ms`; null when not reported |
+| `final_context_tokens`, `cache_write_5m_tokens` | where the context ended; the 5-minute cache-write tier | the last call's prompt plus its output; the 5-minute TTL part of `cache_write_tokens` where the harness reports the split |
+| `subagent_ms`, `subagent_max_depth`, `subagent_max_ms` | the subagents' spans (ADR 0072) | summed `duration_ms`, deepest `depth`, longest `duration_ms`; each `0` with no subagents, like `subagents` |
+| `subagent_max_cost_usd`, `subagent_peak_context_pct` | the costliest and fullest thread | the largest per-thread `estimated_cost_usd` (`0` with no subagents; null while unpriced or when a thread has no estimate); each thread's largest prompt over the run's `context_window` (null without a window) |
 | `subagent_token_share` | how much of the work was delegated (ADR 0071) | the subagents' `accumulative_billed_tokens` over the run's, in `[0, 1]`; `0` with no subagents; null on an empty bill |
 | `subagent_cost_share` | how much of the cost was delegated (ADR 0071) | the subagents' `estimated_cost_usd`, each at its own model's rates (ADR 0065), over the run's; null while unpriced, when the run cost nothing, or when a subagent carries no estimate |
 | `output_tokens_per_sec_by_model` | throughput per model that answered (ADR 0071) | per model: the output tokens of its calls that have a measured `latency_ms` over the sum of those latencies; a subagent naming no model counts under its parent's. Shown in the `SessionMetaTable` |
@@ -269,7 +280,7 @@ ADR 0042: a mean of a heavy-tailed cost lets one runaway session drag the whole 
 | `spread` | `median`, `p25`, `p75`, `n` | heavy-tailed measures: cost, tokens, turns, throughput, wall clock |
 | `fraction` | `mean`, `min`, `max`, `n` | shares of a whole and percentages of the window |
 | `rare` | `mean`, `share` (of samples with at least one), `n` | counts of rare events: subagents, compactions |
-| `rate` | `pass_rate`, `ci_low`, `ci_high` (Wilson 95%), `n` | the verdict |
+| `rate` | `pass_rate`, `ci_low`, `ci_high` (Wilson 95%), `n` | the verdict, read as the share of samples graded the metric's `counts` word: `pass` for the pass rate, `error` for the error rate, whose headline is stored as `error_rate` in place of `pass_rate` |
 
 `n` is the samples that **recorded** the metric. A sample that did not (an unpriced run, a
 capture written before the field existed) drops out of `n`, never zero-filled, and an
@@ -284,17 +295,21 @@ is simply wide.
 | `cost` | `cost` (spread) | `estimated_cost_usd` |
 | `billed tokens` | `tokens` (spread) | `accumulative_billed_tokens` |
 | `peak context` | `context` (fraction) | `context_window_pct` |
+| `cache reads` | `cache` (fraction) | `cache_read_share`; higher is better |
 | `subagents` | `subagents` (rare) | `subagents` |
 | `subagent tokens` | `subagent_tokens` (fraction) | `subagent_token_share` |
 | `subagent cost` | `subagent_cost` (fraction) | `subagent_cost_share` |
 | `compactions` | `compactions` (rare) | `compactions` |
 | `turns` | `turns` (spread) | `turns` |
+| `triggered` | `skill_triggered` (fraction) | `skill_triggered`: 1 when the skill under test triggered, 0 on a skill case where it did not; a scenario case records none |
 | `files loaded` | `skill_loaded` (fraction) | `skill_files_loaded / skill_files` |
 | `scripts run` | `skill_run` (fraction) | `skill_scripts_run / skill_scripts` |
 | `thinking share` | `thinking` (fraction) | `reasoning_share` |
 | `tok/s` | `throughput` (spread) | `output_tokens_per_sec` |
+| `first token` | `ttft` (spread) | `ttft_ms`; lower is better |
 | `wall clock` | `wall` (spread) | `wall_ms` |
-| `pass rate` | `verdict` (rate) | the verdict, `pass` as 1 and `fail` or `error` as 0, printed `passes/n` |
+| `pass rate` | `verdict` (rate) | the verdict, `pass` as 1 and `fail` as 0, printed `passes/n`. An `error` never attempted the task (ADR 0063), so it is no sample of the pass rate: `n` counts passes and fails only |
+| `error rate` | `errors` (rate) | the verdict, `error` as 1 and `pass` or `fail` as 0, over every graded sample; lower is better |
 
 ### How a `RecordCard` is rendered
 

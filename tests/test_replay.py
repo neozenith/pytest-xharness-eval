@@ -104,8 +104,9 @@ def test_replay_rebuilds_results_history_and_report_from_cached_logs(tmp_path: P
     assert fresh["estimated_cost_usd"] > 0 and fresh["rates_applied"]["model"] == "claude-opus-5"
     assert fresh["skill_coverage"]["skill"] == "demo" and fresh["skill_coverage"]["loaded"] == ["resources/guide.md"]
     assert fresh["calls"][0]["records"] == [1, 2]
-    # Recovered from the suite under the skills root, since the log does not know which case produced it.
-    assert fresh["case"]["suite"].endswith("evals/eval_demo.py")
+    # Recovered from the suite under the skills root, named relative to the project root rather than
+    # to wherever the replay ran from, so it keys the same records the sweep wrote.
+    assert fresh["case"]["suite"] == "demo/evals/eval_demo.py"
     # The task is the suite's declaration; the prompt is what the *claude* harness renders
     # around it, so a replayed record carries the same string the live cell sent (ADR 0044).
     assert (
@@ -143,7 +144,7 @@ def test_replay_retries_a_quarantined_run_failing_loudly_until_it_folds(tmp_path
     cache, healthy = _stale_cache(tmp_path)
     quarantined = SessionDir(healthy.parent / "sid-u")
     err = _unfoldable(tmp_path / "native")
-    case = CaseRef(suite="s.py", name="eval_demo", skill="demo", fixture="seed", task="go", prompt="/demo go")
+    case = CaseRef(suite="s.py", name="eval_demo", subject="demo", fixture="seed", task="go", prompt="/demo go")
     pipeline.quarantine(err, quarantined, case=case, effort=None, treatment=None)
 
     with pytest.raises(RunError, match=r"(?s)1 quarantined session\(s\) still do not fold.*sid-u.*tu_x"):
@@ -239,3 +240,24 @@ def test_a_rebuild_carries_the_archived_catalogue_facts_forward_or_looks_them_up
     assert older is not None and (older.line, older.family_tier) == ("opus", 3)
     # A capture of a model the catalogue never described replays rather than failing history.
     assert replay.stored_spec({"harness": "claude", "model": "claude-opus-4-5"}, catalogue) is None
+
+
+def test_a_stored_scenario_case_replays_with_no_skill_coverage(tmp_path: Path) -> None:
+    """The stored case says it was a scenario: a replay annotates no skill, whatever its directory (ADR 0074)."""
+    cache, session_dir = _stale_cache(tmp_path)
+    stored = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
+    stored["case"] = {"suite": "s/evals/eval_lint.py", "name": "eval_lint", "skill": "demo", "kind": "scenario"}
+    stored["case"] |= {"scenario": "doc--1234abcd", "scenario_fingerprint": "f" * 64, "scenario_params": {"n": 1}}
+    (session_dir / "result.json").write_text(json.dumps(stored), encoding="utf-8")
+
+    replay.rebuild(cache)
+
+    fresh = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
+    assert (fresh["skill_coverage"], fresh["skill_use"]) == ({}, {})  # an absent block is written empty
+    assert (fresh["case"]["kind"], fresh["case"]["scenario"], fresh["case"]["scenario_params"]) == (
+        "scenario",
+        "doc--1234abcd",
+        {"n": 1},
+    )
+    mine = json.loads((session_dir / "history.json").read_text(encoding="utf-8"))
+    assert (mine["kind"], mine["scenario"], mine["skill_files"]) == ("scenario", "doc--1234abcd", None)

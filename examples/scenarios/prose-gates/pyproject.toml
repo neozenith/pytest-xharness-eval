@@ -1,0 +1,15 @@
+[project]
+name = "prose-gates-scenarios-evidence"
+version = "0"
+
+[tool.pytest.ini_options]
+# Evidence project for ADR 0074/0075: prose-gates exercised as a *scenario* (no skill),
+# its five hand-committed suites collapsed into one generated case, plus an adversary.
+testpaths = ["evals"]
+xharness_skills_dir = "evals"
+xharness_keep_workspaces = true
+norecursedirs = [".xharness_eval_cache", ".oracle"]
+xharness_matrix = [
+    "claude/claude-haiku-5-5",
+    "codex/gpt-6-luna",
+]

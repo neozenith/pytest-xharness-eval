@@ -42,12 +42,12 @@ def derive(
     *,
     table: pricing.PriceTable,
     run_date: date | None,
-    skill: str,
     skill_files: list[SkillFile],
     case: CaseRef | None,
     effort: str | None = None,
     treatment: str | None = None,
     spec: ModelSpec | None = None,
+    uncased_skill: str | None = None,
 ) -> RunResult:
     """Price the run, annotate skill coverage, name its case, effort, treatment and model kind -- in that order.
 
@@ -67,9 +67,16 @@ def derive(
 
     ``spec`` is the model's catalogue entry, and its line, frozen tier and release date
     are copied onto the record so the archived run stands alone (ADR 0057).
+
+    The skill coverage is annotated against is the case's own ``skill_under_test``, so a
+    scenario case annotates none (ADR 0074). ``uncased_skill`` is read only when there is no
+    case, or a case naming no subject: a replay of a capture whose case can be neither carried forward nor
+    recovered from its suite, annotated against its session's skill coordinate as before.
     """
+    skill = case.skill_under_test if case is not None and case.subject else uncased_skill
     pricing.price(result, table, run_date)
-    result.skill_coverage = skillcov.annotate(skill, skill_files, result)
+    # A scenario case has no skill under test, so neither coverage nor a skill's use (ADR 0074).
+    result.skill_coverage = skillcov.annotate(skill, skill_files, result) if skill else None
     result.case = case
     result.effort = effort
     result.treatment = treatment
@@ -79,9 +86,12 @@ def derive(
     # Last, because a skill's use reads the costs and the case: the run's own invocation of the
     # skill is its first trigger (ADR 0073).
     result.tool_costs = toolcost.run_tool_costs(result, table, run_date)
+    if not skill:
+        result.skill_use = None
+        return result
     invoked = (
         case is not None
-        and case.skill == skill
+        and case.subject == skill
         and result.calls
         and case.prompt == harness.get(result.harness).invoke(skill=skill, task=case.task)
     )

@@ -57,6 +57,27 @@ def cell_key(record: CellMetrics) -> CellKey:
     )
 
 
+def scenario_outcomes(cache: CacheLayout, suite: str, case: str) -> dict[str, tuple[int, int]]:
+    """``(failed, sampled)`` per scenario id, over every stored sample of one case (ADR 0074).
+
+    ``suite`` is the suite file as records name it, relative to the project root, so a case
+    keeps its history when the project is checked out somewhere else and two skills'
+    same-named suites never share one. A ``fail`` counts as
+    failed; an ``error`` does not, because a run that never sat the test says nothing about
+    whether the scenario breaks the subject.
+    """
+    out: dict[str, tuple[int, int]] = {}
+    for record in aggregate_history(cache):
+        if not (record.scenario and record.case == case and record.suite == suite):
+            continue
+        verdict = Verdict.stored(record.verdict)
+        if verdict not in (Verdict.PASS, Verdict.FAIL):
+            continue
+        failed, sampled = out.get(record.scenario, (0, 0))
+        out[record.scenario] = (failed + (verdict is Verdict.FAIL), sampled + 1)
+    return out
+
+
 def _order(key: CellKey) -> tuple[str, ...]:
     return tuple(part or "" for part in key)
 

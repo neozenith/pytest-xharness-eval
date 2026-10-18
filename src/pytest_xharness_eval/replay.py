@@ -103,11 +103,13 @@ def rebuild_result(
     timed_out, idle = old.get("timed_out_after_s"), old.get("idle_before_timeout_s")
     if isinstance(timed_out, int):
         harness.mark_timed_out(result, timed_out, float(idle) if isinstance(idle, int | float) else None)
+    # The case names the skill under test, none for a scenario case (ADR 0074); a capture whose
+    # case is lost is annotated against its session's skill coordinate, as it always was.
     return pipeline.derive(
         result,
         table=table,
         run_date=run_date,
-        skill=skill,
+        uncased_skill=skill,
         skill_files=files,
         case=case,
         effort=str(effort) if effort else None,
@@ -153,11 +155,12 @@ def case_meta(session: SessionDir, skill: str, agent: harness.Harness, settings:
     if found is None:
         return None
     suite_path, case = found
-    try:
-        suite = str(suite_path.relative_to(Path.cwd()))
-    except ValueError:
-        suite = str(suite_path)
-    return CaseRef.of(case, suite, agent.invoke(skill=case.skill, task=case.task))
+    if case.task is None:
+        # A generated case's task belongs to the scenario, which only the stored result names.
+        return None
+    return CaseRef.of(
+        case, settings.suite_ref(suite_path), agent.prompt(skill=case.skill, task=case.task), subject=skill
+    )
 
 
 def rebuild(

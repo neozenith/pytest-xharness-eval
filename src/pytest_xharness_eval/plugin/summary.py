@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING
 from pytest_xharness_eval.emit import page
 from pytest_xharness_eval.emit.summary import RunSummary
 from pytest_xharness_eval.model.layout import CacheLayout
+from pytest_xharness_eval.plugin.finish import ANALYSIS_KEY
 from pytest_xharness_eval.plugin.results import RESULTS_KEY
+from pytest_xharness_eval.runtime.analyzers import finding_lines
 from pytest_xharness_eval.runtime.settings import Settings
 
 if TYPE_CHECKING:
@@ -74,3 +76,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: int,
     tr.write_line(f"  report: {settings.cache.summary}")
     for line in combine(summary, settings):
         tr.write_line(line)
+    analysis = config.stash.get(ANALYSIS_KEY, None)
+    if analysis is not None:
+        tr.section("agent eval analysis")
+        for line in finding_lines(analysis):
+            tr.write_line(line)
+        tr.write_line(f"  analysis: {settings.cache.analysis}")

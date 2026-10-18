@@ -3,7 +3,12 @@
 A facet's ``extract`` is any ``str -> object`` (ADR 0046), so nothing here is privileged.
 These are the ones the shipped cases need, kept in one place because they are the part
 that is easy to get subtly wrong -- a node-id regex that also matches ``classDef``, a
-fence matcher that stops at the first ``</details>``.
+fence matcher that stops at the first ``</details>``, a section splitter that reads a
+``# comment`` inside a code fence as a heading.
+
+Flowcharts are read by :func:`node_ids` and :func:`edges`, ``erDiagram`` fences by
+:func:`entities` and :func:`relationships`, any fenced code by :func:`code_fences`, and a
+document's ``##`` structure by :func:`sections` and :func:`section`.
 
 Every extractor is pure and free, so a golden comparison is exercised against committed
 text in ``tests/verify/test_facets.py`` with no rollout and no spend.
@@ -304,3 +309,91 @@ def hex_colours(doc: str) -> set[str]:
 def body_text(doc: str) -> str:
     """The document with its fenced code removed: the prose, for a similarity tolerance."""
     return re.sub(r"```.*?```", "", doc, flags=re.DOTALL).strip()
+
+
+# -- any fenced code, and the sections of a document ------------------------------------
+
+#: A fenced block of any language, backticks or tildes; group 2 is the info string's first
+#: word, group 3 the body.
+_CODE_FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})[ \t]*([^\s`]*)[^\n]*\n(.*?)^[ \t]*\1[ \t]*$", re.MULTILINE | re.DOTALL)
+
+
+def code_fences(doc: str, lang: str | None = None) -> list[str]:
+    """Every fenced code body, of language ``lang`` when named, in document order.
+
+    :func:`fences` is the mermaid-only reading the diagram facets share; this one reads
+    every fence, so ``code_fences(doc, "python")`` or a count of all of them is one call.
+    """
+    return [body for _, info, body in _CODE_FENCE.findall(doc) if lang is None or info == lang]
+
+
+def _outside_code(doc: str) -> str:
+    """``doc`` with every fence blanked character for character, so a ``# comment`` is no heading.
+
+    Same length as ``doc``, so an offset into the result is an offset into the original.
+    """
+    return _CODE_FENCE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), doc)
+
+
+def sections(doc: str, level: int = 2) -> dict[str, str]:
+    """Each heading at ``level`` mapped to its body, up to the next heading at that level or above.
+
+    Headings inside fenced code are not headings. A repeated heading keeps its first body.
+    """
+    masked = _outside_code(doc)
+    marks = [(m.start(), m.end(), len(m.group(1)), m.group(2).strip()) for m in HEADING.finditer(masked)]
+    out: dict[str, str] = {}
+    for i, (_, end, depth, text) in enumerate(marks):
+        if depth != level:
+            continue
+        stop = next((start for start, _, d, _ in marks[i + 1 :] if d <= level), len(doc))
+        out.setdefault(text, doc[end:stop])
+    return out
+
+
+def section(doc: str, heading_prefix: str, level: int = 2) -> str:
+    """The body of the first section at ``level`` whose heading starts with ``heading_prefix``, any case.
+
+    Raises:
+        AssertionError: when no heading matches, naming the ones the document has. A
+            missing section is a fact about the artifact, so it grades as a fail.
+    """
+    found = sections(doc, level)
+    want = heading_prefix.lower()
+    for text, body in found.items():
+        if text.lower().startswith(want):
+            return body
+    raise AssertionError(f"no {'#' * level} heading starts with {heading_prefix!r}; headings: {sorted(found)}")
+
+
+# -- erDiagram ---------------------------------------------------------------------------
+
+#: An ``erDiagram`` fence: its header line names one.
+_ER = re.compile(r"^\s*erDiagram\b", re.MULTILINE)
+#: An entity's attribute block opener, ``CUSTOMER {``, optionally with an ``["alias"]``.
+_ENTITY_BLOCK = re.compile(r"^\s*([A-Za-z][\w-]*)(?:\s*\[[^\]]*\])?\s*\{", re.MULTILINE)
+#: One relationship statement: ``LEFT <cardinality> RIGHT``, identifying or not.
+_RELATIONSHIP = re.compile(r"^\s*([A-Za-z][\w-]*)\s+([|}][|o])(--|\.\.)([|o][|{])\s+([A-Za-z][\w-]*)", re.MULTILINE)
+
+
+def _er_bodies(doc: str) -> list[str]:
+    return [body for body in fences(doc) if _ER.search(body)]
+
+
+def _relationships(doc: str) -> list[tuple[str, str, str]]:
+    return [(a, f"{lc}{line}{rc}", b) for body in _er_bodies(doc) for a, lc, line, rc, b in _RELATIONSHIP.findall(body)]
+
+
+def entities(doc: str) -> set[str]:
+    """Every entity an ``erDiagram`` fence declares, by attribute block or by relationship.
+
+    :func:`node_ids` reads flowcharts only; this is the data model's concept set.
+    """
+    out = {name for body in _er_bodies(doc) for name in _ENTITY_BLOCK.findall(body)}
+    out.update(name for a, _, b in _relationships(doc) for name in (a, b))
+    return out - {"erDiagram"}
+
+
+def relationships(doc: str) -> set[str]:
+    """Every relationship as ``"LEFT <cardinality> RIGHT"``: the data model's shape."""
+    return {f"{a} {card} {b}" for a, card, b in _relationships(doc)}

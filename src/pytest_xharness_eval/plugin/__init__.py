@@ -31,8 +31,9 @@ package, so every hook is bound here and implemented in the module that owns tha
 * :mod:`.results` -- the record's one crossing to the xdist controller, and its status word
   (ADR 0016).
 * :mod:`.summary` -- the terminal table, ``report.json``, and the combine step (ADR 0032).
+* :mod:`.finish` -- the suites' analyzers, run at session end on the controller (ADR 0075).
 
-What is bound here is the seven hooks pluggy calls, and the four names a consuming
+What is bound here is the eight hooks pluggy calls, and the four names a consuming
 repository's ``conftest.py`` already reaches for -- :class:`EvalFile`, :class:`EvalItem`
 and the three keys a cell's record travels under. Everything else stays addressable where
 it is implemented (``plugin.cell.CellRun``, ``plugin.results.ResultCollector``): a
@@ -43,6 +44,7 @@ from __future__ import annotations
 
 # Our Libraries
 from pytest_xharness_eval.plugin.collect import EvalFile, EvalItem, pytest_collect_file
+from pytest_xharness_eval.plugin.finish import pytest_sessionfinish
 from pytest_xharness_eval.plugin.options import pytest_addoption, pytest_configure, pytest_report_header
 from pytest_xharness_eval.plugin.results import (
     PROPERTY,
@@ -65,5 +67,6 @@ __all__ = [
     "pytest_report_header",
     "pytest_report_teststatus",
     "pytest_runtest_makereport",
+    "pytest_sessionfinish",
     "pytest_terminal_summary",
 ]

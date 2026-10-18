@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+# Third Party
+import pytest
+
 # Our Libraries
 from pytest_xharness_eval import (
     Call,
@@ -13,6 +16,7 @@ from pytest_xharness_eval import (
     Usage,
 )
 from pytest_xharness_eval.model import runresult
+from pytest_xharness_eval.model.case import CaseKind
 from pytest_xharness_eval.model.runresult import Subagent
 from tests.support import _result, _subagent
 
@@ -142,6 +146,13 @@ def test_reasoning_share_is_reasoning_over_output_and_none_with_nothing_generate
     assert _result("m", Usage(input_tokens=5)).reasoning_share is None
 
 
+def test_cache_read_share_is_cache_reads_over_every_prompt_token_and_none_with_no_prompt() -> None:
+    result = _result("m", Usage(input_tokens=20, cache_read_tokens=60, cache_write_tokens=20, output_tokens=99))
+    assert result.cache_read_share == 0.6
+    assert result.to_dict()["cache_read_share"] == 0.6
+    assert _result("m", Usage(output_tokens=5)).cache_read_share is None
+
+
 def test_the_subagents_shares_of_tokens_and_cost() -> None:
     result = _with_subagent()
     # Primary: two calls of 10 in + 50 out; the subagent: 10 in + 20 out.
@@ -191,3 +202,32 @@ def test_a_subagents_span_and_link_reach_result_json() -> None:
     (raw,) = _with_subagent().to_dict()["subagents"]
     assert raw["duration_ms"] == 10_000 and raw["output_tokens_per_sec"] == 20.0
     assert {"spawned_by", "parent", "depth", "parent_turn", "started_at", "ended_at"} <= set(raw)
+
+
+def test_a_case_ref_writes_its_subject_under_the_wire_key_skill_and_its_kind_as_a_word() -> None:
+    """The attribute is ``subject``; ``result.json`` keeps the ``skill`` key every record has carried (ADR 0074)."""
+    ref = runresult.CaseRef(suite="s.py", name="eval_x", subject="lint", kind=CaseKind.SCENARIO)
+    wire = ref.to_dict()
+    assert (wire["skill"], wire["kind"], type(wire["kind"])) == ("lint", "scenario", str) and "subject" not in wire
+    result = _result("m", Usage(1, 0, 0, 0))
+    result.case = ref
+    assert json.loads(json.dumps(result.to_dict()))["case"] == wire
+    assert runresult.CaseRef.stored(wire) == ref
+    assert runresult.CaseRef(subject="lint").to_dict()["kind"] == ""
+
+
+@pytest.mark.parametrize(
+    ("kind", "subject", "expected_kind", "under_test"),
+    [
+        ("skill", "demo", CaseKind.SKILL, "demo"),
+        ("scenario", "lint", CaseKind.SCENARIO, None),
+        ("", "demo", None, "demo"),  # predates ADR 0074: every case was a skill case
+        ("benchmark", "demo", None, "demo"),  # a word this version does not know is no kind, never a guess
+        ("skill", "", CaseKind.SKILL, None),
+    ],
+)
+def test_a_stored_case_reads_its_kind_and_names_the_skill_under_test(
+    kind: str, subject: str, expected_kind: CaseKind | None, under_test: str | None
+) -> None:
+    ref = runresult.CaseRef.stored({"name": "eval_x", "skill": subject, "kind": kind})
+    assert ref is not None and (ref.kind, ref.skill_under_test) == (expected_kind, under_test)

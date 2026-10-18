@@ -62,6 +62,17 @@ def test_treatments_resolve_case_then_project_then_none(tmp_path: Path) -> None:
     assert project.treatments_for(treated) == ["terse"]
 
 
+def test_a_suite_is_named_relative_to_the_root_when_under_it_and_by_its_resolved_path_otherwise(
+    tmp_path: Path,
+) -> None:
+    """One spelling for every record, store and analysis, whatever directory the command ran from."""
+    s = settings.Settings(rootpath=tmp_path / "root", skills_root=tmp_path, cache=CacheLayout(tmp_path))
+    inside = tmp_path / "root" / "skills" / "a" / "evals" / ".." / "evals" / "eval_x.py"
+    assert s.suite_ref(inside) == "skills/a/evals/eval_x.py"
+    outside = tmp_path / "elsewhere" / "eval_x.py"
+    assert s.suite_ref(outside) == str(outside.resolve())
+
+
 def test_a_replay_reads_the_projects_treatment_lines(tmp_path: Path) -> None:
     cache = tmp_path / ".xharness_eval_cache"
     cache.mkdir()

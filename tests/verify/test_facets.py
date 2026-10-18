@@ -114,3 +114,70 @@ def test_a_fence_holding_another_kind_of_diagram_declares_no_nodes() -> None:
 def test_front_matter_keys_are_not_nodes() -> None:
     doc = "```mermaid\n---\nconfig:\n  flowchart:\n    wrappingWidth: 300\n---\nflowchart TB\n  A:::c --> B:::c\n```\n"
     assert facets.node_ids(doc) == {"A", "B"}
+
+
+ER_DOC = """\
+```mermaid
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE-ITEM : contains
+    CUSTOMER }|..|{ DELIVERY-ADDRESS : uses
+    PRODUCT {
+        string sku
+    }
+```
+
+```mermaid
+flowchart TD
+    A --> B
+```
+"""
+
+
+def test_er_diagrams_have_entities_and_relationships_not_nodes() -> None:
+    """``node_ids`` reads flowcharts only; the data model needs its own reading."""
+    assert facets.entities(ER_DOC) == {"CUSTOMER", "ORDER", "LINE-ITEM", "DELIVERY-ADDRESS", "PRODUCT"}
+    assert facets.relationships(ER_DOC) == {
+        "CUSTOMER ||--o{ ORDER",
+        "ORDER ||--|{ LINE-ITEM",
+        "CUSTOMER }|..|{ DELIVERY-ADDRESS",
+    }
+    assert facets.node_ids(ER_DOC) == {"A", "B"}
+    assert facets.entities(DOC) == set()
+
+
+SECTIONED = """\
+# Title
+
+intro
+
+## Current State
+
+now
+### Detail
+
+```bash
+# not a heading
+```
+
+## Desired State
+
+later
+"""
+
+
+def test_sections_split_at_their_level_and_ignore_code() -> None:
+    found = facets.sections(SECTIONED)
+    assert list(found) == ["Current State", "Desired State"]
+    assert "### Detail" in found["Current State"] and "# not a heading" in found["Current State"]
+    assert found["Desired State"].strip() == "later"
+    assert list(facets.sections(SECTIONED, level=3)) == ["Detail"]
+    assert facets.section(SECTIONED, "desired").strip() == "later"
+    with pytest.raises(AssertionError, match=r"no ## heading starts with 'Risks'; headings: \['Current State'"):
+        facets.section(SECTIONED, "Risks")
+
+
+def test_code_fences_reads_every_language() -> None:
+    assert facets.code_fences(SECTIONED) == ["# not a heading\n"]
+    assert facets.code_fences(SECTIONED, "python") == []
+    assert len(facets.code_fences(DOC, "mermaid")) == facets.fence_count(DOC) == 2

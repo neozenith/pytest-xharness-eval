@@ -17,8 +17,11 @@ samples reduce to:
   so the mean with the extremes either side.
 * :attr:`MetricKind.RARE` -- counts of rare events. The mean, and the share of samples in
   which the event happened at all: "how often does it compact?".
-* :attr:`MetricKind.RATE` -- the verdict. The pass rate with its Wilson 95% interval, which
-  is honest at every sample size: at ``n = 1`` it is simply wide.
+* :attr:`MetricKind.RATE` -- the verdict. The share of samples graded the metric's
+  ``counts`` word (a pass, or an error) with its Wilson 95% interval, which is honest at
+  every sample size: at ``n = 1`` it is simply wide. An ``error`` is no attempt at the
+  task, so it is never a sample of the pass rate -- neither a pass nor a fail -- and is
+  measured by the ``errors`` rate instead, where every graded sample counts.
 
 Every kind also reports ``n``: the samples that carried a value. A metric a sample did not
 record (a capture from before the field existed, an unpriced run) is left out of ``n``,
@@ -30,7 +33,7 @@ from __future__ import annotations
 # Standard Library
 import math
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field, fields
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Final
 
@@ -63,6 +66,8 @@ class Aggregate(StrEnum):
     MAX = "max"
     SHARE = "share"
     PASS_RATE = "pass_rate"
+    #: The headline of a rate that counts errors: never stored under ``pass_rate``, which it is not.
+    ERROR_RATE = "error_rate"
     CI_LOW = "ci_low"
     CI_HIGH = "ci_high"
 
@@ -80,6 +85,53 @@ class Unit(StrEnum):
 
 
 #: Which aggregates each kind reports, headline first: a reader showing one number shows the first.
+class Direction(StrEnum):
+    """Whether a larger value of a metric is the better one."""
+
+    HIGHER = "higher"
+    LOWER = "lower"
+
+
+#: The ``dataclasses.field`` metadata key a record's numeric field declares its role under.
+ROLE_KEY: Final = "xharness_role"
+
+
+@dataclass(frozen=True, slots=True)
+class FieldRole:
+    """What a numeric field of a metrics record is: a measurement of a kind and direction, or a fact.
+
+    ``kind`` is None for a fact about the cell (a family tier, a window size, an exit code):
+    summarising one across samples answers no question, so the Analyzer refuses it.
+    ``better`` is None for a neutral measurement -- more delegation or more thinking is
+    neither good nor bad in itself -- and for a fact.
+    """
+
+    kind: MetricKind | None
+    better: Direction | None
+
+    @property
+    def is_metric(self) -> bool:
+        return self.kind is not None
+
+
+def measured(default: Any, kind: MetricKind, better: Direction | None) -> Any:
+    """A record field that is a measurement: ``x: int = measured(0, MetricKind.SPREAD, Direction.LOWER)``.
+
+    ``better=None`` declares it neutral, so ranking by it needs the direction named.
+    """
+    return field(default=default, metadata={ROLE_KEY: FieldRole(kind, better)})
+
+
+def fact(default: Any) -> Any:
+    """A numeric record field that is a fact about the cell, not a measurement of the run."""
+    return field(default=default, metadata={ROLE_KEY: FieldRole(None, None)})
+
+
+def roles(record_type: type) -> dict[str, FieldRole]:
+    """Every field of a dataclass ``record_type`` that declares a :class:`FieldRole`, by name."""
+    return {f.name: f.metadata[ROLE_KEY] for f in fields(record_type) if ROLE_KEY in f.metadata}
+
+
 AGGREGATES: Final[dict[MetricKind, tuple[Aggregate, ...]]] = {
     MetricKind.SPREAD: (Aggregate.MEDIAN, Aggregate.P25, Aggregate.P75, Aggregate.N),
     MetricKind.FRACTION: (Aggregate.MEAN, Aggregate.MIN, Aggregate.MAX, Aggregate.N),
@@ -109,17 +161,25 @@ class ImportantMetric:
     #: The question this metric answers about a skill, as the report's tooltip states it.
     why: str
     per: str | None = None
+    #: For a :attr:`MetricKind.RATE`: the verdict that counts as 1. ``PASS`` reads the pass
+    #: rate, where an error is no sample at all; ``ERROR`` reads the error rate, where every
+    #: graded verdict is one.
+    counts: Verdict = Verdict.PASS
+
+    @property
+    def rate_key(self) -> Aggregate:
+        """The key a rate's headline is stored under: ``pass_rate``, or ``error_rate`` for the error rate."""
+        return Aggregate.ERROR_RATE if self.counts is Verdict.ERROR else Aggregate.PASS_RATE
 
     @property
     def aggregates(self) -> tuple[Aggregate, ...]:
-        return AGGREGATES[self.kind]
+        return tuple(self.rate_key if a is Aggregate.PASS_RATE else a for a in AGGREGATES[self.kind])
 
     def value(self, record: Mapping[str, Any]) -> float | None:
         """This metric's value in one session's record, or None when the record does not carry it."""
         raw = record.get(self.field)
         if self.kind is MetricKind.RATE:
-            verdict = Verdict.stored(str(raw or ""))
-            return None if verdict is None or verdict is Verdict.DRY_RUN else float(verdict is Verdict.PASS)
+            return rate_value(Verdict.stored(str(raw or "")), self.counts)
         if not isinstance(raw, int | float) or isinstance(raw, bool):
             return None
         if self.per is None:
@@ -131,7 +191,8 @@ class ImportantMetric:
 
     def summarise(self, records: Iterable[Mapping[str, Any]]) -> dict[str, float | int | None]:
         """This metric's aggregates over a cell's samples, keyed by :class:`Aggregate` value."""
-        return summarise(self.kind, [v for r in records if (v := self.value(r)) is not None])
+        values = [v for r in records if (v := self.value(r)) is not None]
+        return summarise(self.kind, values, rate_key=self.rate_key)
 
     def to_dict(self) -> dict[str, Any]:
         """The declaration as the report reads it: the aggregates are spelled out, never re-derived."""
@@ -143,17 +204,38 @@ class ImportantMetric:
             "kind": self.kind.value,
             "unit": self.unit.value,
             "why": self.why,
+            "counts": self.counts.value,
             "aggregates": [a.value for a in self.aggregates],
         }
+
+
+def rate_value(verdict: Verdict | None, counts: Verdict = Verdict.PASS) -> float | None:
+    """One verdict as a sample of the rate of ``counts``: 1.0, 0.0, or None when it is no sample.
+
+    A dry run and an unreadable word are never samples. An error is a sample only of the
+    error rate: it did not attempt the task, so counting it as a fail would charge the skill
+    for a session limit or a stalled harness (ADR 0063).
+    """
+    if verdict is None or verdict is Verdict.DRY_RUN:
+        return None
+    if verdict is Verdict.ERROR and counts is not Verdict.ERROR:
+        return None
+    return float(verdict is counts)
 
 
 def _round(value: float) -> float:
     return round(value, 6)
 
 
-def summarise(kind: MetricKind, values: list[float]) -> dict[str, float | int | None]:
-    """``values`` reduced to ``kind``'s aggregates; every aggregate but ``n`` is None with no values."""
-    out: dict[str, float | int | None] = {a.value: None for a in AGGREGATES[kind]}
+def summarise(
+    kind: MetricKind, values: list[float], *, rate_key: Aggregate = Aggregate.PASS_RATE
+) -> dict[str, float | int | None]:
+    """``values`` reduced to ``kind``'s aggregates; every aggregate but ``n`` is None with no values.
+
+    ``rate_key`` names a rate's headline: ``pass_rate``, or ``error_rate`` for the error rate.
+    """
+    keys = tuple(rate_key if a is Aggregate.PASS_RATE else a for a in AGGREGATES[kind])
+    out: dict[str, float | int | None] = {a.value: None for a in keys}
     n = len(values)
     out[Aggregate.N.value] = n
     if not n:
@@ -169,7 +251,7 @@ def summarise(kind: MetricKind, values: list[float]) -> dict[str, float | int | 
         found = {Aggregate.MEAN: statistics.fmean(values), Aggregate.SHARE: sum(v >= 1 for v in values) / n}
     else:
         low, high = wilson(sum(values), n)
-        found = {Aggregate.PASS_RATE: sum(values) / n, Aggregate.CI_LOW: low, Aggregate.CI_HIGH: high}
+        found = {rate_key: sum(values) / n, Aggregate.CI_LOW: low, Aggregate.CI_HIGH: high}
     return out | {a.value: _round(v) for a, v in found.items()}
 
 
@@ -207,6 +289,14 @@ IMPORTANT_METRICS: Final[tuple[ImportantMetric, ...]] = (
         kind=MetricKind.FRACTION,
         unit=Unit.PERCENT,
         why="is the outcome reachable in a small part of the window?",
+    ),
+    ImportantMetric(
+        id="cache",
+        label="cache reads",
+        field="cache_read_share",
+        kind=MetricKind.FRACTION,
+        unit=Unit.SHARE,
+        why="the share of prompt tokens served from the cache: does the run keep its prefix stable?",
     ),
     ImportantMetric(
         id="subagents",
@@ -249,6 +339,14 @@ IMPORTANT_METRICS: Final[tuple[ImportantMetric, ...]] = (
         why="model calls: is the model stuck fighting itself or a bad instruction?",
     ),
     ImportantMetric(
+        id="skill_triggered",
+        label="triggered",
+        field="skill_triggered",
+        kind=MetricKind.FRACTION,
+        unit=Unit.SHARE,
+        why="does the skill under test reliably trigger? A skill case only; a scenario has no skill",
+    ),
+    ImportantMetric(
         id="skill_loaded",
         label="files loaded",
         field="skill_files_loaded",
@@ -283,6 +381,14 @@ IMPORTANT_METRICS: Final[tuple[ImportantMetric, ...]] = (
         why="output tokens per second of API time; the session view splits it by model",
     ),
     ImportantMetric(
+        id="ttft",
+        label="first token",
+        field="ttft_ms",
+        kind=MetricKind.SPREAD,
+        unit=Unit.MS,
+        why="time to the first token: how long before the model starts answering",
+    ),
+    ImportantMetric(
         id="wall",
         label="wall clock",
         field="wall_ms",
@@ -296,6 +402,15 @@ IMPORTANT_METRICS: Final[tuple[ImportantMetric, ...]] = (
         field="verdict",
         kind=MetricKind.RATE,
         unit=Unit.SHARE,
-        why="did it work? A pass rate over the samples, never a single run's word",
+        why="did it work? A pass rate over the attempted samples, never a single run's word",
+    ),
+    ImportantMetric(
+        id="errors",
+        label="error rate",
+        field="verdict",
+        kind=MetricKind.RATE,
+        unit=Unit.SHARE,
+        counts=Verdict.ERROR,
+        why="how often the cell never reached a grade it earned: harness, limit or grader errors. Lower is better",
     ),
 )

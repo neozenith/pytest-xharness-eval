@@ -1,0 +1,38 @@
+{
+  "expect": {
+    "at_least": 1.0,
+    "ratio": [
+      0.95,
+      1.25
+    ]
+  },
+  "fingerprint": "1e47694f502ecad352c588b72d9fffac4670dc02de73b24da620a12f983feba6",
+  "generator": "prose-gates-adversary",
+  "id": "paragraph-over-budget-no-final-newline-t--750d61dd",
+  "label": "paragraph_over_budget-no_final_newline-trailing_whitespace",
+  "params": {
+    "dir": "paragraph_over_budget",
+    "mutation": {
+      "attempt": 3,
+      "generation": 0,
+      "mutators": [
+        "no_final_newline",
+        "trailing_whitespace"
+      ],
+      "parent": "paragraph-over-budget--04fa4b7e"
+    },
+    "rule": "paragraph-sentence-budget-exceeded",
+    "target": "onboarding.md"
+  },
+  "promoted_from": {
+    "case": "eval_gate_adversarial",
+    "failure": "[_grade.<locals>.<lambda>] onboarding.md kept 45% of the seed's content words, below 100%; gone: ['against', 'before', 'build', 'change', 'clone', 'commit', 'contributor', 'even', 'first', 'fresh', 'install', 'land', 'latest', 'main', 'maintainer', 'merg', 'need', 'new', 'nobody', 'node_modul'] ... ",
+    "harness": "codex",
+    "model": "gpt-6-luna",
+    "session": ".xharness_eval_cache/results/prose-gates/codex/gpt-6-luna/20261018T045444Z/01a14d61-98ef-7912-a956-4a49b28a0346",
+    "suite": "evals/prose-gates/evals/eval_gates.py",
+    "verdict": "fail"
+  },
+  "task": "Make `tool/gate onboarding.md` exit 0 by editing onboarding.md in place.",
+  "version": 1
+}

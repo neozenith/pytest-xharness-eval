@@ -1,0 +1,115 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0074
+slug: a-case-may-be-a-scenario-and-its-fixtures-may-be-generated
+title: A case may be a scenario with no skill, and its fixtures may be generated, hunted for and promoted
+status: accepted
+status_note: |-
+  accepted, 2026-10-18.
+  Extends [0008](0008-evals-are-eval-prefixed-modules.md) (the `@evalcase` contract) and [0044](0044-a-skill-is-invoked-the-way-its-user-invokes-it.md) (a case declares a task), so a case may name no skill.
+  Extends [0018](0018-fixtures-directory-and-metrics-history.md) (committed fixtures), so a fixture may also be generated.
+accepted_on: '2026-10-18'
+last_changed_on: '2026-10-18'
+group: collection
+tags:
+- collection
+- grading
+lens: |-
+  An input the subject was measured on must be addressable, reproducible and frozen on demand.
+  Generate it from code, name it by what made it, keep its bytes, and promote the bytes rather than the recipe.
+relates_to:
+- relation: extends
+  target: ADR-0008
+  note: the record's status line says "extends"
+- relation: extends
+  target: ADR-0044
+  note: the record's status line says "extends"
+- relation: extends
+  target: ADR-0018
+  note: the record's status line says "extends"
+body:
+  context: |-
+    Every case invoked a skill, so a command-line tool with no skill could not be measured.
+    A linter whose findings an agent must clear is the common case.
+    Every fixture was a committed directory.
+    A suite that wanted twenty inputs differing only in data committed twenty directories and twenty near-identical case functions.
+    Nothing searched for an input that breaks the subject.
+    A failure found by hand had no path back into the suite as a regression.
+    A record named its skill but not which version of the skill or tool it measured, so two edits of the subject pooled as one.
+
+    Prior art shaped each part.
+    Hypothesis keeps a database of failing examples that it replays first, and `@example` pins one in source.
+    inspect_ai gives every sample a stable id that a rerun and a log viewer both address.
+    promptfoo's red team crosses attack plugins with delivery strategies.
+    AFL keeps a corpus of inputs that found new behaviour and uses a free signal, coverage, to decide which mutants to keep.
+    Successive halving spends a small budget where earlier rounds looked most promising.
+  decision: |-
+    **A case that names no skill is a scenario case.** `@evalcase(skill=None)` sends `task` verbatim to every harness through `Harness.prompt`.
+    No skill is registered with the CLI, and skill coverage and skill use are None.
+    The **subject** is the directory the suite's `evals/` sits under: the skill, or the tool a scenario exercises.
+    Records keep the `skill` key as the subject coordinate and add `kind`, either `skill` or `scenario`.
+
+    **The subject's version is recorded.** `tracks=` names paths whose content digest is written as `subject_version` on every record.
+    A tracked path may be absolute or outside the project root, because a tool often lives in its own repository.
+    A skill case tracks its skill directory, less `evals/`, by default.
+    A scenario case without `tracks=` records no version.
+
+    **A fixture may be a generator.** `fixture=` takes a committed directory name or a `FixtureGenerator`, which yields `Scenario` values.
+    A scenario is a file map, JSON-able `params`, JSON-able `expect`, and an optional task of its own.
+    Its id is a readable slug plus a digest of the generator's name, version and canonical params, never a list position.
+    `params` are what the scenario is, and `expect` are the grader's knobs, such as a recall threshold.
+    `expect` is kept out of the id, so tuning a tolerance keeps the scenario's history in one piece.
+    A key may not be both, and the grader reads the two merged as `output.params`.
+    `Table(expect=[...])` names the row keys that are expectations.
+    A generated case may declare no `task=` when every scenario names its own, and collection stops on a scenario left with none.
+    Its fingerprint is the digest of its bytes, recorded so two runs of one id on different bytes never pool.
+    `Draw` derives its seed from a sha256 digest, never `hash()`, and draws only through `random.Random.random`, whose sequence Python keeps across releases.
+    The shipped generators are `Table`, `Generated`, `Promoted`, `from_dir` and `Adversarial`.
+
+    **Collection expands case by scenario by cell, and stores every scenario.** A node id is `eval_x[<scenario id>/<cell id>]`.
+    Each scenario is written to `<cache>/scenarios/<suite path>/<case>/<id>/`, with `<id>.provenance.json` beside it, never inside it.
+    The suite path is the suite file relative to the project root, as records name it.
+    So two skills' `eval_main.py` never share a store, and the history an adversary reads is keyed the same way.
+    The cell materialises from there, so the evidence is inspectable and promotable.
+    A generator that raises, yields nothing, or yields one id twice stops collection by name.
+    A generator marked `may_be_empty` is the exception for yielding nothing.
+    `Promoted` before its first promotion and an adversary that found nothing new collect no cells, and collection warns by name.
+    That warning keeps the silence from reading as a pass.
+    Every xdist worker collects, so generation and any oracle run once per worker and must be deterministic and process-safe.
+    The store write is idempotent, staged under a process-unique name and renamed into place.
+    The provenance file is written last, as the marker of a complete tree.
+
+    **An adversarial generator spends a small budget where the subject already breaks.** Each sweep it yields at most `budget` scenarios in three steps.
+    It confirms, re-running stored past mutants that failed, worst first, up to half the budget.
+    It explores, drawing new mutants of seed scenarios weighted by `(f + 1) / (n + 2)`, and never re-yields a mutant already sampled or confirmed.
+    Its draws are salted with a generation, the number of its mutants already sampled, so each sweep explores somewhere new.
+    A mutant's params are its parent's plus a `mutation` record naming the parent, the mutators, the generation and the attempt.
+    So the mutant has an id of its own, and its outcomes count toward its parent's weight.
+    Its `expect` is its parent's.
+    It screens, keeping a mutant only if a free `oracle` gives it a non-empty signal set new to the sweep.
+    The outcomes it reads are every stored record of the case, so it is deterministic for a given history and seed.
+
+    **Promotion freezes bytes, not parameters.** `python -m pytest_xharness_eval.promote` copies a stored scenario, or the scenario a failed session ran on, into `evals/fixtures/<name>/`.
+    Its provenance goes beside it, naming the generator, params, fingerprint and the session it came from.
+    From a session directory, `CacheLayout.holding` finds the cache it sits in, so the command needs no cache argument.
+    `Promoted` runs every promoted fixture and refuses one whose bytes no longer match their fingerprint.
+    It is `may_be_empty`, so a suite may declare its regression case before the first failure is promoted.
+
+    **A seed is gated before anything spends.** `@evalcase(precheck=...)` takes a function over a `Seed`: the materialised workspace, with any treatment over it, and its scenario.
+    It raises when the seed no longer sets up what the case is about, such as a linter fixture that no longer trips its rule.
+    It runs after materialising and before the paid invoke, and a raise errors the cell as a `RunError` with nothing billed and no record written.
+    Under `--dry-run` the same precheck runs on the same materialised seed, so every fixture is validated for free.
+
+    **A record says why a cell did not pass.** `failure` is the first line of what the grader or harness raised, kept to 300 characters.
+
+    **A suite's own helper modules import by bare name.** The loader puts the suite's `evals/` directory on `sys.path`, so `_helpers.py` needs no `conftest.py`.
+  consequences: |-
+    A tool is measured across harness, model, effort and treatment exactly as a skill is, with the same words sent to every arm.
+    A suite of near-identical directories becomes one case and a table.
+    A found failure becomes a committed regression in one command, and it stays the same input when its generator changes.
+
+    Generation runs at collection, so it is free but repeated on every worker.
+    A generator whose output changes for the same params must bump `version`, or its records carry one id over two fingerprints.
+    The adversary's budget is tens of paid runs, not a fuzzer's millions.
+    Its worth rests on the oracle and the history, and a search with neither is a seeded random walk.

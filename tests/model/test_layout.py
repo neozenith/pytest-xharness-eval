@@ -128,3 +128,45 @@ def test_a_session_dir_addressed_by_path_cannot_publish_a_report_link(tmp_path: 
 
     located = CacheLayout(tmp_path).session(skill="s", harness="h", model="m", run="r", session="sid1")
     assert isinstance(located, SessionDir) and located.rel == "s/h/m/r/sid1"
+
+
+@pytest.mark.parametrize(
+    ("suite", "parts"),
+    [
+        ("skills/lint/evals/eval_lint.py", ("skills", "lint", "evals", "eval_lint")),
+        ("tools/lint/evals/eval_lint.py", ("tools", "lint", "evals", "eval_lint")),
+        ("../outside/evals/eval_lint.py", ("outside", "evals", "eval_lint")),
+        ("/abs/evals/eval_lint.py", ("abs", "evals", "eval_lint")),
+    ],
+    ids=["skill", "same-stem-elsewhere", "climbing", "absolute"],
+)
+def test_the_scenario_store_is_keyed_by_the_whole_suite_path_and_never_escapes(
+    tmp_path: Path, suite: str, parts: tuple[str, ...]
+) -> None:
+    """Two subjects' ``eval_lint.py`` never share a store, and no suite path climbs out of the cache (ADR 0074)."""
+    cache = CacheLayout(tmp_path / "cache")
+    store = cache.scenarios(suite, "eval_case")
+    assert store == cache.root.joinpath("scenarios", *parts, "eval_case")
+    assert cache.root.resolve() in store.resolve().parents
+
+
+def test_the_analysis_report_sits_beside_the_other_report_documents(tmp_path: Path) -> None:
+    cache = CacheLayout(tmp_path / "cache")
+    assert cache.analysis == cache.report / "analysis.json"
+
+
+def test_holding_finds_the_cache_a_session_directory_sits_in(tmp_path: Path) -> None:
+    cache = CacheLayout(tmp_path / "cache")
+    session = cache.session(skill="s", harness="claude", model="m--high", run="20261018T000000Z", session="sid")
+    assert CacheLayout.holding(session.mkdir()).root == cache.root.resolve()
+
+
+def test_holding_refuses_a_directory_that_is_not_under_results(tmp_path: Path) -> None:
+    stray = tmp_path / "a" / "b" / "c" / "d" / "e" / "sid"
+    with pytest.raises(ValueError, match="not a session directory"):
+        CacheLayout.holding(stray)
+    # One level too shallow: results/ is then four levels up, not five.
+    cache = CacheLayout(tmp_path / "cache")
+    shallow = cache.results / "s" / "claude" / "m" / "run"
+    with pytest.raises(ValueError, match="not a session directory"):
+        CacheLayout.holding(shallow)

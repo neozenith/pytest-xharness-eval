@@ -12,6 +12,7 @@ status_note: |-
   And it refines [0040](0040-the-plugin-is-a-hook-manifest.md) (the plugin is a hook manifest).
   **Supersedes 0040's placement of `Verdict` in `plugin/verdict.py`, and the justification given there for it.** Structural only: no serialised key, no ini key, no CLI option and no metric's value changes.
   Every hook keeps its name and its signature, and the characterization goldens are byte-identical.
+  Its count of seven bound hooks is superseded by [0075](0075-an-analyzer-is-a-checker-over-every-sample.md): `pytest_sessionfinish` makes eight.
 accepted_on: '2026-08-28'
 last_changed_on: '2026-08-28'
 group: architecture
@@ -38,6 +39,9 @@ relates_to:
 - relation: extends
   target: ADR-0040
   note: the record's status line says "refines"
+- relation: superseded_by
+  target: ADR-0075
+  note: the record's status line says "superseded by"
 body:
   context: |-
     0040 introduced `Verdict` (`pass`, `fail`, `error`, `dry-run`) and put it in `plugin/verdict.py`, claiming a vocabulary the whole package shares.

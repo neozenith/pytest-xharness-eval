@@ -43,3 +43,22 @@ class Verdict(StrEnum):
             return cls(word)
         except ValueError:
             return None
+
+    @classmethod
+    def of_exception(cls, exc: BaseException) -> Verdict:
+        """The verdict a raised exception earns: a failed assertion is a ``fail``, anything else an ``error``.
+
+        One rule for every checker -- a case's grader, a precheck, an analyzer: an assertion
+        is a claim about the subject that did not hold, while anything else (an
+        :class:`Unmeasurable`, a crash in the checker itself) says nothing about the subject.
+        """
+        return cls.FAIL if isinstance(exc, AssertionError) else cls.ERROR
+
+
+class Unmeasurable(RuntimeError):  # noqa: N818 - a domain word, like Verdict: what cannot be measured
+    """A checker could not measure what it was asked to, so the cell errors rather than fails.
+
+    A tool that did not start, a report that did not parse, a fixture that no longer
+    reproduces its rule, a harness that logged no context window: each is a fact about the
+    host, not the agent. A ``RuntimeError`` so ``except RuntimeError`` callers keep working.
+    """

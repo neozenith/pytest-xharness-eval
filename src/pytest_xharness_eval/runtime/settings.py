@@ -272,3 +272,16 @@ class Settings:
     def skill_dir(self, skill: str) -> Path:
         """Where the skill under test lives."""
         return self.skills_root / skill
+
+    def suite_ref(self, path: Path) -> str:
+        """A suite file as every record, scenario store and analysis names it (ADR 0025, ADR 0074).
+
+        Relative to the project root when the file is under it, its absolute path otherwise;
+        both sides resolved, so a replay or an analysis run from another directory keys a
+        suite exactly as the sweep that recorded it did. The one owner of the spelling.
+        """
+        resolved = path.resolve()
+        try:
+            return str(resolved.relative_to(self.rootpath.resolve()))
+        except ValueError:
+            return str(resolved)

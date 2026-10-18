@@ -95,6 +95,15 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help="how long one cell's CLI may run before it is killed (overrides the ini key; default 600)",
     )
     g.addoption(
+        "--xharness-repeat",
+        dest="xharness_repeat",
+        type=int,
+        default=1,
+        metavar="N",
+        help="run every cell N times in this sweep, each a separate sample (ADR 0075). An analyzer "
+        "comparing versions needs n >= 5 per cell for a two-sided test to reach p <= 0.05",
+    )
+    g.addoption(
         "--xharness-keep-workspaces",
         dest="xharness_keep_workspaces",
         action="store_true",
@@ -231,6 +240,11 @@ def pytest_configure(config: pytest.Config) -> None:
         for name in settings.treatment_lines:
             check_name(name)
         settings.catalogue()
+        # ADR 0075: ``0`` is not ``1``. A sweep asked for no samples says so here, once, rather
+        # than in every suite's collection or by quietly running one sample each.
+        repeat = config.getoption("xharness_repeat", 1)
+        if repeat is not None and int(repeat) < 1:
+            raise ValueError(f"--xharness-repeat must be at least 1, got {repeat}")
     except (ValueError, pricing.PricingError) as exc:
         raise pytest.UsageError(str(exc)) from exc
     config.pluginmanager.register(ResultCollector(config), COLLECTOR_NAME)
