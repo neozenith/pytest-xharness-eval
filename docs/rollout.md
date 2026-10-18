@@ -76,14 +76,194 @@ collection on every xdist worker, so a generator and its oracle must be determin
 
 | Generator | Yields |
 |---|---|
-| `Table(name, rows, build, label=None, task=None, expect=())` | One scenario per row; `build(row)` returns its files, `task` is a format string over the row. The row keys named in `expect` become the scenario's expectations: they reach the grader through `output.params` but not the scenario id, so tuning one keeps its history. |
-| `Generated(name, build, count, seed=0)` | `count` scenarios, `build(draw)` returning `(params, files)` from a seeded `Draw`. |
+| `Table(name, rows, build, version=1, label=None, task=None, expect=())` | One scenario per row; `build(row)` returns its files, `task` is a format string over the row. The row keys named in `expect` become the scenario's expectations: they reach the grader through `output.params` but not the scenario id, so tuning one keeps its history. |
+| `Generated(name, build, count, seed=0, version=1, task=None)` | `count` scenarios, `build(draw)` returning `(params, files)` from `Draw(name, version, seed, i)`. A `label` key in the params labels the id. |
 | `from_dir(name, root, transform=None)` | One scenario per subdirectory of `root`, each text file optionally rewritten by `transform(path, text)`. |
 | `Promoted(name, source=None)` | Every promoted fixture under `evals/fixtures/` (of generator `source`). None found collects no cells and warns by name, so a regression case may exist before its first promotion. |
-| `Adversarial(name, seeds, mutators, budget, oracle=None, seed=0, depth=2)` | Re-runs stored mutants that failed, up to half the budget, then new mutants of `seeds`' scenarios, screened by the free `oracle`. Each mutant's params are its parent's plus a `mutation` record (parent, mutators, generation, attempt); its `expect` is its parent's. A search that finds nothing new warns rather than failing collection. `TEXT_MUTATORS` are the shipped mutators. |
+| `Adversarial(name, seeds, mutators, budget, seed=0, depth=2, oracle=None, version=1, attempts=20)` | Re-runs stored mutants that failed, up to half the budget, then new mutants of `seeds`' scenarios, screened by the free `oracle`. Each mutant's params are its parent's plus a `mutation` record (parent, mutators, generation, attempt); its `expect` is its parent's. A search that finds nothing new warns rather than failing collection. [Its fields](#adversarial-field-by-field) and [the mutators](#mutators) are below. |
 
 A failing scenario is frozen into a regression fixture with
 `uv run -m pytest_xharness_eval.promote <scenario or session dir> <evals dir> [--name NAME]`.
+
+### Writing your own generator
+
+`@evalcase(fixture=)` takes anything that satisfies the `FixtureGenerator` protocol
+(`from pytest_xharness_eval import FixtureGenerator`). It is runtime-checkable, so
+`@evalcase` refuses a class that lacks any of its three members:
+
+| Member | What it must be |
+|---|---|
+| `name: str` | The generator's name. It is digested into every scenario id it yields. |
+| `may_be_empty: ClassVar[bool]` | **Declared, never defaulted.** `False` stops collection when the generator yields nothing; `True` only for a generator whose empty sweep is an answer (a regression case before its first promotion, an exhausted search), which collection names in a warning. |
+| `scenarios(self, context: GenerationContext) -> Iterable[Scenario]` | The scenarios to run this sweep, in a stable order. It runs at collection on every xdist worker, so it must be deterministic: draw randomness only through `Draw`. |
+
+A minimal generator, one scenario per line width:
+
+```python
+from __future__ import annotations
+
+import textwrap
+from collections.abc import Iterator
+from dataclasses import dataclass
+from typing import ClassVar
+
+from pytest_xharness_eval import CaseOutput, GenerationContext, Scenario, evalcase
+from pytest_xharness_eval.model.scenario import read_tree
+from pytest_xharness_eval.verify import check_rollout
+
+
+@dataclass(frozen=True)
+class Wrapped:
+    """The seed notes, hard-wrapped at each width: the agent must rewrap them at 80."""
+
+    name: str
+    widths: tuple[int, ...]
+    version: int = 1                          # bump when the same params start writing new bytes
+    may_be_empty: ClassVar[bool] = False      # an empty sweep is a broken suite
+
+    def scenarios(self, context: GenerationContext) -> Iterator[Scenario]:
+        seed = read_tree(context.evals_dir / "seeds" / "notes")    # bytes, keyed by POSIX path
+        text = seed["notes.md"].decode("utf-8")
+        for width in self.widths:
+            yield Scenario(
+                generator=self.name,
+                version=self.version,
+                params={"target": "notes.md", "width": width},     # what it is: in the id
+                expect={"max_width": 80},                          # a grader knob: not in the id
+                files={"notes.md": textwrap.fill(text, width) + "\n"},
+                label=f"width-{width}",
+                task="Rewrap notes.md so that no line is longer than 80 characters.",
+            )
+
+
+@evalcase(fixture=Wrapped(name="notes-wrapped", widths=(40, 120, 200)), tracks=["tools/rewrap"])
+def eval_rewrap(output: CaseOutput) -> None:
+    check_rollout(output)
+    limit = int(output.params["max_width"])
+    assert all(len(line) <= limit for line in output.read("notes.md").splitlines())
+```
+
+A module beside the suite (a `_shared.py` holding the seed table, the oracle and the
+command a check runs) is imported by bare name: the plugin puts the evals directory on
+`sys.path` before it imports a suite, so it needs no `conftest.py` (ADR 0074). Its name
+must not start with `eval_`, or it is collected as a suite.
+
+#### `GenerationContext`: what collection hands `scenarios`
+
+| Field | Type | What it is |
+|---|---|---|
+| `context.evals_dir` | `Path` | The suite's `evals/` directory: where a generator reads seed material. |
+| `context.case` | `str` | The case function's name. |
+| `context.outcomes` | `Mapping[str, tuple[int, int]]` | Scenario id to `(failed, sampled)` over every stored record of this case: where the subject already breaks. Empty on a first sweep. |
+| `context.store` | `ScenarioStore \| None` | Where collection writes this case's scenarios (`<cache>/scenarios/<suite path>/<case>/`); `None` for a generator asked outside a sweep, which then sees no history. `.stored()`, `.provenance(id)` and `.lineage()` read it back. |
+| `context.stored` | `dict[str, Path]` | Every complete scenario tree in the store, by id; empty without a store. |
+
+#### `Scenario`: one generated fixture
+
+`Scenario(generator, params, files, version=1, label=None, task=None, expect={})`, frozen
+and keyword-only.
+
+| Field | What it is | In the id? |
+|---|---|---|
+| `generator` | The generator's `name`. | yes |
+| `version` | Bump it when the same params start producing different bytes. | yes |
+| `params` | What the scenario *is*: the inputs that made it. JSON-able. | yes |
+| `label` | A readable name for the id's slug; without one, the slug is the canonical params. | the slug only |
+| `files` | Workspace-relative POSIX path to `str` or `bytes`. Must not be empty. | no: the fingerprint |
+| `expect` | What the grader holds it to (a threshold, a ratio). JSON-able, and no key may also be in `params`. | no |
+| `task` | This scenario's prompt, overriding the case's `task`. | no |
+
+The rules that follow from those columns:
+
+- **The id is `<slug>--<8 hex>`.** The slug is `label` (or the params) lowercased to
+  `[a-z0-9-]`; the hex is the start of `scenario.key`, the digest of generator, version and
+  canonical params. It never depends on a list position, so inserting a row renumbers
+  nothing. Renaming a label or the generator starts a new history.
+- **The fingerprint is the digest of `files`.** Two records of one id with different
+  fingerprints measured different inputs, and the Analyzer never pools them. That is the
+  signal to bump `version`.
+- **The grader reads `params` and `expect` merged** as `output.params` (`scenario.merged`);
+  a precheck reads the same as `seed.params`.
+- **A bad scenario fails at construction.** A non-JSON param or expectation raises
+  `TypeError`; empty `files` or a key in both `params` and `expect` raises `ValueError`.
+
+`scenario.write(dest)` writes the tree, `scenario.provenance()` is the `Provenance` record
+kept beside a stored copy, and `Scenario.promoted(dir)` reads a stored or promoted tree
+back, refusing one whose bytes no longer match its recorded fingerprint.
+
+#### `Draw`, `read_tree` and `write_tree`
+
+`Draw(*seed)` is a seeded source of choices that stays reproducible across Python versions:
+`.random()`, `.integer(low, high)` (both ends included), `.choice(options)`, `.chance(p)`,
+`.shuffled(items)` and `.sample(items, k)`. Seed it from the generator's name, version and
+an index, as `Generated` does, never from `hash()`.
+
+`from pytest_xharness_eval.model.scenario import Files, read_tree, write_tree`:
+
+| Name | What it does |
+|---|---|
+| `Files` | `dict[str, str \| bytes]`: the type of `scenario.files`, and what a mutator and an oracle take. |
+| `read_tree(root)` | Every file under `root` as `Files` with **`bytes`** values, skipping `__pycache__`, `node_modules` and `.git`. Raises `FileNotFoundError` for a missing directory. The way to start from material already on disk, such as a linter's own rule fixtures. |
+| `write_tree(files, dest)` | Writes `files` under `dest`, emptying it first, and raises `ValueError` for a path that escapes it. What an oracle uses to put a candidate on disk for the subject's own tool. |
+
+An oracle runs on every xdist worker at once, so it writes to a directory per process
+(`<project>/tmp/oracle/<pid>/`, say), and never under `evals/fixtures/`, which is copied
+into every workspace.
+
+#### Mutators
+
+A mutator is any `Callable[[Files, Draw], Files]` that returns a new tree and leaves its
+input alone; the name the mutant records is its `__name__`. The shipped ones are
+`TextMutator`s in `pytest_xharness_eval.model.generators`. Each rewrites one drawn file
+ending in `.md`, `.mmd`, `.markdown` or `.txt` (`TEXT_SUFFIXES`) whose content is text:
+a `str`, or `bytes` that decode as UTF-8 (so a tree read with `read_tree` mutates as it is);
+a binary file is never touched, and the mutated file is written back as a `str`.
+
+| Constant | What it does to the drawn file |
+|---|---|
+| `CRLF` | Every line ending becomes `\r\n`. |
+| `TRAILING_WHITESPACE` | Appends one to three spaces to some non-empty lines. |
+| `ZERO_WIDTH` | Appends a zero-width space to some words. |
+| `DUPLICATE_PARAGRAPH` | Repeats one paragraph in place. |
+| `SHUFFLE_PARAGRAPHS` | Reorders every paragraph after the first. |
+| `NO_FINAL_NEWLINE` | Strips the trailing newline. |
+| `NBSP` | Turns some spaces into non-breaking spaces. |
+| `TEXT_MUTATORS` | The tuple of all of the above. |
+
+Write your own as `TextMutator(name, apply, suffixes=TEXT_SUFFIXES)`, where
+`apply(text, draw)` returns the new text:
+
+```python
+from pytest_xharness_eval.model.generators import TextMutator
+from pytest_xharness_eval.model.scenario import Draw
+
+
+def _tabs(text: str, draw: Draw) -> str:
+    return "\n".join("\t" + line[4:] if line.startswith("    ") and draw.chance(0.5) else line for line in text.split("\n"))
+
+
+TABS = TextMutator("tabs", _tabs)
+```
+
+#### `Adversarial`, field by field
+
+| Field | Default | What it does |
+|---|---|---|
+| `name` | required | The adversary's name: its mutants' `generator`, and what `Promoted(source=)` names. |
+| `seeds` | required | The `FixtureGenerator` whose scenarios are the parents. One that yields nothing raises. |
+| `mutators` | required | The mutators drawn from; empty raises. |
+| `budget` | required | At most this many scenarios per sweep: stored failed mutants first (up to half, worst first), then new ones. |
+| `seed` | `0` | Salts every draw. |
+| `depth` | `2` | Each mutant applies one to `depth` distinct mutators, chained. |
+| `oracle` | `None` | `Callable[[Files], frozenset[str]]`, free and deterministic (a linter's rule ids). A mutant is kept only if its signal set is non-empty and new to this sweep. |
+| `version` | `1` | Digested into each mutant's id, like a scenario's. |
+| `attempts` | `20` | Mutants drawn per kept scenario before the search gives up. |
+
+A parent is drawn with weight `(f + 1) / (n + 2)` over its mutants' stored outcomes, so a
+seed whose offspring broke the subject is mutated more. A mutant's `params` carry
+`MUTATION_KEY` (`"mutation"`, importable from `model.scenario`): a precheck that tests the
+seed for exactly one rule may relax to `exactly=False` when that key is present, since a
+mutation can add findings.
 
 ## `Seed`: what a precheck is handed
 
@@ -105,7 +285,7 @@ the agent's: the cell errors as a `RunError`, nothing is billed and no record is
 `require_seed_fails` and `scratch_dir` accept a `Seed` as well as a `CaseOutput`:
 
 ```python
-from pytest_xharness_eval.model.output import Seed
+from pytest_xharness_eval import CaseOutput, Seed, evalcase
 from pytest_xharness_eval.verify import require_seed_fails
 
 def seed_reproduces(seed: Seed) -> None:
@@ -421,11 +601,16 @@ from pytest_xharness_eval import Analysis, analyzer
 
 @analyzer                                    # or @analyzer(cases=["eval_lint_fix"])
 def analyze_versions(a: Analysis) -> None:
-    versions = a.note("versions", list(a.versions()))
+    a.note("versions", list(a.versions()))
     a.note("front", a.pareto())              # published on the finding, pass or fail
-    if len(versions) >= 2:
-        a.expect_no_regression("verdict", baseline=versions[-2], candidate=versions[-1])
+    a.expect_no_regression("verdict")        # the current subject version against the one before
 ```
+
+`expect_no_regression` never passes on no evidence. With fewer than two subject versions
+recorded, or no matched cell at `min_n` samples on both sides, it fails, so the gate stays
+red until the subject has changed and been swept again. To publish without gating on a
+first sweep, record why with `a.note("skipped", "one subject version so far")` instead of
+calling it.
 
 The function is named `analyze_*`, takes one `Analysis`, returns nothing, and fails by
 raising `AssertionError`. It sees only its own suite's records, matched by the suite
@@ -441,12 +626,16 @@ each session once), plus `seed`, `min_n` (3) and `confidence` (0.95).
 | environment | `a.best(metric, by=ENVIRONMENT, direction=None)` | Groups best first; those under `min_n` trail unranked |
 | environment | `a.pareto(quality="verdict", cost="cost", by=ENVIRONMENT)` | `ParetoPoint`s, each at its pessimistic bounds, front first |
 | environment | `a.tiers(metric)` | `{family tier: Estimate}`, pooled across harnesses |
-| subject | `a.versions(field="subject_version")` | The versions in first-measured order |
-| subject | `a.compare(metric, baseline, candidate, by=CELL_FIELDS, direction=None)` | One `Comparison` per matched cell; a side is a version or any `Samples` |
-| subject | `a.trend(metric, by=())` | Per group, `(version, Estimate)` in order |
-| subject | `a.regressions(metric="verdict")` | The cells where the latest version regressed against the one before |
-| scenario | `a.fragile(by=("case", "scenario"))` | Scenarios by failure rate, most fragile first |
-| scenario | `a.failures(by=())` | Per group, each failure line and its count |
+| narrow | `a.for_cases(cases)` | The same `Analysis` over only these case names' samples |
+| narrow | `a.at_version(version=None, field="subject_version")` | The same `Analysis` over one subject version: `version`, or the current one (the version the newest sample measured) |
+| environment | `a.reliability(k, by=ENVIRONMENT)` | Per group, `{"n", "passes", "pass_at_k", "pass_hat_k"}` over attempted samples; each estimate `None` while `n < k` |
+| subject | `a.versions(field="subject_version")` | The versions ordered by when each was *last* measured: `[-1]` is the current one, `[-2]` the one it replaced (after a revert too). First-seen order is `a.samples.first_seen(field)` |
+| subject | `a.compare(metric, baseline, candidate, by=CELL_FIELDS, direction=None, field="subject_version")` | One `Comparison` per matched cell; a side is a value of `field` or any `Samples`. `by=("family_tier",)` compares stratified by tier rather than cell by cell |
+| subject | `a.trend(metric, by=(), field="subject_version")` | Per group, `(version, Estimate)` in first-measured order |
+| subject | `a.regressions(metric="verdict", by=CELL_FIELDS)` | The cells where the latest version regressed against the one before; empty with fewer than two versions |
+| scenario | `a.fragile(by=("case", "scenario"))` | Scenarios by failure rate over attempted samples, most fragile first |
+| scenario | `a.broken(by=("case", "scenario"))` | Scenarios by error rate, most often ungraded first: a seed, tool or harness to fix, not a skill |
+| scenario | `a.failures(by=())` | Per group, `{(verdict, failure): count}`, most common first |
 | verdict | `a.expect_no_regression(...)`, `a.expect_at_least(metric, value, by=(), bound="low")`, `a.expect_at_most(metric, value, by=(), bound="high")`, `a.expect_pareto_contains(match)` | Raise `AnalysisFailure` (an `AssertionError`) with the comparisons and details attached |
 | publish | `a.note(key, value)` | Stores `value` on the finding (an `Estimate` or `Comparison` as its dict) and returns it |
 
@@ -454,6 +643,10 @@ A metric is an Important Metric id (`cost`, `verdict`, ...), `passed`, a group s
 (`cost_per_pass`, `wasted_cost`), `tool_time_share`, `context_cost_share`, or any numeric
 `CellMetrics` field. `a.samples.where(**fields)` and `.group(*fields)` filter and split by
 any record field; grouping by `scenario` splits by fingerprint too.
+
+**Versions pool unless narrowed.** `summarise`, `best`, `pareto`, `tiers` and
+`reliability` read every sample, whatever subject version it measured. To ask about the
+subject as it now stands, narrow first: `a.at_version().pareto()`.
 
 How the answers are reached, so you can read them:
 
@@ -477,6 +670,55 @@ and a failed one fails the session. Rerun every analyzer for free over the cache
 ```bash
 uv run -m pytest_xharness_eval.analysis .xharness_eval_cache [--suite skills/x/evals/eval_x.py] [--seed N]
 ```
+
+### Scripted hill-climbing
+
+An `Analysis` needs no sweep. Build one over the cache from a script, free, to decide
+whether the last edit to the subject was worth keeping:
+
+```python
+from collections import Counter
+from pathlib import Path
+
+from pytest_xharness_eval import Analysis, Samples
+from pytest_xharness_eval.model.layout import CacheLayout
+
+samples = Samples.stored(CacheLayout(Path(".xharness_eval_cache")))
+a = Analysis(history=samples.where(case="eval_gate"), min_n=5)
+before, after = a.versions()[-2:]                  # last measured last: `after` is the subject now
+
+for metric in ("verdict", "turns", "cost"):
+    cells = a.compare(metric, baseline=before, candidate=after)
+    print(metric, dict(Counter(c.change.value for c in cells)))
+    for c in cells:
+        if c.change.value in ("improved", "regressed"):
+            print("   ", c.describe())
+    for c in a.compare(metric, baseline=before, candidate=after, by=("family_tier",)):
+        print("  stratified by tier:", c.describe())
+
+for version in (before, after):
+    at = a.at_version(version)
+    print(version, "pass rate by tier", {tier: est.point for tier, est in at.tiers("verdict").items()})
+    print(version, "cost per pass by model", {key: est.point for key, est in at.summarise("cost_per_pass", by=("model",)).items()})
+    print(version, "pass^3 by model", at.reliability(3, by=("model",)))
+```
+
+`Samples.stored(CacheLayout(root))` reads every graded sample the cache holds, oldest
+first; `Analysis(history=..., min_n=5)` matches a `--xharness-repeat 5` sweep. The
+`Samples` surface a script filters with:
+
+| Call | Returns |
+|---|---|
+| `Samples.stored(cache)` | Every graded sample under a `CacheLayout`; dry runs and unreadable verdicts dropped |
+| `s.where(predicate=None, **fields)` | The records matching every condition: a value by equality, a list, tuple or set by membership, a callable by calling it |
+| `s.group(*fields)` | `{key tuple: Samples}` in sorted key order |
+| `s.levels(field)`, `s.first_seen(field)`, `s.last_seen(field)` | A field's distinct values: sorted, by first appearance, by latest appearance |
+| `s.latest(field="subject_version")` | The records carrying the value the newest record carries |
+| `s.values(metric)` | Each record's value of `metric`, records without one left out |
+| `s.attempted()`, `s.passes()` | The pass-or-fail records, and how many passed |
+| `s.cost_per_pass()`, `s.wasted_cost()` | The two group statistics |
+| `s.pass_at_k(k)`, `s.pass_hat_k(k)` | The unbiased estimators; `None` below `k` attempts |
+| `s + t` | Both collections, oldest first, each session once |
 
 ## What you may not assume
 

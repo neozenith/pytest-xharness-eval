@@ -278,9 +278,21 @@ def _weighted(items: Sequence[Scenario], weights: Sequence[float], draw: Draw) -
 TEXT_SUFFIXES: Final = (".md", ".mmd", ".markdown", ".txt")
 
 
+def _text(content: str | bytes) -> str | None:
+    """``content`` as text: a string as it is, bytes when they decode as UTF-8, else None."""
+    if isinstance(content, str):
+        return content
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
 def _texts(files: Files, suffixes: Iterable[str]) -> list[str]:
+    """The text files a mutator may touch: matching suffix, and readable as UTF-8 (a seed from
+    :func:`read_tree` is bytes, and skipping it would leave an adversary mutating nothing)."""
     ends = tuple(suffixes)
-    return sorted(p for p, c in files.items() if p.endswith(ends) and isinstance(c, str))
+    return sorted(p for p, c in files.items() if p.endswith(ends) and _text(c) is not None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,7 +313,7 @@ class TextMutator:
             return files
         path = draw.choice(targets)
         out = dict(files)
-        out[path] = self.apply(str(files[path]), draw)
+        out[path] = self.apply(_text(files[path]) or "", draw)
         return out
 
 

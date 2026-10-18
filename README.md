@@ -293,7 +293,9 @@ row keys that are grader knobs, kept out of the scenario id. `Adversarial` mutat
 scenarios where the tool already fails, and
 `uv run -m pytest_xharness_eval.promote <scenario dir> <evals dir>` freezes a failure into
 `evals/fixtures/` for `Promoted` to replay. The whole surface is
-[docs/rollout.md](docs/rollout.md#what-a-case-declares) (ADR 0074).
+[docs/rollout.md](docs/rollout.md#what-a-case-declares) (ADR 0074), including
+[writing your own generator](docs/rollout.md#writing-your-own-generator) and the
+shipped mutators.
 
 ### Analyzers and hill-climbing
 
@@ -316,10 +318,11 @@ def analyze_where_it_works(a: Analysis) -> None:
 
 @analyzer
 def analyze_versions(a: Analysis) -> None:
-    versions = list(a.versions())
-    if len(versions) >= 2:
-        a.expect_no_regression("verdict", baseline=versions[-2], candidate=versions[-1])
+    a.expect_no_regression("verdict")                   # the current version against the one before
 ```
+
+`expect_no_regression` fails rather than passing on no evidence: with fewer than two
+`subject_version`s recorded it stays red until the subject changes and is swept again.
 
 Analyzers run once the sweep ends, on the xdist controller only, and write
 `.xharness_eval_cache/report/analysis.json`. A failed one fails the session; one that
@@ -336,7 +339,9 @@ The CLI exits 1 when an analyzer fails. A comparison says `improved` or `regress
 when it clears a Benjamini-Hochberg-corrected test across cells; below three samples per
 arm it is `insufficient`, and at three it cannot reach significance, so repeat each cell
 five times for a decision. The `Analysis` surface and its statistics are
-[docs/rollout.md](docs/rollout.md#analyzers-checks-over-every-sample) (ADR 0075).
+[docs/rollout.md](docs/rollout.md#analyzers-checks-over-every-sample) (ADR 0075), and an
+`Analysis` built from a script over `Samples.stored(...)` is
+[scripted hill-climbing](docs/rollout.md#scripted-hill-climbing).
 
 ----
 

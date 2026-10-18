@@ -325,3 +325,11 @@ def test_a_text_mutator_touches_one_text_file_and_names_itself() -> None:
     assert out == {"a.md": "x\r\n", "b.py": "y\n", "c.bin": b"\n"} and files["a.md"] == "x\n"
     assert gen.CRLF({"b.py": "y\n"}, Draw("none")) == {"b.py": "y\n"}  # nothing to touch: unchanged
     assert gen.CRLF.__name__ == "crlf" and len(gen.TEXT_MUTATORS) == 7
+
+
+def test_a_text_mutator_rewrites_utf8_bytes_and_leaves_binary_alone() -> None:
+    """A seed from read_tree is bytes; skipping it would leave an adversary mutating nothing."""
+    files = {"doc.md": b"line one\nline two\n", "img.md": b"\xff\xfe\x00binary"}
+    out = gen.CRLF(files, Draw("t", 0))
+    assert out["doc.md"] == "line one\r\nline two\r\n"
+    assert out["img.md"] == files["img.md"]
