@@ -135,6 +135,7 @@ flowchart TB
         HARNESS["harness<br/>claude or codex"]:::plan
         MODEL["model"]:::plan
         EFFORT["effort<br/>a rung of the harness ladder"]:::plan
+        PLAN["cell plan"]:::plan
     end
 
     subgraph produced["Produced by one live cell run"]
@@ -156,20 +157,20 @@ flowchart TB
     SKILL -->|"is graded by"| CASE
     CASE -->|"seeds from"| FIX
     CASE -->|"or generates from"| GEN
-    GEN -->|"yields, stored under scenarios/"| SCEN
+    GEN -->|"yields, into the scenario store"| SCEN
     SCEN -->|"one set of cells each,<br/>copied into"| WS
     CASE -->|"may override with models="| MATRIX
     MATRIX -->|"each harness/model[/effort]<br/>entry expands to"| CELL
     CELL -->|"runs on"| HARNESS
     CELL -->|"with"| MODEL
     CELL -->|"at"| EFFORT
+    CELL -->|"planned as"| PLAN
     HARNESS -->|"declares the ladder<br/>a rung resolves on"| EFFORT
     CATALOG -->|"describes"| MODEL
     CATALOG -->|"defaults under<br/>the rate limit"| MATRIX
     FIX -->|"copied per cell into"| WS
     CASE -->|"may add with treatments="| TREAT
     TREAT -->|"copied over the fixture in"| WS
-    HARNESS -->|"works inside"| WS
     HARNESS -->|"writes"| LOG
     HARNESS -->|"forks per subagent"| SUB
     LOG -->|"normalised into"| RR
