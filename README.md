@@ -180,6 +180,7 @@ stock pytest (`-k`, `-x`, `-m eval`, node ids).
 | `--treatment <name>` | Only cells under that treatment, repeatable. `control` names the untreated cell (ADR 0055) | `pytest skills/x/evals --treatment control` |
 | `-k <expr>` | Boolean slices over cell ids and case names (stock pytest) | `-k "opus or sol"`, `-k "codex and not sol"` |
 | `--xharness-timeout <s>` | Seconds one cell's CLI may run before it is killed (default 600). Raise it for the top effort rungs, which think for longer by design | `pytest skills/x/evals --xharness-timeout 1800` |
+| `--xharness-repeat <n>` | Run every cell `n` times in this sweep, each a separate sample, node ids suffixed `#1` to `#n` (default 1). An analyzer comparing versions needs five per cell to reach significance (ADR 0075) | `pytest skills/x/evals --xharness-repeat 5` |
 | `--xharness-keep-workspaces` | Leave each finished cell's build workspace in `.xharness_eval_cache/build/` for inspection. By default it is removed once its evidence is captured and graded | `pytest skills/x/evals --xharness-keep-workspaces` |
 | `--dry-run` | Enumerate cells and validate pricing, invoke nothing | `pytest skills/x/evals --dry-run` |
 | `--collect-only -q` | List cell node ids (stock pytest) | `pytest --collect-only -q skills/x/evals` |
@@ -253,6 +254,89 @@ The `__<harness>` directory exists because the CLIs read different files: codex 
 `AGENTS.md`, claude reads `CLAUDE.md`. Each cell reads its workspace's own file and nothing
 above it. A treatment with no files for a harness the case sweeps stops collection, because
 that cell would be its control billed twice under a second name (ADR 0055).
+
+### Scenario cases and generated fixtures
+
+A case that names no `skill=` is a *scenario case*: its task is sent verbatim to every
+harness and no skill is registered, so it measures a tool rather than a skill. Its fixture
+may be a *generator* instead of a committed directory, and every scenario it yields becomes
+its own cells:
+
+```python
+from pytest_xharness_eval import evalcase
+from pytest_xharness_eval.model.generators import Table
+from pytest_xharness_eval.verify import check_rollout
+
+ROWS = Table(
+    name="trailing-spaces",
+    rows=[{"target": "README.md", "lines": 3}, {"target": "docs/guide.md", "lines": 40}],
+    build=lambda row: {row["target"]: "a line  \n" * row["lines"]},
+    label="target",
+    task="Clear every lint finding in {target} without changing what it says",
+)
+
+def seed_has_findings(seed):
+    assert "  \n" in seed.read(seed.params["target"]), "the seed no longer trips the rule"
+
+@evalcase(fixture=ROWS, tracks=["tools/lint"], precheck=seed_has_findings)
+def eval_lint_fix(output):
+    check_rollout(output)
+    assert "  \n" not in output.read(output.params["target"])
+```
+
+The node ids are `eval_lint_fix[<scenario id>/<cell id>]`, each id a slug plus a digest of
+the row, so inserting a row renumbers nothing. The case needs no `task=` because every row
+names its own. Every scenario is written to `.xharness_eval_cache/scenarios/` before any
+cell runs, and `tracks=` records which version of the tool ran. The `precheck` gates each
+seed before the paid run, and `--dry-run` runs it for free. `Table(expect=[...])` names
+row keys that are grader knobs, kept out of the scenario id. `Adversarial` mutates seed
+scenarios where the tool already fails, and
+`uv run -m pytest_xharness_eval.promote <scenario dir> <evals dir>` freezes a failure into
+`evals/fixtures/` for `Promoted` to replay. The whole surface is
+[docs/rollout.md](docs/rollout.md#what-a-case-declares) (ADR 0074).
+
+### Analyzers and hill-climbing
+
+A case grades one run. An *analyzer* asks a question across every sample the cache holds
+for its suite, after the sweep, in either of two modes:
+
+- **The environment as the variable.** The subject is fixed: which harness, model, tier,
+  effort or treatment does it do best under, and at what cost?
+- **The subject as the variable.** The skill or tool changed: did any matched cell improve
+  or regress between its `subject_version`s?
+
+```python
+from pytest_xharness_eval import Analysis, analyzer
+
+@analyzer
+def analyze_where_it_works(a: Analysis) -> None:
+    a.note("pass_rate_by_tier", a.tiers("verdict"))     # pooled across harnesses
+    a.note("front", a.pareto())                         # pass rate against cost
+    a.expect_at_least("verdict", 0.5, by=("harness",), bound="point")
+
+@analyzer
+def analyze_versions(a: Analysis) -> None:
+    versions = list(a.versions())
+    if len(versions) >= 2:
+        a.expect_no_regression("verdict", baseline=versions[-2], candidate=versions[-1])
+```
+
+Analyzers run once the sweep ends, on the xdist controller only, and write
+`.xharness_eval_cache/report/analysis.json`. A failed one fails the session; one that
+crashes is reported as an `ERROR` finding rather than taking the session down. Each
+publishes what it found with `a.note(...)`, pass or fail. The hill-climbing loop is: edit
+the subject, sweep the cells that matter, then ask again for free:
+
+```bash
+pytest skills/x/evals --xharness-repeat 5 -n 4
+uv run -m pytest_xharness_eval.analysis .xharness_eval_cache [--suite skills/x/evals/eval_x.py] [--seed N]
+```
+
+The CLI exits 1 when an analyzer fails. A comparison says `improved` or `regressed` only
+when it clears a Benjamini-Hochberg-corrected test across cells; below three samples per
+arm it is `insufficient`, and at three it cannot reach significance, so repeat each cell
+five times for a decision. The `Analysis` surface and its statistics are
+[docs/rollout.md](docs/rollout.md#analyzers-checks-over-every-sample) (ADR 0075).
 
 ----
 

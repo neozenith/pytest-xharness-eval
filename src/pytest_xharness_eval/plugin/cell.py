@@ -20,7 +20,7 @@ from __future__ import annotations
 # Standard Library
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 # Our Libraries
@@ -28,26 +28,24 @@ from pytest_xharness_eval import harness
 from pytest_xharness_eval.emit.metrics import Outcome
 from pytest_xharness_eval.model import workspace as ws
 from pytest_xharness_eval.model.clock import now_iso
-from pytest_xharness_eval.model.output import CaseOutput
-from pytest_xharness_eval.model.runresult import CaseRef
+from pytest_xharness_eval.model.output import CaseOutput, Seed
 from pytest_xharness_eval.model.verdict import Verdict
 from pytest_xharness_eval.plugin.results import RECORD_KEY
 from pytest_xharness_eval.runtime import pipeline
 
 if TYPE_CHECKING:
     # Standard Library
+    from collections.abc import Sequence
     from pathlib import Path
 
     # Third Party
     import pytest
 
     # Our Libraries
-    from pytest_xharness_eval.derive.skillcov import SkillFile
     from pytest_xharness_eval.emit.metrics import CellMetrics
-    from pytest_xharness_eval.model.case import EvalCase
     from pytest_xharness_eval.model.layout import LocatedSession
-    from pytest_xharness_eval.model.matrix import Cell
     from pytest_xharness_eval.model.runresult import RunResult
+    from pytest_xharness_eval.runtime.plan import CellPlan
     from pytest_xharness_eval.runtime.settings import Settings
 
 # One UTC stamp per pytest session, exported so that xdist workers -- which are child
@@ -81,6 +79,33 @@ def check_completed(result: RunResult) -> None:
     raise harness.RunError(f"stalled: killed at the {limit}s timeout after {silent} (ADR 0064)")
 
 
+#: How much of a failure's message a record keeps: enough to group failures by, no more.
+FAILURE_CHARS = 300
+
+
+def redact(text: str, replacements: Sequence[tuple[str, str]]) -> str:
+    """``text`` with each path of ``replacements`` replaced by its token, longest path first.
+
+    Longest first, so a path inside another (the cache root inside a workspace under it) is
+    never replaced before the path that contains it.
+    """
+    for path, token in sorted(replacements, key=lambda pair: -len(pair[0])):
+        if path:
+            text = text.replace(path, token)
+    return text
+
+
+def failure_line(exc: BaseException, replacements: Sequence[tuple[str, str]] = ()) -> str:
+    """The first non-empty line of what ``exc`` says, prefixed with its type for anything but an assertion.
+
+    ``replacements`` are redacted (:func:`redact`) before the line is truncated, so a path
+    that differs per cell cannot split one cause into as many groups as there were cells.
+    """
+    text = next((line.strip() for line in str(exc).splitlines() if line.strip()), "")
+    prefix = "" if isinstance(exc, AssertionError) else f"{type(exc).__name__}: "
+    return redact(prefix + text, replacements)[:FAILURE_CHARS] or type(exc).__name__
+
+
 def run_stamp() -> str:
     """This sweep's run stamp: path-safe, sortable, and minted at most once per session.
 
@@ -108,52 +133,38 @@ class Attempt:
 class CellRun:
     """One cell's live run in progress: what it needs, what it did, and what it left behind.
 
-    Everything it needs is resolved off the item once, at construction; the mutable
-    :attr:`verdict` is the one thing that is not known until the grader has run. It starts
-    at ``ERROR`` because a run that has not reached its grader has not passed.
+    Everything it needs was resolved at collection and arrives as one frozen
+    :class:`~pytest_xharness_eval.runtime.plan.CellPlan`; the mutable :attr:`verdict` is the
+    one thing that is not known until the grader has run. It starts at ``ERROR`` because a
+    run that has not reached its grader has not passed.
     """
 
-    case: EvalCase
-    cell: Cell
+    plan: CellPlan
     settings: Settings
-    skill_dir: Path
-    fixture_dir: Path
-    node: str
-    suite: str
-    skill_files: list[SkillFile] = field(default_factory=list)
-    # The treatment's directories, copied over the fixture in order; empty for the control
-    # (ADR 0055). Resolved at collection, where a treatment that would copy nothing has
-    # already stopped the sweep.
-    overlays: list[Path] = field(default_factory=list)
     verdict: Verdict = Verdict.ERROR
+    # The first line of what the grader or harness raised, recorded with the verdict.
+    failure: str | None = None
 
     # -- the steps ---------------------------------------------------------------------
 
-    @property
-    def cell_id(self) -> str:
-        """The workspace name for this cell: case, harness, model, effort and treatment, path-safe.
-
-        The effort rung and the treatment are part of the name because two cells of one
-        sweep may differ in nothing else, and a shared workspace name would have them
-        overwrite each other's build directory (ADR 0049, ADR 0055).
-        """
-        rung = f"-{self.cell.effort}" if self.cell.effort else ""
-        treated = f"-{self.cell.treatment}" if self.cell.treatment else ""
-        return f"{self.case.name}-{self.cell.harness}-{self.cell.model}{rung}{treated}"
-
     def materialise(self) -> Path:
         """A fresh copy of the fixture, then the treatment over it, under ``<cache>/build/`` (ADR 0004, ADR 0055)."""
-        return ws.materialise(self.fixture_dir, self.cell_id, self.settings.cache.build, self.overlays)
+        plan = self.plan
+        return ws.materialise(plan.fixture_dir, plan.cell_id, self.settings.cache.build, list(plan.overlays))
 
-    @property
-    def prompt(self) -> str:
-        """This cell's invocation: the case's task in this harness's own syntax (ADR 0044).
+    def precheck(self, workspace: Path) -> None:
+        """Gate the seeded workspace with the case's precheck, before anything spends (ADR 0074).
 
-        A property rather than a field because it is a pure function of the cell, and free:
-        a ``--dry-run`` preview and the stored :class:`CaseRef` must show the same string
-        the CLI is about to be handed, not a second rendering of it.
+        Whatever the precheck raises -- a failed assertion included -- is the fixture's fault,
+        not the agent's, so it surfaces as a :class:`~pytest_xharness_eval.harness.RunError`
+        and the cell errors with nothing billed and no record written.
         """
-        return harness.get(self.cell.harness).invoke(skill=self.case.skill, task=self.case.task)
+        if self.plan.case.precheck is None:
+            return
+        try:
+            self.plan.case.precheck(Seed(workspace=workspace, scenario=self.plan.scenario))
+        except Exception as exc:
+            raise harness.RunError(f"precheck refused the seed before any run: {failure_line(exc)}") from exc
 
     def invoke(self, workspace: Path) -> Attempt:  # pragma: no cover - spawns a paid CLI (ADR 0002)
         """Run the harness's CLI in ``workspace``: the one step of a sweep that spends money.
@@ -163,12 +174,12 @@ class CellRun:
         """
         started_at = now_iso()
         t0 = time.monotonic()
-        result = harness.get(self.cell.harness).run(
-            prompt=self.prompt,
-            model=self.cell.model,
+        result = harness.get(self.plan.cell.harness).run(
+            prompt=self.plan.prompt,
+            model=self.plan.cell.model,
             workspace=workspace,
-            effort=self.cell.effort,
-            skill_dir=self.skill_dir,
+            effort=self.plan.cell.effort,
+            skill_dir=self.plan.skill_dir,
             timeout_s=self.settings.timeout_s,
         )
         return Attempt(result=result, started_at=started_at, wall_ms=int((time.monotonic() - t0) * 1000))
@@ -176,11 +187,11 @@ class CellRun:
     def session_dir(self, session_id: str) -> LocatedSession:
         """Where this cell's evidence goes: its five coordinates under ``<cache>/results/``."""
         return self.settings.cache.session(
-            skill=self.case.skill,
-            harness=self.cell.harness,
-            model=self.cell.model,
-            effort=self.cell.effort,
-            treatment=self.cell.treatment,
+            skill=self.plan.subject,
+            harness=self.plan.cell.harness,
+            model=self.plan.cell.model,
+            effort=self.plan.cell.effort,
+            treatment=self.plan.cell.treatment,
             run=run_stamp(),
             session=session_id,
         )
@@ -197,12 +208,11 @@ class CellRun:
             result,
             table=self.settings.price_table(),
             run_date=session.run_date,
-            skill=self.case.skill,
-            skill_files=self.skill_files,
-            case=CaseRef.of(self.case, self.suite, self.prompt),
-            effort=self.cell.effort,
-            treatment=self.cell.treatment,
-            spec=self.settings.catalogue().get(self.cell.harness, self.cell.model),
+            skill_files=list(self.plan.skill_files),
+            case=self.plan.case_ref,
+            effort=self.plan.cell.effort,
+            treatment=self.plan.cell.treatment,
+            spec=self.settings.catalogue().get(self.plan.cell.harness, self.plan.cell.model),
         )
         pipeline.capture(result, session)
         return session
@@ -217,9 +227,9 @@ class CellRun:
         pipeline.quarantine(
             err,
             session,
-            case=CaseRef.of(self.case, self.suite, self.prompt),
-            effort=self.cell.effort,
-            treatment=self.cell.treatment,
+            case=self.plan.case_ref,
+            effort=self.plan.cell.effort,
+            treatment=self.plan.cell.treatment,
         )
         return session
 
@@ -233,11 +243,11 @@ class CellRun:
         """
         seeded = frozenset(
             str(p.relative_to(layer))
-            for layer in (self.fixture_dir, *self.overlays)
+            for layer in (self.plan.fixture_dir, *self.plan.overlays)
             for p in layer.rglob("*")
             if p.is_file()
         )
-        return CaseOutput(run=result, workspace=workspace, seeded=seeded)
+        return CaseOutput(run=result, workspace=workspace, seeded=seeded, scenario=self.plan.scenario)
 
     def grade(self, result: RunResult, workspace: Path) -> Verdict:
         """Run the case's grader over the finished run, and name what happened.
@@ -257,15 +267,30 @@ class CellRun:
                     f"{result.harness} exited {result.exit_code} without a model call, so the task was "
                     f"never attempted: {result.final_text[:300] or '(no message)'}"
                 )
-            self.case.fn(self.output(result, workspace))
-        except AssertionError:
-            self.verdict = Verdict.FAIL
+            self.plan.case.fn(self.output(result, workspace))
+        except AssertionError as exc:
+            self.verdict, self.failure = Verdict.FAIL, failure_line(exc, self.redactions(workspace))
             raise
-        except Exception:
-            self.verdict = Verdict.ERROR
+        except Exception as exc:
+            self.verdict, self.failure = Verdict.ERROR, failure_line(exc, self.redactions(workspace))
             raise
         self.verdict = Verdict.PASS
         return self.verdict
+
+    def redactions(self, workspace: Path) -> list[tuple[str, str]]:
+        """The per-cell paths a recorded failure names, each with the token it is recorded as.
+
+        The workspace, its scratch directory beside it (``verify.tool.scratch_dir``'s
+        ``.<workspace name>.scratch``) and the cache root differ for every cell, so a failure
+        quoting them would group as one cause per cell. Each is listed as given and resolved,
+        since a message may quote either (``/tmp`` against ``/private/tmp``).
+        """
+        named = (
+            (workspace.parent / f".{workspace.name}.scratch", "<scratch>"),
+            (workspace, "<workspace>"),
+            (self.settings.cache.root, "<cache>"),
+        )
+        return [(str(form), token) for path, token in named for form in dict.fromkeys((path, path.resolve()))]
 
     def record(self, attempt: Attempt, session: LocatedSession) -> CellMetrics:
         """This cell's metrics record, written beside its evidence (ADR 0018)."""
@@ -273,10 +298,11 @@ class CellRun:
             attempt.result,
             session,
             outcome=Outcome(
-                node=self.node,
+                node=self.plan.node,
                 verdict=self.verdict,
                 wall_ms=attempt.wall_ms,
                 started_at=attempt.started_at,
+                failure=self.failure,
             ),
             cache=self.settings.cache,
         )
@@ -298,6 +324,7 @@ class CellRun:
         """
         workspace = self.materialise()
         try:
+            self.precheck(workspace)
             try:
                 attempt = self.invoke(workspace)
             except harness.UnfoldedRun as err:

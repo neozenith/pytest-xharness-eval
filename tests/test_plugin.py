@@ -27,6 +27,7 @@ def test_help_lists_options_and_ini_keys(pytester: pytest.Pytester) -> None:
             "*--effort=*",
             "*--treatment=NAME*",
             "*--xharness-timeout=SECONDS*",
+            "*--xharness-repeat=N*",
             "*--xharness-keep-workspaces*",
             "*--dry-run*",
         ]
@@ -68,7 +69,7 @@ def test_skill_ignore_lines_scope_by_skill_name(pytester: pytest.Pytester) -> No
         "def pytest_collection_modifyitems(items):\n"
         "    for item in items:\n"
         "        if isinstance(item, EvalItem):\n"
-        "            for f in item.skill_files:\n"
+        "            for f in item.plan.skill_files:\n"
         "                print('FILE', f.path, f.ignored)\n"
     )
     result = pytester.runpytest("--collect-only", "-s")

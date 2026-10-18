@@ -22,6 +22,7 @@ from __future__ import annotations
 # Standard Library
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import PurePath, PurePosixPath
 from typing import TYPE_CHECKING
 
 # Our Libraries
@@ -42,11 +43,16 @@ if TYPE_CHECKING:
 #: a URL the page builds, and no shipped model id contains it.
 MODEL_EFFORT_SEP = "--"
 
+#: How many levels a session directory sits beneath ``results/``: skill, harness, model, run, session.
+_SESSION_LEVELS = 5
+
 # Directories directly under the cache root.
 BUILD_DIR = "build"
 RESULTS_DIR = "results"
 REPORT_DIR = "report"
 PRICING_DIR = "pricing"
+# Every generated scenario, written once at collection and materialised from there (ADR 0074).
+SCENARIOS_DIR = "scenarios"
 
 # One session's evidence (ADR 0032). ``HISTORY_NAME`` is *one* session's metrics record;
 # the aggregate of all of them is ``AGGREGATED_HISTORY_NAME`` below, and the two names are
@@ -66,6 +72,8 @@ SUMMARY_NAME = "report.json"
 PAGE_NAME = "report.html"
 TOKENS_NAME = "report.tokens.json"
 GLOSSARY_NAME = "XHARNESS-REPORT-GLOSSARY.md"
+# What the suites' analyzers concluded over the whole history (ADR 0075).
+ANALYSIS_NAME = "analysis.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,6 +249,17 @@ class CacheLayout:
         """``<cache>/report/``: the aggregated microsite."""
         return self.root / REPORT_DIR
 
+    def scenarios(self, suite: str, case: str) -> Path:
+        """``<cache>/scenarios/<suite path>/<case>/``: one directory per generated scenario, each with
+        its ``<id>.provenance.json`` beside it, so a run's input is inspectable and promotable (ADR 0074).
+
+        ``suite`` is the suite file as a record names it (relative to the project root), so two
+        skills' ``eval_main.py`` never share a store.
+        """
+        rel = PurePosixPath(PurePath(suite).as_posix()).with_suffix("")
+        parts = [part for part in rel.parts if part not in ("/", "..")]
+        return self.root.joinpath(SCENARIOS_DIR, *parts, case)
+
     # -- the evidence tree -------------------------------------------------------------
 
     def session(
@@ -269,6 +288,15 @@ class CacheLayout:
             effort=effort,
             treatment=treatment,
         )
+
+    @classmethod
+    def holding(cls, session_dir: Path) -> CacheLayout:
+        """The cache a session directory sits in: ``results/`` is five levels above every session."""
+        resolved = session_dir.resolve()
+        results = resolved.parents[_SESSION_LEVELS - 1]
+        if results.name != RESULTS_DIR:
+            raise ValueError(f"{session_dir} is not a session directory under <cache>/{RESULTS_DIR}/")
+        return cls(results.parent)
 
     def sessions(self) -> Iterator[LocatedSession]:
         """Every captured session directory under ``results/``, in path order.
@@ -319,3 +347,8 @@ class CacheLayout:
     def glossary(self) -> Path:
         """``report/XHARNESS-REPORT-GLOSSARY.md``: the names of everything on the page."""
         return self.report / GLOSSARY_NAME
+
+    @property
+    def analysis(self) -> Path:
+        """``report/analysis.json``: every analyzer's finding over the stored history (ADR 0075)."""
+        return self.report / ANALYSIS_NAME

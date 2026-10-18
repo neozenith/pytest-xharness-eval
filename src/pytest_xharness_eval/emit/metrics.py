@@ -26,12 +26,15 @@ from __future__ import annotations
 
 # Standard Library
 import json
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from types import UnionType
 from typing import TYPE_CHECKING, Any, Final, Self, Union, get_args, get_origin, get_type_hints
 
 # Our Libraries
+from pytest_xharness_eval.model.case import CaseKind
 from pytest_xharness_eval.model.documents import read_json_object
+from pytest_xharness_eval.model.runresult import CostStatus
 from pytest_xharness_eval.model.verdict import Verdict
 
 if TYPE_CHECKING:
@@ -73,6 +76,9 @@ class Outcome:
     verdict: Verdict | None
     wall_ms: int
     started_at: str
+    #: Why a cell that did not pass did not: the first line of what its grader or harness
+    #: raised, so a reader groups failures without scraping a pytest log. None on a pass.
+    failure: str | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -108,17 +114,42 @@ class CellMetrics:
     released: str | None = None
     session_id: str = ""
     verdict: str = ""
+    failure: str | None = None
+    # What kind of case it was (``skill`` or ``scenario``), which generated scenario it ran on
+    # and the bytes that scenario had, and which version of the subject it measured: the
+    # digest of the paths the case tracks. Empty or None on records written before them.
+    kind: str = ""
+    scenario: str | None = None
+    scenario_fingerprint: str | None = None
+    subject_version: str | None = None
     # What it did.
     turns: int = 0
     reported_turns: int | None = None
+    # ``tool_calls`` and ``tool_calls_by_name`` are the primary thread's, as the harness
+    # counted them (the wire format since ADR 0018); ``tool_calls_by_name_all`` counts every
+    # thread's ledger, the same calls ``tool_ms_by_name`` and the tool cost maps sum over, so
+    # a per-call average divides like by like.
     tool_calls: int = 0
     tool_calls_by_name: dict[str, int] = field(default_factory=dict)
+    tool_calls_by_name_all: dict[str, int] = field(default_factory=dict)
     duration_ms: int = 0
+    # The harness-reported API time, where it reports one; None otherwise.
+    api_duration_ms: int | None = None
     wall_ms: int = 0
+    # How the CLI ended (ADR 0063, ADR 0064): its exit code, whether it reached the model at
+    # all (1 or 0), and -- for a run killed at the wall -- the limit and how long its logs had
+    # been silent. None on a record written before them; the timeout pair is None on a run
+    # that finished on its own.
+    exit_code: int | None = None
+    attempted: int | None = None
+    timed_out_after_s: int | None = None
+    idle_before_timeout_s: float | None = None
     # What it cost, and the rates that say so (ADR 0021).
     estimated_cost_usd: float | None = None
     harness_reported_cost_usd: float | None = None
     rates_applied: dict[str, Any] = field(default_factory=dict)
+    # Calls billed at the long-context tier; None while unpriced (ADR 0051).
+    long_context_calls: int | None = None
     # What it spent, tier by tier (ADR 0029).
     accumulative_billed_tokens: int = 0
     baseline_tokens: int = 0
@@ -128,10 +159,12 @@ class CellMetrics:
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
     cache_write_1h_tokens: int = 0
+    cache_write_5m_tokens: int = 0
     files_written: int = 0
     # How close it came to the window, and how fast it ran (ADR 0024).
     context_window: int | None = None
     peak_context_tokens: int = 0
+    final_context_tokens: int | None = None
     context_window_pct: float | None = None
     final_context_pct: float | None = None
     ttft_ms: int | None = None
@@ -153,6 +186,41 @@ class CellMetrics:
     skill_scripts_run: int | None = None
     skill_not_loaded: list[str] = field(default_factory=list)
     skill_not_run: list[str] = field(default_factory=list)
+    # Whether the skill under test triggered at all: 1 when it did, 0 on a skill case where
+    # nothing triggered it, None on a scenario case (no skill) and every record written before it.
+    skill_triggered: int | None = None
+    # When the skill under test was triggered and what its use cost (ADR 0073). None when
+    # nothing triggered it, on a scenario case, and on records written before it.
+    # ``skill_cost_share`` is the *issuing* cost of the skill's tool calls over the run's
+    # estimate; ``skill_context_cost_share`` the cost of carrying their results through later
+    # prompts over the same estimate. Both are attributions inside the estimate, not additions.
+    skill_trigger: str | None = None
+    skill_triggered_turn: int | None = None
+    skill_duration_ms: int | None = None
+    skill_tool_calls: int | None = None
+    skill_issuing_cost_usd: float | None = None
+    skill_context_cost_usd: float | None = None
+    skill_cost_share: float | None = None
+    skill_context_cost_share: float | None = None
+    # Every tool call's time and cost, summed and split by tool name (ADR 0073).
+    tool_issuing_cost_usd: float | None = None
+    tool_context_cost_usd: float | None = None
+    tool_ms_by_name: dict[str, int] = field(default_factory=dict)
+    tool_issuing_cost_usd_by_name: dict[str, float] = field(default_factory=dict)
+    tool_context_cost_usd_by_name: dict[str, float] = field(default_factory=dict)
+    cache_rereads: int | None = None
+    # The share of prompt tokens served from the cache: how well the run reused its context.
+    cache_read_share: float | None = None
+    # The subagents' spans and per-thread extremes (ADR 0072). One convention: a count or a
+    # span over zero subagents is 0, consistent with ``subagents = 0``; a figure that needs a
+    # measurement the run lacks (a price, a context window) is None. None on every record
+    # written before them. The peak context share is each thread's largest prompt over the
+    # run's reported window, the window of the model the primary ran on.
+    subagent_ms: int | None = None
+    subagent_max_depth: int | None = None
+    subagent_max_ms: int | None = None
+    subagent_max_cost_usd: float | None = None
+    subagent_peak_context_pct: float | None = None
     # Which cache root to run the combine step against; a declared field rather than a key
     # written onto the record afterwards (ADR 0032, ADR 0037). Empty means "combine
     # nothing", which is how a dry run stays free of evidence.
@@ -167,12 +235,38 @@ class CellMetrics:
         case = result.case
         cov = result.skill_coverage
         summary = cov.summary if cov else None
+        use = result.skill_use
         return cls(
+            **_tool_figures(result),
+            **_subagent_figures(result),
+            failure=outcome.failure,
+            kind=case.kind.value if case and case.kind else "",
+            scenario=case.scenario if case else None,
+            scenario_fingerprint=case.scenario_fingerprint if case else None,
+            subject_version=case.subject_version if case else None,
+            skill_triggered=_triggered(result),
+            skill_trigger=use.trigger if use else None,
+            skill_triggered_turn=use.triggered_turn if use else None,
+            skill_duration_ms=use.duration_ms if use else None,
+            skill_tool_calls=use.tool_calls if use else None,
+            skill_issuing_cost_usd=use.issuing_cost_usd if use else None,
+            skill_context_cost_usd=use.context_cost_usd if use else None,
+            skill_cost_share=_share(use.issuing_cost_usd, result.estimated_cost_usd) if use else None,
+            skill_context_cost_share=_share(use.context_cost_usd, result.estimated_cost_usd) if use else None,
+            cache_read_share=result.cache_read_share,
+            api_duration_ms=result.api_duration_ms,
+            exit_code=result.exit_code,
+            attempted=int(result.attempted),
+            timed_out_after_s=result.timed_out_after_s,
+            idle_before_timeout_s=result.idle_before_timeout_s,
+            long_context_calls=result.long_context_calls,
+            cache_write_5m_tokens=u.cache_write_5m_tokens,
+            final_context_tokens=result.final_context_tokens,
             at=outcome.started_at,
             node=outcome.node,
             suite=case.suite if case else None,
             case=case.name if case else None,
-            skill=case.skill if case else None,
+            skill=case.subject if case else None,
             fixture=case.fixture if case else None,
             harness=result.harness,
             model=result.model,
@@ -290,7 +384,13 @@ class CellMetrics:
         absent or foreign carries no verdict forward rather than a word no reader can
         interpret (ADR 0038, ADR 0041).
         """
-        return Outcome(node=self.node, verdict=Verdict.stored(self.verdict), wall_ms=self.wall_ms, started_at=self.at)
+        return Outcome(
+            node=self.node,
+            verdict=Verdict.stored(self.verdict),
+            wall_ms=self.wall_ms,
+            started_at=self.at,
+            failure=self.failure,
+        )
 
     def status_word(self) -> str:
         """The detail shown after the verdict in ``-v`` output.
@@ -330,6 +430,69 @@ class CellMetrics:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.to_dict(), sort_keys=True) + "\n", encoding="utf-8")
         return path
+
+
+def _share(part: float | None, whole: float | None) -> float | None:
+    """``part / whole`` rounded, or None when either is missing or the whole is zero."""
+    if part is None or not whole:
+        return None
+    return round(part / whole, 6)
+
+
+def _triggered(result: RunResult) -> int | None:
+    """1 when the skill under test triggered, 0 on a skill case where it did not, None without a skill."""
+    if result.skill_use is not None:
+        return 1
+    return 0 if result.case is not None and result.case.kind is CaseKind.SKILL else None
+
+
+def _subagent_figures(result: RunResult) -> dict[str, Any]:
+    """Each thread's span, cost and context reduced to the run's: summed, deepest, longest, costliest, fullest.
+
+    Zero subagents is 0 for the counts and spans; the cost is None while the run is unpriced
+    or any thread carries no estimate, and the context share None without a window.
+    """
+    subs = result.subagents
+    costs = [s.estimated_cost_usd for s in subs]
+    priced = result.cost_status is CostStatus.PRICED and all(c is not None for c in costs)
+    peak = max((c.context_tokens for s in subs for c in s.calls), default=0)
+    return {
+        "subagent_ms": sum(s.duration_ms or 0 for s in subs),
+        "subagent_max_depth": max((s.depth for s in subs), default=0),
+        "subagent_max_ms": max((s.duration_ms or 0 for s in subs), default=0),
+        "subagent_max_cost_usd": round(max((c or 0.0 for c in costs), default=0.0), 6) if priced else None,
+        "subagent_peak_context_pct": result.pct_of_window(peak),
+    }
+
+
+def _tool_figures(result: RunResult) -> dict[str, Any]:
+    """The run's tool calls counted, summed and split by name: calls, milliseconds, issuing and context cost (ADR 0073).
+
+    Every map covers every thread. The cost totals are None only while the run is unpriced
+    (and on records from before ADR 0073); a priced run that called no tool is 0.0.
+    """
+    ms: dict[str, int] = defaultdict(int)
+    made: dict[str, int] = defaultdict(int)
+    for call in (*result.calls, *(c for s in result.subagents for c in s.calls)):
+        for tool in call.tools:
+            made[tool.name] += 1
+            if tool.duration_ms is not None:
+                ms[tool.name] += tool.duration_ms
+    issuing: dict[str, float] = defaultdict(float)
+    context: dict[str, float] = defaultdict(float)
+    for cost in result.tool_costs:
+        issuing[cost.name] += cost.issuing_cost_usd
+        context[cost.name] += cost.context_cost_usd
+    costed = result.cost_status is CostStatus.PRICED
+    return {
+        "tool_calls_by_name_all": dict(sorted(made.items())),
+        "tool_ms_by_name": dict(sorted(ms.items())),
+        "tool_issuing_cost_usd_by_name": {k: round(v, 6) for k, v in sorted(issuing.items())},
+        "tool_context_cost_usd_by_name": {k: round(v, 6) for k, v in sorted(context.items())},
+        "tool_issuing_cost_usd": round(sum(issuing.values()), 6) if costed else None,
+        "tool_context_cost_usd": round(sum(context.values()), 6) if costed else None,
+        "cache_rereads": sum(c.cache_rereads for c in result.tool_costs) if costed else None,
+    }
 
 
 # What each field admits when a stored mapping is read back, resolved once from the

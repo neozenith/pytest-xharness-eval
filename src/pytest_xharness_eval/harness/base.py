@@ -220,6 +220,14 @@ class Harness(ABC):
         a matrix the same experiment rather than two different ones (ADR 0044).
         """
 
+    def prompt(self, *, skill: str | None, task: str) -> str:
+        """What this CLI is sent for a case: the skill's invocation, or a scenario's task verbatim (ADR 0074).
+
+        A scenario case names no skill, so every harness is sent the same words and none
+        registers a skill; that sameness is what makes its arms one experiment.
+        """
+        return task if skill is None else self.invoke(skill=skill, task=task)
+
     def resolve_effort(self, effort: str) -> str:
         """The rung of *this* CLI's ladder that ``effort`` names (ADR 0049).
 

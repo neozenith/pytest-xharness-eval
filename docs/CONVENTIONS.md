@@ -50,7 +50,7 @@ misfiled.
 | `README.md` | Orientation and routing: what the plugin is, the quickstart, the option tables, where to go next | Consumers | Purpose, options or entry points change |
 | `CONTRIBUTING.md` | Setup, the `make` commands, the release procedure | Contributors | The dev workflow changes |
 | `AGENTS.md` (`CLAUDE.md`) | Agent invariants and pointers: commands, layout by purpose, hard boundaries, the change map. No restated conventions another doc owns | Agents | Commands, layout or a hard boundary changes |
-| `ARCHITECTURE.md` | How the system is put together and why: the pipeline, the layer stack, the capture contracts | Both | The structure changes |
+| `ARCHITECTURE.md` | How the system is put together and why, each section led by a dual-density mermaid pair: the pipeline, the layer stack, the hook event model, the capture contracts, the data models (ER), the state machines, and a pointer table of the public interfaces (whose contracts `docs/rollout.md` and `README.md` own) | Both | The structure changes |
 | `GLOSSARY.md` | Ubiquitous language: one canonical term per concept | Both | A domain term enters the code or conversation |
 | `docs/adrs/*.yml` | Immutable accepted decisions and their lenses: the authored source | Both | A binding decision is made |
 | `docs/adrs/*.md`, `index.md`, `graph.*` | Generated from the records; never hand-edited. `graph.html` is the browsable viewer: cytoscape.js for the graph, marked.js for the record, both payloads embedded so it opens over `file://`. Records cluster into compound nodes by `group`; fill is the domain, size is in-degree, a red ring is a superseded record. Its default layout is computed deterministically, so a rebuild draws the same picture | Both | `make adrs` runs |

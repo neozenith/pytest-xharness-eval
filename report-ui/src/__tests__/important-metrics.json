@@ -7,7 +7,13 @@
     "kind": "spread",
     "unit": "usd",
     "why": "the felt cost of the skill with this model, from the plugin's price table",
-    "aggregates": ["median", "p25", "p75", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "median",
+      "p25",
+      "p75",
+      "n"
+    ]
   },
   {
     "id": "tokens",
@@ -17,7 +23,13 @@
     "kind": "spread",
     "unit": "tokens",
     "why": "every billed token over every call: an order-of-magnitude proxy for effort",
-    "aggregates": ["median", "p25", "p75", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "median",
+      "p25",
+      "p75",
+      "n"
+    ]
   },
   {
     "id": "context",
@@ -27,7 +39,29 @@
     "kind": "fraction",
     "unit": "percent",
     "why": "is the outcome reachable in a small part of the window?",
-    "aggregates": ["mean", "min", "max", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "mean",
+      "min",
+      "max",
+      "n"
+    ]
+  },
+  {
+    "id": "cache",
+    "label": "cache reads",
+    "field": "cache_read_share",
+    "per": null,
+    "kind": "fraction",
+    "unit": "share",
+    "why": "the share of prompt tokens served from the cache: does the run keep its prefix stable?",
+    "counts": "pass",
+    "aggregates": [
+      "mean",
+      "min",
+      "max",
+      "n"
+    ]
   },
   {
     "id": "subagents",
@@ -37,7 +71,12 @@
     "kind": "rare",
     "unit": "count",
     "why": "did the main agent delegate to manage its context?",
-    "aggregates": ["mean", "share", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "mean",
+      "share",
+      "n"
+    ]
   },
   {
     "id": "subagent_tokens",
@@ -47,7 +86,13 @@
     "kind": "fraction",
     "unit": "share",
     "why": "the subagents' share of the billed tokens: how much of the work was delegated",
-    "aggregates": ["mean", "min", "max", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "mean",
+      "min",
+      "max",
+      "n"
+    ]
   },
   {
     "id": "subagent_cost",
@@ -57,7 +102,13 @@
     "kind": "fraction",
     "unit": "share",
     "why": "the subagents' share of the cost, each priced at its own model's rates",
-    "aggregates": ["mean", "min", "max", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "mean",
+      "min",
+      "max",
+      "n"
+    ]
   },
   {
     "id": "compactions",
@@ -67,7 +118,12 @@
     "kind": "rare",
     "unit": "count",
     "why": "did the task need the context compacted to finish?",
-    "aggregates": ["mean", "share", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "mean",
+      "share",
+      "n"
+    ]
   },
   {
     "id": "turns",
@@ -77,7 +133,29 @@
     "kind": "spread",
     "unit": "count",
     "why": "model calls: is the model stuck fighting itself or a bad instruction?",
-    "aggregates": ["median", "p25", "p75", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "median",
+      "p25",
+      "p75",
+      "n"
+    ]
+  },
+  {
+    "id": "skill_triggered",
+    "label": "triggered",
+    "field": "skill_triggered",
+    "per": null,
+    "kind": "fraction",
+    "unit": "share",
+    "why": "does the skill under test reliably trigger? A skill case only; a scenario has no skill",
+    "counts": "pass",
+    "aggregates": [
+      "mean",
+      "min",
+      "max",
+      "n"
+    ]
   },
   {
     "id": "skill_loaded",
@@ -87,7 +165,13 @@
     "kind": "fraction",
     "unit": "share",
     "why": "does the model reliably read the skill files it is expected to?",
-    "aggregates": ["mean", "min", "max", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "mean",
+      "min",
+      "max",
+      "n"
+    ]
   },
   {
     "id": "skill_run",
@@ -97,7 +181,13 @@
     "kind": "fraction",
     "unit": "share",
     "why": "does the model reliably run the skill scripts it is expected to?",
-    "aggregates": ["mean", "min", "max", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "mean",
+      "min",
+      "max",
+      "n"
+    ]
   },
   {
     "id": "thinking",
@@ -107,7 +197,13 @@
     "kind": "fraction",
     "unit": "share",
     "why": "reasoning over output tokens: does a higher effort rung change how much it thinks?",
-    "aggregates": ["mean", "min", "max", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "mean",
+      "min",
+      "max",
+      "n"
+    ]
   },
   {
     "id": "throughput",
@@ -117,7 +213,29 @@
     "kind": "spread",
     "unit": "tokens_per_sec",
     "why": "output tokens per second of API time; the session view splits it by model",
-    "aggregates": ["median", "p25", "p75", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "median",
+      "p25",
+      "p75",
+      "n"
+    ]
+  },
+  {
+    "id": "ttft",
+    "label": "first token",
+    "field": "ttft_ms",
+    "per": null,
+    "kind": "spread",
+    "unit": "ms",
+    "why": "time to the first token: how long before the model starts answering",
+    "counts": "pass",
+    "aggregates": [
+      "median",
+      "p25",
+      "p75",
+      "n"
+    ]
   },
   {
     "id": "wall",
@@ -127,7 +245,13 @@
     "kind": "spread",
     "unit": "ms",
     "why": "the other felt cost: how long the reader waits",
-    "aggregates": ["median", "p25", "p75", "n"]
+    "counts": "pass",
+    "aggregates": [
+      "median",
+      "p25",
+      "p75",
+      "n"
+    ]
   },
   {
     "id": "verdict",
@@ -136,7 +260,29 @@
     "per": null,
     "kind": "rate",
     "unit": "share",
-    "why": "did it work? A pass rate over the samples, never a single run's word",
-    "aggregates": ["pass_rate", "ci_low", "ci_high", "n"]
+    "why": "did it work? A pass rate over the attempted samples, never a single run's word",
+    "counts": "pass",
+    "aggregates": [
+      "pass_rate",
+      "ci_low",
+      "ci_high",
+      "n"
+    ]
+  },
+  {
+    "id": "errors",
+    "label": "error rate",
+    "field": "verdict",
+    "per": null,
+    "kind": "rate",
+    "unit": "share",
+    "why": "how often the cell never reached a grade it earned: harness, limit or grader errors. Lower is better",
+    "counts": "error",
+    "aggregates": [
+      "error_rate",
+      "ci_low",
+      "ci_high",
+      "n"
+    ]
   }
 ]

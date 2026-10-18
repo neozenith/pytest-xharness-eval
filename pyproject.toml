@@ -104,6 +104,8 @@ unfixable = []
 "pytest_xharness_eval.harness".msg = "the adapter layer is above the domain; resolve a harness through model.registry (ADR 0039)"
 "pytest_xharness_eval.verify".msg = "verify is above derive, harness and model; a check reads a finished rollout and never helps produce one (ADR 0045)"
 "pytest_xharness_eval.emit".msg = "emit is above derive, harness and model; a document must not be named from beneath it (ADR 0039)"
+# `analyze/` sits above `emit/` (it reads the stored metrics records) and below `runtime/`.
+"pytest_xharness_eval.analyze".msg = "analyze is above emit, verify, derive, harness and model; only runtime and the entry points may name it"
 "pytest_xharness_eval.runtime".msg = "runtime is the top layer below the entry points; nothing beneath it may name it (ADR 0039)"
 
 [tool.ruff.lint.per-file-ignores]
@@ -115,10 +117,13 @@ unfixable = []
 "src/pytest_xharness_eval/__init__.py" = ["TID251"]
 "src/pytest_xharness_eval/plugin/*" = ["TID251"]
 "src/pytest_xharness_eval/replay.py" = ["TID251"]
+"src/pytest_xharness_eval/promote.py" = ["TID251"]
+"src/pytest_xharness_eval/analysis.py" = ["TID251"]
 "src/pytest_xharness_eval/model/registry.py" = ["TID251"]
 "src/pytest_xharness_eval/harness/*" = ["TID251"]
 "src/pytest_xharness_eval/verify/*" = ["TID251"]
 "src/pytest_xharness_eval/emit/*" = ["TID251"]
+"src/pytest_xharness_eval/analyze/*" = ["TID251"]
 "src/pytest_xharness_eval/runtime/*" = ["TID251"]
 "tests/*" = ["TID251"]
 

@@ -23,6 +23,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, NotRequired, Self, TypedDict, Unpack
 
 # Our Libraries
+from pytest_xharness_eval.model.case import CaseKind
 from pytest_xharness_eval.model.clock import ms_between
 
 if TYPE_CHECKING:
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
     from pytest_xharness_eval.derive.skillcov import SkillCoverage
     from pytest_xharness_eval.derive.toolcost import SkillUse, ToolCost
     from pytest_xharness_eval.model.case import EvalCase
+    from pytest_xharness_eval.model.scenario import Scenario
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,25 +315,53 @@ class CaseRef:
 
     suite: str = ""
     name: str = ""
-    skill: str = ""
+    #: The subject coordinate: the skill under test, or the directory a scenario case lives
+    #: under (ADR 0074). ``kind`` says which. Written under the wire key ``skill``, which
+    #: every record has carried since before a subject could be anything but a skill.
+    subject: str = ""
     fixture: str = ""
     task: str = ""
     prompt: str = ""
+    #: None for a capture that predates ADR 0074 or names a kind this version does not know.
+    kind: CaseKind | None = None
+    #: The generated scenario this run measured: its id, the digest of its bytes, and the
+    #: parameters the grader read (ADR 0074). Empty for a committed fixture.
+    scenario: str | None = None
+    scenario_fingerprint: str | None = None
+    scenario_params: dict[str, Any] = field(default_factory=dict)
+    #: The digest of the paths the case tracks: which version of the subject ran.
+    subject_version: str | None = None
 
     @classmethod
-    def of(cls, case: EvalCase, suite: str, prompt: str) -> Self:
+    def of(
+        cls,
+        case: EvalCase,
+        suite: str,
+        prompt: str,
+        *,
+        subject: str,
+        scenario: Scenario | None = None,
+        subject_version: str | None = None,
+    ) -> Self:
         """The reference to ``case`` from suite file ``suite``, sent to a CLI as ``prompt``.
 
         ``prompt`` is supplied rather than derived here, because only the caller knows which
         harness this run is for and the rendering belongs to that harness (ADR 0044).
+        ``subject`` is the directory the case's ``evals/`` sits under, which only collection
+        knows; for a skill case it is the skill.
         """
         return cls(
             suite=suite,
             name=case.name,
-            skill=case.skill,
-            fixture=case.fixture,
-            task=case.task,
+            subject=subject,
+            fixture=case.fixture_name,
+            task=case.task_for(scenario),
             prompt=prompt,
+            kind=case.kind,
+            scenario=scenario.id if scenario else None,
+            scenario_fingerprint=scenario.fingerprint if scenario else None,
+            scenario_params=scenario.merged if scenario else {},
+            subject_version=subject_version,
         )
 
     @classmethod
@@ -344,14 +374,51 @@ class CaseRef:
         """
         if not raw:
             return None
+        params = raw.get("scenario_params")
+        kind = raw.get("kind")
         return cls(
             suite=str(raw.get("suite") or ""),
             name=str(raw.get("name") or ""),
-            skill=str(raw.get("skill") or ""),
+            subject=str(raw.get("skill") or ""),
             fixture=str(raw.get("fixture") or ""),
             task=str(raw.get("task") or ""),
             prompt=str(raw.get("prompt") or ""),
+            # A word this version does not know reads back as no kind, never as a guess (ADR 0038).
+            kind=CaseKind(kind) if kind in {k.value for k in CaseKind} else None,
+            scenario=str(raw["scenario"]) if raw.get("scenario") else None,
+            scenario_fingerprint=str(raw["scenario_fingerprint"]) if raw.get("scenario_fingerprint") else None,
+            scenario_params=dict(params) if isinstance(params, dict) else {},
+            subject_version=str(raw["subject_version"]) if raw.get("subject_version") else None,
         )
+
+    @property
+    def skill_under_test(self) -> str | None:
+        """The skill this run measured, or None for a scenario case, which measured none (ADR 0074).
+
+        A capture with no ``kind`` predates scenario cases, so its subject was a skill.
+        """
+        if self.kind is CaseKind.SCENARIO:
+            return None
+        return self.subject or None
+
+    def to_dict(self) -> dict[str, Any]:
+        """The ``case`` keys of ``result.json``: the subject under its wire key ``skill``, the kind as its word.
+
+        An unknown kind is written as the empty string it has always been on the wire.
+        """
+        return {
+            "suite": self.suite,
+            "name": self.name,
+            "skill": self.subject,
+            "fixture": self.fixture,
+            "task": self.task,
+            "prompt": self.prompt,
+            "kind": self.kind.value if self.kind else "",
+            "scenario": self.scenario,
+            "scenario_fingerprint": self.scenario_fingerprint,
+            "scenario_params": dict(self.scenario_params),
+            "subject_version": self.subject_version,
+        }
 
 
 class RunResultFields(TypedDict):
@@ -570,6 +637,19 @@ class RunResult:
         return round(self.usage.reasoning_tokens / self.usage.output_tokens, 4)
 
     @property
+    def cache_read_share(self) -> float | None:
+        """Cache reads over every prompt token, whole run, subagents included; None with no prompt.
+
+        ``cache_read / (input + cache_read + cache_write)``: how well the run reused its context.
+        A low share on a long run usually means the prefix kept changing.
+        """
+        u = self.usage
+        prompt = u.input_tokens + u.cache_read_tokens + u.cache_write_tokens
+        if not prompt:
+            return None
+        return round(u.cache_read_tokens / prompt, 6)
+
+    @property
     def subagent_token_share(self) -> float | None:
         """The subagents' part of the run's billed tokens, in ``[0, 1]`` (ADR 0071); None on an empty bill."""
         total = self.usage.accumulative_billed_tokens
@@ -617,7 +697,9 @@ class RunResult:
         one straight to the field. An absent record has always serialised as ``{}``.
         """
         d = asdict(self)
-        for absent in ("case", "skill_coverage", "rates_applied", "skill_use"):
+        # The case maps its subject back to the wire key ``skill`` (ADR 0074), so asdict's field walk is replaced.
+        d["case"] = self.case.to_dict() if self.case else {}
+        for absent in ("skill_coverage", "rates_applied", "skill_use"):
             d[absent] = d[absent] or {}
         d["usage"]["accumulative_billed_tokens"] = self.usage.accumulative_billed_tokens
         d["baseline_tokens"] = self.baseline_tokens
@@ -628,6 +710,7 @@ class RunResult:
         d["output_tokens_per_sec"] = self.output_tokens_per_sec
         d["output_tokens_per_sec_by_model"] = self.output_tokens_per_sec_by_model
         d["reasoning_share"] = self.reasoning_share
+        d["cache_read_share"] = self.cache_read_share
         d["subagent_token_share"] = self.subagent_token_share
         d["subagent_cost_share"] = self.subagent_cost_share
         for call, raw in zip(self.calls, d["calls"], strict=True):

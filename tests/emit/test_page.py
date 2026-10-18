@@ -26,7 +26,7 @@ def test_report_indexes_every_captured_result_and_writes_the_page(tmp_path: Path
     new.harness, new.session_id, new.turns = "claude", "9f5f73a0", 13
     new.harness_reported_cost_usd, new.estimated_cost_usd = 0.66, 0.55
     new.rates_applied = _applied_rates(model="claude-opus-5")
-    new.case = CaseRef(name="eval_demo", skill="demo")
+    new.case = CaseRef(name="eval_demo", subject="demo")
     new.calls = [
         Call(n=1, at="t", usage=Usage(input_tokens=2, cache_read_tokens=22_954), tools=[ToolCall("Bash", "ls")])
     ]

@@ -13,6 +13,7 @@ relates_to:
   - { relation: extends, target: ADR-0038 }
   - { relation: extends, target: ADR-0039 }
   - { relation: extends, target: ADR-0040 }
+  - { relation: superseded_by, target: ADR-0075 }
 generated: { by: human:neozenith, at: 2026-08-28T00:00:00Z }
 ---
 
@@ -24,6 +25,7 @@ It also refines [0038](0038-a-tolerant-reader-still-honours-its-declaration.md) 
 And it refines [0040](0040-the-plugin-is-a-hook-manifest.md) (the plugin is a hook manifest).
 **Supersedes 0040's placement of `Verdict` in `plugin/verdict.py`, and the justification given there for it.** Structural only: no serialised key, no ini key, no CLI option and no metric's value changes.
 Every hook keeps its name and its signature, and the characterization goldens are byte-identical.
+Its count of seven bound hooks is superseded by [0075](0075-an-analyzer-is-a-checker-over-every-sample.md): `pytest_sessionfinish` makes eight.
 
 ## Context
 

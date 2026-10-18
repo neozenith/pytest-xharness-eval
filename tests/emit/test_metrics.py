@@ -10,14 +10,19 @@ from pytest_xharness_eval import (
     Call,
     CaseRef,
     Cell,
+    CostStatus,
+    ToolCall,
     Usage,
 )
 from pytest_xharness_eval.derive import skillcov
+from pytest_xharness_eval.derive.toolcost import SkillUse, ToolCost
 from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome
 from pytest_xharness_eval.model import clock
 from pytest_xharness_eval.model import matrix as mx
+from pytest_xharness_eval.model.case import CaseKind
+from pytest_xharness_eval.model.layout import CacheLayout
 from pytest_xharness_eval.model.verdict import Verdict
-from tests.support import _applied_rates, _metrics, _result
+from tests.support import _applied_rates, _metrics, _result, _subagent
 
 
 def test_a_dry_run_record_names_the_rung_it_would_have_run_at() -> None:
@@ -33,7 +38,7 @@ def test_case_metadata_round_trips_and_reaches_history(tmp_path: Path) -> None:
     r.case = CaseRef(
         suite="skills/demo/evals/eval_demo.py",
         name="eval_demo",
-        skill="demo",
+        subject="demo",
         fixture="seed",
         task="say hi",
         prompt="/demo say hi",
@@ -169,11 +174,16 @@ def test_a_metrics_record_survives_a_partial_or_foreign_document(tmp_path: Path)
 # the same edit there is a silently broken page, which is what this list exists to catch.
 HISTORY_KEYS = [
     "accumulative_billed_tokens",
+    "api_duration_ms",
     "at",
+    "attempted",
     "baseline_tokens",
     "cache",
+    "cache_read_share",
     "cache_read_tokens",
+    "cache_rereads",
     "cache_write_1h_tokens",
+    "cache_write_5m_tokens",
     "cache_write_tokens",
     "case",
     "compactions",
@@ -182,14 +192,20 @@ HISTORY_KEYS = [
     "duration_ms",
     "effort",
     "estimated_cost_usd",
+    "exit_code",
+    "failure",
     "family_tier",
     "files_written",
     "final_context_pct",
+    "final_context_tokens",
     "fixture",
     "harness",
     "harness_reported_cost_usd",
+    "idle_before_timeout_s",
     "input_tokens",
+    "kind",
     "line",
+    "long_context_calls",
     "model",
     "node",
     "output_tokens",
@@ -202,20 +218,44 @@ HISTORY_KEYS = [
     "record_kinds",
     "released",
     "reported_turns",
+    "scenario",
+    "scenario_fingerprint",
     "session_id",
     "skill",
+    "skill_context_cost_share",
+    "skill_context_cost_usd",
+    "skill_cost_share",
+    "skill_duration_ms",
     "skill_files",
     "skill_files_loaded",
+    "skill_issuing_cost_usd",
     "skill_not_loaded",
     "skill_not_run",
     "skill_scripts",
     "skill_scripts_run",
+    "skill_tool_calls",
+    "skill_trigger",
+    "skill_triggered",
+    "skill_triggered_turn",
     "subagent_cost_share",
+    "subagent_max_cost_usd",
+    "subagent_max_depth",
+    "subagent_max_ms",
+    "subagent_ms",
+    "subagent_peak_context_pct",
     "subagent_token_share",
     "subagents",
+    "subject_version",
     "suite",
+    "timed_out_after_s",
     "tool_calls",
     "tool_calls_by_name",
+    "tool_calls_by_name_all",
+    "tool_context_cost_usd",
+    "tool_context_cost_usd_by_name",
+    "tool_issuing_cost_usd",
+    "tool_issuing_cost_usd_by_name",
+    "tool_ms_by_name",
     "treatment",
     "ttft_ms",
     "turns",
@@ -235,3 +275,123 @@ def test_history_json_has_exactly_the_frozen_key_set() -> None:
     # The fourth word's only producer names it from the vocabulary, and still stores the
     # plain word: this record is shipped by execnet (ADR 0016, ADR 0041).
     assert dry.verdict == Verdict.DRY_RUN and type(dry.verdict) is str
+
+
+def _tool_cost(name: str, issuing: float, context: float, rereads: int) -> ToolCost:
+    return ToolCost(
+        thread="",
+        turn=1,
+        id=f"t-{name}",
+        name=name,
+        summary="",
+        started_at="",
+        ended_at="",
+        duration_ms=None,
+        issuing_cost_usd=issuing,
+        result_tokens=0,
+        context_cost_usd=context,
+        cache_rereads=rereads,
+    )
+
+
+def _timed(name: str, seconds: int) -> ToolCall:
+    return ToolCall(name, "", started_at="2026-10-01T00:00:00.000Z", ended_at=f"2026-10-01T00:00:0{seconds}.000Z")
+
+
+def test_the_tool_skill_cache_and_subagent_figures_reach_the_record() -> None:
+    """ADR 0073's per-tool and skill-use figures, flattened so the Analyzer can group and compare them."""
+    r = _result("m", Usage(input_tokens=20, cache_read_tokens=60, cache_write_tokens=20))
+    r.estimated_cost_usd, r.cost_status = 2.0, CostStatus.PRICED
+    r.calls = [Call(n=1, at="t", tools=[_timed("Bash", 2), _timed("Read", 1), ToolCall("Bash", "")])]
+    r.subagents = [
+        _subagent([Call(n=1, at="t", tools=[_timed("Bash", 3)])]),
+        _subagent(id="a2", depth=2, parent="a1", ended_at="2026-10-01T00:00:05.000Z"),
+    ]
+    r.tool_costs = [_tool_cost("Bash", 0.25, 0.5, 2), _tool_cost("Bash", 0.25, 0.0, 1), _tool_cost("Read", 0.1, 0.2, 0)]
+    r.skill_use = SkillUse(
+        skill="demo",
+        trigger="prompt",
+        triggered_turn=1,
+        triggered_at="t",
+        last_turn=3,
+        last_at="t",
+        duration_ms=900,
+        tool_calls=2,
+        issuing_cost_usd=0.5,
+        context_cost_usd=0.25,
+        cache_rereads=1,
+    )
+    rec = _metrics(r).to_dict()
+    assert rec["tool_ms_by_name"] == {"Bash": 5000, "Read": 1000}  # an untimed call adds nothing
+    assert (rec["tool_issuing_cost_usd_by_name"], rec["tool_context_cost_usd_by_name"]) == (
+        {"Bash": 0.5, "Read": 0.1},
+        {"Bash": 0.5, "Read": 0.2},
+    )
+    assert (rec["tool_issuing_cost_usd"], rec["tool_context_cost_usd"], rec["cache_rereads"]) == (0.6, 0.7, 3)
+    assert rec["cache_read_share"] == 0.6
+    assert (rec["skill_trigger"], rec["skill_triggered_turn"], rec["skill_duration_ms"]) == ("prompt", 1, 900)
+    assert (rec["skill_tool_calls"], rec["skill_issuing_cost_usd"], rec["skill_context_cost_usd"]) == (2, 0.5, 0.25)
+    assert (rec["skill_cost_share"], rec["skill_context_cost_share"]) == (0.25, 0.125)
+    # Counts over every thread, beside the primary-only wire field, so ms per call divides like by like.
+    assert (rec["tool_calls_by_name"], rec["tool_calls_by_name_all"]) == ({}, {"Bash": 3, "Read": 1})
+    assert (rec["subagent_ms"], rec["subagent_max_depth"], rec["subagent_max_ms"]) == (15000, 2, 10000)
+    # A thread with no estimate of its own leaves the costliest thread unknown, not zero.
+    assert rec["subagent_max_cost_usd"] is None
+    r.subagents[0].estimated_cost_usd, r.subagents[1].estimated_cost_usd = 0.3, 0.1
+    assert _metrics(r).subagent_max_cost_usd == 0.3
+
+
+def test_a_run_without_tool_costs_skill_use_or_subagents_records_none_not_zero() -> None:
+    """An unpriced run, or a scenario case, must drop out of a metric's n rather than average as zero."""
+    rec = _metrics(_result("m", Usage())).to_dict()
+    assert (rec["tool_issuing_cost_usd"], rec["tool_context_cost_usd"], rec["cache_rereads"]) == (None, None, None)
+    assert (rec["tool_ms_by_name"], rec["tool_issuing_cost_usd_by_name"]) == ({}, {})
+    assert (rec["skill_trigger"], rec["skill_cost_share"], rec["cache_read_share"], rec["skill_triggered"]) == (
+        None,
+    ) * 4
+    # Zero subagents is a count and a span of 0, like ``subagents`` itself; a window-less share is None.
+    assert (rec["subagents"], rec["subagent_ms"], rec["subagent_max_depth"], rec["subagent_max_ms"]) == (0, 0, 0, 0)
+    assert (rec["subagent_max_cost_usd"], rec["subagent_peak_context_pct"]) == (None, None)
+
+
+def test_a_priced_run_with_no_tools_costs_nothing_and_a_skill_case_records_whether_it_triggered() -> None:
+    r = _result("m", Usage(input_tokens=10))
+    r.cost_status, r.context_window = CostStatus.PRICED, 1000
+    r.case = CaseRef(kind=CaseKind.SKILL)
+    rec = _metrics(r).to_dict()
+    assert (rec["tool_issuing_cost_usd"], rec["tool_context_cost_usd"], rec["cache_rereads"]) == (0.0, 0.0, 0)
+    assert (rec["skill_triggered"], rec["subagent_max_cost_usd"], rec["subagent_peak_context_pct"]) == (0, 0.0, 0.0)
+    r.case = CaseRef(kind=CaseKind.SCENARIO)
+    assert _metrics(r).skill_triggered is None
+
+
+def test_how_the_cli_ended_and_its_timing_reach_the_record() -> None:
+    r = _result("m", Usage(input_tokens=10, output_tokens=5, cache_write_tokens=8, cache_write_5m_tokens=8))
+    r.calls = [Call(n=1, at="t", usage=Usage(input_tokens=10, output_tokens=5))]
+    r.exit_code, r.api_duration_ms, r.long_context_calls = 3, 700, 1
+    r.timed_out_after_s, r.idle_before_timeout_s = 600, 12.5
+    rec = _metrics(r).to_dict()
+    assert (rec["exit_code"], rec["attempted"], rec["api_duration_ms"], rec["long_context_calls"]) == (3, 1, 700, 1)
+    assert (rec["timed_out_after_s"], rec["idle_before_timeout_s"]) == (600, 12.5)
+    assert (rec["cache_write_5m_tokens"], rec["final_context_tokens"]) == (8, 15)
+    r.calls = []
+    assert _metrics(r).attempted == 0  # exited non-zero without a model call
+
+
+def test_a_failure_reason_and_the_scenario_facts_ride_the_record_and_round_trip(tmp_path: Path) -> None:
+    r = _result("m", Usage(1, 2))
+    r.case = CaseRef(
+        suite="s.py", name="eval_x", kind=CaseKind.SCENARIO, scenario="doc--1234abcd", subject_version="v1"
+    )
+    r.case = dataclasses.replace(r.case, scenario_fingerprint="f" * 64)
+    outcome = Outcome(node="n", verdict=Verdict.FAIL, wall_ms=3, started_at="t", failure="doc.md still has MD009")
+    record = CellMetrics.of(r, outcome=outcome, cache=CacheLayout(tmp_path))
+    assert (record.failure, record.kind, record.scenario, record.subject_version) == (
+        "doc.md still has MD009",
+        "scenario",
+        "doc--1234abcd",
+        "v1",
+    )
+    assert record.scenario_fingerprint == "f" * 64
+    back = CellMetrics.stored(record.write(tmp_path / "history.json"))
+    assert back is not None and back.outcome == outcome  # a replay carries the reason forward

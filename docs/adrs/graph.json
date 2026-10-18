@@ -1101,6 +1101,34 @@
     },
     {
       "data": {
+        "id": "ADR-0074",
+        "label": "0074",
+        "parent": "group-collection",
+        "colour": "#4d7c0f",
+        "file": "0074-a-case-may-be-a-scenario-and-its-fixtures-may-be-generated.md",
+        "title": "A case may be a scenario with no skill, and its fixtures may be generated, hunted for and promoted",
+        "description": "A case may be a scenario with no skill, and its fixtures may be generated, hunted for and promoted",
+        "status": "accepted",
+        "group": "collection",
+        "tags": "collection, grading"
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0075",
+        "label": "0075",
+        "parent": "group-grading",
+        "colour": "#0284c7",
+        "file": "0075-an-analyzer-is-a-checker-over-every-sample.md",
+        "title": "An analyzer is a checker over every sample, run after the sweep and on demand",
+        "description": "An analyzer is a checker over every sample, run after the sweep and on demand",
+        "status": "accepted",
+        "group": "grading",
+        "tags": "grading, architecture"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -1921,6 +1949,16 @@
     },
     {
       "data": {
+        "id": "ADR-0039-superseded_by-ADR-0075",
+        "source": "ADR-0039",
+        "target": "ADR-0075",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the record's status line says \"superseded by\""
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0040-extends-ADR-0008",
         "source": "ADR-0040",
         "target": "ADR-0008",
@@ -2037,6 +2075,16 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"refines\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0041-superseded_by-ADR-0075",
+        "source": "ADR-0041",
+        "target": "ADR-0075",
+        "label": "superseded by",
+        "relation": "superseded_by",
+        "note": "the record's status line says \"superseded by\""
       }
     },
     {
@@ -2937,6 +2985,86 @@
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0074-extends-ADR-0008",
+        "source": "ADR-0074",
+        "target": "ADR-0008",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0074-extends-ADR-0044",
+        "source": "ADR-0074",
+        "target": "ADR-0044",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0074-extends-ADR-0018",
+        "source": "ADR-0074",
+        "target": "ADR-0018",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0075-extends-ADR-0045",
+        "source": "ADR-0075",
+        "target": "ADR-0045",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0075-extends-ADR-0071",
+        "source": "ADR-0075",
+        "target": "ADR-0071",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0075-extends-ADR-0074",
+        "source": "ADR-0075",
+        "target": "ADR-0074",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0075-supersedes-ADR-0039",
+        "source": "ADR-0075",
+        "target": "ADR-0039",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "the record's status line says \"supersedes\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0075-supersedes-ADR-0041",
+        "source": "ADR-0075",
+        "target": "ADR-0041",
+        "label": "supersedes",
+        "relation": "supersedes",
+        "note": "the record's status line says \"supersedes\""
       }
     }
   ],

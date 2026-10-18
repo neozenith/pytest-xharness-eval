@@ -27,12 +27,16 @@ from __future__ import annotations
 # Our Libraries
 from pytest_xharness_eval import emit as report
 from pytest_xharness_eval import verify as verify
+from pytest_xharness_eval.analyze import Analysis, Samples
 from pytest_xharness_eval.derive import pricing as pricing
 from pytest_xharness_eval.derive import skillcov as skillcov
 from pytest_xharness_eval.harness import normalise as normalise
 from pytest_xharness_eval.harness import records as records
-from pytest_xharness_eval.model.case import EvalCase, evalcase
+from pytest_xharness_eval.model import generators as generators
+from pytest_xharness_eval.model.analysis import Change, analyzer
+from pytest_xharness_eval.model.case import CaseKind, EvalCase, evalcase
 from pytest_xharness_eval.model.catalogue import ModelSpec
+from pytest_xharness_eval.model.generators import Adversarial, Generated, Promoted, Table
 from pytest_xharness_eval.model.matrix import Cell
 from pytest_xharness_eval.model.output import CaseOutput
 from pytest_xharness_eval.model.runresult import (
@@ -46,22 +50,37 @@ from pytest_xharness_eval.model.runresult import (
     ToolResult,
     Usage,
 )
+from pytest_xharness_eval.model.scenario import Draw, FixtureGenerator, GenerationContext, Scenario
 
 __all__ = [
+    "Adversarial",
+    "Analysis",
     "Call",
+    "CaseKind",
     "CaseOutput",
     "CaseRef",
     "Cell",
+    "Change",
     "CostStatus",
+    "Draw",
     "EvalCase",
     "ExecutedCommand",
+    "FixtureGenerator",
+    "Generated",
+    "GenerationContext",
     "ModelSpec",
+    "Promoted",
     "RunResult",
+    "Samples",
+    "Scenario",
     "Subagent",
+    "Table",
     "ToolCall",
     "ToolResult",
     "Usage",
+    "analyzer",
     "evalcase",
+    "generators",
     "normalise",
     "pricing",
     "records",

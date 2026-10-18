@@ -12,6 +12,7 @@ relates_to:
   - { relation: extends, target: ADR-0027 }
   - { relation: extends, target: ADR-0034 }
   - { relation: extends, target: ADR-0037 }
+  - { relation: superseded_by, target: ADR-0075 }
 generated: { by: human:neozenith, at: 2026-08-28T00:00:00Z }
 ---
 
@@ -21,6 +22,7 @@ Status: accepted, 2026-08-28.
 Refines [0014](0014-register-through-the-pytest11-entry-point.md) (register through the pytest11 entry point) and [0027](0027-coverage-follows-the-shells-working-directory.md) (coverage follows the shell's working directory).
 It also refines [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) (a harness is a class and the registry is the only dispatch) and [0037](0037-the-emitted-records-are-types-and-the-cache-tree-has-one-owner.md) (the emitted records are types).
 Structural only: no serialised key, no ini key, no CLI option and no metric's value changes, and the characterization goldens are byte-identical.
+Its count of two entry-point modules is superseded by [0075](0075-an-analyzer-is-a-checker-over-every-sample.md): there are four, and `analyze/` joins the layers between `emit/` and `runtime/`.
 
 ## Context
 

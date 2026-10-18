@@ -20,6 +20,7 @@ from pytest_xharness_eval.model.metrics import (
     summarise,
     wilson,
 )
+from pytest_xharness_eval.model.verdict import Verdict
 
 
 def test_the_declaration_names_each_metric_once_and_every_kind_reports_n() -> None:
@@ -84,16 +85,23 @@ def test_a_value_is_read_from_its_field_or_divided_by_its_denominator() -> None:
     assert _metric(per="b").value({"a": 3, "b": 0}) is None
 
 
-def test_a_verdict_counts_pass_as_one_any_other_grade_as_zero_and_a_dry_run_not_at_all() -> None:
+WORDS = ("pass", "fail", "error", "dry-run", "", "maybe")
+
+
+def test_a_pass_rate_counts_a_pass_as_one_a_fail_as_zero_and_an_error_or_dry_run_not_at_all() -> None:
     verdict = _metric(field="verdict", kind=MetricKind.RATE)
-    assert [verdict.value({"verdict": w}) for w in ("pass", "fail", "error", "dry-run", "", "maybe")] == [
-        1.0,
-        0.0,
-        0.0,
-        None,
-        None,
-        None,
-    ]
+    assert [verdict.value({"verdict": w}) for w in WORDS] == [1.0, 0.0, None, None, None, None]
+
+
+def test_the_error_rate_counts_every_graded_verdict_and_is_declared() -> None:
+    errors = next(m for m in IMPORTANT_METRICS if m.id == "errors")
+    assert (errors.kind, errors.counts, errors.to_dict()["counts"]) == (MetricKind.RATE, Verdict.ERROR, "error")
+    assert [errors.value({"verdict": w}) for w in WORDS] == [0.0, 0.0, 1.0, None, None, None]
+    # Its headline is stored as what it is, never under ``pass_rate``.
+    assert errors.to_dict()["aggregates"] == ["error_rate", "ci_low", "ci_high", "n"]
+    out = errors.summarise([{"verdict": "error"}, {"verdict": "pass"}, {"verdict": "fail"}, {"verdict": "pass"}])
+    assert (out["error_rate"], out["n"], "pass_rate" in out) == (0.25, 4, False)
+    assert {"errors", "skill_triggered", "cache", "ttft"} <= {m.id for m in IMPORTANT_METRICS}
 
 
 def test_summarise_skips_the_samples_that_did_not_record_the_metric() -> None:
@@ -111,6 +119,7 @@ def test_the_declaration_serialises_its_aggregates_spelled_out() -> None:
         "kind": "spread",
         "unit": "usd",
         "why": cost.why,
+        "counts": "pass",
         "aggregates": ["median", "p25", "p75", "n"],
     }
 

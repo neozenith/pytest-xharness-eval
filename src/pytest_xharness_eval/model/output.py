@@ -16,7 +16,7 @@ from __future__ import annotations
 
 # Standard Library
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     # Standard Library
@@ -24,6 +24,36 @@ if TYPE_CHECKING:
 
     # Our Libraries
     from pytest_xharness_eval.model.runresult import RunResult
+    from pytest_xharness_eval.model.scenario import Scenario
+
+
+@dataclass(frozen=True, slots=True)
+class Seed:
+    """The workspace as the agent will first find it, before anything has run (ADR 0074).
+
+    What a case's ``precheck`` is handed: the materialised fixture (and any treatment over
+    it) and the scenario that produced it. A precheck gates the *input* -- does this seed
+    still reproduce the rule the case is about? -- so a broken fixture stops the cell before
+    it spends, and ``--dry-run`` validates every fixture for free.
+    """
+
+    workspace: Path
+    scenario: Scenario | None = None
+
+    def path(self, rel: str) -> Path:
+        """The absolute path of ``rel`` inside the seeded workspace."""
+        return self.workspace / rel
+
+    def read(self, rel: str) -> str:
+        """The seeded text of ``rel``."""
+        return self.path(rel).read_text(encoding="utf-8")
+
+    @property
+    def params(self) -> dict[str, Any]:
+        """The scenario's parameters; a committed fixture has none, and asking raises."""
+        if self.scenario is None:
+            raise ValueError("this case runs on a committed fixture, which has no scenario params")
+        return self.scenario.merged
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +73,10 @@ class CaseOutput:
     #: answerable: at grading time the workspace holds the seed and the writes mixed
     #: together, and only the collector knows which was which.
     seeded: frozenset[str] = frozenset()
+    #: The generated scenario this rollout ran on, None for a committed fixture directory
+    #: (ADR 0074). Its ``params`` are what the grader checks the outcome against, and its
+    #: ``files`` are the seed exactly as the agent first saw it.
+    scenario: Scenario | None = None
 
     # -- reaching into the workspace ---------------------------------------------------
 
@@ -92,6 +126,29 @@ class CaseOutput:
     def added(self) -> list[str]:
         """Written paths the fixture did not seed: files this rollout brought into being."""
         return sorted(set(self.written) - self.seeded)
+
+    @property
+    def params(self) -> dict[str, Any]:
+        """The scenario's parameters; a grader of a committed fixture that asks has a bug, so it raises."""
+        if self.scenario is None:
+            raise ValueError("this case runs on a committed fixture, which has no scenario params")
+        return self.scenario.merged
+
+    def seed(self, rel: str) -> str:
+        """The text ``rel`` had before the agent touched it, read from the scenario or the seed list.
+
+        The yardstick content-preservation checks compare the result with. Raises
+        ValueError (a suite bug, so the cell errors) when the seed did not contain ``rel``.
+        """
+        if self.scenario is not None:
+            if rel not in self.scenario.files:
+                raise ValueError(f"{rel} was not part of the scenario; it seeded: {sorted(self.scenario.files)}")
+            content = self.scenario.files[rel]
+            return content.decode("utf-8") if isinstance(content, bytes) else content
+        raise ValueError(
+            "the seed text of a committed fixture is read from evals/fixtures/ by the suite itself; "
+            "output.seed() answers only for a generated scenario"
+        )
 
     @property
     def changed(self) -> list[str]:

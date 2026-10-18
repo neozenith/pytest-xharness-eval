@@ -12,7 +12,7 @@ from tests.support import _unfoldable
 
 def test_the_record_keeps_the_refusal_and_what_a_later_fold_needs(tmp_path: Path) -> None:
     err = _unfoldable(tmp_path)
-    case = CaseRef(suite="s.py", name="eval_x", skill="demo", fixture="seed", task="go", prompt="/demo go")
+    case = CaseRef(suite="s.py", name="eval_x", subject="demo", fixture="seed", task="go", prompt="/demo go")
     record = UnfoldedRecord.of(err.evidence, str(err), case=case, effort="high", treatment=None)
     written = json.loads(record.write(tmp_path / "out" / "unfolded.json").read_text(encoding="utf-8"))
     assert "no captured subagent transcript: tu_x" in written["error"]

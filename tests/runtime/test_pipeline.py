@@ -18,6 +18,7 @@ from pytest_xharness_eval import (
 )
 from pytest_xharness_eval.derive import pricing, skillcov
 from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome
+from pytest_xharness_eval.model.case import CaseKind
 from pytest_xharness_eval.model.layout import CacheLayout, SessionDir
 from pytest_xharness_eval.model.verdict import Verdict
 from pytest_xharness_eval.runtime import pipeline
@@ -104,16 +105,29 @@ def test_derive_prices_annotates_and_names_the_case_in_one_order(tmp_path: Path)
         evalcase(task="go", skill="demo", fixture="seed")(lambda output: None),
         "skills/demo/evals/eval_x.py",
         "/demo go",
+        subject="demo",
     )
-    out = pipeline.derive(r, table=pricing.load_table(), run_date=DAY, skill="demo", skill_files=files, case=case)
+    out = pipeline.derive(r, table=pricing.load_table(), run_date=DAY, skill_files=files, case=case)
     assert out is r
     assert r.cost_status is CostStatus.PRICED and r.estimated_cost_usd == pytest.approx(5.0)
     assert r.skill_coverage is not None and r.skill_coverage.loaded == ["SKILL.md"]
     assert r.case == CaseRef(
         suite="skills/demo/evals/eval_x.py",
         name="<lambda>",
-        skill="demo",
+        subject="demo",
         fixture="seed",
         task="go",
         prompt="/demo go",
+        kind=CaseKind.SKILL,
     )
+
+
+def test_derive_for_a_scenario_case_annotates_no_skill(tmp_path: Path) -> None:
+    """A scenario case names no skill under test: neither coverage nor a skill's use (ADR 0074)."""
+    r = _result("claude-opus-5", Usage(1_000_000, 0, 0, 0))
+    r.calls = [Call(n=1, at="t", tools=[ToolCall("Read", "", {"file_path": "/x/skills/demo/SKILL.md"})])]
+    case = CaseRef(suite="skills/lint/evals/eval_lint.py", name="eval_lint", subject="lint", kind=CaseKind.SCENARIO)
+    files = skillcov.catalog(_skill(tmp_path))
+    out = pipeline.derive(r, table=pricing.load_table(), run_date=DAY, skill_files=files, case=case)
+    assert (out.skill_coverage, out.skill_use) == (None, None)
+    assert out.cost_status is CostStatus.PRICED and out.case is case

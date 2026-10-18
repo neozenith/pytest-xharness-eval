@@ -4,7 +4,7 @@
 
 Browse it interactively in [graph.html](graph.html): click a node to read its record.
 
-73 decision records, 184 typed edges, grouped into 11 groups.
+75 decision records, 194 typed edges, grouped into 11 groups.
 Every edge comes from a record's `relates_to` block, so this view cannot drift from the records.
 
 ```cytoscape
@@ -175,3 +175,9 @@ These are gaps in the record set, not rendering artifacts.
 * `ADR-0073` declares `extends ADR-0022`, but `ADR-0022` has no `extended_by ADR-0073`
 * `ADR-0073` declares `extends ADR-0065`, but `ADR-0065` has no `extended_by ADR-0073`
 * `ADR-0073` declares `extends ADR-0072`, but `ADR-0072` has no `extended_by ADR-0073`
+* `ADR-0074` declares `extends ADR-0008`, but `ADR-0008` has no `extended_by ADR-0074`
+* `ADR-0074` declares `extends ADR-0044`, but `ADR-0044` has no `extended_by ADR-0074`
+* `ADR-0074` declares `extends ADR-0018`, but `ADR-0018` has no `extended_by ADR-0074`
+* `ADR-0075` declares `extends ADR-0045`, but `ADR-0045` has no `extended_by ADR-0075`
+* `ADR-0075` declares `extends ADR-0071`, but `ADR-0071` has no `extended_by ADR-0075`
+* `ADR-0075` declares `extends ADR-0074`, but `ADR-0074` has no `extended_by ADR-0075`

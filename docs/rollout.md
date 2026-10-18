@@ -18,14 +18,20 @@ Three ADRs govern this page: [0044](adrs/0044-a-skill-is-invoked-the-way-its-use
 (a case declares a *task*, the harness renders the invocation),
 [0045](adrs/0045-the-verifiers-ship-with-the-plugin.md) (the shared checks, and this
 surface) and [0046](adrs/0046-a-golden-is-compared-facet-by-facet-within-a-declared-tolerance.md)
-(goldens).
+(goldens). [0074](adrs/0074-a-case-may-be-a-scenario-and-its-fixtures-may-be-generated.md)
+adds scenario cases, generated fixtures and the precheck, and
+[0075](adrs/0075-an-analyzer-is-a-checker-over-every-sample.md) adds analyzers: checks
+over every sample rather than one rollout.
 
 ## Contents
 
 - [`CaseOutput`: the two halves](#caseoutput-the-two-halves)
+- [What a case declares](#what-a-case-declares)
+- [`Seed`: what a precheck is handed](#seed-what-a-precheck-is-handed)
 - [`output.run`: what the CLI did](#outputrun-what-the-cli-did)
 - [The bundled verifiers](#the-bundled-verifiers)
 - [Goldens](#goldens)
+- [Analyzers: checks over every sample](#analyzers-checks-over-every-sample)
 - [What you may not assume](#what-you-may-not-assume)
 
 ## `CaseOutput`: the two halves
@@ -45,10 +51,73 @@ itself; the artifact is the directory it worked in.
 | `output.written` | `list[str]` | Every path the run created or modified. |
 | `output.added` | `list[str]` | Written paths the fixture did **not** seed: what this rollout brought into being. A treatment's files count as seeded (ADR 0055). |
 | `output.changed` | `list[str]` | Written paths the fixture or treatment did seed: what it edited in place. |
+| `output.scenario` | `Scenario \| None` | The generated scenario this rollout ran on: `.id`, `.params`, `.expect`, `.files` (the seed exactly as the agent first saw it), `.task`, `.fingerprint`. `None` for a committed fixture directory (ADR 0074). |
+| `output.params` | `dict` | The scenario's `params` and `expect` merged: what it is, and the knobs the grader holds it to. **Fails as an assertion** on a committed fixture, which has none. |
+| `output.seed(rel)` | `str` | The text `rel` had before the agent touched it, read from the scenario. **Fails as an assertion** when the scenario did not seed `rel`, or on a committed fixture. |
 
 The `exists` / `wrote` distinction is the one worth internalising. A fixture file the
 agent never touched **exists**; it was not **written**. A case about editing something
 that only checks `exists` passes for a run that did nothing at all.
+
+## What a case declares
+
+`@evalcase(task=None, fixture=, skill=None, models=None, treatments=None, tracks=None, precheck=None)`.
+
+| Argument | What it does |
+|---|---|
+| `task` | For a skill case, what a user types *after* naming the skill (ADR 0044). For a scenario case, the whole prompt, sent verbatim to every harness. A generated case may omit it when every scenario carries its own task; a scenario left with none stops collection. |
+| `skill` | The skill under test. **Omit it for a scenario case**: no skill is registered, and coverage and skill use stay `None`. |
+| `fixture` | A directory name under `evals/fixtures/`, or a fixture generator whose every scenario becomes its own cells, `eval_x[<scenario id>/<cell id>]`. |
+| `tracks` | Paths, relative to the project root, absolute, or outside it, whose content digest is recorded as `subject_version`. A skill case tracks its skill directory less `evals/` by default. |
+| `precheck` | A function over the [`Seed`](#seed-what-a-precheck-is-handed) that raises when the input no longer sets up what the case is about. It runs before the paid invoke, and under `--dry-run`. |
+
+The generators ship in `pytest_xharness_eval.model.generators`. Generation runs at
+collection on every xdist worker, so a generator and its oracle must be deterministic.
+
+| Generator | Yields |
+|---|---|
+| `Table(name, rows, build, label=None, task=None, expect=())` | One scenario per row; `build(row)` returns its files, `task` is a format string over the row. The row keys named in `expect` become the scenario's expectations: they reach the grader through `output.params` but not the scenario id, so tuning one keeps its history. |
+| `Generated(name, build, count, seed=0)` | `count` scenarios, `build(draw)` returning `(params, files)` from a seeded `Draw`. |
+| `from_dir(name, root, transform=None)` | One scenario per subdirectory of `root`, each text file optionally rewritten by `transform(path, text)`. |
+| `Promoted(name, source=None)` | Every promoted fixture under `evals/fixtures/` (of generator `source`). None found collects no cells and warns by name, so a regression case may exist before its first promotion. |
+| `Adversarial(name, seeds, mutators, budget, oracle=None, seed=0, depth=2)` | Re-runs stored mutants that failed, up to half the budget, then new mutants of `seeds`' scenarios, screened by the free `oracle`. Each mutant's params are its parent's plus a `mutation` record (parent, mutators, generation, attempt); its `expect` is its parent's. A search that finds nothing new warns rather than failing collection. `TEXT_MUTATORS` are the shipped mutators. |
+
+A failing scenario is frozen into a regression fixture with
+`uv run -m pytest_xharness_eval.promote <scenario or session dir> <evals dir> [--name NAME]`.
+
+## `Seed`: what a precheck is handed
+
+A precheck gates the *input*. A grader asks whether the agent did the task; a precheck asks
+whether the task is still there to do. It is handed a `Seed`, the workspace as the agent
+will first find it: the fixture or scenario materialised, any treatment copied over it,
+and nothing run yet.
+
+| Member | Type | What it is |
+|---|---|---|
+| `seed.workspace` | `Path` | The materialised workspace. |
+| `seed.scenario` | `Scenario \| None` | The generated scenario, or `None` for a committed fixture. |
+| `seed.path(rel)` | `Path` | The absolute path of `rel` in the workspace. |
+| `seed.read(rel)` | `str` | The seeded text of `rel`. |
+| `seed.params` | `dict` | The scenario's params and expectations merged. Raises `ValueError` on a committed fixture. |
+
+Anything a precheck raises, a failed assertion included, is the fixture's fault rather than
+the agent's: the cell errors as a `RunError`, nothing is billed and no record is written.
+`require_seed_fails` and `scratch_dir` accept a `Seed` as well as a `CaseOutput`:
+
+```python
+from pytest_xharness_eval.model.output import Seed
+from pytest_xharness_eval.verify import require_seed_fails
+
+def seed_reproduces(seed: Seed) -> None:
+    target, rule = seed.params["target"], seed.params["rule"]
+    require_seed_fails(seed, seed.read(target), [*LINT, "--json"], rules={rule}, name=target)
+
+@evalcase(fixture=RULES, precheck=seed_reproduces)
+def eval_lint_fix(output: CaseOutput) -> None: ...
+```
+
+`pytest --dry-run` materialises every seed and runs its precheck, so a fixture that has
+drifted from its rule is found for free.
 
 ## `output.run`: what the CLI did
 
@@ -100,6 +169,7 @@ that only checks `exists` passes for a run that did nothing at all.
 | `run.ttft_ms`, `run.output_tokens_per_sec` | Timing. |
 | `run.output_tokens_per_sec_by_model` | `dict[str, float]`: throughput per model that answered, over calls with a measured latency; a subagent naming no model counts under its parent's (ADR 0071). |
 | `run.reasoning_share` | `reasoning_tokens / output_tokens`, in `[0, 1]`; `None` when nothing was generated (ADR 0071). |
+| `run.cache_read_share` | `cache_read / (input + cache_read + cache_write)` over the whole run, subagents included; `None` with no prompt tokens. |
 | `run.compactions` | `int`: how many times the primary thread compacted its context, counted off `record_kinds` (ADR 0071). |
 
 `docs/token-accounting.md` has the derivation and the provider quotations behind it.
@@ -168,9 +238,10 @@ annotated it). Reach it by attribute:
 
 ### Provenance
 
-`run.case` is a `CaseRef` naming what produced the run: `.suite`, `.name`, `.skill`,
-`.fixture`, `.task` (what the case declared) and `.prompt` (what this harness actually
-sent). `run.record_kinds` is the census of session-log record kinds.
+`run.case` is a `CaseRef` naming what produced the run: `.suite`, `.name`, `.skill` (the
+subject), `.fixture`, `.task` (what the case declared) and `.prompt` (what this harness
+actually sent), `.kind` (`skill` or `scenario`), `.scenario`, `.scenario_fingerprint`,
+`.scenario_params` and `.subject_version` (ADR 0074). `run.record_kinds` is the census of session-log record kinds.
 
 ## The bundled verifiers
 
@@ -190,6 +261,81 @@ sent). `run.record_kinds` is the census of session-log record kinds.
 | `check_turns_within(output, at_most=, at_least=)` | A plausible turn count. |
 | `check_skill_was_loaded(output, *paths)` | It read the named skill files. **Name resources, not `SKILL.md`**, see below. |
 | `check_skill_scripts_ran(output, *paths)` | It executed the skill's mandatory gates. |
+
+### Budgets and behaviours (`verify.conduct`)
+
+Read off the run's measured fields. A figure the pipeline never attached (an unpriced run,
+no tool costs, no skill use) fails the check rather than passing it.
+
+| Verifier | Asserts |
+|---|---|
+| `check_cost_within(output, usd)` | `run.estimated_cost_usd`, subagents included, is at most `usd`. |
+| `check_wall_within(output, seconds)` | `run.duration_ms` is at most `seconds`. |
+| `check_context_within(output, pct, threads="primary")` | The largest prompt of the primary thread (`threads="all"`: of any thread) is at most `pct` of `run.context_window`. **Raises `RuntimeError`** (an `error`) when the harness reported no window. |
+| `check_no_compaction(output)` | `run.compactions == 0`. Primary thread only: no harness counts a subagent's compactions. |
+| `check_cache_efficiency(output, min_cache_read_share)` | `run.cache_read_share` (`cache_read / (input + cache_read + cache_write)` over the whole run) is at least the share. |
+| `check_no_timeout(output)` | `run.timed_out_after_s is None`: the CLI was not killed at the wall (ADR 0064). |
+| `check_no_long_context(output)` | `run.long_context_calls == 0`; fails on an unpriced run (ADR 0051). |
+| `check_tool_calls_within(output, at_most=, name=None)` | At most `at_most` tool calls in any thread, of `name` when given: counted off every thread's ledger, like the duration and cost checks, not off the primary-only `run.tool_calls`. |
+| `check_tool_durations_within(output, ms, name=None)` | No `ToolCall.duration_ms` in any thread exceeds `ms`; lists the slowest. |
+| `check_tool_cost_within(output, usd, name=None, kind="issuing")` | The matching `run.tool_costs` sum to at most `usd`, by `issuing` or `context` attribution (ADR 0073); `kind` is a `CostKind` word, and an unknown one raises `ValueError`. |
+| `check_commands_ran(output, *patterns)` | Each regex matches a shell command of some thread: shell tool calls read through the harness's own vocabulary, plus `call.executed`. |
+| `check_skill_triggered(output, by=None, within_turns=None)` | `run.skill_use` exists, its `.trigger` is `by` (`"prompt"` or a tool name), and `.triggered_turn <= within_turns`. Turns are the primary's; a subagent's touch counts at the primary turn its spawn descends from. |
+| `check_skill_cost_within(output, usd, kind="issuing")` | The skill's tool calls cost at most `usd`. |
+| `check_subagents_within(output, at_most=None, max_depth=None)` | At most `at_most` subagents, none deeper than `max_depth`. |
+| `check_subagent_durations_within(output, ms, agent=None)` | No subagent's `.duration_ms` exceeds `ms`. |
+| `check_subagent_cost_within(output, usd, agent=None)` | No subagent's own `.estimated_cost_usd` exceeds `usd`, per thread; a thread with no estimate fails. |
+
+### Content kept (`verify.content`)
+
+The other half of every fixer's verdict: a quiet tool alone is reachable by deleting the
+text. Each takes the seed explicitly as `seed_text`; for a generated scenario that is
+`seed_text=output.seed("doc.md")`. "Prose" is the document minus fenced code, inline
+code spans and HTML comments; words are lowercased, stopwords dropped, crudely stemmed.
+
+| Verifier | Asserts |
+|---|---|
+| `check_absent(output, path, pattern, why=)` | `pattern` no longer occurs. A `str` matches literally, a compiled `re.Pattern` as a regex. The message quotes each matching line. |
+| `check_matches(output, path, regex, at_least=1)` | The regex (a `str` is compiled, multiline) matches at least `at_least` times. |
+| `check_content_kept(output, path, seed_text, at_least=0.9, per_sentence=0.5)` | The seed's content words survive at `at_least` recall, and every seed sentence keeps `per_sentence` of its own, so no sentence went whole. |
+| `check_length_kept(output, path, seed_text, ratio=(lo, hi))` | The prose word count is within `lo`x to `hi`x the seed's: rewritten, not compressed. |
+| `check_nothing_hidden(output, path, seed_text)` | No new fence line and no new inline code span: prose was not moved where a gate skips it. |
+| `check_fences_kept(output, path, seed_text, lang=None)` | At least as many fences (of `lang`) as the seed. |
+| `check_ids_kept(output, path, seed_text, extractor)` | Everything `extractor` (a facet such as `facets.node_ids` or `facets.entities`) finds in the seed is still there. |
+
+### The tool under test (`verify.tool`)
+
+Runs the *user's* tool on the workspace, never an agent CLI. A tool that cannot start,
+hangs past `timeout_s`, exits outside `ok_codes`, or prints no parseable report raises
+`RuntimeError`, which grades `error`, never `fail`: lint-style CLIs exit 1 for findings
+and for some crashes alike, and only a report tells them apart.
+
+| Name | What it does |
+|---|---|
+| `run_tool(output, argv, cwd=None, ok_codes=(0,), env=None, timeout_s=120)` | Runs `argv` (default `cwd` the workspace; `env` merged over the current one) and returns a `ToolRun`: `.argv`, `.returncode`, `.stdout`, `.stderr`, `.json()`, `.tail()`. |
+| `findings(output, argv, json_key="findings", ok_codes=(0, 1))` | The tool's JSON findings list (`json_key=None` for a top-level list). |
+| `check_tool_passes(output, argv, ok_codes=(0, 1))` | The tool exits 0; otherwise lists its findings, or the tail of its output. |
+| `check_tool_clean(output, argv, json_key="findings")` | Zero findings, each remaining one listed as `file:line rule message`. |
+| `require_seed_fails(output, seed, argv, rules=, exactly=True)` | Precondition: the seed (a `Path`, or text written under the scratch dir) still reports exactly `rules`. `argv` is the command prefix; the seed path is appended. **Raises `RuntimeError`**: a fixture that drifted is the host's fault. |
+| `scratch_dir(output)` | `<workspace parent>/.<workspace>.scratch`: where a check writes its own files, outside the workspace, so `check_no_files_added` is order-independent. |
+
+### Many at once (`verify.combine`)
+
+`check_all(output, *checkers)` runs every `Checker` (`Callable[[CaseOutput], None]`) and
+raises one `AssertionError` listing each failure under the checker's name, so one failure
+never masks another. Any other exception propagates at once, unchanged. The output is
+passed first, so bind keywords with `functools.partial` and positionals with a lambda:
+
+```python
+check_all(
+    output,
+    check_rollout,
+    lambda o: check_files_written(o, "NOTES.md"),
+    lambda o: check_content_kept(o, "NOTES.md", seed_text=output.seed("NOTES.md")),
+    partial(check_cost_within, usd=0.50),
+    partial(check_tool_clean, argv=[*LINT, "--json", output.path("NOTES.md")]),
+)
+```
 
 Anything else is a plain function beside your case. That has always been the contract
 (ADR 0013), and these are only the ones everybody was writing anyway.
@@ -228,7 +374,11 @@ GOLDEN = GoldenCase.at(
 Extractors in `verify.facets`: `fence_count`, `fences`, `visible_fences`,
 `collapsed_fences`, `node_ids`, `edges`, `classdef_names`, `classdef_count`,
 `fill_colours`, `text_colours`, `unstyled_nodes`, `headings`, `headings_at(n)`,
-`hex_colours`, `body_text`. Any `str -> object` works.
+`hex_colours`, `body_text`, `code_fences(doc, lang=None)` (every fenced block, where
+`fences` is mermaid only), `entities` and `relationships` (`erDiagram` fences, as
+`"LEFT ||--o{ RIGHT"`), `sections(doc, level=2)` (heading to body, headings inside code
+ignored) and `section(doc, heading_prefix)` (case-insensitive prefix; fails as an
+assertion naming the headings present). Any `str -> object` works.
 
 `node_ids`, `edges` and `unstyled_nodes` read flowchart fences only, one fence at a time,
 because a class applies only within the diagram that assigns it. Front matter, `%%`
@@ -256,6 +406,74 @@ ARCHITECTURE.md is outside the golden's tolerances (1 of 3 facets failed)
 `GOLDEN.record(output)` writes a run's output into the golden path, for creating or
 deliberately regenerating a reference. It is never called during grading, a run that
 could launder its own output into the reference would make every later comparison vacuous.
+
+## Analyzers: checks over every sample
+
+A grader judges one rollout. An analyzer judges every sample the cache holds for its
+suite, after the sweep: has the new tool version regressed a cell, which model tier
+carries the skill, where is the cost-quality front. Declare one beside the cases:
+
+```python
+from pytest_xharness_eval import Analysis, analyzer
+
+@analyzer                                    # or @analyzer(cases=["eval_lint_fix"])
+def analyze_versions(a: Analysis) -> None:
+    versions = a.note("versions", list(a.versions()))
+    a.note("front", a.pareto())              # published on the finding, pass or fail
+    if len(versions) >= 2:
+        a.expect_no_regression("verdict", baseline=versions[-2], candidate=versions[-1])
+```
+
+The function is named `analyze_*`, takes one `Analysis`, returns nothing, and fails by
+raising `AssertionError`. It sees only its own suite's records, matched by the suite
+file's path relative to the project root. Its `Analysis` holds `a.history` (the cache),
+`a.current` (this sweep's records, empty when rerun from the CLI) and `a.samples` (both,
+each session once), plus `seed`, `min_n` (3) and `confidence` (0.95).
+
+| Family | Call | Returns |
+|---|---|---|
+| any | `a.estimate(metric, on=None)` | One `Estimate` over `on` (default every sample) |
+| environment | `a.summarise(metric, by=())` | `{group key: Estimate}` |
+| environment | `a.effects(factor, metric, within=None, drop_unbalanced=False)` | Each level's main effect over balanced slices; an incomplete design raises `Unbalanced` |
+| environment | `a.best(metric, by=ENVIRONMENT, direction=None)` | Groups best first; those under `min_n` trail unranked |
+| environment | `a.pareto(quality="verdict", cost="cost", by=ENVIRONMENT)` | `ParetoPoint`s, each at its pessimistic bounds, front first |
+| environment | `a.tiers(metric)` | `{family tier: Estimate}`, pooled across harnesses |
+| subject | `a.versions(field="subject_version")` | The versions in first-measured order |
+| subject | `a.compare(metric, baseline, candidate, by=CELL_FIELDS, direction=None)` | One `Comparison` per matched cell; a side is a version or any `Samples` |
+| subject | `a.trend(metric, by=())` | Per group, `(version, Estimate)` in order |
+| subject | `a.regressions(metric="verdict")` | The cells where the latest version regressed against the one before |
+| scenario | `a.fragile(by=("case", "scenario"))` | Scenarios by failure rate, most fragile first |
+| scenario | `a.failures(by=())` | Per group, each failure line and its count |
+| verdict | `a.expect_no_regression(...)`, `a.expect_at_least(metric, value, by=(), bound="low")`, `a.expect_at_most(metric, value, by=(), bound="high")`, `a.expect_pareto_contains(match)` | Raise `AnalysisFailure` (an `AssertionError`) with the comparisons and details attached |
+| publish | `a.note(key, value)` | Stores `value` on the finding (an `Estimate` or `Comparison` as its dict) and returns it |
+
+A metric is an Important Metric id (`cost`, `verdict`, ...), `passed`, a group statistic
+(`cost_per_pass`, `wasted_cost`), `tool_time_share`, `context_cost_share`, or any numeric
+`CellMetrics` field. `a.samples.where(**fields)` and `.group(*fields)` filter and split by
+any record field; grouping by `scenario` splits by fingerprint too.
+
+How the answers are reached, so you can read them:
+
+- **A rate is Wilson; anything else is a seeded bootstrap** of its kind's centre.
+- **A comparison is cell by matched cell.** A cell one side never ran is not compared.
+- **Each cell is tested two-sided**, Fisher exact for a rate, a permutation test otherwise.
+  The p-values are Benjamini-Hochberg adjusted together.
+- **`improved` or `regressed` needs both** a q-value within `1 - confidence` and a
+  difference interval that excludes zero. Below `min_n` on either side is `insufficient`.
+  Everything else is `inconclusive`.
+- **No pass on zero evidence.** A bound asked of no samples fails.
+- **Errors are not attempts.** A sample graded `error` is left out of every pass rate.
+- **Three samples per arm cannot reach significance.** The smallest two-sided p-value at
+  n = 3 is 0.1. Run `--xharness-repeat 5` for a comparison that can decide.
+
+A finding passes, fails, or is an `ERROR` finding when the analyzer raised anything but an
+assertion. All of them land in `report/analysis.json`, named `<suite path>::<analyzer>`,
+and a failed one fails the session. Rerun every analyzer for free over the cache, with
+`--suite` to narrow and `--seed` to reseed; it exits 1 when one fails:
+
+```bash
+uv run -m pytest_xharness_eval.analysis .xharness_eval_cache [--suite skills/x/evals/eval_x.py] [--seed N]
+```
 
 ## What you may not assume
 

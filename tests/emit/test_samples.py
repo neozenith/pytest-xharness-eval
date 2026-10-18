@@ -10,7 +10,7 @@ from pytest_xharness_eval import Usage
 from pytest_xharness_eval.emit import page
 from pytest_xharness_eval.emit.index import UNKNOWN_CASE
 from pytest_xharness_eval.emit.metrics import CellMetrics
-from pytest_xharness_eval.emit.samples import ImportantMetrics, cell_key, is_sample
+from pytest_xharness_eval.emit.samples import ImportantMetrics, cell_key, is_sample, scenario_outcomes
 from pytest_xharness_eval.model.layout import CacheLayout
 from pytest_xharness_eval.model.metrics import IMPORTANT_METRICS
 from pytest_xharness_eval.model.verdict import Verdict
@@ -76,3 +76,27 @@ def test_the_combine_step_writes_the_declaration_and_the_cells_into_index_json(t
     assert [m["id"] for m in doc["metrics"]] == [m.id for m in IMPORTANT_METRICS]
     assert [(c["model"], c["samples"]) for c in doc["cells"]] == [("m", 1)]
     assert set(doc["cells"][0]["metrics"]) == {m.id for m in IMPORTANT_METRICS}
+
+
+def test_scenario_outcomes_count_each_scenarios_fails_over_its_graded_samples(tmp_path: Path) -> None:
+    """What an adversarial generator reads at collection: ``(failed, sampled)`` per scenario id (ADR 0074)."""
+    cache = CacheLayout(tmp_path / ".xharness_eval_cache")
+    suite = "skills/lint/evals/eval_lint.py"  # relative to the root: history survives a move
+    samples = [
+        ("s1", "a", Verdict.FAIL, suite, "eval_lint"),
+        ("s2", "a", Verdict.PASS, suite, "eval_lint"),
+        ("s3", "a", Verdict.FAIL, suite, "eval_lint"),
+        ("s4", "b", Verdict.PASS, suite, "eval_lint"),
+        ("s5", "b", Verdict.ERROR, suite, "eval_lint"),  # never sat the test: says nothing
+        ("s6", "b", Verdict.DRY_RUN, suite, "eval_lint"),
+        ("s7", "a", Verdict.FAIL, suite, "eval_other"),  # another case
+        ("s8", "a", Verdict.FAIL, "skills/other/evals/eval_lint.py", "eval_lint"),  # same stem, another skill
+        ("s9", None, Verdict.FAIL, suite, "eval_lint"),  # a committed fixture: no scenario
+    ]
+    for sid, scenario, verdict, where, case in samples:
+        session = cache.session(skill="lint", harness="claude", model="m", run="20261018T000000Z", session=sid)
+        _result("m", Usage(1, 2)).write(session.result)
+        _sample(verdict=verdict, scenario=scenario, suite=where, case=case).write(session.history)
+
+    assert scenario_outcomes(cache, suite, "eval_lint") == {"a": (2, 3), "b": (0, 1)}
+    assert scenario_outcomes(cache, suite, "eval_missing") == {}

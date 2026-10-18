@@ -9,6 +9,7 @@ from __future__ import annotations
 # Standard Library
 import hashlib
 import shutil
+from pathlib import PurePath
 from typing import TYPE_CHECKING
 
 # Our Libraries
@@ -65,6 +66,40 @@ def snapshot(root: Path) -> dict[str, str]:
             rel = str(p.relative_to(root))
             out[rel] = hashlib.sha256(p.read_bytes()).hexdigest()
     return out
+
+
+#: Directories a version digest never reads: caches and vendored trees change without the
+#: subject changing.
+_UNVERSIONED = frozenset({"__pycache__", "node_modules", ".git", ".venv", ".pytest_cache", ".ruff_cache"})
+
+
+def version(root: Path, paths: Sequence[str], *, exclude: Sequence[str] = ()) -> str:
+    """The digest of every file under ``paths`` (relative to ``root``): the subject's version (ADR 0074).
+
+    ``exclude`` names further directory names to skip -- a skill's own ``evals/`` grade the
+    skill and are not part of it. A missing path raises: a case that tracks a file that is not
+    there would record one version for every edit of the subject.
+    """
+    skipped = _UNVERSIONED | set(exclude)
+    h = hashlib.sha256()
+    for rel in sorted(paths):
+        # ``rel`` may also be absolute, or climb out of the root: a scenario's tool often lives
+        # in its own repository. Files are named relative to the tracked path, never to the
+        # root, so the digest does not change when the project is checked out elsewhere.
+        target = root / rel
+        if not target.exists():
+            raise FileNotFoundError(f"tracked path does not exist: {target}")
+        # An absolute track is named by its basename: the digest must not move with the checkout.
+        name = target.name if PurePath(rel).is_absolute() else rel
+        if target.is_file():
+            h.update(name.encode("utf-8") + b"\0" + target.read_bytes() + b"\0")
+            continue
+        for p in sorted(p for p in target.rglob("*") if p.is_file()):
+            inner = p.relative_to(target)
+            if skipped.intersection(inner.parts):
+                continue
+            h.update(f"{name}/{inner.as_posix()}".encode() + b"\0" + p.read_bytes() + b"\0")
+    return h.hexdigest()[:12]
 
 
 def diff(before: dict[str, str], after: dict[str, str]) -> list[str]:

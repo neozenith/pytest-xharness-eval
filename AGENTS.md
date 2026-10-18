@@ -34,6 +34,8 @@ In a consuming repository with the plugin installed:
 | Run one skill's evals, or all | `pytest skills/<skill>/evals -v`, `pytest skills/*/evals -v` | paid |
 | Run cells in parallel | `pytest skills/*/evals -v -n 4`; add `--dist loadgroup` to keep each harness serial | paid |
 | Run one harness, model, effort or treatment only | `pytest skills/<skill>/evals --harness codex`, `--model opus`, `--effort max`, `--treatment control`, `-k "opus or sol"` | paid |
+| Sample every cell N times in one sweep, for an analyzer comparison that can decide | `pytest skills/<skill>/evals --xharness-repeat 5` | paid |
+| Re-ask every suite's analyzers over the cache (exit 1 on a failed one; ADR 0075) | `uv run -m pytest_xharness_eval.analysis .xharness_eval_cache [--suite <eval_x.py>] [--seed N]` | free |
 | Read the last report | `cat .xharness_eval_cache/report/report.json` | free |
 | Rebuild results, history and `report.html` from captured logs after a plugin change | `uv run -m pytest_xharness_eval.replay .xharness_eval_cache` (a legacy `<skill>/evals/captured` dir migrates into the cache, ADR 0032) | free |
 
@@ -44,20 +46,21 @@ Never use `pip install` or invoke `python` directly; use `uv`.
 ## Layout by purpose
 
 All source lives under `src/pytest_xharness_eval/`, and the listing is the architecture
-(ADR 0039). Two entry-point modules sit at the root because importlib resolves them by
-name -- `plugin/` (the `pytest11` entry point, a package whose `__init__` is the hook
-manifest, ADR 0040) and `replay.py` (`python -m`) -- and the six layers each run is
-pushed through are folders beneath them, each depending only on the ones above it in
-this list:
+(ADR 0039, ADR 0075). The entry-point modules sit at the root because importlib resolves
+them by name -- `plugin/` (the `pytest11` entry point, a package whose `__init__` is the
+hook manifest, ADR 0040), and the `python -m` modules `replay.py`, `promote.py` (ADR 0074)
+and `analysis.py` (ADR 0075) -- and the layers each run is pushed through are folders
+beneath them, each depending only on the ones above it in this list:
 
 | Layer | What lives there |
 |-------|------------------|
-| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `treatment.py`, `catalogue.py`, `metrics.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, and `registry.py` -- the one module below `harness/` that names it |
+| `model/` | the nouns: `runresult.py`, `case.py`, `output.py`, `suite.py`, `matrix.py`, `verdict.py`, `effort.py`, `treatment.py`, `catalogue.py`, `metrics.py`, `layout.py`, `workspace.py`, `clock.py`, `documents.py`, `scenario.py` (a generated fixture and the generator protocol), `generators.py` (the shipped generators and mutators), and `registry.py` -- the one module below `harness/` that names it |
 | `harness/` | one adapter class per agent CLI (`base.py`, `claude.py`, `codex.py`), the folding toolkit `normalise.py`, the spawn linker `threads.py`, and the record-kind catalogue `records.py` |
 | `derive/` | free derivations over a folded run: `pricing.py`, `skillcov.py`, `toolcost.py`, `ignorerules.py`, `catalogue.py` (reads `prices/models.toml`), `feed.py` (LiteLLM's feed into price records, for the curator and live pricing), and the bundled `prices/prices-YYYYMMDD.toml` records |
 | `verify/` | what a *grader* is written with: `checks.py` (the shared `check_*` verifiers), `tolerance.py` (`Facet` and the six tolerances), `facets.py` (markdown/mermaid extractors), `golden.py` (`GoldenCase`) |
 | `emit/` | the documents that leave: `metrics.py`, `index.py`, `samples.py`, `unfolded.py`, `summary.py`, `tokens.py`, `page.py` |
-| `runtime/` | how a sweep is wired: `settings.py`, `pipeline.py`, and the transitional `legacy.py` |
+| `analyze/` | questions asked across every sample after the sweep (ADR 0075): `samples.py` (`Samples`, metric resolution), `stats.py` (Wilson, bootstrap, Fisher, permutation, Benjamini-Hochberg, pass@k), `estimate.py`, `compare.py` (matched-cell comparison), `analysis.py` (`Analysis`, `AnalysisFailure`), and `run_one` in `__init__.py`. Its nouns (`Change`, `Estimate`, `Comparison`, `Finding`, `AnalyzerSpec`, `@analyzer`) are `model/analysis.py`, its document `emit/analysis.py` |
+| `runtime/` | how a sweep is wired: `settings.py`, `pipeline.py`, `analysis.py` (`analyze_suites`, shared by the hook and the CLI), and the transitional `legacy.py` |
 
 A ruff `TID251` rule fails the build when a layer names one above it; the exceptions are
 the per-file-ignore list in `pyproject.toml` and nowhere else.
@@ -100,11 +103,18 @@ the per-file-ignore list in `pyproject.toml` and nowhere else.
 | When a tool call ran and what it cost, or the skill under test's span and cost | the fold stamps `ToolCall.started_at` / `ended_at` in `harness/<provider>.py` (through `normalise.ended`); `derive/toolcost.py` attributes `issuing_cost_usd` and `context_cost_usd` per tool call and builds `SkillUse` from `skillcov.accesses`; `runtime/pipeline.py` attaches both last (ADR 0073) |
 | Which skill files count as loaded or run | `derive/skillcov.py` (`SkillFile` catalogued, `FileCoverage` annotated, `SkillCoverage` derived); the shell vocabulary it attributes with arrives as a `model.registry.Shells` value (ADR 0027, ADR 0039) |
 | How `xharness_skill_ignore` lines (`<pattern>` or `<skill>: <pattern>`) select and match | `derive/ignorerules.py` (ADR 0035) |
-| Rebuilding cached results without a paid run | `replay.py` (`uv run -m pytest_xharness_eval.replay <cache dir>`) |
+| Rebuilding cached results without a paid run | `replay.py` (`uv run -m pytest_xharness_eval.replay <cache dir>`); re-asking the analyzers is `analysis.py` (ADR 0075) |
 | Migrating a legacy pre-0032 `captured/` dir | `runtime/legacy.py` (`LegacyCapture`); transitional, deletable in one file (ADR 0040) |
 | How a workspace is built or diffed | `model/workspace.py` |
-| The `@evalcase` contract, or what a case declares | `model/case.py` (`task=`, never `prompt=`, ADR 0044) |
+| The `@evalcase` contract, or what a case declares | `model/case.py` (`task=`, never `prompt=`, ADR 0044; `skill=` optional, `fixture=` a name or a generator, `tracks=`, ADR 0074) |
+| A fixture generator or scenario: its id, fingerprint, `Draw`, where it is stored, or an adversary's search | `model/scenario.py` (`Scenario`, `Draw`, `write_scenario`, `FixtureGenerator`), `model/generators.py` (`Table`, `Generated`, `from_dir`, `Promoted`, `Adversarial`, the text mutators); collection's expansion and store is `plugin/collect.py` (`EvalFile._scenarios`), the history an adversary reads is `emit/samples.py`'s `scenario_outcomes`, then `docs/rollout.md` (ADR 0074) |
+| Promotion of a failing scenario into a committed fixture | `promote.py` (`uv run -m pytest_xharness_eval.promote <scenario or session dir> <evals dir>`); provenance sits beside the fixture as `<name>.provenance.json`, never inside it (ADR 0074) |
+| A scenario case's prompt, or the subject and its version | `Harness.prompt` in `harness/base.py` (the task verbatim when no skill), `EvalItem.subject` and `EvalFile._version` in `plugin/collect.py`, `model/workspace.py`'s `version` (ADR 0074) |
 | What a grader is handed, or an accessor over the workspace | `model/output.py` (`CaseOutput`), then the surface table in `docs/rollout.md` (ADR 0045) |
+| A precheck, or what it is handed | `model/output.py` (`Seed`), `model/case.py` (`precheck=`), `CellRun.precheck` in `plugin/cell.py` (before the paid invoke, raising `RunError`) and `EvalItem._precheck_free` in `plugin/collect.py` (under `--dry-run`), then `docs/rollout.md` (ADR 0074) |
+| A scenario's expectations (`expect`, kept out of its id) | `Scenario.expect` and `merged` in `model/scenario.py`, `Table(expect=)` in `model/generators.py`, then `docs/rollout.md` (ADR 0074) |
+| An analyzer, or how one runs | the declaration is `model/analysis.py` (`@analyzer`, `AnalyzerSpec`); what it may ask is `analyze/analysis.py` (`Analysis`); the suite scoping and the `ERROR` finding are `runtime/analysis.py` (`analyze_suites`); the session hook is `plugin/analysis.py` (`pytest_sessionfinish`, controller only, sets the exit status); the terminal lines are `plugin/summary.py`; the free rerun is `analysis.py` (`uv run -m pytest_xharness_eval.analysis <cache>`); `report/analysis.json` is `emit/analysis.py` and `CacheLayout.analysis`. Then `docs/rollout.md`'s analyzer table (ADR 0075) |
+| `--xharness-repeat`, or how a repeat is collected | `plugin/options.py` (the option), `EvalFile.collect` in `plugin/collect.py` (the `#k` node-id suffix and `EvalItem.sample`); a repeat keys its cell the same as a single run, then `README.md`'s options table and `tests/test_plugin.py` (ADR 0075) |
 | A shared `check_*` verifier | `verify/checks.py`, then `docs/rollout.md`'s verifier table and `tests/verify/test_checks.py` (ADR 0045) |
 | A golden tolerance, or a markdown/mermaid facet extractor | `verify/tolerance.py` or `verify/facets.py`, then `docs/rollout.md` (ADR 0046) |
 | A behaviour of the plugin | `tests/<layer>/test_<module>.py`, mirroring `src/pytest_xharness_eval/<layer>/<module>.py` (shared builders in `tests/support.py`); whole-plugin sessions in `tests/test_plugin.py` (pytester). `tests/test_suite_shape.py` fails the build on a module that mirrors nothing or outgrows its budget (ADR 0053) |
@@ -136,7 +146,7 @@ in `emit/metrics.py`.
 - Never spell a word from a shared vocabulary as a literal. A vocabulary two layers use
   is a `StrEnum` in `model/`, where every layer above may import it; its `.value` is what
   reaches a record that crosses execnet (ADR 0041).
-- Never re-export an internal from `plugin/__init__.py`. It binds the seven hooks pluggy
+- Never re-export an internal from `plugin/__init__.py`. It binds the eight hooks pluggy
   discovers plus the four compatibility names, and a test pins that set; everything else
   stays addressable at `plugin.<module>.<name>` (ADR 0041).
 - Never make a cell pass without a real session log. A missing log, a mismatched
