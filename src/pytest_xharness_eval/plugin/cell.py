@@ -268,11 +268,9 @@ class CellRun:
                     f"never attempted: {result.final_text[:300] or '(no message)'}"
                 )
             self.plan.case.fn(self.output(result, workspace))
-        except AssertionError as exc:
-            self.verdict, self.failure = Verdict.FAIL, failure_line(exc, self.redactions(workspace))
-            raise
         except Exception as exc:
-            self.verdict, self.failure = Verdict.ERROR, failure_line(exc, self.redactions(workspace))
+            # One rule for every checker (ADR 0076): an assertion fails, anything else errors.
+            self.verdict, self.failure = Verdict.of_exception(exc), failure_line(exc, self.redactions(workspace))
             raise
         self.verdict = Verdict.PASS
         return self.verdict

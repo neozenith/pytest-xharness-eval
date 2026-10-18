@@ -1,7 +1,4 @@
-"""``analyze.run``: each analyzer becomes a finding; a failed expectation fails it, a bug propagates."""
-
-# Third Party
-import pytest
+"""``analyze.run``: each analyzer becomes a finding; a failed expectation fails it, a bug errors it."""
 
 # Our Libraries
 from pytest_xharness_eval import analyze
@@ -66,9 +63,10 @@ def test_run_turns_each_analyzer_into_a_finding_in_order() -> None:
     assert findings[3].message == "AssertionError"
 
 
-def test_an_error_that_is_not_a_failed_assertion_propagates() -> None:
-    with pytest.raises(KeyError, match="bug"):
-        run([analyze_broken], _analysis())
+def test_an_error_that_is_not_a_failed_assertion_is_an_errored_finding_never_a_raise() -> None:
+    """A broken analyzer is not a failed expectation, and must not take the combine step down (ADR 0075)."""
+    (finding,) = run([analyze_broken], _analysis())
+    assert (finding.passed, finding.message, finding.details) == (False, "ERROR KeyError: 'bug'", {"error": "KeyError"})
 
 
 def test_the_public_api_is_exported() -> None:

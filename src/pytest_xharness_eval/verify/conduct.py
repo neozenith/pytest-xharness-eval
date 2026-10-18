@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING
 
 # Our Libraries
 from pytest_xharness_eval.model.registry import Shells
+from pytest_xharness_eval.model.verdict import Unmeasurable
 
 if TYPE_CHECKING:
     # Standard Library
@@ -100,12 +101,12 @@ def check_context_within(output: CaseOutput, pct: float, *, threads: Threads | s
     every subagent's too, each against the window the harness reported for the run.
 
     Raises:
-        RuntimeError: when the harness reported no context window. That is a gap in what
+        Unmeasurable: when the harness reported no context window. That is a gap in what
             the CLI logged, not something the agent did, so the cell errors.
     """
     run = output.run
     if run.context_window is None:
-        raise RuntimeError(f"the {run.harness} run reported no context window, so its context share is unknown")
+        raise Unmeasurable(f"the {run.harness} run reported no context window, so its context share is unknown")
     peak, where = max(
         ((c.context_tokens, thread) for thread, calls in _threads(run, Threads(threads)) for c in calls),
         default=(0, ""),

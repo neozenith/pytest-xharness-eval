@@ -12,6 +12,7 @@ import pytest
 from pytest_xharness_eval import CaseOutput, RunResult, Usage, verify
 from pytest_xharness_eval.derive.toolcost import SkillUse, ToolCost
 from pytest_xharness_eval.model.runresult import Call, ExecutedCommand, ToolCall
+from pytest_xharness_eval.model.verdict import Unmeasurable
 from tests.support import _subagent
 
 if TYPE_CHECKING:
@@ -165,7 +166,7 @@ def test_an_unpriced_run_or_unknown_window_cannot_pass_a_budget(output: CaseOutp
     with pytest.raises(AssertionError, match="never priced"):
         verify.check_cost_within(output, 100)
     output.run.context_window = None
-    with pytest.raises(RuntimeError, match="reported no context window"):
+    with pytest.raises(Unmeasurable, match="reported no context window"):
         verify.check_context_within(output, 100)
 
 

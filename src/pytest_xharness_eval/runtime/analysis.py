@@ -23,7 +23,6 @@ from typing import TYPE_CHECKING
 from pytest_xharness_eval import analyze
 from pytest_xharness_eval.analyze import Analysis, Samples
 from pytest_xharness_eval.emit.analysis import AnalysisReport
-from pytest_xharness_eval.model.analysis import Finding
 from pytest_xharness_eval.model.clock import now_iso
 from pytest_xharness_eval.model.suite import EvalSuite
 
@@ -34,6 +33,7 @@ if TYPE_CHECKING:
 
     # Our Libraries
     from pytest_xharness_eval.emit.metrics import CellMetrics
+    from pytest_xharness_eval.model.analysis import Finding
     from pytest_xharness_eval.runtime.settings import Settings
 
 
@@ -65,15 +65,8 @@ def analyze_suites(
         ref = settings.suite_ref(suite.path)
         scoped = Analysis(history=_of_suite(history, ref), current=_of_suite(now, ref), seed=seed)
         for spec in suite.analyzers:
-            try:
-                finding = analyze.run_one(spec, scoped)
-            except Exception as exc:  # noqa: BLE001 - reported as an errored finding, never dropped
-                finding = Finding(
-                    analyzer=spec.name,
-                    passed=False,
-                    message=f"ERROR {type(exc).__name__}: {exc}",
-                    details={"error": type(exc).__name__},
-                )
+            # ``run_one`` turns every outcome, a broken analyzer included, into a finding.
+            finding = analyze.run_one(spec, scoped)
             findings.append(replace(finding, analyzer=f"{ref}::{finding.analyzer}"))
     return AnalysisReport.of(findings, generated_at=now_iso())
 

@@ -12,7 +12,7 @@ from pytest_xharness_eval import (
 )
 from pytest_xharness_eval.emit.metrics import CellMetrics
 from pytest_xharness_eval.model.layout import CacheLayout
-from pytest_xharness_eval.model.verdict import Verdict
+from pytest_xharness_eval.model.verdict import Unmeasurable, Verdict
 from tests.support import _result
 
 
@@ -36,3 +36,17 @@ def test_a_verdict_no_version_of_this_package_wrote_reads_as_no_verdict(stored: 
     assert record.outcome.verdict is None
     rebuilt = CellMetrics.of(_result("m", Usage(1, 2)), outcome=record.outcome, cache=CacheLayout(Path("/c")))
     assert rebuilt.verdict == "" and rebuilt.node == "n"
+
+
+@pytest.mark.parametrize(
+    ("exc", "verdict"),
+    [
+        (AssertionError("the agent left a finding"), Verdict.FAIL),
+        (Unmeasurable("the tool did not start"), Verdict.ERROR),
+        (KeyError("a bug in the checker"), Verdict.ERROR),
+    ],
+)
+def test_an_exception_earns_fail_only_when_it_is_a_failed_assertion(exc: Exception, verdict: Verdict) -> None:
+    """One rule for a grader, a precheck and an analyzer; an unmeasurable check is still a RuntimeError."""
+    assert Verdict.of_exception(exc) is verdict
+    assert issubclass(Unmeasurable, RuntimeError)

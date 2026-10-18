@@ -13,6 +13,7 @@ import pytest
 # Our Libraries
 from pytest_xharness_eval import CaseOutput, Usage, verify
 from pytest_xharness_eval.model.output import Seed
+from pytest_xharness_eval.model.verdict import Unmeasurable
 from pytest_xharness_eval.verify.tool import describe
 from tests.support import _result
 
@@ -84,16 +85,16 @@ def test_env_is_merged_over_the_current_environment(output: CaseOutput, lint: li
 
 def test_an_exit_outside_ok_codes_is_an_error_not_a_fail(output: CaseOutput, lint: list[str]) -> None:
     """A crashed tool says nothing about the agent, so it must grade ``error``."""
-    with pytest.raises(RuntimeError, match="exited 3"):
+    with pytest.raises(Unmeasurable, match="exited 3"):
         verify.run_tool(output, [*lint, "crash", "good.md"], ok_codes=(0, 1))
-    with pytest.raises(RuntimeError, match="exited 1"):
+    with pytest.raises(Unmeasurable, match="exited 1"):
         verify.run_tool(output, [*lint, "json", "bad.md"])
 
 
 def test_a_tool_that_cannot_start_or_hangs_is_an_error(output: CaseOutput, lint: list[str]) -> None:
-    with pytest.raises(RuntimeError, match="could not start"):
+    with pytest.raises(Unmeasurable, match="could not start"):
         verify.run_tool(output, [str(output.workspace / "no-such-binary")])
-    with pytest.raises(RuntimeError, match="was killed"):
+    with pytest.raises(Unmeasurable, match="was killed"):
         verify.run_tool(output, [*lint, "hang", "good.md"], timeout_s=0.5)
 
 
@@ -106,9 +107,9 @@ def test_findings_reads_the_named_list_or_the_top_level(output: CaseOutput, lint
 
 def test_exit_one_without_json_is_a_crash_not_a_finding(output: CaseOutput, lint: list[str]) -> None:
     """Lint CLIs exit 1 for findings *and* for some crashes; only a report tells them apart."""
-    with pytest.raises(RuntimeError, match="printed no JSON"):
+    with pytest.raises(Unmeasurable, match="printed no JSON"):
         verify.findings(output, [*lint, "nojson", "bad.md"])
-    with pytest.raises(RuntimeError, match="no findings list"):
+    with pytest.raises(Unmeasurable, match="no findings list"):
         verify.findings(output, [*lint, "json", "bad.md"], json_key="errors")
 
 
@@ -118,7 +119,7 @@ def test_check_tool_passes_shows_findings_or_the_output_tail(output: CaseOutput,
         verify.check_tool_passes(output, [*lint, "json", "bad.md"])
     with pytest.raises(AssertionError, match="bad found"):
         verify.check_tool_passes(output, [*lint, "plain", "bad.md"])
-    with pytest.raises(RuntimeError, match="exited 3"):
+    with pytest.raises(Unmeasurable, match="exited 3"):
         verify.check_tool_passes(output, [*lint, "crash", "bad.md"])
 
 
@@ -136,9 +137,9 @@ def test_the_seed_must_still_fail_as_described(output: CaseOutput, lint: list[st
     committed.write_text("BAD\n", encoding="utf-8")
     verify.require_seed_fails(output, committed, [*lint, "json"], rules=["BAD"])
     verify.require_seed_fails(output, "BAD and UGLY\n", [*lint, "json"], rules=["BAD"], exactly=False)
-    with pytest.raises(RuntimeError, match=r"should fail \['BAD'\] alone; it reports \['BAD', 'UGLY'\]"):
+    with pytest.raises(Unmeasurable, match=r"should fail \['BAD'\] alone; it reports \['BAD', 'UGLY'\]"):
         verify.require_seed_fails(output, "BAD and UGLY\n", [*lint, "json"], rules=["BAD"])
-    with pytest.raises(RuntimeError, match=r"reports \[\]"):
+    with pytest.raises(Unmeasurable, match=r"reports \[\]"):
         verify.require_seed_fails(output, "clean\n", [*lint, "json"], rules=["BAD"])
 
 

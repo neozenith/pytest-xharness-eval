@@ -7,7 +7,8 @@ two decisions correctly:
 
 * **A tool that could not run is an error, not a fail.** No interpreter on ``PATH``, a
   usage error, a crash with no report: none of those is a fact about the agent, so they
-  raise :class:`RuntimeError` and the cell grades ``error``. Lint-style CLIs exit 1 both
+  raise :class:`~pytest_xharness_eval.model.verdict.Unmeasurable` and the cell grades
+  ``error``. Lint-style CLIs exit 1 both
   for "findings" and for some crashes, so exit 1 alone proves nothing; a report that
   parses is what distinguishes the two.
 * **A broken fixture is an error, not a fail.** :func:`require_seed_fails` gates the
@@ -32,6 +33,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+# Our Libraries
+from pytest_xharness_eval.model.verdict import Unmeasurable
 
 if TYPE_CHECKING:
     # Standard Library
@@ -62,13 +66,13 @@ class ToolRun:
         """The tool's stdout parsed as JSON.
 
         Raises:
-            RuntimeError: when stdout is not JSON. The tool did not produce a report, which
+            Unmeasurable: when stdout is not JSON. The tool did not produce a report, which
                 is the host's failure, not the agent's.
         """
         try:
             return json.loads(self.stdout)
         except json.JSONDecodeError as exc:
-            raise RuntimeError(f"{self.command} printed no JSON (exit {self.returncode}):\n{self.tail()}") from exc
+            raise Unmeasurable(f"{self.command} printed no JSON (exit {self.returncode}):\n{self.tail()}") from exc
 
     @property
     def command(self) -> str:
@@ -97,7 +101,7 @@ def scratch_dir(output: CaseOutput | Seed) -> Path:
 def _run(
     argv: Sequence[Arg], *, cwd: Path, ok_codes: Iterable[int], env: Mapping[str, str] | None, timeout_s: float
 ) -> ToolRun:
-    """Run ``argv`` in ``cwd``; anything that means the tool did not run raises RuntimeError."""
+    """Run ``argv`` in ``cwd``; anything that means the tool did not run raises Unmeasurable."""
     args = tuple(str(a) for a in argv)
     command = " ".join(args)
     try:
@@ -111,13 +115,13 @@ def _run(
             timeout=timeout_s,
         )
     except FileNotFoundError as exc:
-        raise RuntimeError(f"the tool under test could not start ({command}): {exc}") from exc
+        raise Unmeasurable(f"the tool under test could not start ({command}): {exc}") from exc
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(f"the tool under test ran past {timeout_s}s and was killed: {command}") from exc
+        raise Unmeasurable(f"the tool under test ran past {timeout_s}s and was killed: {command}") from exc
     run = ToolRun(argv=args, returncode=done.returncode, stdout=done.stdout, stderr=done.stderr)
     allowed = tuple(ok_codes)
     if run.returncode not in allowed:
-        raise RuntimeError(f"{command} exited {run.returncode}, outside {list(allowed)}:\n{run.tail()}")
+        raise Unmeasurable(f"{command} exited {run.returncode}, outside {list(allowed)}:\n{run.tail()}")
     return run
 
 
@@ -137,19 +141,19 @@ def run_tool(
     tool still finds its interpreter on ``PATH``.
 
     Raises:
-        RuntimeError: the tool could not start, ran past ``timeout_s``, or exited with a
+        Unmeasurable: the tool could not start, ran past ``timeout_s``, or exited with a
             code outside ``ok_codes``. Each means the tool, not the agent, failed.
     """
     return _run(argv, cwd=cwd or output.workspace, ok_codes=ok_codes, env=env, timeout_s=timeout_s)
 
 
 def _report_list(run: ToolRun, json_key: str | None) -> list[dict[str, Any]]:
-    """The findings list in a parsed report; anything not shaped like one raises RuntimeError."""
+    """The findings list in a parsed report; anything not shaped like one raises Unmeasurable."""
     report = run.json()
     items = report.get(json_key) if json_key is not None and isinstance(report, dict) else report
     if not isinstance(items, list):
         where = f"key {json_key!r}" if json_key is not None else "top level"
-        raise RuntimeError(f"{run.command} printed JSON with no findings list at its {where}:\n{run.tail()}")
+        raise Unmeasurable(f"{run.command} printed JSON with no findings list at its {where}:\n{run.tail()}")
     return [item if isinstance(item, dict) else {"message": str(item)} for item in items]
 
 
@@ -169,7 +173,7 @@ def findings(
     list. Exit 1 is allowed by default because lint-style CLIs use it for "found something".
 
     Raises:
-        RuntimeError: the tool did not run (see :func:`run_tool`), or printed no JSON, or
+        Unmeasurable: the tool did not run (see :func:`run_tool`), or printed no JSON, or
             JSON without the list. Exit 1 with no report is a crash, not a finding.
     """
     run = run_tool(output, argv, cwd=cwd, ok_codes=ok_codes, env=env, timeout_s=timeout_s)
@@ -200,14 +204,14 @@ def check_tool_passes(
 
     Any code in ``ok_codes`` other than 0 is the agent's failure, and the message lists
     the findings when the tool printed a JSON report, else the tail of its output. A code
-    outside ``ok_codes`` raises :class:`RuntimeError` (the tool crashed).
+    outside ``ok_codes`` raises :class:`~pytest_xharness_eval.model.verdict.Unmeasurable` (the tool crashed).
     """
     run = run_tool(output, argv, cwd=cwd, ok_codes=ok_codes, env=env, timeout_s=timeout_s)
     if run.returncode == 0:
         return
     try:
         evidence = _listing(_report_list(run, json_key))
-    except RuntimeError:
+    except Unmeasurable:
         # Not a report: the output itself is the evidence. The exit code already decided.
         evidence = run.tail()
     raise AssertionError(f"{run.command} exited {run.returncode} on the agent's work:\n{evidence}")
@@ -254,7 +258,7 @@ def require_seed_fails(
     ``rules`` must be among them.
 
     Raises:
-        RuntimeError: the seed does not reproduce ``rules``, or the tool did not run. A
+        Unmeasurable: the seed does not reproduce ``rules``, or the tool did not run. A
             fixture that drifted from its rule is the host's fault, so the cell errors.
     """
     if isinstance(seed, Path):
@@ -270,7 +274,7 @@ def require_seed_fails(
     holds = got == want if exactly else want <= got
     if not holds:
         claim = "alone" if exactly else "among others"
-        raise RuntimeError(
+        raise Unmeasurable(
             # Rules first, path last: a record keeps only the first line's opening characters.
             f"the seed should fail {sorted(want)} {claim}; it reports {sorted(got)} ({target.name}). "
             f"The fixture no longer tests what the case says. Gated at {target}:\n{_listing(found) or run.tail()}"
