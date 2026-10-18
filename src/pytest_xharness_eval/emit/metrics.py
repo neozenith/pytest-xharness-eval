@@ -231,93 +231,12 @@ class CellMetrics:
 
     @classmethod
     def of(cls, result: RunResult, *, outcome: Outcome, cache: CacheLayout) -> Self:
-        """The record for one graded run: everything derived, nothing assigned afterwards."""
-        u = result.usage
-        case = result.case
-        cov = result.skill_coverage
-        summary = cov.summary if cov else None
-        use = result.skill_use
-        return cls(
-            **_tool_figures(result),
-            **_subagent_figures(result),
-            failure=outcome.failure,
-            kind=case.kind.value if case and case.kind else "",
-            scenario=case.scenario if case else None,
-            scenario_fingerprint=case.scenario_fingerprint if case else None,
-            subject_version=case.subject_version if case else None,
-            skill_triggered=_triggered(result),
-            skill_trigger=use.trigger if use else None,
-            skill_triggered_turn=use.triggered_turn if use else None,
-            skill_duration_ms=use.duration_ms if use else None,
-            skill_tool_calls=use.tool_calls if use else None,
-            skill_issuing_cost_usd=use.issuing_cost_usd if use else None,
-            skill_context_cost_usd=use.context_cost_usd if use else None,
-            skill_cost_share=_share(use.issuing_cost_usd, result.estimated_cost_usd) if use else None,
-            skill_context_cost_share=_share(use.context_cost_usd, result.estimated_cost_usd) if use else None,
-            cache_read_share=result.cache_read_share,
-            api_duration_ms=result.api_duration_ms,
-            exit_code=result.exit_code,
-            attempted=int(result.attempted),
-            timed_out_after_s=result.timed_out_after_s,
-            idle_before_timeout_s=result.idle_before_timeout_s,
-            long_context_calls=result.long_context_calls,
-            cache_write_5m_tokens=u.cache_write_5m_tokens,
-            final_context_tokens=result.final_context_tokens,
-            at=outcome.started_at,
-            node=outcome.node,
-            suite=case.suite if case else None,
-            case=case.name if case else None,
-            skill=case.subject if case else None,
-            fixture=case.fixture if case else None,
-            harness=result.harness,
-            model=result.model,
-            effort=result.effort or "",
-            treatment=result.treatment or "",
-            line=result.line,
-            family_tier=result.family_tier,
-            released=result.released,
-            session_id=result.session_id,
-            # The word, never the member: this record is shipped by execnet (ADR 0041).
-            verdict=outcome.verdict.value if outcome.verdict else "",
-            turns=result.turns,
-            reported_turns=result.reported_turns,
-            tool_calls=sum(result.tool_calls.values()),
-            tool_calls_by_name=dict(result.tool_calls),
-            duration_ms=result.duration_ms,
-            wall_ms=outcome.wall_ms,
-            estimated_cost_usd=result.estimated_cost_usd,
-            harness_reported_cost_usd=result.harness_reported_cost_usd,
-            rates_applied=asdict(result.rates_applied) if result.rates_applied else {},
-            accumulative_billed_tokens=u.accumulative_billed_tokens,
-            baseline_tokens=result.baseline_tokens,
-            input_tokens=u.input_tokens,
-            output_tokens=u.output_tokens,
-            reasoning_tokens=u.reasoning_tokens,
-            cache_read_tokens=u.cache_read_tokens,
-            cache_write_tokens=u.cache_write_tokens,
-            cache_write_1h_tokens=u.cache_write_1h_tokens,
-            files_written=len(result.files_written),
-            context_window=result.context_window,
-            peak_context_tokens=result.peak_context_tokens,
-            context_window_pct=result.context_window_pct,
-            final_context_pct=result.final_context_pct,
-            ttft_ms=result.ttft_ms,
-            output_tokens_per_sec=result.output_tokens_per_sec,
-            record_kinds=dict(result.record_kinds),
-            subagents=len(result.subagents),
-            subagent_token_share=result.subagent_token_share,
-            subagent_cost_share=result.subagent_cost_share,
-            compactions=result.compactions,
-            reasoning_share=result.reasoning_share,
-            output_tokens_per_sec_by_model=result.output_tokens_per_sec_by_model,
-            skill_files=summary.files if summary else None,
-            skill_files_loaded=summary.loaded if summary else None,
-            skill_scripts=summary.scripts if summary else None,
-            skill_scripts_run=summary.run if summary else None,
-            skill_not_loaded=list(cov.not_loaded) if cov else [],
-            skill_not_run=list(cov.not_run) if cov else [],
-            cache=str(cache.root),
-        )
+        """The record for one graded run: everything derived, nothing assigned afterwards.
+
+        Each concern's fields come from one builder; :func:`figures` joins them and refuses
+        two builders claiming one field, and a test pins that together they fill every field.
+        """
+        return cls(**figures(result, outcome=outcome, cache=cache))
 
     @classmethod
     def dry_run(cls, *, node: str, cell: Cell) -> Self:
@@ -440,6 +359,159 @@ def _share(part: float | None, whole: float | None) -> float | None:
     return round(part / whole, 6)
 
 
+def figures(result: RunResult, *, outcome: Outcome, cache: CacheLayout) -> dict[str, Any]:
+    """Every field of the record for one graded run, joined from one builder per concern.
+
+    Raises:
+        ValueError: when two builders claim one field, which would let the later silently win.
+    """
+    out: dict[str, Any] = {}
+    for part in (
+        _outcome_figures(outcome, cache),
+        _identity_figures(result),
+        _case_figures(result),
+        _run_figures(result),
+        _usage_figures(result),
+        _run_end_figures(result),
+        _skill_use_figures(result),
+        _coverage_figures(result),
+        _tool_figures(result),
+        _subagent_figures(result),
+    ):
+        clash = out.keys() & part.keys()
+        if clash:
+            raise ValueError(f"two metrics builders claim {sorted(clash)}")
+        out |= part
+    return out
+
+
+def _outcome_figures(outcome: Outcome, cache: CacheLayout) -> dict[str, Any]:
+    """What grading observed, and where the combine step runs."""
+    return {
+        "at": outcome.started_at,
+        "node": outcome.node,
+        # The word, never the member: this record is shipped by execnet (ADR 0041).
+        "verdict": outcome.verdict.value if outcome.verdict else "",
+        "failure": outcome.failure,
+        "wall_ms": outcome.wall_ms,
+        "cache": str(cache.root),
+    }
+
+
+def _identity_figures(result: RunResult) -> dict[str, Any]:
+    """Which harness, model, rung and treatment ran, and what the catalogue says the model is."""
+    return {
+        "harness": result.harness,
+        "model": result.model,
+        "effort": result.effort or "",
+        "treatment": result.treatment or "",
+        "line": result.line,
+        "family_tier": result.family_tier,
+        "released": result.released,
+        "session_id": result.session_id,
+    }
+
+
+def _case_figures(result: RunResult) -> dict[str, Any]:
+    """The case, its subject and scenario, and the subject's version (ADR 0074)."""
+    case = result.case
+    return {
+        "suite": case.suite if case else None,
+        "case": case.name if case else None,
+        "skill": case.subject if case else None,
+        "fixture": case.fixture if case else None,
+        "kind": case.kind.value if case and case.kind else "",
+        "scenario": case.scenario if case else None,
+        "scenario_fingerprint": case.scenario_fingerprint if case else None,
+        "subject_version": case.subject_version if case else None,
+    }
+
+
+def _run_figures(result: RunResult) -> dict[str, Any]:
+    """What the run did, cost and needed of the window, and how fast it ran."""
+    return {
+        "turns": result.turns,
+        "reported_turns": result.reported_turns,
+        "tool_calls": sum(result.tool_calls.values()),
+        "tool_calls_by_name": dict(result.tool_calls),
+        "duration_ms": result.duration_ms,
+        "api_duration_ms": result.api_duration_ms,
+        "estimated_cost_usd": result.estimated_cost_usd,
+        "harness_reported_cost_usd": result.harness_reported_cost_usd,
+        "rates_applied": asdict(result.rates_applied) if result.rates_applied else {},
+        "long_context_calls": result.long_context_calls,
+        "files_written": len(result.files_written),
+        "context_window": result.context_window,
+        "peak_context_tokens": result.peak_context_tokens,
+        "final_context_tokens": result.final_context_tokens,
+        "context_window_pct": result.context_window_pct,
+        "final_context_pct": result.final_context_pct,
+        "ttft_ms": result.ttft_ms,
+        "output_tokens_per_sec": result.output_tokens_per_sec,
+        "output_tokens_per_sec_by_model": result.output_tokens_per_sec_by_model,
+        "record_kinds": dict(result.record_kinds),
+        "compactions": result.compactions,
+        "reasoning_share": result.reasoning_share,
+        "cache_read_share": result.cache_read_share,
+    }
+
+
+def _usage_figures(result: RunResult) -> dict[str, Any]:
+    """What it spent, tier by tier (ADR 0029)."""
+    u = result.usage
+    return {
+        "accumulative_billed_tokens": u.accumulative_billed_tokens,
+        "baseline_tokens": result.baseline_tokens,
+        "input_tokens": u.input_tokens,
+        "output_tokens": u.output_tokens,
+        "reasoning_tokens": u.reasoning_tokens,
+        "cache_read_tokens": u.cache_read_tokens,
+        "cache_write_tokens": u.cache_write_tokens,
+        "cache_write_1h_tokens": u.cache_write_1h_tokens,
+        "cache_write_5m_tokens": u.cache_write_5m_tokens,
+    }
+
+
+def _run_end_figures(result: RunResult) -> dict[str, Any]:
+    """How the CLI ended: its exit code, whether it reached the model, and any kill at the wall (ADR 0063, 0064)."""
+    return {
+        "exit_code": result.exit_code,
+        "attempted": int(result.attempted),
+        "timed_out_after_s": result.timed_out_after_s,
+        "idle_before_timeout_s": result.idle_before_timeout_s,
+    }
+
+
+def _skill_use_figures(result: RunResult) -> dict[str, Any]:
+    """Whether and when the skill under test triggered, and what its use cost (ADR 0073)."""
+    use = result.skill_use
+    return {
+        "skill_triggered": _triggered(result),
+        "skill_trigger": use.trigger if use else None,
+        "skill_triggered_turn": use.triggered_turn if use else None,
+        "skill_duration_ms": use.duration_ms if use else None,
+        "skill_tool_calls": use.tool_calls if use else None,
+        "skill_issuing_cost_usd": use.issuing_cost_usd if use else None,
+        "skill_context_cost_usd": use.context_cost_usd if use else None,
+        "skill_cost_share": _share(use.issuing_cost_usd, result.estimated_cost_usd) if use else None,
+        "skill_context_cost_share": _share(use.context_cost_usd, result.estimated_cost_usd) if use else None,
+    }
+
+
+def _coverage_figures(result: RunResult) -> dict[str, Any]:
+    """Which of the skill's files the run reached (ADR 0022)."""
+    cov = result.skill_coverage
+    summary = cov.summary if cov else None
+    return {
+        "skill_files": summary.files if summary else None,
+        "skill_files_loaded": summary.loaded if summary else None,
+        "skill_scripts": summary.scripts if summary else None,
+        "skill_scripts_run": summary.run if summary else None,
+        "skill_not_loaded": list(cov.not_loaded) if cov else [],
+        "skill_not_run": list(cov.not_run) if cov else [],
+    }
+
+
 def _triggered(result: RunResult) -> int | None:
     """1 when the skill under test triggered, 0 on a skill case where it did not, None without a skill."""
     if result.skill_use is not None:
@@ -458,6 +530,9 @@ def _subagent_figures(result: RunResult) -> dict[str, Any]:
     priced = result.cost_status is CostStatus.PRICED and all(c is not None for c in costs)
     peak = max((c.context_tokens for s in subs for c in s.calls), default=0)
     return {
+        "subagents": len(subs),
+        "subagent_token_share": result.subagent_token_share,
+        "subagent_cost_share": result.subagent_cost_share,
         "subagent_ms": sum(s.duration_ms or 0 for s in subs),
         "subagent_max_depth": max((s.depth for s in subs), default=0),
         "subagent_max_ms": max((s.duration_ms or 0 for s in subs), default=0),

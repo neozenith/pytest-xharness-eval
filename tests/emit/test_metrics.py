@@ -18,7 +18,7 @@ from pytest_xharness_eval import (
 )
 from pytest_xharness_eval.derive import skillcov
 from pytest_xharness_eval.derive.toolcost import SkillUse, ToolCost
-from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome
+from pytest_xharness_eval.emit.metrics import CellMetrics, Outcome, figures
 from pytest_xharness_eval.model import clock
 from pytest_xharness_eval.model import matrix as mx
 from pytest_xharness_eval.model.case import CaseKind
@@ -412,3 +412,10 @@ def test_every_numeric_field_declares_its_role_so_the_analyzer_never_guesses_one
     assert numeric_fields == set(declared)
     assert not declared["family_tier"].is_metric and declared["turns"].is_metric
     assert declared["subagents"].better is None  # neutral: delegation is neither good nor bad
+
+
+def test_the_per_concern_builders_fill_every_field_exactly_once(tmp_path: Path) -> None:
+    """A field no builder fills would silently keep its default on every record (ADR 0076)."""
+    outcome = Outcome(node="n", verdict=Verdict.PASS, wall_ms=1, started_at="t")
+    built = figures(_result("claude-opus-5", Usage(1, 2, 0, 0)), outcome=outcome, cache=CacheLayout(tmp_path))
+    assert set(built) == {f.name for f in dataclasses.fields(CellMetrics)}
