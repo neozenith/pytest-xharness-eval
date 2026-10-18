@@ -11,20 +11,20 @@ decisions as records see [docs/adrs/](docs/adrs/index.md); for the words, see
 
 Every section leads with a diagram pair: a small overview that is always visible, and a
 detailed reference collapsed beneath it. Colours mean the same thing in every
-flowchart:
+diagram:
 
 | Colour | Means |
 |--------|-------|
-| Blue | an entry point (`plugin/`, `replay.py`, `promote.py`) |
+| Blue | an entry point (`plugin/`, `replay.py`, `promote.py`, `analysis.py`), or a state in progress |
 | Slate | the domain nouns (`model/`) |
 | Violet | an agent CLI adapter (`harness/`) or the CLI itself |
 | Teal | a derivation (`derive/`), or a store on disk (pale teal) |
 | Amber | a check a grader is written with (`verify/`) |
-| Green | a document that leaves (`emit/`) |
+| Green | a document that leaves (`emit/`), or a good outcome |
 | Indigo | the Analyzer (`analyze/`) |
 | Orange | sweep wiring (`runtime/`) |
-| Red | a refusal: the run fails loudly |
-| Grey, dashed | designed but not yet wired |
+| Red | a refusal or an `error`: the run fails loudly |
+| Grey, dashed | skipped, discarded, or not counted |
 
 ## Contents
 
@@ -34,13 +34,14 @@ flowchart:
 4. [One live cell](#one-live-cell)
 5. [Two CLIs, two capture contracts](#two-clis-two-capture-contracts)
 6. [Isolation keeps the score about the skill](#isolation-keeps-the-score-about-the-skill)
-7. [Data models](#data-models): [cases and scenarios](#cases-and-scenarios),
+7. [Data models](#data-models): [cases, scenarios and plans](#cases-scenarios-and-plans),
    [the run record](#the-run-record), [the documents](#the-documents),
    [the cache tree](#the-cache-tree)
 8. [State machines](#state-machines): [a cell's verdict](#a-cells-verdict),
    [a session capture](#a-session-capture), [an adversarial scenario](#an-adversarial-scenario),
    [a comparison's outcome](#a-comparisons-outcome)
-9. [Replay](#replay), [promote](#promote), [session end: combine and analyze](#session-end-combine-and-analyze)
+9. [Session end: analyze and combine](#session-end-analyze-and-combine), [replay](#replay),
+   [promote](#promote)
 10. [Pricing is the plugin's job, not the CLI's](#pricing-is-the-plugins-job-not-the-clis)
 11. [Grading and analysis are not prescribed](#grading-and-analysis-are-not-prescribed)
 12. [Interfaces](#interfaces)
@@ -52,19 +53,18 @@ flowchart:
 ```mermaid
 flowchart LR
     SUITE["eval_*.py suite"]
-    COL["collect<br/>plugin/collect.py"]
+    PLAN["collect and plan<br/>CellPlan"]
     GEN["generate scenarios<br/>FixtureGenerator"]
-    EXP["expand matrix<br/>model/matrix.py"]
-    MAT["materialise<br/>model/workspace.py"]
+    MAT["materialise, precheck<br/>model/workspace.py"]
     INV["invoke CLI<br/>harness/"]
     FOLD["fold session log<br/>SessionLog.to_result"]
     DER["derive and capture<br/>runtime/pipeline.py"]
     GRADE["grade<br/>case fn + verify/"]
     REC["record<br/>CellMetrics"]
+    ANA["analyze<br/>runtime/analyzers.py"]
     COMB["combine<br/>emit/page.py"]
-    ANA["analyze<br/>analyze/"]
 
-    SUITE --> COL --> GEN --> EXP --> MAT --> INV --> FOLD --> DER --> GRADE --> REC --> COMB --> ANA
+    SUITE --> GEN --> PLAN --> MAT --> INV --> FOLD --> DER --> GRADE --> REC --> ANA --> COMB
 
     classDef entry fill:#2563eb,stroke:#bfdbfe,color:#fff,stroke-width:2px
     classDef domain fill:#475569,stroke:#cbd5e1,color:#fff,stroke-width:2px
@@ -72,59 +72,59 @@ flowchart LR
     classDef runtime fill:#c2410c,stroke:#fed7aa,color:#fff,stroke-width:2px
     classDef verify fill:#92400e,stroke:#fde68a,color:#fff,stroke-width:2px
     classDef emit fill:#065f46,stroke:#a7f3d0,color:#fff,stroke-width:2px
-    classDef target fill:#e4e4e7,stroke:#52525b,color:#52525b,stroke-width:1px,stroke-dasharray:5 5
-    class SUITE,COL entry
-    class GEN,EXP,MAT domain
+    classDef analyze fill:#4f46e5,stroke:#c7d2fe,color:#fff,stroke-width:2px
+    class SUITE entry
+    class GEN,PLAN,MAT domain
     class INV,FOLD adapter
     class DER runtime
     class GRADE verify
     class REC,COMB emit
-    class ANA target
+    class ANA analyze
 ```
 
 A suite's cases are collected, each generator's scenarios are written once, and every
-(case, scenario, cell) point becomes one pytest item. Each item gets a fresh workspace,
-the harness runs its CLI, the run's own log is folded into a `RunResult`, which is
-priced, captured, graded and recorded. At session end the combine step rebuilds the
-report over every run in the cache. The Analyzer is built (`analyze/`) but no hook calls
-it yet (see [session end](#session-end-combine-and-analyze)).
+(case, scenario, cell, repeat) point is planned into one frozen `CellPlan` and one pytest
+item. Each item gets a fresh workspace that the case's `precheck` may refuse before
+anything spends; then the harness runs its CLI, the run's own log is folded into a
+`RunResult`, which is priced, captured, graded and recorded. At session end the
+controller runs every analyzer of the suites it graded, writes `report/analysis.json`,
+and then the combine step rebuilds the report over every run in the cache.
 
 Everything from the `RunResult` rightwards is `runtime/pipeline.py`, and a replay
 rejoins the same flow at the session log rather than repeating the spend: one sequence,
 two entry points (ADR 0034).
 
 <details>
-<summary>Detailed pipeline (27 nodes)</summary>
+<summary>Detailed pipeline (26 nodes)</summary>
 
 ```mermaid
 flowchart TB
     subgraph COLLECT["Collection: plugin/collect.py EvalFile.collect"]
         LOAD["EvalSuite.load<br/>model/suite.py"]
         MATRIX["Settings.matrix_for"]
-        PRICED["ensure_priced + validate_matrix<br/>ADR 0007, 0060"]
-        CAT["catalogue.require<br/>ADR 0057"]
-        INV0["skillcov.catalog<br/>skill file inventory"]
+        PRICED["ensure_priced, validate_matrix,<br/>catalogue.require"]
+        INV0["skillcov.catalog,<br/>ws.version"]
         TREAT["treatment.validate<br/>ADR 0055"]
-        VER["ws.version<br/>subject_version"]
         GENS["generator.scenarios<br/>GenerationContext"]
-        WRITE["write_scenario"]
+        WRITE["ScenarioStore.write"]
         CELLS["expand, treat, narrow<br/>model/matrix.py"]
-        ITEM["EvalItem per<br/>case x scenario x cell"]
+        ITEM["CellPlan + EvalItem per<br/>case x scenario x cell x repeat"]
     end
     subgraph CELL["One cell: plugin/cell.py CellRun.execute"]
         MATER["materialise<br/>fixture + treatment"]
+        PRE["precheck of Seed<br/>nothing billed"]
         INVOKE["invoke<br/>the one paid step"]
         QUAR["quarantine<br/>UnfoldedRun"]
         DERIVE["pipeline.derive<br/>price, coverage, case,<br/>tool costs, skill use"]
         CAPT["pipeline.capture"]
-        GRADE["grade<br/>case.fn of CaseOutput"]
+        GRADE["grade<br/>Verdict.of_exception"]
         RECORD["record_metrics"]
         TIDY["tidy"]
     end
-    subgraph END["Session end: plugin/summary.py"]
-        SUMM["RunSummary.write"]
+    subgraph END["Session end, controller only"]
+        FIN["pytest_sessionfinish<br/>analyze_suites"]
+        SUMM["pytest_terminal_summary<br/>RunSummary.write"]
         PAGE["page.write<br/>combine step"]
-        ANALY["analyzers<br/>not yet wired"]
     end
     subgraph STORE["cache root"]
         SCN[("scenarios/")]
@@ -134,20 +134,20 @@ flowchart TB
         REP[("report/")]
     end
 
-    LOAD --> MATRIX --> PRICED --> CAT --> INV0 --> TREAT --> VER --> GENS --> WRITE --> CELLS --> ITEM
+    LOAD --> MATRIX --> PRICED --> INV0 --> TREAT --> GENS --> WRITE --> CELLS --> ITEM
     PRICED -.->|live feed rows| PRC
     WRITE -.-> SCN
-    ITEM --> MATER --> INVOKE
+    ITEM --> MATER --> PRE --> INVOKE
     MATER -.-> BLD
     INVOKE -->|RunResult| DERIVE --> CAPT --> GRADE --> RECORD --> TIDY
     INVOKE -->|log will not fold| QUAR
     QUAR -.->|unfolded.json| RES
     CAPT -.->|log, result.json| RES
     RECORD -.->|history.json| RES
-    RECORD -->|user_properties| SUMM --> PAGE --> ANALY
+    RECORD -->|user_properties| FIN --> SUMM --> PAGE
+    FIN -.->|analysis.json| REP
     SUMM -.->|report.json| REP
     PAGE -.->|index.json, history.jsonl, report.html| REP
-    ANALY -.->|analysis.json| REP
 
     classDef entry fill:#2563eb,stroke:#bfdbfe,color:#fff,stroke-width:2px
     classDef domain fill:#475569,stroke:#cbd5e1,color:#fff,stroke-width:2px
@@ -156,27 +156,29 @@ flowchart TB
     classDef runtime fill:#c2410c,stroke:#fed7aa,color:#fff,stroke-width:2px
     classDef verify fill:#92400e,stroke:#fde68a,color:#fff,stroke-width:2px
     classDef emit fill:#065f46,stroke:#a7f3d0,color:#fff,stroke-width:2px
+    classDef analyze fill:#4f46e5,stroke:#c7d2fe,color:#fff,stroke-width:2px
     classDef store fill:#99f6e4,stroke:#0f766e,color:#1e293b,stroke-width:1px
     classDef danger fill:#dc2626,stroke:#fecaca,color:#fff,stroke-width:2px
-    classDef target fill:#e4e4e7,stroke:#52525b,color:#52525b,stroke-width:1px,stroke-dasharray:5 5
     classDef sg fill:#f1f5f9,stroke:#475569,color:#1e293b
-    class LOAD,MATRIX,CAT,TREAT,VER,GENS,WRITE,CELLS,MATER,TIDY domain
+    class LOAD,MATRIX,TREAT,GENS,WRITE,CELLS,MATER,TIDY domain
     class ITEM entry
     class PRICED,INV0 derive
     class INVOKE adapter
     class QUAR danger
     class DERIVE,CAPT runtime
-    class GRADE verify
+    class PRE,GRADE verify
     class RECORD,SUMM,PAGE emit
-    class ANALY target
+    class FIN analyze
     class SCN,PRC,BLD,RES,REP store
     class COLLECT,CELL,END,STORE sg
 ```
 
 Every refusal on the left stops collection with a `pytest.UsageError` before any cell
 spends: an unpriced or uncatalogued model, a rung the model ignores, a treatment that
-copies nothing for a harness, a generator that raises, yields nothing, or yields two
-scenarios under one id.
+copies nothing for a harness, a generator that raises, a scenario with no task to run, or
+two scenarios under one id. A generator that yields nothing stops collection too, unless
+it declares `may_be_empty` (`Promoted`, `Adversarial`), in which case collection warns by
+name and collects no cell for that case.
 
 </details>
 
@@ -184,9 +186,10 @@ scenarios under one id.
 
 ```mermaid
 flowchart TB
-    PLUG["plugin/<br/>pytest11 entry point"]
-    REPLAY["replay.py<br/>python -m"]
-    PROMO["promote.py<br/>python -m"]
+    PLUG["plugin/<br/>pytest11"]
+    REPLAY["replay.py"]
+    PROMO["promote.py"]
+    ANCLI["analysis.py"]
     RT["runtime/"]
     AN["analyze/"]
     EM["emit/"]
@@ -196,8 +199,7 @@ flowchart TB
     MO["model/"]
     REG["model/registry.py"]
 
-    PLUG --> RT
-    REPLAY --> RT
+    PLUG & REPLAY & ANCLI --> RT
     PROMO --> EM
     RT --> AN --> EM --> VE --> DE --> HA --> MO
     REG -.->|the one edge up| HA
@@ -210,7 +212,7 @@ flowchart TB
     classDef emit fill:#065f46,stroke:#a7f3d0,color:#fff,stroke-width:2px
     classDef analyze fill:#4f46e5,stroke:#c7d2fe,color:#fff,stroke-width:2px
     classDef runtime fill:#c2410c,stroke:#fed7aa,color:#fff,stroke-width:2px
-    class PLUG,REPLAY,PROMO entry
+    class PLUG,REPLAY,PROMO,ANCLI entry
     class RT runtime
     class AN analyze
     class EM emit
@@ -222,23 +224,23 @@ flowchart TB
 
 An arrow reads "may import". A layer may name any layer beneath it, never one above.
 
-`src/pytest_xharness_eval/` is not a flat list of modules. Three entry-point modules sit
-at the root because something outside the package resolves them by name: `plugin/`
-through the `pytest11` entry point (ADR 0014), `replay.py` and `promote.py` through
-`python -m`. The seven layers each run is pushed through are folders beneath them.
-`plugin/` is itself a package: its `__init__` is the hook manifest, and each hook's job
-(options, collection, the per-cell run, the record's crossing, the summary) is a module
-beside it (ADR 0040).
+`src/pytest_xharness_eval/` is not a flat list of modules. Four entry points sit at the
+root because something outside the package resolves them by name: `plugin/` through the
+`pytest11` entry point (ADR 0014), and `replay.py`, `promote.py` and `analysis.py`
+through `python -m`. The seven layers each run is pushed through are folders beneath
+them. `plugin/` is itself a package: its `__init__` is the hook manifest, and each hook's
+job (options, collection, the per-cell run, the record's crossing, the session-end
+analysis, the summary) is a module beside it (ADR 0040).
 
 | Layer | Answers | Depends on |
 | --- | --- | --- |
-| `model/` | what a run, a case, a scenario, a cell, a workspace and a cache tree *are* | nothing (except `model/registry.py`) |
+| `model/` | what a run, a case, a scenario, a cell, a finding, a workspace and a cache tree *are* | nothing (except `model/registry.py`) |
 | `harness/` | how one agent CLI is invoked, and how its session log folds | `model/` |
 | `derive/` | what a folded run cost, and which of the skill it reached | `model/` |
 | `verify/` | the shared `check_*` verifiers and the golden comparison a grader is written with | `model/`, `derive/` |
 | `emit/` | the documents that leave: the metrics record, the report microsite, `analysis.json` | `model/`, `harness/` |
 | `analyze/` | questions asked across cells, runs and subject versions | `model/`, `emit/` |
-| `runtime/` | how a sweep is wired: settings, and the steps after the CLI returns | everything below |
+| `runtime/` | how a sweep is wired: settings, the cell plan, the steps after the CLI returns, the analyzer run | everything below |
 
 The order is a rule, not a description: a ruff `TID251` rule in `pyproject.toml` bans
 `harness`, `verify`, `emit`, `analyze` and `runtime` from every module beneath them, and
@@ -255,21 +257,22 @@ job.
 ```mermaid
 flowchart TB
     subgraph ENTRY["Entry points"]
-        P_COL["plugin/collect.py"]
-        P_CELL["plugin/cell.py"]
-        P_RES["plugin/results.py"]
+        P_CELL["plugin/collect.py,<br/>cell.py"]
+        P_FIN["plugin/finish.py"]
         P_SUM["plugin/summary.py"]
         P_REP["replay.py"]
         P_PRO["promote.py"]
+        P_ANA["analysis.py"]
     end
     subgraph RUNTIME["runtime/"]
-        R_PIPE["pipeline.py, settings.py"]
+        R_PIPE["pipeline, plan,<br/>settings"]
+        R_AN["analyzers.py"]
     end
     subgraph ANALYZE["analyze/"]
-        A_AN["analysis, compare,<br/>samples, stats"]
+        A_AN["questions, sampleset,<br/>compare, stats"]
     end
     subgraph EMIT["emit/"]
-        E_MET["metrics.py, summary.py,<br/>findings.py"]
+        E_MET["metrics, summary,<br/>findings"]
         E_PAGE["page.py, index.py"]
         E_SAM["samples.py"]
         E_UNF["unfolded.py"]
@@ -282,27 +285,26 @@ flowchart TB
         D_COV["skillcov.py, toolcost.py"]
     end
     subgraph HARNESS["harness/"]
-        H_BASE["base.py, threads.py"]
-        H_CLI["claude.py, codex.py"]
+        H_BASE["base, threads,<br/>claude, codex"]
     end
     subgraph MODEL["model/"]
-        M_CASE["case, scenario,<br/>generators, matrix"]
-        M_RUN["runresult, output,<br/>layout, metrics"]
+        M_CASE["case, scenario,<br/>generators, matrix, findings"]
+        M_RUN["runresult, output,<br/>verdict, layout, metrics"]
         M_REG["registry.py"]
     end
 
-    P_COL --> P_CELL --> R_PIPE
-    P_CELL --> P_RES
-    P_COL --> E_SAM
+    P_CELL --> R_PIPE
+    P_CELL --> E_SAM
+    P_FIN & P_ANA --> R_AN
     P_SUM --> E_PAGE
     P_REP --> R_PIPE
     P_PRO --> E_MET
-    R_PIPE --> D_PRI & D_COV & E_MET & E_UNF
-    A_AN --> E_MET
+    R_PIPE --> D_PRI & D_COV & E_UNF
+    R_AN --> A_AN --> E_MET
     E_UNF --> H_BASE
     V_CHK --> D_COV
     D_COV --> M_REG
-    H_CLI --> H_BASE --> M_RUN
+    H_BASE --> M_RUN
     M_REG -.->|registry lookup| H_BASE
     M_CASE --> M_RUN
 
@@ -315,20 +317,22 @@ flowchart TB
     classDef analyze fill:#4f46e5,stroke:#c7d2fe,color:#fff,stroke-width:2px
     classDef runtime fill:#c2410c,stroke:#fed7aa,color:#fff,stroke-width:2px
     classDef sg fill:#f1f5f9,stroke:#475569,color:#1e293b
-    class P_COL,P_CELL,P_RES,P_SUM,P_REP,P_PRO entry
-    class R_PIPE runtime
+    class P_CELL,P_FIN,P_SUM,P_REP,P_PRO,P_ANA entry
+    class R_PIPE,R_AN runtime
     class A_AN analyze
     class E_MET,E_PAGE,E_SAM,E_UNF emit
     class V_CHK verify
     class D_PRI,D_COV derive
-    class H_BASE,H_CLI adapter
+    class H_BASE adapter
     class M_CASE,M_RUN,M_REG domain
     class ENTRY,RUNTIME,ANALYZE,EMIT,VERIFY,DERIVE,HARNESS,MODEL sg
 ```
 
-`runtime/` does not import `analyze/` yet: the session-end analyzer run is the missing
-edge. `emit/unfolded.py` names `harness/base.py` for the `Evidence` a quarantined run
-carries, which is why `emit/` sits above `harness/`.
+`runtime/analyzers.py` is the one module that names `analyze/`, and both the session-end
+hook and the free command line go through it. `emit/unfolded.py` names `harness/base.py`
+for the `Evidence` a quarantined run carries, which is why `emit/` sits above `harness/`.
+The module names follow ADR 0076: `model/findings.py`, `analyze/questions.py`
+(`Analysis`), `analyze/sampleset.py` (`Samples`), `emit/findings.py` (`AnalysisReport`).
 
 </details>
 
@@ -341,6 +345,7 @@ sequenceDiagram
     participant COL as plugin/collect.py
     participant CELL as EvalItem / CellRun
     participant RES as plugin/results.py
+    participant FIN as plugin/finish.py
     participant SUM as plugin/summary.py
 
     PY->>OPS: pytest_addoption
@@ -352,13 +357,15 @@ sequenceDiagram
     PY->>RES: pytest_runtest_makereport
     PY->>RES: pytest_runtest_logreport
     PY->>RES: pytest_report_teststatus
+    PY->>FIN: pytest_sessionfinish
     PY->>SUM: pytest_terminal_summary
 ```
 
-The plugin binds seven hooks in `plugin/__init__.py`, plus one more through the
+The plugin binds eight hooks in `plugin/__init__.py`, plus one more through the
 `ResultCollector` it registers at configure. The record makes exactly one crossing from
 a worker to the controller, as a plain mapping on `TestReport.user_properties`, because
-execnet serialises builtins only (ADR 0016, ADR 0037).
+execnet serialises builtins only (ADR 0016, ADR 0037). The analyzers run once, on the
+controller, after every cell (ADR 0075).
 
 <details>
 <summary>Detailed event flow with the worker/controller split and files written</summary>
@@ -369,6 +376,7 @@ sequenceDiagram
         participant PY as pytest
         participant OPS as options.py
         participant RC as ResultCollector
+        participant FIN as finish.py
         participant SUM as summary.py
     end
     box rgba(124,58,237,0.12) xdist worker, or the same process
@@ -379,13 +387,12 @@ sequenceDiagram
     participant FS as cache root
 
     PY->>OPS: pytest_addoption
-    Note over OPS: every option and ini key
     PY->>OPS: pytest_configure
     OPS->>OPS: mint XHARNESS_EVAL_RUN_TS, validate ignore, price, treatment, model lines
     OPS->>RC: register, RESULTS_KEY stash
     PY->>OPS: pytest_report_header
     PY->>COL: pytest_collect_file
-    COL->>FS: scenarios/suite/case/id, pricing/ records
+    COL->>FS: scenarios/suite path/case/id, pricing/ records
     PY->>CELL: runtest
     CELL->>FS: build/cell_id, then results/.../session/
     CELL->>CELL: stash RECORD_KEY
@@ -394,6 +401,8 @@ sequenceDiagram
     RES-->>RC: TestReport via execnet
     RC->>RC: pytest_runtest_logreport, record_of
     PY->>RES: pytest_report_teststatus
+    PY->>FIN: pytest_sessionfinish, skipped on a worker
+    FIN->>FS: report/analysis.json, exit status
     PY->>SUM: pytest_terminal_summary
     SUM->>FS: report/report.json
     SUM->>FS: report/index.json, history.jsonl, report.html
@@ -403,16 +412,16 @@ sequenceDiagram
 
 | Hook | Module | Consumes | Emits | Files written |
 |------|--------|----------|-------|---------------|
-| `pytest_addoption` | `plugin/options.py` | the parser | every `--` option and `xharness_*` ini key | none |
+| `pytest_addoption` | `plugin/options.py` | the parser | every `--` option (including `--xharness-repeat`) and `xharness_*` ini key | none |
 | `pytest_configure` | `plugin/options.py` | ini lines | the run stamp in `XHARNESS_EVAL_RUN_TS` (inherited by xdist workers), the `RESULTS_KEY` stash, a registered `ResultCollector`; a `UsageError` on a malformed line | none |
 | `pytest_report_header` | `plugin/options.py` | `Settings` | the skills root (marked `(missing)`), cache root, matrix and treatment source | none |
-| `pytest_collect_file` | `plugin/collect.py` | an `eval_*.py` in `<skills root>/<skill>/evals/` | an `EvalFile`, whose `collect` yields one `EvalItem` per case, scenario and cell | `<cache>/scenarios/<suite>/<case>/<id>/` and `<id>.provenance.json`; `<cache>/pricing/` rows priced live |
-| `runtest` (pytest's own call) | `plugin/collect.py`, `plugin/cell.py` | the item | a `CellMetrics` in the item's `RECORD_KEY` stash, or a dry-run skip | `<cache>/build/<cell>/`; `results/.../{session}/log.jsonl`, `result.json` or `unfolded.json`, `subagents/`, `history.json` |
+| `pytest_collect_file` | `plugin/collect.py` | an `eval_*.py` in `<skills root>/<skill>/evals/` | an `EvalFile`, whose `collect` yields one `EvalItem` per `CellPlan`: case, scenario, cell and repeat (`#k` under `--xharness-repeat`) | `<cache>/scenarios/<suite path>/<case>/<id>/` and `<id>.provenance.json`; `<cache>/pricing/` rows priced live |
+| `runtest` (pytest's own call) | `plugin/collect.py`, `plugin/cell.py` | the item's plan | a `CellMetrics` in the item's `RECORD_KEY` stash; under `--dry-run` a free precheck and a skip | `<cache>/build/<cell>/`; `results/.../{session}/log.jsonl`, `result.json` or `unfolded.json`, `subagents/`, `history.json` |
 | `pytest_runtest_makereport` | `plugin/results.py` | the stashed record | `("xharness_eval", dict)` plus flat `xharness_*` scalars on the call report (JUnit sees them too) | none |
 | `pytest_runtest_logreport` | `ResultCollector` in `plugin/results.py` | a call report | the decoded record into `RESULTS_KEY`, by node id | none |
 | `pytest_report_teststatus` | `plugin/results.py` | a call report | `PASSED`, `FAIL`, `ERROR` or `DRY-RUN` with the metrics status word | none |
-| `pytest_terminal_summary` | `plugin/summary.py` | `RESULTS_KEY` | the per-cell table and total spend | `report/report.json`; then, if evidence was written, `index.json`, `history.jsonl`, `report.html`, `report.tokens.json`, the glossary |
-| analyzers (target) | not yet bound | every stored record | a `Finding` per `analyze_*` | `report/analysis.json` |
+| `pytest_sessionfinish` | `plugin/finish.py` | `RESULTS_KEY` (controller only; an xdist worker returns at once) | the `AnalysisReport` in `ANALYSIS_KEY`; `TESTS_FAILED` exit status if a finding failed and the session was otherwise OK | `report/analysis.json`, only when a graded suite declares an analyzer |
+| `pytest_terminal_summary` | `plugin/summary.py` | `RESULTS_KEY`, `ANALYSIS_KEY` | the per-cell table, total spend, and the "agent eval analysis" section | `report/report.json`; then, if evidence was written, `index.json`, `history.jsonl`, `report.html`, `report.tokens.json`, the glossary |
 
 ## One live cell
 
@@ -427,8 +436,8 @@ sequenceDiagram
     participant C as controller
 
     PY->>IT: runtest
-    IT->>RUN: execute
-    RUN->>RUN: materialise workspace
+    IT->>RUN: CellRun of plan, settings
+    RUN->>RUN: materialise, precheck
     RUN->>H: invoke, the paid step
     H-->>RUN: Attempt with RunResult
     RUN->>PL: derive, capture
@@ -438,12 +447,16 @@ sequenceDiagram
     RUN-->>C: CellMetrics via user_properties
 ```
 
-A cell is a (case, scenario, harness, model, effort, treatment) point, and running it is
-always the same steps in `plugin/cell.py`. Exactly one, `CellRun.invoke`, spawns a paid
-process and carries `pragma: no cover`; every other step is exercised from captured logs
-in `tests/plugin/test_cell.py` (ADR 0002, ADR 0040). The record is written in a
-`finally`, so a failing cell still emits its metrics; the workspace is tidied in an outer
-`finally` (ADR 0062).
+A cell is a (case, scenario, harness, model, effort, treatment) point, planned once at
+collection into a frozen `CellPlan` (`runtime/plan.py`, ADR 0076) that the `EvalItem`
+holds; `CellRun` is that plan plus the settings, and its only mutable state is the
+verdict. Running it is always the same steps in `plugin/cell.py`. Exactly one,
+`CellRun.invoke`, spawns a paid process and carries `pragma: no cover`; every other step
+is exercised from captured logs in `tests/plugin/test_cell.py` (ADR 0002, ADR 0040). The
+record is written in a `finally`, so a failing cell still emits its metrics; the
+workspace is tidied in an outer `finally` (ADR 0062). Under `--xharness-repeat N` each
+cell is planned N times as separate samples, named `#k`, each in its own `-r{k}`
+workspace, and keyed as the same cell in every record (ADR 0075).
 
 <details>
 <summary>Detailed: collection, then the run</summary>
@@ -457,23 +470,23 @@ sequenceDiagram
     participant ST as Settings
     participant SU as EvalSuite
     participant GEN as FixtureGenerator
-    participant SS as cache/scenarios
+    participant SS as ScenarioStore
     participant MX as model/matrix.py
 
     PY->>EF: collect
     EF->>SU: load, cases named eval_*
     loop each case
         EF->>ST: matrix_for, ensure_priced, validate_matrix
-        EF->>ST: catalogue.require, treatments_for
+        EF->>ST: catalogue.require, treatments_for, suite_ref
         EF->>EF: skillcov.catalog, ws.version
         alt fixture is a FixtureGenerator
-            EF->>SS: stored_scenarios, scenario_outcomes
-            EF->>GEN: scenarios of GenerationContext
+            EF->>SS: scenario_store of suite path and case
+            EF->>GEN: scenarios of GenerationContext with outcomes and store
             GEN-->>EF: Scenario list, unique ids
-            EF->>SS: write_scenario, atomic and idempotent
+            EF->>SS: write, atomic and idempotent
         end
         EF->>MX: expand, treat, narrow
-        EF-->>PY: EvalItem per scenario x cell
+        EF-->>PY: EvalItem per CellPlan, scenario x cell x repeat
     end
 ```
 
@@ -492,10 +505,12 @@ sequenceDiagram
 
     IT->>IT: skill and fixture dirs exist, else RunError
     alt --dry-run
+        IT->>WS: materialise, precheck of Seed, discard
         IT->>RS: CellMetrics.dry_run, then skip
     else live
         IT->>RUN: execute stash
         RUN->>WS: materialise fixture + overlays into build/
+        RUN->>RUN: precheck of Seed, any raise is RunError
         rect rgba(220,38,38,0.12)
             RUN->>H: run prompt, model, effort, skill_dir, timeout
             H->>CLI: spawn in workspace
@@ -716,67 +731,90 @@ ancestor's (ADR 0055).
 
 ## Data models
 
-### Cases and scenarios
+### Cases, scenarios and plans
 
 ```mermaid
 erDiagram
     EvalCase ||--|| CaseKind : "kind"
     EvalCase |o--o| FixtureGenerator : "fixture="
-    FixtureGenerator ||--|{ Scenario : "yields"
+    FixtureGenerator ||--o{ Scenario : "yields"
     FixtureGenerator }o--|| GenerationContext : "reads"
-    EvalCase ||--|{ Cell : "expands to"
-    Cell ||--o{ EvalItem : "one per scenario"
-    Scenario |o--o{ EvalItem : "runs on"
-    EvalItem ||--|| CellRun : "runs as"
-    CellRun ||--|| CaseOutput : "hands the grader"
+    GenerationContext |o--o| ScenarioStore : "store"
+    ScenarioStore ||--o{ Scenario : "stores"
+    EvalCase ||--|{ CellPlan : "planned as"
+    CellPlan }o--|| Cell : "matrix point"
+    CellPlan }o--o| Scenario : "runs on"
+    EvalItem ||--|| CellPlan : "holds"
+    CellPlan ||--o| Seed : "prechecked as"
+    CellPlan ||--|| CaseOutput : "graded as"
 
     classDef domain fill:#47556966,stroke:#64748b,stroke-width:2px
     classDef entry fill:#2563eb33,stroke:#3b82f6,stroke-width:2px
-    class EvalCase,CaseKind,FixtureGenerator,Scenario,GenerationContext,Cell,CaseOutput domain
-    class EvalItem,CellRun entry
+    classDef runtime fill:#c2410c33,stroke:#ea580c,stroke-width:2px
+    class EvalCase,CaseKind,FixtureGenerator,Scenario,GenerationContext,ScenarioStore,Cell,Seed,CaseOutput domain
+    class EvalItem entry
+    class CellPlan runtime
 ```
 
 A case is either a *skill* case or a *scenario* case: `skill=None` sends the task
 verbatim to every harness (ADR 0074). Its `fixture=` is a committed directory name or a
 `FixtureGenerator`, whose scenarios each multiply the cells. A scenario's id is a slug
-plus a digest of generator, version and canonical params, so it never renumbers.
+plus a digest of generator, version and canonical params, so it never renumbers; its
+`expect` carries grader knobs that stay out of the id. A case's optional `precheck=` is
+handed a `Seed` (the materialised workspace before anything runs) and gates the input,
+not the agent.
 
 <details>
-<summary>Detailed: fields, and the shipped generators (13 entities)</summary>
+<summary>Detailed: fields, the store, and the shipped generators (17 entities)</summary>
 
 ```mermaid
 erDiagram
     EvalCase {
         callable fn "the grader, named eval_*"
-        str task "never prompt="
+        str task "None if every scenario names one"
         str fixture "or a FixtureGenerator"
         str skill "None for a scenario case"
         list models "None inherits xharness_matrix"
         list treatments "None inherits xharness_treatments"
         tuple tracks "subject version paths"
+        callable precheck "of a Seed"
     }
     CaseKind {
         enum value "skill or scenario"
     }
     FixtureGenerator {
         str name
+        bool may_be_empty "class var"
         method scenarios "of GenerationContext"
     }
     GenerationContext {
         path evals_dir
         str case
         map outcomes "id to failed, sampled"
-        map stored "id to stored dir"
+        ScenarioStore store
     }
     Scenario {
         str generator
-        map params "JSON-able"
+        map params "JSON-able, in the id"
+        map expect "grader knobs, not in the id"
         map files "path to text or bytes"
         int version
         str label
         str task "per-scenario override"
         str id "slug--8 hex of key"
         str fingerprint "digest of the bytes"
+    }
+    Provenance {
+        str generator
+        int version
+        str id
+        map params
+        map expect
+        str fingerprint
+        map promoted_from "session facts"
+    }
+    ScenarioStore {
+        path root "cache/scenarios/suite/case or evals/fixtures"
     }
     Table {
         str name
@@ -810,11 +848,22 @@ erDiagram
         str effort "resolved native rung"
         str treatment "None is the control"
     }
-    EvalItem {
+    CellPlan {
         str node "id without xdist suffix"
+        str suite "relative to rootpath"
         str subject "skill or tool dir"
-        str subject_version
         path fixture_dir
+        path skill_dir
+        tuple overlays
+        str subject_version
+        int sample "repeat k, or None"
+    }
+    EvalItem {
+        CellPlan plan
+    }
+    Seed {
+        path workspace
+        Scenario scenario
     }
     CaseOutput {
         RunResult run
@@ -828,24 +877,36 @@ erDiagram
     Table ||--|| FixtureGenerator : "is a"
     Generated ||--|| FixtureGenerator : "is a"
     Promoted ||--|| FixtureGenerator : "is a"
-    Adversarial ||--|| FixtureGenerator : "is a"
-    Adversarial ||--|| FixtureGenerator : "seeds"
+    Adversarial ||--|| FixtureGenerator : "is a, seeds"
     Generated ||--o{ Draw : "one per index"
     FixtureGenerator }o--|| GenerationContext : "reads"
-    FixtureGenerator ||--|{ Scenario : "yields"
-    EvalCase ||--|{ Cell : "expand, treat, narrow"
-    Cell ||--o{ EvalItem : "x scenario"
-    Scenario |o--o{ EvalItem : "runs on"
-    EvalItem ||--|| CaseOutput : "graded as"
+    GenerationContext |o--o| ScenarioStore : "store"
+    FixtureGenerator ||--o{ Scenario : "yields"
+    ScenarioStore ||--o{ Scenario : "tree per id"
+    Scenario ||--|| Provenance : "id.provenance.json"
+    Promoted ||--|| ScenarioStore : "reads evals/fixtures"
+    EvalCase ||--|{ CellPlan : "scenario x cell x repeat"
+    CellPlan }o--|| Cell : "matrix point"
+    CellPlan }o--o| Scenario : "runs on"
+    EvalItem ||--|| CellPlan : "holds"
+    CellPlan ||--o| Seed : "prechecked as"
+    CellPlan ||--|| CaseOutput : "graded as"
 
     classDef domain fill:#47556966,stroke:#64748b,stroke-width:2px
     classDef entry fill:#2563eb33,stroke:#3b82f6,stroke-width:2px
-    class EvalCase,CaseKind,FixtureGenerator,GenerationContext,Scenario,Table,Generated,Promoted,Adversarial,Draw,Cell,CaseOutput domain
+    classDef runtime fill:#c2410c33,stroke:#ea580c,stroke-width:2px
+    class EvalCase,CaseKind,FixtureGenerator,GenerationContext,Scenario,Provenance,ScenarioStore,Table,Generated,Promoted,Adversarial,Draw,Cell,Seed,CaseOutput domain
     class EvalItem entry
+    class CellPlan runtime
 ```
 
-Sources: `model/case.py`, `model/scenario.py`, `model/generators.py`, `model/matrix.py`,
-`model/output.py`, `plugin/collect.py`.
+Sources: `model/case.py`, `model/scenario.py` (`Scenario`, `Provenance`,
+`ScenarioStore`, `GenerationContext`, `FixtureGenerator`), `model/generators.py`,
+`model/matrix.py`, `model/output.py` (`Seed`, `CaseOutput`), `runtime/plan.py`
+(`CellPlan`), `plugin/collect.py`. A store is keyed by the suite path relative to the
+project root (`Settings.suite_ref`), so two skills' `eval_main.py` never share one.
+`ScenarioStore` is the one owner of the tree-plus-provenance layout, for the cache and for
+a suite's promoted `evals/fixtures/` alike.
 
 </details>
 
@@ -949,13 +1010,14 @@ erDiagram
     CaseRef {
         str suite
         str name
-        str skill
+        str subject "wire key skill"
         str fixture
         str task
         str prompt
-        str kind
+        enum kind "CaseKind"
         str scenario
         str scenario_fingerprint
+        map scenario_params
         str subject_version
     }
     AppliedRates {
@@ -1042,9 +1104,11 @@ erDiagram
 ```
 
 Sources: `model/runresult.py`, `derive/pricing.py`, `derive/toolcost.py`,
-`derive/skillcov.py`. A scenario case has no skill under test, so `skill_coverage` and
-`skill_use` are `None` (ADR 0074). Every field a grader may assert on is listed in
-[docs/rollout.md](docs/rollout.md).
+`derive/skillcov.py`. `CaseRef.subject` is the skill under test or a scenario case's tool
+directory; it is written under the wire key `skill`, which every record has carried
+since before a subject could be anything else. A scenario case has no skill under test,
+so `skill_coverage` and `skill_use` are `None` (ADR 0074). Every field a grader may
+assert on is listed in [docs/rollout.md](docs/rollout.md).
 
 </details>
 
@@ -1072,7 +1136,8 @@ Every emitted format is a type in `emit/` with `to_dict` and `write` on it, so a
 (and `report-ui/src/lib/types.ts`) has one definition to look at (ADR 0037, ADR 0040).
 `CellMetrics` is the per-session record (`history.json`); `history.jsonl` is every one of
 them sorted by `at`; `index.json` carries one `IndexRow` per captured session and, under
-`important_metrics`, the per-cell samples (ADR 0071).
+`important_metrics`, the per-cell samples (ADR 0071); `analysis.json` is one
+`AnalysisReport` of every finding.
 
 <details>
 <summary>Detailed: fields and files (13 entities)</summary>
@@ -1156,9 +1221,9 @@ erDiagram
         bool passed
     }
     Finding {
-        str analyzer "analyze_*"
+        str analyzer "suite path::analyze_*"
         bool passed
-        str message
+        str message "ERROR prefix if it broke"
         map details
     }
     Comparison {
@@ -1199,8 +1264,11 @@ erDiagram
 
 Sources: `emit/metrics.py` (its keys are a wire format, pinned in
 `tests/emit/test_metrics.py`), `emit/summary.py`, `emit/index.py`, `emit/samples.py`,
-`emit/unfolded.py`, `emit/findings.py`, `model/findings.py`. `AnalysisReport` is built
-and typed but nothing writes it during a sweep yet.
+`emit/unfolded.py`, `emit/findings.py`, `model/findings.py`. Each numeric `CellMetrics`
+field declares its role (metric kind and which direction is better) as dataclass field
+metadata under `ROLE_KEY` (`model/metrics.py`), so the Analyzer reads one declaration. An
+`error` is never a sample of the pass rate, neither a pass nor a fail; it is counted by
+the separate `errors` rate, where every graded sample counts.
 
 </details>
 
@@ -1213,7 +1281,7 @@ flowchart LR
     PRICING["pricing/<br/>live price rows"]
     SCN["scenarios/<br/>generated inputs"]
     RES["results/<br/>skill/harness/model/run/session"]
-    REP["report/<br/>the microsite"]
+    REP["report/<br/>the microsite, analysis.json"]
 
     ROOT --> BUILD & PRICING & SCN & RES & REP
 
@@ -1226,8 +1294,9 @@ flowchart LR
 Every path under the cache root is named by `CacheLayout`, `SessionDir` and
 `LocatedSession` in `model/layout.py` and nowhere else (ADR 0037, ADR 0038). Only
 `CacheLayout` builds a `LocatedSession`, which is what a report link or a session key
-needs. A cell writes only inside its own `{run}/{session}/`, so parallel workers never
-contend (ADR 0032).
+needs, and `CacheLayout.holding(session_dir)` finds the cache a session directory sits in.
+A cell writes only inside its own `{run}/{session}/`, so parallel workers never contend
+(ADR 0032).
 
 <details>
 <summary>Detailed tree with the type that writes each file (25 nodes)</summary>
@@ -1237,9 +1306,9 @@ flowchart LR
     ROOT[(".xharness_eval_cache<br/>CacheLayout")]
     BUILD["build/cell_id/<br/>+ cell_id.claude, .codex"]
     PRICING["pricing/<br/>derive/feed.py"]
-    SCN["scenarios/suite/case/"]
+    SCN["scenarios/suite path/case/<br/>ScenarioStore"]
     SID["id/ tree"]
-    SPROV["id.provenance.json"]
+    SPROV["id.provenance.json<br/>Provenance"]
     RES["results/"]
     SK["skill/"]
     HA["harness/"]
@@ -1269,19 +1338,20 @@ flowchart LR
     classDef store fill:#99f6e4,stroke:#0f766e,color:#1e293b,stroke-width:1px
     classDef adapter fill:#7c3aed,stroke:#ddd6fe,color:#fff,stroke-width:2px
     classDef emit fill:#065f46,stroke:#a7f3d0,color:#fff,stroke-width:2px
+    classDef analyze fill:#4f46e5,stroke:#c7d2fe,color:#fff,stroke-width:2px
     classDef danger fill:#dc2626,stroke:#fecaca,color:#fff,stroke-width:2px
-    classDef target fill:#e4e4e7,stroke:#52525b,color:#52525b,stroke-width:1px,stroke-dasharray:5 5
     class ROOT,BUILD,PRICING,SCN,SID,SPROV,RES,SK,HA,MO,RUN,SES,REP store
     class LOG,RESULT,SUBS adapter
     class HIST,SUMJ,IDX,HJL,PAGE,TOK,GLO emit
     class UNF danger
-    class ANJ target
+    class ANJ analyze
 ```
 
 `{skill}` is the *subject*: the skill under test, or the tool directory a scenario case
 exercises. Effort and treatment are coordinates but not levels: they join the model in
 the level they share, so the five-level shape the report fetches by is unchanged (ADR
-0049, ADR 0055). A session directory holds `result.json` or `unfolded.json`, never both.
+0049, ADR 0055). A repeat is not a coordinate either: each sample is its own session. A
+session directory holds `result.json` or `unfolded.json`, never both.
 
 </details>
 
@@ -1292,11 +1362,14 @@ the level they share, so the five-level shape the report fetches by is unchanged
 ```mermaid
 stateDiagram-v2
     [*] --> Collected
-    Collected --> DryRun : --dry-run
-    Collected --> Invoked : materialise, invoke
+    Collected --> DryRun : --dry-run, free precheck
+    Collected --> Materialised : materialise
+    Materialised --> Refused : precheck raises
+    Materialised --> Invoked : invoke
     Invoked --> Quarantined : UnfoldedRun
     Invoked --> Graded : derive, capture
     Graded --> Recorded : pass, fail or error
+    Refused --> [*] : error, nothing billed
     Quarantined --> [*] : error, no record
     DryRun --> [*] : skipped
     Recorded --> [*] : tidied
@@ -1305,25 +1378,28 @@ stateDiagram-v2
     classDef bad fill:#dc2626,stroke:#fecaca,color:#fff,stroke-width:2px
     classDef done fill:#065f46,stroke:#a7f3d0,color:#fff,stroke-width:2px
     classDef skip fill:#e4e4e7,stroke:#52525b,color:#52525b,stroke-width:1px,stroke-dasharray:5 5
-    class Collected,Invoked,Graded active
-    class Quarantined bad
+    class Collected,Materialised,Invoked,Graded active
+    class Refused,Quarantined bad
     class Recorded done
     class DryRun skip
 ```
 
 `CellRun.verdict` starts at `error`, because a run that has not reached its grader has
 not passed. The words are `Verdict` in `model/verdict.py`: `pass`, `fail`, `error`,
-`dry-run` (ADR 0041).
+`dry-run` (ADR 0041). One rule classifies every checker, a grader, a precheck or an
+analyzer: `Verdict.of_exception` makes an `AssertionError` a `fail` and anything else,
+an `Unmeasurable` included, an `error` (ADR 0076).
 
 <details>
-<summary>Detailed: every exit, and which one emits a record (17 states)</summary>
+<summary>Detailed: every exit, and which one emits a record (18 states)</summary>
 
 ```mermaid
 stateDiagram-v2
     [*] --> Collected
     Collected --> Missing : skill or fixture dir missing
-    Collected --> DryRun : --dry-run
+    Collected --> DryRun : --dry-run, materialise, precheck, discard
     Collected --> Materialised : CellRun.materialise
+    Materialised --> PrecheckRefused : precheck of Seed raises
     Materialised --> Invoked : invoke
     Invoked --> Refused : RunError, no envelope or log
     Invoked --> Quarantined : UnfoldedRun
@@ -1334,7 +1410,7 @@ stateDiagram-v2
     Stored --> Grading : completed and attempted
     Grading --> Pass : grader returns
     Grading --> Fail : AssertionError
-    Grading --> Error : any other exception
+    Grading --> Error : anything else, Unmeasurable included
     TimedOutActive --> Fail
     Stalled --> Error
     NotAttempted --> Error
@@ -1343,6 +1419,7 @@ stateDiagram-v2
     Fail --> Recorded
     Error --> Recorded
     Recorded --> Tidied : discard workspace
+    PrecheckRefused --> Tidied : RunError, nothing billed
     Refused --> Tidied
     Quarantined --> Tidied
     DryRun --> [*] : CellMetrics.dry_run, skip
@@ -1359,18 +1436,20 @@ stateDiagram-v2
     classDef done fill:#065f46,stroke:#a7f3d0,color:#fff,stroke-width:2px
     classDef skip fill:#e4e4e7,stroke:#52525b,color:#52525b,stroke-width:1px,stroke-dasharray:5 5
     class Collected,Materialised,Invoked,Stored,Grading active
-    class Missing,Refused,Quarantined,Stalled,NotAttempted,Error bad
+    class Missing,PrecheckRefused,Refused,Quarantined,Stalled,NotAttempted,Error bad
     class TimedOutActive,Fail warn
     class Pass,Recorded,Tidied done
     class DryRun skip
 ```
 
 A cell refused before `store` raises without a metrics record, and pytest reports it as
-an error: a missing skill or fixture directory from `EvalItem.runtest`, a CLI that left
-no envelope or log, or a log that would not fold from `CellRun.execute`. A killed run that was still active is a `fail` (a longer
-`xharness_timeout_s` might pass it); one silent for `STALLED_AFTER_S` is an `error` to
-investigate (ADR 0064). A run that never reached the model is an `error`, never graded
-(ADR 0063).
+an error: a missing skill or fixture directory from `EvalItem.runtest`; a precheck that
+refused the seed (whatever it raised, an assertion included, is the fixture's fault, so
+it is a `RunError` and nothing is billed); a CLI that left no envelope or log, or a log
+that would not fold, from `CellRun.execute`. A killed run that was still active is a
+`fail` (a longer `xharness_timeout_s` might pass it); one silent for `STALLED_AFTER_S`
+is an `error` to investigate (ADR 0064). A run that never reached the model is an
+`error`, never graded (ADR 0063).
 
 </details>
 
@@ -1435,8 +1514,8 @@ A quarantined capture has no `history.json`, so a replay that folds it writes th
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Mutant : drawn from a seed
-    Mutant --> Discarded : oracle or fingerprint
+    [*] --> Mutant : explore, drawn from a seed
+    Mutant --> Discarded : taken, duplicate or screened out
     Mutant --> Stored : kept
     Stored --> Run
     Run --> Passed
@@ -1461,15 +1540,16 @@ already breaks, and a free oracle decides which mutants are worth a run at all (
 the generator that found it.
 
 <details>
-<summary>Detailed: the search, the confirm pass and promotion (12 states)</summary>
+<summary>Detailed: confirm, explore, screen, promote (13 states)</summary>
 
 ```mermaid
 stateDiagram-v2
     [*] --> Seed : seeds.scenarios
-    Seed --> Mutant : parent weighted f+1 over n+2, 1 to depth mutators
-    Mutant --> Discarded : oracle signals empty or seen
+    Seed --> Mutant : explore, parent weighted f+1 over n+2 by lineage
+    Mutant --> Discarded : id already sampled or confirmed
     Mutant --> Discarded : same fingerprint as parent or a kept mutant
-    Mutant --> Stored : write_scenario under scenarios/
+    Mutant --> Discarded : oracle signals empty or seen this sweep
+    Mutant --> Stored : ScenarioStore.write, params plus mutation record
     Stored --> Run : one cell per matrix point
     Run --> Passed : verdict pass
     Run --> Failed : verdict fail
@@ -1478,9 +1558,11 @@ stateDiagram-v2
     Confirming --> Failed : fails again
     Confirming --> Passed : passes
     Failed --> Promoted : python -m pytest_xharness_eval.promote
-    Promoted --> Regression : Promoted yields it
+    Promoted --> Regression : Promoted yields it from evals/fixtures
     Regression --> Broken : bytes no longer match fingerprint
     Regression --> Run : every sweep
+    Seed --> Exhausted : nothing new, nothing failed
+    Exhausted --> [*] : may_be_empty, collection warns
 
     note right of Promoted
         evals/fixtures/name/ plus
@@ -1494,14 +1576,20 @@ stateDiagram-v2
     class Seed,Mutant,Stored,Run,Confirming active
     class Failed,Broken bad
     class Passed,Promoted,Regression done
-    class Discarded,Uncounted skip
+    class Discarded,Uncounted,Exhausted skip
 ```
 
-The search is deterministic for a given history, seed and generator code: every `Draw`
-seeds from a digest, never `hash()`. History reaches the generator as
+Each sweep yields at most `budget` scenarios: confirm first (past mutants that failed and
+are still stored, re-run from their bytes), then explore with what is left. Explore draws
+are salted with the number of mutants already sampled (the generation), so each sweep
+searches somewhere new; a parent's weight counts the samples of every stored mutant bred
+from it (`ScenarioStore.lineage`). A mutant's `params` are its parent's plus a `mutation`
+record (parent, mutators, generation, attempt), and its `expect` is its parent's. The
+search is deterministic for a given history, seed and generator code: every `Draw` seeds
+from a digest, never `hash()`. History reaches the generator as
 `GenerationContext.outcomes`, built by `emit/samples.scenario_outcomes`, which counts a
-`fail` as failed and ignores an `error`. When to promote is a human decision; the
-confirm pass exists so one unlucky sample is not promoted as a regression.
+`fail` as failed and ignores an `error`. When to promote is a human decision; the confirm
+pass exists so one unlucky sample is not promoted as a regression.
 
 </details>
 
@@ -1531,37 +1619,114 @@ stateDiagram-v2
 `inconclusive`, which is the default.
 
 <details>
-<summary>Detailed: the tests, the correction and the finding (9 states)</summary>
+<summary>Detailed: the tests, the correction and the gate (11 states)</summary>
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Grouped : baseline and candidate grouped by CELL_FIELDS
-    Grouped --> Matched : key present in both arms
+    [*] --> Versions : expect_no_regression, no sides named
+    Versions --> GateFailed : fewer than 2 subject versions
+    Versions --> Grouped : baseline, candidate = last two versions
+    Grouped --> Matched : key present in both arms, by CELL_FIELDS
     Matched --> Insufficient : either arm under min_n, default 3
     Matched --> Tested : Fisher exact for a rate, permutation otherwise
     Tested --> Corrected : Benjamini-Hochberg q across all scopes
     Corrected --> Inconclusive : q over alpha or the diff CI spans 0
     Corrected --> Improved : clear, in the metric's direction
     Corrected --> Regressed : clear, against it
-    Insufficient --> Finding
-    Inconclusive --> Finding
-    Improved --> Finding
-    Regressed --> Finding : expect_no_regression raises AnalysisFailure
-    Finding --> [*] : passed, failed, or the analyzer's own error propagates
+    Regressed --> GateFailed : any cell regressed
+    Insufficient --> GateFailed : every cell insufficient
+    Inconclusive --> GatePassed
+    Improved --> GatePassed
+    GateFailed --> [*] : AnalysisFailure, a failed finding
+    GatePassed --> [*] : comparisons returned
 
     classDef active fill:#2563eb,stroke:#bfdbfe,color:#fff,stroke-width:2px
     classDef bad fill:#dc2626,stroke:#fecaca,color:#fff,stroke-width:2px
     classDef done fill:#065f46,stroke:#a7f3d0,color:#fff,stroke-width:2px
     classDef skip fill:#e4e4e7,stroke:#52525b,color:#52525b,stroke-width:1px,stroke-dasharray:5 5
-    class Grouped,Matched,Tested,Corrected,Finding active
-    class Regressed bad
-    class Improved done
+    class Versions,Grouped,Matched,Tested,Corrected active
+    class Regressed,GateFailed bad
+    class Improved,GatePassed done
     class Insufficient,Inconclusive skip
 ```
 
 Sources: `analyze/compare.py` (`compare`, `_decide`), `analyze/stats.py`,
-`analyze/__init__.py` (`run_one`). Alpha is `1 - confidence` (default 0.95), every draw
-is seeded, and a comparison is only ever made between samples of the same cell.
+`analyze/questions.py` (`expect_no_regression`). A gate that cannot see a regression must
+not report that there was none, so it fails on a single recorded version and when no
+matched cell had `min_n` samples on both sides. Alpha is `1 - confidence` (default
+0.95), every draw is seeded, and a comparison is only ever made between samples of the
+same cell. `--xharness-repeat` is how a sweep reaches `min_n`.
+
+</details>
+
+## Session end: analyze and combine
+
+```mermaid
+sequenceDiagram
+    participant PY as pytest
+    participant FIN as plugin/finish.py
+    participant RA as runtime/analyzers.py
+    participant SUM as plugin/summary.py
+    participant PG as emit/page.py
+
+    PY->>FIN: pytest_sessionfinish, controller only
+    FIN->>RA: analyze_suites of the graded suites
+    RA-->>FIN: AnalysisReport, or None
+    FIN->>FIN: write analysis.json, fail the session on a failed finding
+    PY->>SUM: pytest_terminal_summary
+    SUM->>SUM: table, report.json
+    SUM->>PG: write for each cache root
+    SUM->>SUM: agent eval analysis section
+```
+
+The analyzers run once per session, on the controller, over every stored record plus
+this sweep's (ADR 0075). Only suites that graded a live cell this session are analyzed,
+and a session whose suites declare no `analyze_*` writes no `analysis.json`. A failed
+finding turns an otherwise passing session into `TESTS_FAILED`. The same run is free from
+the command line: `python -m pytest_xharness_eval.analysis <cache> [--suite ...] [--seed N]`
+calls the same `analyze_suites` over every suite under the skills root and exits 1 on a
+failed finding.
+
+The combine step is per cache root, not per cell: it rebuilds one browsable report over
+everything under `results/`, every subject and every run, not only this session's (ADR
+0032). A session that wrote no evidence names no root and combines nothing, which is how
+`--dry-run` stays free.
+
+<details>
+<summary>Detailed: the analyzer run and the combine step</summary>
+
+```mermaid
+sequenceDiagram
+    participant FIN as finish.py
+    participant RA as analyzers.py
+    participant SU as EvalSuite
+    participant AN as analyze.run_one
+    participant SUM as summary.py
+    participant PG as page.write
+    participant FS as report/
+
+    FIN->>FIN: return on an xdist worker
+    FIN->>FIN: live records with a cache and a suite, else return
+    FIN->>RA: settings, suite paths, live records
+    RA->>SU: load each suite, its AnalyzerSpecs
+    RA->>RA: Samples.stored of the cache, Samples.of current
+    loop each suite, each analyze_*
+        RA->>AN: spec over Analysis scoped to the suite
+        AN-->>RA: Finding, passed, failed, or ERROR for a broken analyzer
+    end
+    RA-->>FIN: AnalysisReport, findings named suite::analyzer
+    FIN->>FS: analysis.json
+    FIN->>FIN: ANALYSIS_KEY, exit status
+    SUM->>FS: report.json
+    SUM->>PG: cache, design tokens, inline
+    PG->>FS: index.json with important_metrics, history.jsonl
+    PG->>FS: report.html, report.tokens.json, glossary
+    SUM->>SUM: print finding_lines
+```
+
+A broken analyzer (one that raises anything but a failed assertion) is reported as a
+failed finding whose message starts `ERROR` and names the exception: never swallowed,
+never an `INTERNALERROR`, and the other analyzers and the combine step still run.
 
 </details>
 
@@ -1637,7 +1802,7 @@ ADR 0064).
 sequenceDiagram
     participant U as developer
     participant PR as promote.py
-    participant SS as cache/scenarios
+    participant SS as ScenarioStore
     participant FX as evals/fixtures
 
     U->>PR: python -m pytest_xharness_eval.promote source evals
@@ -1657,8 +1822,8 @@ inside a fixture is copied into every workspace (ADR 0018).
 sequenceDiagram
     participant PR as promote.promote
     participant SD as results/.../session
-    participant SS as scenarios/suite/case
-    participant SC as Scenario
+    participant CL as CacheLayout
+    participant SS as ScenarioStore
     participant FX as evals/fixtures
 
     alt source holds result.json
@@ -1666,78 +1831,20 @@ sequenceDiagram
         SD-->>PR: suite, case name, scenario id
         PR->>SD: CellMetrics.stored, history.json
         SD-->>PR: verdict, failure
-        PR->>SS: stored_scenarios, find the id
+        PR->>CL: holding of the session dir
+        PR->>SS: scenario_store of suite and case, stored by id
     end
-    PR->>SC: promoted, read tree and provenance
-    SC-->>PR: ValueError if the bytes changed
+    PR->>SS: Scenario.promoted, tree and Provenance
+    SS-->>PR: ValueError if the bytes changed
     PR->>FX: FileExistsError if name exists
     PR->>FX: write tree to fixtures/name/
-    PR->>FX: provenance plus promoted_from session facts
+    PR->>FX: Provenance with promoted_from session facts
 ```
 
 A session that ran on a committed fixture has nothing to promote, and says so. A suite
-then runs every promoted fixture through the `Promoted` generator, which refuses an
-empty result: a regression suite that finds nothing would report green having guarded
-nothing.
-
-</details>
-
-## Session end: combine and analyze
-
-```mermaid
-sequenceDiagram
-    participant PY as pytest
-    participant SUM as plugin/summary.py
-    participant RS as RunSummary
-    participant PG as emit/page.py
-    participant AN as analyze/
-
-    PY->>SUM: pytest_terminal_summary
-    SUM->>RS: of RESULTS_KEY, write report.json
-    SUM->>PG: write for each cache root
-    SUM-->>AN: target, run analyzers
-```
-
-The combine step is per cache root, not per cell: it rebuilds one browsable report over
-everything under `results/`, every subject and every run, not only this session's (ADR
-0032). A session that wrote no evidence names no root and combines nothing, which is how
-`--dry-run` stays free.
-
-**The analyzer run is the target, not the current code.** `analyze/` (the `Analysis`
-API, `run`, `run_one`), `@analyzer` and `Finding` (`model/findings.py`),
-`AnalysisReport` (`emit/findings.py`) and `CacheLayout.analysis` exist, but no hook in
-`plugin/` collects `analyze_*` functions or calls them, and there is no
-`python -m pytest_xharness_eval.analyze` yet. The dashed steps below follow
-`tmp/design/scenarios-checkers-analyzer.md`.
-
-<details>
-<summary>Detailed: the combine step today, and the analyzer run as designed</summary>
-
-```mermaid
-sequenceDiagram
-    participant SUM as summary.py
-    participant RS as RunSummary
-    participant PG as page.write
-    participant IX as emit/index.py
-    participant SM as emit/samples.py
-    participant AN as analyze.run
-    participant FS as report/
-
-    SUM->>RS: of the controller's records
-    RS->>FS: report.json
-    SUM->>PG: cache, design tokens, inline
-    PG->>IX: cells, aggregate_history
-    PG->>SM: ImportantMetrics.of every record
-    PG->>FS: index.json, history.jsonl
-    PG->>FS: report.html, report.tokens.json, glossary
-    rect rgba(82,82,91,0.12)
-        Note over SUM,AN: target, not yet wired
-        SUM->>AN: AnalyzerSpecs, Analysis of history + current
-        AN-->>SUM: Finding per analyze_*
-        SUM->>FS: analysis.json
-        SUM->>SUM: a failed finding fails the session
-    end
-```
+then runs every promoted fixture through the `Promoted` generator. A regression case is
+declared before its first promotion, so `Promoted` may yield nothing; collection then
+warns by name rather than collecting a silent green case.
 
 </details>
 
@@ -1847,14 +1954,17 @@ robust; the derivation and its provider sources are
 
 ```mermaid
 flowchart LR
+    SEED["Seed"]
+    PRE["precheck"]
     OUT["CaseOutput"]
     CHK["verify/ checkers<br/>check_*, check_all"]
     GOLD["verify/golden.py<br/>facets + tolerances"]
-    VER["cell verdict"]
+    VER["cell verdict<br/>Verdict.of_exception"]
     REC["stored records"]
     ANA["Analysis<br/>analyze/"]
     FIND["Finding"]
 
+    SEED --> PRE
     OUT --> CHK --> VER
     OUT --> GOLD --> VER
     VER --> REC --> ANA --> FIND
@@ -1863,8 +1973,8 @@ flowchart LR
     classDef verify fill:#92400e,stroke:#fde68a,color:#fff,stroke-width:2px
     classDef emit fill:#065f46,stroke:#a7f3d0,color:#fff,stroke-width:2px
     classDef analyze fill:#4f46e5,stroke:#c7d2fe,color:#fff,stroke-width:2px
-    class OUT domain
-    class CHK,GOLD verify
+    class SEED,OUT domain
+    class PRE,CHK,GOLD verify
     class VER,REC emit
     class ANA,FIND analyze
 ```
@@ -1872,11 +1982,12 @@ flowchart LR
 The plugin does not decide what a correct run looks like. A case is an ordinary
 Python function that receives one `CaseOutput` (the run record, the workspace the agent
 wrote, the seeded paths, and the scenario if one was generated) and composes whatever
-checks it needs with plain `assert` (ADR 0045). The checks every case was writing for
-itself ship as `verify/`, and a case still writes its own beside it (ADR 0012, ADR 0013).
-Where a correct answer can be written down, `verify/golden.py` compares against a
-committed one facet by facet, each facet declaring how much variation is still correct
-(ADR 0046).
+checks it needs with plain `assert` (ADR 0045). A `precheck=` does the same for the input:
+it is handed the `Seed` before the run and refuses a fixture that no longer reproduces
+what the case is about. The checks every case was writing for itself ship as `verify/`,
+and a case still writes its own beside it (ADR 0012, ADR 0013). Where a correct answer
+can be written down, `verify/golden.py` compares against a committed one facet by facet,
+each facet declaring how much variation is still correct (ADR 0046).
 
 <details>
 <summary>Detailed: the checker modules, and the Analyzer's API (17 nodes)</summary>
@@ -1895,10 +2006,10 @@ flowchart TB
     FAIL["AssertionError<br/>fail"]
     ERR["Unmeasurable<br/>error"]
     subgraph ANALYZE["analyze/: across cells and runs"]
-        SAM["Samples<br/>where, group, latest"]
-        AN["Analysis<br/>history + current"]
-        ENV["summarise, effects,<br/>best, pareto, tiers"]
-        SUBJ["compare, trend,<br/>regressions, fragile"]
+        SAM["sampleset.py Samples<br/>where, group, latest"]
+        AN["questions.py Analysis<br/>history + current"]
+        ENV["summarise, effects,<br/>best, pareto, tiers, reliability"]
+        SUBJ["compare, trend, regressions,<br/>fragile, broken"]
         EXP["expect_no_regression,<br/>expect_at_least, at_most,<br/>pareto_contains"]
         STATS["stats.py<br/>Wilson, bootstrap,<br/>permutation, BH"]
     end
@@ -1908,7 +2019,7 @@ flowchart TB
     OUT --> CHECKS & CONDUCT & CONTENT & TOOL & GOLD
     COMB --> CHECKS & CONDUCT & CONTENT & TOOL
     CHECKS & CONDUCT & CONTENT & GOLD --> FAIL
-    TOOL --> ERR
+    TOOL & CONDUCT --> ERR
     SAM --> AN --> ENV & SUBJ
     ENV & SUBJ --> STATS
     SUBJ --> EXP --> FIND --> REPORT
@@ -1929,8 +2040,11 @@ flowchart TB
     class ANALYZE sga
 ```
 
-`tool.py` runs the *tool under test* on the workspace, never the agent CLI; a tool that
-cannot run raises `RuntimeError`, which grades `error`, never `fail`.
+`tool.py` runs the *tool under test* on the workspace, never the agent CLI. A checker
+that cannot measure what it was asked to (a tool that did not start, a report that did
+not parse, a harness that logged no context window) raises `Unmeasurable`, a
+`RuntimeError`, which grades `error`, never `fail`: it is a fact about the host, not the
+agent (ADR 0076).
 
 </details>
 
@@ -1958,21 +2072,23 @@ the module listed; the package root re-exports the case decorator and the record
 
 | Surface | Where | Contract |
 |---------|-------|----------|
-| `@evalcase(task=, fixture=, skill=, models=, treatments=, tracks=)` | `model/case.py` | a `task`, never `prompt=` (a `TypeError`, ADR 0044); `skill=None` makes a scenario case (ADR 0074) |
+| `@evalcase(fixture=, task=, skill=, models=, treatments=, tracks=, precheck=)` | `model/case.py` | a `task`, never `prompt=` (a `TypeError`, ADR 0044); `skill=None` makes a scenario case; `task` may be omitted when every scenario names its own (ADR 0074) |
+| `Seed` | `model/output.py` | what a `precheck` is handed: the materialised `workspace` and the `scenario`; whatever it raises refuses the cell before it spends (ADR 0074) |
 | `CaseOutput` | `model/output.py` | what a grader is handed: `run`, `workspace`, `seeded`, `scenario`; accessors are listed in [docs/rollout.md](docs/rollout.md) (ADR 0045) |
 | `RunResult` and its parts | `model/runresult.py` | the run record, `result.json`; a field a suite may assert on is listed in `docs/rollout.md` |
+| `Verdict`, `Verdict.of_exception`, `Unmeasurable` | `model/verdict.py` | an assertion is a `fail`, anything else an `error`; raise `Unmeasurable` for what cannot be measured (ADR 0076) |
 | `check_*` verifiers, `check_all`, `Checker` | `verify/checks.py`, `conduct.py`, `content.py`, `tool.py`, `combine.py` | `(CaseOutput, ...) -> None`, raise `AssertionError` with evidence (ADR 0045) |
 | `GoldenCase`, `Facet`, the tolerances, facet extractors | `verify/golden.py`, `tolerance.py`, `facets.py` | every facet declares a tolerance; a grader never calls `GoldenCase.record` (ADR 0046) |
-| `FixtureGenerator`, `Scenario`, `Draw`, `GenerationContext` | `model/scenario.py` | a protocol: a `name`, a declared `may_be_empty` and `scenarios(context)`, stable ids, JSON-able params (ADR 0074) |
+| `FixtureGenerator`, `Scenario`, `Draw`, `GenerationContext`, `ScenarioStore`, `Provenance` | `model/scenario.py` | a protocol: a `name`, `may_be_empty`, and `scenarios(context)`; stable ids, JSON-able params, `expect` outside the id (ADR 0074) |
 | `Table`, `Generated`, `Promoted`, `Adversarial`, `TextMutator`, `from_dir` | `model/generators.py` | the shipped generators and mutators (ADR 0074) |
-| `@analyzer`, `AnalyzerSpec`, `Change`, `Comparison`, `Finding` | `model/findings.py` | an `analyze_*(analysis) -> None` function that fails by raising `AssertionError` |
-| `Analysis`, `Samples`, `run`, `run_one` | `analyze/` | the statistics API an analyzer reads stored records with |
+| `@analyzer`, `AnalyzerSpec`, `Change`, `Comparison`, `Finding` | `model/findings.py` | an `analyze_*(analysis) -> None` function in an `eval_*.py`, failing by raising `AssertionError` (ADR 0075) |
+| `Analysis`, `Samples`, `run`, `run_one` | `analyze/` (`questions.py`, `sampleset.py`) | the statistics API an analyzer reads stored records with |
 | `Harness`, `register`, `get` | `harness/base.py` | one adapter class per CLI, reached by name (ADR 0034) |
 | `EvalFile`, `EvalItem`, `PROPERTY`, `RECORD_KEY`, `RESULTS_KEY` | `plugin/` | the compatibility names a `conftest.py` may reach for (ADR 0041) |
 | `python -m pytest_xharness_eval.replay <cache>` | `replay.py` | rebuild results, history and the report, free |
 | `python -m pytest_xharness_eval.promote <source> <evals dir> [--name]` | `promote.py` | freeze a scenario into `evals/fixtures/` with provenance |
-| `python -m pytest_xharness_eval.analyze <cache>` | not yet present | designed: re-run every suite's analyzers, free |
-| Options and `xharness_*` ini keys | `plugin/options.py` | the option tables in [README.md](README.md) |
+| `python -m pytest_xharness_eval.analysis <cache> [--suite] [--seed]` | `analysis.py` | re-run every suite's analyzers over the cache, free; writes `report/analysis.json`, exits 1 on a failed finding |
+| Options (`--xharness-repeat`, `--dry-run`, narrowing) and `xharness_*` ini keys | `plugin/options.py` | the option tables in [README.md](README.md) |
 | The emitted documents | `emit/` | one type per file, `to_dict` and `write`; `report-ui/src/lib/types.ts` mirrors them |
 
 ## Paths come from the rootdir, not from the package
@@ -1982,8 +2098,10 @@ The plugin is installed, so nothing about the consuming repository can be derive
 0059). Locations are ini keys resolved against pytest's `rootpath`: the skills root
 (`xharness_skills_dir`, default `skills`) and the cache root (`xharness_cache_dir`,
 default `.xharness_eval_cache`) (ADR 0014). Prices are `xharness_prices` lines, not a
-file. The matrix follows the same shape: a project sets `xharness_matrix` once, a case
-may override it with `models=`, and the plugin's bundled default is the floor (ADR 0015).
+file. A suite is named everywhere (records, scenario stores, findings) by its path
+relative to the root, through `Settings.suite_ref`. The matrix follows the same shape: a
+project sets `xharness_matrix` once, a case may override it with `models=`, and the
+plugin's bundled default is the floor (ADR 0015).
 
 The consequence worth knowing: pytest picks the rootdir from the first config file it
 finds walking up from the arguments. A repository with no `[tool.pytest.ini_options]`
@@ -1998,10 +2116,8 @@ visible on the first line of output.
   the two adapters is currently enforced by both producing the same dataclass. The
   grading primitives ADR 0012 left pending did ship, as `verify/` (ADR 0045) and the
   golden comparison (ADR 0046).
-- The Analyzer is not yet run by the plugin: no hook calls `analyze_*` functions, nothing
-  writes `report/analysis.json`, and there is no `analyze` command line yet.
 - Nothing throttles providers under `pytest-xdist`. Per-cell records travel on
-  `TestReport.user_properties`, so verbose status words and `report.json` are
-  complete under `-n` (ADR 0016); `--dist loadgroup` is the lever if a provider
+  `TestReport.user_properties`, so verbose status words, `report.json` and the analyzer
+  run are complete under `-n` (ADR 0016); `--dist loadgroup` is the lever if a provider
   rate-limits a sweep.
 - Workspaces have no git context (ADR 0004).
