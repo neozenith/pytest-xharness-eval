@@ -21,7 +21,7 @@ paid run at all, and history deciding which seeds to mutate.
 from __future__ import annotations
 
 # Standard Library
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, ClassVar, Final
 
 # Our Libraries
@@ -120,16 +120,25 @@ class Promoted:
     promoted fixture. A regression case is declared before its first failure is promoted, so
     finding none is allowed: collection names the empty case in a warning rather than
     reporting a green sweep that guarded nothing in silence (:attr:`may_be_empty`).
+
+    The bytes are frozen; the task need not be. A task that names a machine's own path (the
+    tool under test, say) would freeze that path into the fixture, so ``task`` is a format
+    string over the scenario's params and expectations that replaces the stored one -- the
+    same template the generator that found the failure used.
     """
 
     name: str
     source: str | None = None
+    task: str | None = None
     may_be_empty: ClassVar[bool] = True
 
     def scenarios(self, context: GenerationContext) -> list[Scenario]:
         # A suite's committed fixtures are a scenario store once a failure is promoted into it.
         found = [Scenario.promoted(tree) for tree in ScenarioStore(context.evals_dir / "fixtures").stored().values()]
-        return [s for s in found if self.source is None or s.generator == self.source]
+        chosen = [s for s in found if self.source is None or s.generator == self.source]
+        if self.task is None:
+            return chosen
+        return [replace(s, task=self.task.format(**s.merged)) for s in chosen]
 
 
 def _name(fn: Callable[..., Any]) -> str:

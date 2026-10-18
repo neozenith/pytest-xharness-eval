@@ -1,0 +1,6 @@
+#!/bin/sh
+# The subject under test (v2): apply every fix prose-gates can prove safe, then report what
+# remains, so the agent only has to rewrite what no fixer could settle.
+gate="${PROSE_GATES_REPO:?set PROSE_GATES_REPO to the prose-gates checkout}/src/bin.ts"
+bun run "$gate" --no-plugins --fix "$@" >/dev/null 2>&1
+exec bun run "$gate" --no-plugins "$@"

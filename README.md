@@ -257,6 +257,9 @@ that cell would be its control billed twice under a second name (ADR 0055).
 
 ### Scenario cases and generated fixtures
 
+Two complete reference suites, real evals rewritten this way with what their live runs
+showed, are in [examples/scenarios/](examples/scenarios/README.md).
+
 A case that names no `skill=` is a *scenario case*: its task is sent verbatim to every
 harness and no skill is registered, so it measures a tool rather than a skill. Its fixture
 may be a *generator* instead of a committed directory, and every scenario it yields becomes

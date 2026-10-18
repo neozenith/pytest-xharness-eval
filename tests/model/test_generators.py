@@ -333,3 +333,13 @@ def test_a_text_mutator_rewrites_utf8_bytes_and_leaves_binary_alone() -> None:
     out = gen.CRLF(files, Draw("t", 0))
     assert out["doc.md"] == "line one\r\nline two\r\n"
     assert out["img.md"] == files["img.md"]
+
+
+def test_a_promoted_case_may_re_render_the_frozen_task_from_its_params(tmp_path: Path) -> None:
+    """A stored task naming one machine's tool path is replaced, the bytes and id untouched."""
+    found = Scenario(generator="adv", params={"target": "doc.md"}, files={"doc.md": "x"}, task="fix /home/me/doc.md")
+    write_scenario(found, tmp_path / "evals" / "fixtures")
+    (kept,) = gen.Promoted(name="p").scenarios(_context(tmp_path))
+    (moved,) = gen.Promoted(name="p", task="tool {target}").scenarios(_context(tmp_path))
+    assert (kept.task, moved.task) == ("fix /home/me/doc.md", "tool doc.md")
+    assert (moved.id, moved.fingerprint) == (kept.id, kept.fingerprint)

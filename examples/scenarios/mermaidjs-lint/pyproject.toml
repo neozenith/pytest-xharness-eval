@@ -1,0 +1,14 @@
+[project]
+name = "mermaidjs-lint-scenarios-evidence"
+version = "0"
+
+[tool.pytest.ini_options]
+# Evidence project: mermaidjs-lint exercised as a scenario, its fixtures generated from the
+# tool's own rule fixtures instead of hand-copied (ADR 0074).
+testpaths = ["evals"]
+xharness_skills_dir = "evals"
+norecursedirs = [".xharness_eval_cache"]
+xharness_matrix = [
+    "claude/claude-haiku-5-5",
+    "codex/gpt-6-luna",
+]

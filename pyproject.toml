@@ -126,6 +126,8 @@ unfixable = []
 "src/pytest_xharness_eval/analyze/*" = ["TID251"]
 "src/pytest_xharness_eval/runtime/*" = ["TID251"]
 "tests/*" = ["TID251"]
+# Consumer example suites sit above every layer, like the tests (examples/scenarios/).
+"examples/*" = ["TID251"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
