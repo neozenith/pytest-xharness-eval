@@ -165,12 +165,13 @@ flowchart TB
     CELL -->|"with"| MODEL
     CELL -->|"at"| EFFORT
     CELL -->|"planned as"| PLAN
-    HARNESS -->|"declares the ladder<br/>a rung resolves on"| EFFORT
+    PLAN -->|"materialises"| WS
     CATALOG -->|"describes"| MODEL
     CATALOG -->|"defaults under<br/>the rate limit"| MATRIX
     FIX -->|"copied per cell into"| WS
     CASE -->|"may add with treatments="| TREAT
     TREAT -->|"copied over the fixture in"| WS
+    HARNESS -->|"works inside"| WS
     HARNESS -->|"writes"| LOG
     HARNESS -->|"forks per subagent"| SUB
     LOG -->|"normalised into"| RR
@@ -185,7 +186,6 @@ flowchart TB
     HIST -->|"samples of a cell<br/>reduced into"| IM
     CAP -.->|"a failure promoted into"| FIX
     IM -->|"leads"| REP
-    SKILL -->|"is questioned across samples by"| ANZ
     HIST -.->|"every stored sample<br/>read after the sweep by"| ANZ
     ANZ -->|"concludes"| FIND
 

@@ -62,15 +62,18 @@ def test_suite_names_the_suites_to_analyze_instead_of_every_one_under_the_skills
     other = tmp_path / "elsewhere" / "eval_other.py"
     other.parent.mkdir()
     other.write_text("X = 1\n", encoding="utf-8")
-    assert analysis.main([str(cache.root), "--suite", str(other)]) == 0
-    assert capsys.readouterr().out == f"no analyzers declared in: {other}\n"
+    # The named suite declares no analyzer, so the one under the skills root is not run either.
+    assert analysis.main([str(cache.root), "--suite", str(other)]) == analysis.NOTHING_TO_ANALYZE
+    assert capsys.readouterr().err == f"nothing to analyze: no @analyzer declared in: {other}\n"
     assert not cache.analysis.exists()
 
 
-def test_a_project_whose_suites_declare_no_analyzer_exits_zero(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_nothing_to_analyze_is_a_usage_error_never_a_pass(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """A typo in a hill-climbing script must not read as a green answer (ADR 0075)."""
     cache = _project(tmp_path, Verdict.FAIL, body="X = 1\n")
-    assert analysis.main([str(cache.root)]) == 0
-    assert capsys.readouterr().out.startswith("no analyzers declared in: ")
+    assert analysis.main([str(cache.root)]) == analysis.NOTHING_TO_ANALYZE
+    assert "no @analyzer declared" in capsys.readouterr().err
+    assert analysis.main([str(tmp_path / "no-such-cache")]) == analysis.NOTHING_TO_ANALYZE
+    assert analysis.main([str(cache.root), "--suite", str(tmp_path / "missing.py")]) == analysis.NOTHING_TO_ANALYZE
+    assert "no suite file at" in capsys.readouterr().err
     assert not cache.analysis.exists()
