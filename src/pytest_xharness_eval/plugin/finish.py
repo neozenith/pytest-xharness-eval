@@ -14,10 +14,10 @@ from __future__ import annotations
 import pytest
 
 # Our Libraries
-from pytest_xharness_eval.emit.analysis import AnalysisReport
+from pytest_xharness_eval.emit.findings import AnalysisReport
 from pytest_xharness_eval.emit.summary import RunSummary
 from pytest_xharness_eval.plugin.results import RESULTS_KEY
-from pytest_xharness_eval.runtime.analysis import analyze_suites
+from pytest_xharness_eval.runtime.analyzers import analyze_suites
 from pytest_xharness_eval.runtime.settings import Settings
 
 #: Where the session's analysis report waits for the terminal summary.

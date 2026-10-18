@@ -269,7 +269,7 @@ flowchart TB
         A_AN["analysis, compare,<br/>samples, stats"]
     end
     subgraph EMIT["emit/"]
-        E_MET["metrics.py, summary.py,<br/>analysis.py"]
+        E_MET["metrics.py, summary.py,<br/>findings.py"]
         E_PAGE["page.py, index.py"]
         E_SAM["samples.py"]
         E_UNF["unfolded.py"]
@@ -1199,7 +1199,7 @@ erDiagram
 
 Sources: `emit/metrics.py` (its keys are a wire format, pinned in
 `tests/emit/test_metrics.py`), `emit/summary.py`, `emit/index.py`, `emit/samples.py`,
-`emit/unfolded.py`, `emit/analysis.py`, `model/analysis.py`. `AnalysisReport` is built
+`emit/unfolded.py`, `emit/findings.py`, `model/findings.py`. `AnalysisReport` is built
 and typed but nothing writes it during a sweep yet.
 
 </details>
@@ -1526,7 +1526,7 @@ stateDiagram-v2
     class Insufficient,Inconclusive skip
 ```
 
-`Change` in `model/analysis.py` has four words and no fifth. A tiny sample is
+`Change` in `model/findings.py` has four words and no fifth. A tiny sample is
 `insufficient`, never a coin-flip "improved"; anything the evidence does not settle is
 `inconclusive`, which is the default.
 
@@ -1704,8 +1704,8 @@ everything under `results/`, every subject and every run, not only this session'
 `--dry-run` stays free.
 
 **The analyzer run is the target, not the current code.** `analyze/` (the `Analysis`
-API, `run`, `run_one`), `@analyzer` and `Finding` (`model/analysis.py`),
-`AnalysisReport` (`emit/analysis.py`) and `CacheLayout.analysis` exist, but no hook in
+API, `run`, `run_one`), `@analyzer` and `Finding` (`model/findings.py`),
+`AnalysisReport` (`emit/findings.py`) and `CacheLayout.analysis` exist, but no hook in
 `plugin/` collects `analyze_*` functions or calls them, and there is no
 `python -m pytest_xharness_eval.analyze` yet. The dashed steps below follow
 `tmp/design/scenarios-checkers-analyzer.md`.
@@ -1893,7 +1893,7 @@ flowchart TB
         GOLD["golden.py, tolerance.py, facets.py"]
     end
     FAIL["AssertionError<br/>fail"]
-    ERR["RuntimeError<br/>error"]
+    ERR["Unmeasurable<br/>error"]
     subgraph ANALYZE["analyze/: across cells and runs"]
         SAM["Samples<br/>where, group, latest"]
         AN["Analysis<br/>history + current"]
@@ -1963,9 +1963,9 @@ the module listed; the package root re-exports the case decorator and the record
 | `RunResult` and its parts | `model/runresult.py` | the run record, `result.json`; a field a suite may assert on is listed in `docs/rollout.md` |
 | `check_*` verifiers, `check_all`, `Checker` | `verify/checks.py`, `conduct.py`, `content.py`, `tool.py`, `combine.py` | `(CaseOutput, ...) -> None`, raise `AssertionError` with evidence (ADR 0045) |
 | `GoldenCase`, `Facet`, the tolerances, facet extractors | `verify/golden.py`, `tolerance.py`, `facets.py` | every facet declares a tolerance; a grader never calls `GoldenCase.record` (ADR 0046) |
-| `FixtureGenerator`, `Scenario`, `Draw`, `GenerationContext` | `model/scenario.py` | a protocol: a `name` and `scenarios(context)`, stable ids, JSON-able params (ADR 0074) |
+| `FixtureGenerator`, `Scenario`, `Draw`, `GenerationContext` | `model/scenario.py` | a protocol: a `name`, a declared `may_be_empty` and `scenarios(context)`, stable ids, JSON-able params (ADR 0074) |
 | `Table`, `Generated`, `Promoted`, `Adversarial`, `TextMutator`, `from_dir` | `model/generators.py` | the shipped generators and mutators (ADR 0074) |
-| `@analyzer`, `AnalyzerSpec`, `Change`, `Comparison`, `Finding` | `model/analysis.py` | an `analyze_*(analysis) -> None` function that fails by raising `AssertionError` |
+| `@analyzer`, `AnalyzerSpec`, `Change`, `Comparison`, `Finding` | `model/findings.py` | an `analyze_*(analysis) -> None` function that fails by raising `AssertionError` |
 | `Analysis`, `Samples`, `run`, `run_one` | `analyze/` | the statistics API an analyzer reads stored records with |
 | `Harness`, `register`, `get` | `harness/base.py` | one adapter class per CLI, reached by name (ADR 0034) |
 | `EvalFile`, `EvalItem`, `PROPERTY`, `RECORD_KEY`, `RESULTS_KEY` | `plugin/` | the compatibility names a `conftest.py` may reach for (ADR 0041) |

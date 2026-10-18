@@ -1,0 +1,87 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0076
+slug: a-cell-is-planned-once-and-every-check-is-classified-by-one-rule
+title: A cell is planned once at collection, and every check is classified by one rule
+status: accepted
+status_note: |-
+  accepted, 2026-10-18.
+  Extends [0074](0074-a-case-may-be-a-scenario-and-its-fixtures-may-be-generated.md) (scenario cases and generated fixtures), whose suite reference, scenario store and case reference it gives one owner each.
+  Extends [0075](0075-an-analyzer-is-a-checker-over-every-sample.md) (the Analyzer), whose modules it renames and whose metric directions it moves onto the record.
+  Every argument of both records stands; only where their code lives changes.
+accepted_on: '2026-10-18'
+last_changed_on: '2026-10-18'
+group: architecture
+tags:
+- architecture
+- collection
+lens: |-
+  A fact that two places compute is a fact that two places can get wrong.
+  Resolve it once, give it one owner, and let every reader take it from there.
+relates_to:
+- relation: extends
+  target: ADR-0074
+  note: the record's status line says "extends"
+- relation: extends
+  target: ADR-0075
+  note: the record's status line says "extends"
+body:
+  context: |-
+    A review of the scenario and Analyzer work found the same facts computed in several places.
+    A suite's path, as records name it, was spelled three times.
+    The replay spelled it relative to the working directory, so a replay run from another directory keyed its records apart from the sweep's.
+    What collection resolved for a cell travelled as nine loose arguments from the file to the item and on to the run.
+    The prompt was rendered twice, once for the dry-run preview and once for the live run.
+    Which way a metric is better lived in name-keyed sets far from the record that declares the metric.
+    A grader, a precheck and an analyzer each decided for themselves which exceptions were failures.
+    The scenario store's file names were spelled by the writer, the adversary and the promotion command separately.
+    The module names `analysis.py` appeared in four layers and named four different things.
+  decision: |-
+    **A suite has one name.** `Settings.suite_ref(path)` resolves the path and names it relative to the project root, or absolute outside it.
+    Collection, the replay, the analyzers and the scenario store all call it, and collection calls it once per suite.
+
+    **A cell is planned once.** Collection builds a frozen `CellPlan` in `runtime/plan.py` for each scenario, cell and repeat.
+    It holds the case, cell, scenario, sample, subject, subject version, suite, fixture directory, skill directory, overlays and skill files.
+    The item holds the plan, and `CellRun` takes the plan and the settings.
+    The workspace name, the prompt and the case reference are properties of the plan, so the preview and the run read one rendering.
+    The plan lives in `runtime/` because it names a skill file from `derive/` and a harness's prompt, which `model/` may not.
+    `--xharness-repeat` below one is refused at configure time, once, rather than by each suite's collection.
+
+    **A generator's failure is the suite's.** Whatever a generator raises stops collection as a usage error naming it.
+    `FixtureGenerator` declares `may_be_empty` as a class variable, and every shipped generator sets it.
+    The protocol is runtime-checkable, so `@evalcase` refuses a generator that does not declare it.
+
+    **The case reference names its subject.** `CaseRef.subject` is written under the wire key `skill`, so `result.json` is unchanged.
+    `CaseRef.kind` is a `CaseKind`, or None for a capture without one or with a word this version does not know.
+    `CaseRef.skill_under_test` is the subject, except for a scenario case, which measured none.
+    `pipeline.derive` reads the skill it annotates from the case.
+    A replay passes its session's skill coordinate only for a capture whose case is lost.
+
+    **Every check is classified by one rule.** `Verdict.of_exception` gives `fail` to a failed assertion and `error` to anything else.
+    A cell's grader and an analyzer both use it.
+    A checker that cannot measure what it was asked raises `Unmeasurable`, a `RuntimeError`, so the cell errors.
+    The tool and conduct verifiers raise it where they raised a bare `RuntimeError`.
+    `analyze.run_one` turns every outcome into a finding, a broken analyzer included, so the error wrapping has one place.
+
+    **The scenario store has one owner.** `ScenarioStore` writes, lists and reads scenario trees, and `Provenance` is the record beside each tree.
+    `CacheLayout.scenario_store` returns the cache's store for a case, and a suite's `evals/fixtures/` is read as a store too.
+    The adversary's lineage, the promoted generator and the promotion command all go through them.
+
+    **A metric's role is declared on its field.** Each numeric `CellMetrics` field declares its kind and better direction with `measured`, or that it is a fact with `fact`.
+    `Direction` moves to `model/metrics.py` beside `MetricKind`.
+    A test fails the build on a numeric field with no role.
+    `CellMetrics.of` joins one builder per concern, and a test pins that together they fill every field once.
+
+    **Six modules are renamed.** `model/analysis.py` is `model/findings.py`, and `analyze/analysis.py` is `analyze/questions.py`.
+    `emit/analysis.py` is `emit/findings.py`, and `runtime/analysis.py` is `runtime/analyzers.py`.
+    `plugin/analysis.py` is `plugin/finish.py`, and `analyze/samples.py` is `analyze/sampleset.py`.
+    The command line stays `python -m pytest_xharness_eval.analysis`, and `report/analysis.json` keeps its name.
+  consequences: |-
+    A replay or an analysis run from any directory keys a suite as the sweep did.
+    A new cell fact is one field on the plan, not a new argument threaded through three constructors.
+    A new numeric metric cannot reach the Analyzer without saying which way is better.
+    No wire key of `result.json`, `history.json` or `analysis.json` changed.
+
+    A custom generator written before this record must add `may_be_empty`, or `@evalcase` refuses it.
+    Code that imported the renamed modules by path must update its imports.

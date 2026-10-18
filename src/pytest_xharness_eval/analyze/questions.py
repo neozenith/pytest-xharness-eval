@@ -43,7 +43,7 @@ from pytest_xharness_eval.analyze import stats
 from pytest_xharness_eval.analyze.compare import Arms
 from pytest_xharness_eval.analyze.compare import compare as compare_arms
 from pytest_xharness_eval.analyze.estimate import centre, estimate, of_cells
-from pytest_xharness_eval.analyze.samples import (
+from pytest_xharness_eval.analyze.sampleset import (
     CELL_FIELDS,
     ENVIRONMENT,
     PASSED,
@@ -51,7 +51,7 @@ from pytest_xharness_eval.analyze.samples import (
     direction_of,
     kind_of,
 )
-from pytest_xharness_eval.model.analysis import Change, Comparison, Estimate, ParetoPoint
+from pytest_xharness_eval.model.findings import Change, Comparison, Estimate, ParetoPoint
 from pytest_xharness_eval.model.metrics import Direction
 from pytest_xharness_eval.model.verdict import Verdict
 

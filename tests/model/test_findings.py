@@ -1,4 +1,4 @@
-"""``model.analysis``: the Analyzer's vocabulary, result nouns and the ``@analyzer`` declaration."""
+"""``model.findings``: the Analyzer's vocabulary, result nouns and the ``@analyzer`` declaration."""
 
 # Standard Library
 import json
@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 # Our Libraries
-from pytest_xharness_eval.model.analysis import (
+from pytest_xharness_eval.model.findings import (
     AnalyzerSpec,
     Change,
     Comparison,

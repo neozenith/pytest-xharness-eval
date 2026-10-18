@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 # Our Libraries
-from pytest_xharness_eval.runtime.analysis import analyze_suites, finding_lines
+from pytest_xharness_eval.runtime.analyzers import analyze_suites, finding_lines
 from pytest_xharness_eval.runtime.settings import Settings
 
 if TYPE_CHECKING:

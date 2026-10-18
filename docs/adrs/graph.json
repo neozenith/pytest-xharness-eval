@@ -1129,6 +1129,20 @@
     },
     {
       "data": {
+        "id": "ADR-0076",
+        "label": "0076",
+        "parent": "group-architecture",
+        "colour": "#a16207",
+        "file": "0076-a-cell-is-planned-once-and-every-check-is-classified-by-one-rule.md",
+        "title": "A cell is planned once at collection, and every check is classified by one rule",
+        "description": "A cell is planned once at collection, and every check is classified by one rule",
+        "status": "accepted",
+        "group": "architecture",
+        "tags": "architecture, collection"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -3065,6 +3079,26 @@
         "label": "supersedes",
         "relation": "supersedes",
         "note": "the record's status line says \"supersedes\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0076-extends-ADR-0074",
+        "source": "ADR-0076",
+        "target": "ADR-0074",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0076-extends-ADR-0075",
+        "source": "ADR-0076",
+        "target": "ADR-0075",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
       }
     }
   ],

@@ -20,9 +20,9 @@ from typing import TYPE_CHECKING
 from pytest_xharness_eval.emit import page
 from pytest_xharness_eval.emit.summary import RunSummary
 from pytest_xharness_eval.model.layout import CacheLayout
-from pytest_xharness_eval.plugin.analysis import ANALYSIS_KEY
+from pytest_xharness_eval.plugin.finish import ANALYSIS_KEY
 from pytest_xharness_eval.plugin.results import RESULTS_KEY
-from pytest_xharness_eval.runtime.analysis import finding_lines
+from pytest_xharness_eval.runtime.analyzers import finding_lines
 from pytest_xharness_eval.runtime.settings import Settings
 
 if TYPE_CHECKING:

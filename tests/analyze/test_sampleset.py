@@ -1,4 +1,4 @@
-"""``analyze.samples``: filtering, grouping and reading metrics off stored session records."""
+"""``analyze.sampleset``: filtering, grouping and reading metrics off stored session records."""
 
 # Standard Library
 from pathlib import Path
@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 # Our Libraries
-from pytest_xharness_eval.analyze.samples import (
+from pytest_xharness_eval.analyze.sampleset import (
     COST_PER_PASS,
     Samples,
     direction_of,

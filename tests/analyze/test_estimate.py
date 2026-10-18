@@ -5,7 +5,7 @@ import pytest
 
 # Our Libraries
 from pytest_xharness_eval.analyze.estimate import centre, estimate, of_cells, of_values
-from pytest_xharness_eval.analyze.samples import Samples
+from pytest_xharness_eval.analyze.sampleset import Samples
 from pytest_xharness_eval.model.metrics import MetricKind, wilson
 from tests.analyze import batch, record
 

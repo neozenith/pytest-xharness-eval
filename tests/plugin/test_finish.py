@@ -1,4 +1,4 @@
-"""``plugin.analysis``: the analyzers' run at session end, on the controller only (ADR 0075).
+"""``plugin.finish``: the analyzers' run at session end, on the controller only (ADR 0075).
 
 The hook reads the records the session's cells left in the config stash. A record only
 reaches it from a graded live cell, which no test may produce (ADR 0002), so each test
@@ -16,7 +16,7 @@ import pytest
 # Our Libraries
 from pytest_xharness_eval.emit.metrics import CellMetrics
 from pytest_xharness_eval.model.verdict import Verdict
-from pytest_xharness_eval.plugin.analysis import ANALYSIS_KEY, pytest_sessionfinish
+from pytest_xharness_eval.plugin.finish import ANALYSIS_KEY, pytest_sessionfinish
 from pytest_xharness_eval.plugin.results import RESULTS_KEY
 from pytest_xharness_eval.runtime.settings import Settings
 from tests.support import _case_record, _store_record, make_tree

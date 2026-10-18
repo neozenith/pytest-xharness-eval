@@ -1,4 +1,4 @@
-"""One group's metric as an :class:`~pytest_xharness_eval.model.analysis.Estimate`, by its kind.
+"""One group's metric as an :class:`~pytest_xharness_eval.model.findings.Estimate`, by its kind.
 
 The estimator follows the metric's :class:`~pytest_xharness_eval.model.metrics.MetricKind`,
 the same split the report's aggregates make (ADR 0071):
@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING, Final
 
 # Our Libraries
 from pytest_xharness_eval.analyze import stats
-from pytest_xharness_eval.analyze.samples import COST_PER_PASS, PASSED, WASTED_COST, kind_of, record_value
-from pytest_xharness_eval.model.analysis import Estimate
+from pytest_xharness_eval.analyze.sampleset import COST_PER_PASS, PASSED, WASTED_COST, kind_of, record_value
+from pytest_xharness_eval.model.findings import Estimate
 from pytest_xharness_eval.model.metrics import MetricKind
 from pytest_xharness_eval.model.verdict import Verdict
 
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     # Our Libraries
-    from pytest_xharness_eval.analyze.samples import Samples
+    from pytest_xharness_eval.analyze.sampleset import Samples
     from pytest_xharness_eval.analyze.stats import Stat
 
 #: The centre each kind is summarised by.

@@ -4,7 +4,7 @@ A layer above :mod:`pytest_xharness_eval.emit` -- it reads the stored
 :class:`~pytest_xharness_eval.emit.metrics.CellMetrics` records -- and below
 :mod:`pytest_xharness_eval.runtime`. A suite declares ``@analyzer`` functions named
 ``analyze_*``; :func:`run` calls each with one :class:`Analysis` and turns what happened
-into a :class:`~pytest_xharness_eval.model.analysis.Finding`:
+into a :class:`~pytest_xharness_eval.model.findings.Finding`:
 
 * returned normally -- the finding passed;
 * raised ``AssertionError`` (every ``Analysis.expect_*`` raises an :class:`AnalysisFailure`,
@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING
 
 # Our Libraries
 from pytest_xharness_eval.analyze import stats
-from pytest_xharness_eval.analyze.analysis import Analysis, AnalysisFailure, Unbalanced
-from pytest_xharness_eval.analyze.samples import (
+from pytest_xharness_eval.analyze.questions import Analysis, AnalysisFailure, Unbalanced
+from pytest_xharness_eval.analyze.sampleset import (
     CELL_FIELDS,
     COST_PER_PASS,
     ENVIRONMENT,
@@ -30,7 +30,7 @@ from pytest_xharness_eval.analyze.samples import (
     WASTED_COST,
     Samples,
 )
-from pytest_xharness_eval.model.analysis import (
+from pytest_xharness_eval.model.findings import (
     AnalyzerSpec,
     Change,
     Comparison,

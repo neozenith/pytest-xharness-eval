@@ -24,8 +24,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self
 
 # Our Libraries
-from pytest_xharness_eval.model.analysis import AnalyzerSpec
 from pytest_xharness_eval.model.case import EvalCase
+from pytest_xharness_eval.model.findings import AnalyzerSpec
 
 if TYPE_CHECKING:
     # Standard Library

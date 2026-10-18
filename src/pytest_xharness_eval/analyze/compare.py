@@ -11,12 +11,12 @@ The rules, each one a pitfall it closes:
   whole cells, and a stratum's change is the mean of its cells' differences with each
   cell weighed once, so an uneven mix of cells cannot reverse the sign (Simpson's paradox).
 * **Insufficient below ``min_n``.** A cell with fewer than ``min_n`` samples on either side
-  is :attr:`~pytest_xharness_eval.model.analysis.Change.INSUFFICIENT`, with no statistics.
+  is :attr:`~pytest_xharness_eval.model.findings.Change.INSUFFICIENT`, with no statistics.
 * **Many cells, one error budget.** Every sufficient cell gets a two-sided p-value (Fisher
   exact for a rate, a permutation test of the kind's centre otherwise); the p-values are
   Benjamini-Hochberg adjusted together, and a cell changes only when its q-value is within
   ``1 - confidence`` *and* the bootstrap interval of the difference excludes zero.
-  Everything else is :attr:`~pytest_xharness_eval.model.analysis.Change.INCONCLUSIVE`.
+  Everything else is :attr:`~pytest_xharness_eval.model.findings.Change.INCONCLUSIVE`.
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ from typing import TYPE_CHECKING, Any
 # Our Libraries
 from pytest_xharness_eval.analyze import stats
 from pytest_xharness_eval.analyze.estimate import centre, of_cells, of_values
-from pytest_xharness_eval.analyze.samples import CELL_FIELDS, COST_PER_PASS, WASTED_COST, kind_of
-from pytest_xharness_eval.model.analysis import Change, Comparison, Estimate
+from pytest_xharness_eval.analyze.sampleset import CELL_FIELDS, COST_PER_PASS, WASTED_COST, kind_of
+from pytest_xharness_eval.model.findings import Change, Comparison, Estimate
 from pytest_xharness_eval.model.metrics import Direction, MetricKind
 
 if TYPE_CHECKING:
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     # Our Libraries
-    from pytest_xharness_eval.analyze.samples import Samples
+    from pytest_xharness_eval.analyze.sampleset import Samples
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

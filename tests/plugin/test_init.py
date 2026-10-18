@@ -31,7 +31,7 @@ def test_the_plugin_module_binds_every_hook_and_nothing_of_its_own(pytestconfig:
     # Every hook the package implements is bound, wherever it is implemented.
     implemented = {
         name
-        for module in (plugin.analysis, plugin.collect, plugin.options, plugin.results, plugin.summary)
+        for module in (plugin.collect, plugin.finish, plugin.options, plugin.results, plugin.summary)
         for name, obj in vars(module).items()
         if name.startswith("pytest_") and getattr(obj, "__module__", None) == module.__name__
     }

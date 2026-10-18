@@ -2,7 +2,7 @@
 
 One document per analysis run, live at session end or re-run free over a cache: when it was
 generated, whether every analyzer held, and each
-:class:`~pytest_xharness_eval.model.analysis.Finding` with the comparisons and details that
+:class:`~pytest_xharness_eval.model.findings.Finding` with the comparisons and details that
 justify it. The path is the caller's to choose (the cache layout names it); this type only
 knows how to serialise itself there.
 """
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     # Our Libraries
-    from pytest_xharness_eval.model.analysis import Finding
+    from pytest_xharness_eval.model.findings import Finding
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

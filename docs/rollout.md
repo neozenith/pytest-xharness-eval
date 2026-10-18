@@ -271,7 +271,7 @@ no tool costs, no skill use) fails the check rather than passing it.
 |---|---|
 | `check_cost_within(output, usd)` | `run.estimated_cost_usd`, subagents included, is at most `usd`. |
 | `check_wall_within(output, seconds)` | `run.duration_ms` is at most `seconds`. |
-| `check_context_within(output, pct, threads="primary")` | The largest prompt of the primary thread (`threads="all"`: of any thread) is at most `pct` of `run.context_window`. **Raises `RuntimeError`** (an `error`) when the harness reported no window. |
+| `check_context_within(output, pct, threads="primary")` | The largest prompt of the primary thread (`threads="all"`: of any thread) is at most `pct` of `run.context_window`. **Raises `Unmeasurable`** (a `RuntimeError`, so an `error`) when the harness reported no window. |
 | `check_no_compaction(output)` | `run.compactions == 0`. Primary thread only: no harness counts a subagent's compactions. |
 | `check_cache_efficiency(output, min_cache_read_share)` | `run.cache_read_share` (`cache_read / (input + cache_read + cache_write)` over the whole run) is at least the share. |
 | `check_no_timeout(output)` | `run.timed_out_after_s is None`: the CLI was not killed at the wall (ADR 0064). |
@@ -307,7 +307,7 @@ code spans and HTML comments; words are lowercased, stopwords dropped, crudely s
 
 Runs the *user's* tool on the workspace, never an agent CLI. A tool that cannot start,
 hangs past `timeout_s`, exits outside `ok_codes`, or prints no parseable report raises
-`RuntimeError`, which grades `error`, never `fail`: lint-style CLIs exit 1 for findings
+`Unmeasurable` (a `RuntimeError`, from `model.verdict`), which grades `error`, never `fail`: lint-style CLIs exit 1 for findings
 and for some crashes alike, and only a report tells them apart.
 
 | Name | What it does |
@@ -316,7 +316,7 @@ and for some crashes alike, and only a report tells them apart.
 | `findings(output, argv, json_key="findings", ok_codes=(0, 1))` | The tool's JSON findings list (`json_key=None` for a top-level list). |
 | `check_tool_passes(output, argv, ok_codes=(0, 1))` | The tool exits 0; otherwise lists its findings, or the tail of its output. |
 | `check_tool_clean(output, argv, json_key="findings")` | Zero findings, each remaining one listed as `file:line rule message`. |
-| `require_seed_fails(output, seed, argv, rules=, exactly=True)` | Precondition: the seed (a `Path`, or text written under the scratch dir) still reports exactly `rules`. `argv` is the command prefix; the seed path is appended. **Raises `RuntimeError`**: a fixture that drifted is the host's fault. |
+| `require_seed_fails(output, seed, argv, rules=, exactly=True)` | Precondition: the seed (a `Path`, or text written under the scratch dir) still reports exactly `rules`. `argv` is the command prefix; the seed path is appended. **Raises `Unmeasurable`**: a fixture that drifted is the host's fault. |
 | `scratch_dir(output)` | `<workspace parent>/.<workspace>.scratch`: where a check writes its own files, outside the workspace, so `check_no_files_added` is order-independent. |
 
 ### Many at once (`verify.combine`)

@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 # Our Libraries
 from pytest_xharness_eval import analyze
 from pytest_xharness_eval.analyze import Analysis, Samples
-from pytest_xharness_eval.emit.analysis import AnalysisReport
+from pytest_xharness_eval.emit.findings import AnalysisReport
 from pytest_xharness_eval.model.clock import now_iso
 from pytest_xharness_eval.model.suite import EvalSuite
 
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     # Our Libraries
     from pytest_xharness_eval.emit.metrics import CellMetrics
-    from pytest_xharness_eval.model.analysis import Finding
+    from pytest_xharness_eval.model.findings import Finding
     from pytest_xharness_eval.runtime.settings import Settings
 
 

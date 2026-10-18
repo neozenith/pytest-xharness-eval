@@ -33,9 +33,9 @@ from pytest_xharness_eval.derive import skillcov as skillcov
 from pytest_xharness_eval.harness import normalise as normalise
 from pytest_xharness_eval.harness import records as records
 from pytest_xharness_eval.model import generators as generators
-from pytest_xharness_eval.model.analysis import Change, analyzer
 from pytest_xharness_eval.model.case import CaseKind, EvalCase, evalcase
 from pytest_xharness_eval.model.catalogue import ModelSpec
+from pytest_xharness_eval.model.findings import Change, analyzer
 from pytest_xharness_eval.model.generators import Adversarial, Generated, Promoted, Table
 from pytest_xharness_eval.model.matrix import Cell
 from pytest_xharness_eval.model.output import CaseOutput

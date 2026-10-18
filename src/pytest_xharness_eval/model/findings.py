@@ -4,7 +4,7 @@ A cell's samples answer "how did this cell do?". An *analysis* asks the question
 cells and across runs: which environment is best, did the new subject version regress,
 which scenarios are fragile. The arithmetic lives in :mod:`pytest_xharness_eval.analyze`;
 this module holds the vocabulary every layer above it shares and the result nouns an
-:class:`~pytest_xharness_eval.emit.analysis.AnalysisReport` serialises.
+:class:`~pytest_xharness_eval.emit.findings.AnalysisReport` serialises.
 
 * :class:`Change` -- the four words a comparison may conclude, and no fifth. A tiny sample
   is :attr:`Change.INSUFFICIENT`, never a coin-flip "improved"; anything the evidence does
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     #: An ``analyze_*`` function. Its one argument is an
-    #: :class:`~pytest_xharness_eval.analyze.analysis.Analysis`, which lives above this layer
+    #: :class:`~pytest_xharness_eval.analyze.questions.Analysis`, which lives above this layer
     #: and so is not named here (ADR 0039); it returns nothing and fails by raising
     #: ``AssertionError``.
     AnalyzerFn = Callable[[Any], None]

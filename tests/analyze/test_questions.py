@@ -1,12 +1,12 @@
-"""``analyze.analysis``: the questions an analyzer asks, and the expectations that fail with evidence."""
+"""``analyze.questions``: the questions an analyzer asks, and the expectations that fail with evidence."""
 
 # Third Party
 import pytest
 
 # Our Libraries
-from pytest_xharness_eval.analyze.analysis import Analysis, AnalysisFailure, Unbalanced
-from pytest_xharness_eval.analyze.samples import Samples
-from pytest_xharness_eval.model.analysis import Change
+from pytest_xharness_eval.analyze.questions import Analysis, AnalysisFailure, Unbalanced
+from pytest_xharness_eval.analyze.sampleset import Samples
+from pytest_xharness_eval.model.findings import Change
 from pytest_xharness_eval.model.metrics import wilson
 from tests.analyze import batch, record
 

@@ -1,15 +1,15 @@
-"""``runtime.analysis``: every suite's analyzers over a cache, each scoped to its own suite (ADR 0075)."""
+"""``runtime.analyzers``: every suite's analyzers over a cache, each scoped to its own suite (ADR 0075)."""
 
 # Standard Library
 import textwrap
 from pathlib import Path
 
 # Our Libraries
-from pytest_xharness_eval.emit.analysis import AnalysisReport
-from pytest_xharness_eval.model.analysis import Finding
+from pytest_xharness_eval.emit.findings import AnalysisReport
+from pytest_xharness_eval.model.findings import Finding
 from pytest_xharness_eval.model.layout import CacheLayout
 from pytest_xharness_eval.model.verdict import Verdict
-from pytest_xharness_eval.runtime.analysis import analyze_suites, finding_lines
+from pytest_xharness_eval.runtime.analyzers import analyze_suites, finding_lines
 from pytest_xharness_eval.runtime.settings import Settings
 from tests.support import _case_record, _store_record
 

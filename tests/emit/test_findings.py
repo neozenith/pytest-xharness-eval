@@ -1,12 +1,12 @@
-"""``emit.analysis``: ``report/analysis.json``, every analyzer's finding as one document."""
+"""``emit.findings``: ``report/analysis.json``, every analyzer's finding as one document."""
 
 # Standard Library
 import json
 from pathlib import Path
 
 # Our Libraries
-from pytest_xharness_eval.emit.analysis import AnalysisReport
-from pytest_xharness_eval.model.analysis import Finding
+from pytest_xharness_eval.emit.findings import AnalysisReport
+from pytest_xharness_eval.model.findings import Finding
 
 
 def test_the_report_passes_only_when_every_finding_does(tmp_path: Path) -> None:
