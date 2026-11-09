@@ -10,7 +10,7 @@
  * million tokens and `unit` says so; a record without `unit` predates it and its rates are
  * USD per token. Read the tiers through `ratesPerMtok` (`lib/rates.ts`), never directly.
  */
-/** `rates_applied.long_context`: a threshold on one call's prompt tokens, and the five tiers billed above it (ADR 0051). */
+/** `rates_applied.long_context`: a prompt threshold and its published rates (ADR 0051, ADR 0077). */
 export interface LongContextRates {
   above_prompt_tokens: number;
   input: number;
@@ -18,6 +18,7 @@ export interface LongContextRates {
   cache_read: number;
   cache_write: number;
   cache_write_1h: number;
+  cache_write_12h?: number | null;
 }
 
 export interface RatesApplied {
@@ -26,6 +27,7 @@ export interface RatesApplied {
   cache_read?: number;
   cache_write?: number;
   cache_write_1h?: number;
+  cache_write_12h?: number | null;
   /** The tier a call is billed at, in full, once its prompt exceeds `above_prompt_tokens` (ADR 0051); null or absent where the row has none. */
   long_context?: LongContextRates | null;
   unit?: string;

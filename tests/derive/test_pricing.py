@@ -61,6 +61,18 @@ def test_cache_writes_price_by_ttl() -> None:
     assert row is not None and row.cache_write_1h == pytest.approx(3.2)
 
 
+def test_twelve_hour_rates_can_be_overridden_without_inventing_older_rates() -> None:
+    (row,) = pricing.parse_price_lines(
+        [
+            "codex/m: input=2 output=12 cache_write_12h=5 long_context_above=272000 "
+            "long_input=4 long_output=18 long_cache_write_12h=10"
+        ]
+    )
+    assert row.cache_write_12h == 5.0
+    assert row.long_context is not None and row.long_context.cache_write_12h == 10.0
+    assert pricing.load_table().resolve("codex", "gpt-6.1-sol", date(2026, 10, 12)).cache_write_12h is None
+
+
 def test_per_mtok_rates_divide_once_so_round_rates_give_round_costs() -> None:
     """Multiplying by the published $/MTok and dividing once avoids the error a pre-divided rate carries (ADR 0050).
 
@@ -183,7 +195,13 @@ def test_the_curated_record_models_each_providers_long_context_tier() -> None:
     table = pricing.load_table()
     sol = table.resolve("codex", "gpt-6-sol", DAY).long_context
     assert sol == pricing.LongContext(
-        above_prompt_tokens=272_000, input=4.0, output=15.0, cache_read=0.4, cache_write=5.0, cache_write_1h=5.0
+        cache_write_12h=None,
+        above_prompt_tokens=272_000,
+        input=4.0,
+        output=15.0,
+        cache_read=0.4,
+        cache_write=5.0,
+        cache_write_1h=5.0,
     )
     sonnet_45 = table.resolve("claude", "claude-sonnet-4-5", DAY).long_context
     assert sonnet_45 is not None and (sonnet_45.above_prompt_tokens, sonnet_45.input, sonnet_45.output) == (
@@ -292,7 +310,13 @@ def test_a_record_row_states_its_long_context_tier_as_a_sub_table(tmp_path: Path
     )
     (row,) = pricing.parse_record(path)
     assert row.long_context == pricing.LongContext(
-        above_prompt_tokens=100_000, input=2.0, output=3.0, cache_read=2.0, cache_write=2.0, cache_write_1h=3.2
+        cache_write_12h=None,
+        above_prompt_tokens=100_000,
+        input=2.0,
+        output=3.0,
+        cache_read=2.0,
+        cache_write=2.0,
+        cache_write_1h=3.2,
     )
 
 
@@ -317,7 +341,13 @@ def test_a_price_line_states_a_long_context_tier_with_long_keys() -> None:
         ["codex/m: input=1 output=2 long_context_above=272000 long_input=2 long_output=3 long_cache_read=0.2"]
     )
     assert row.long_context == pricing.LongContext(
-        above_prompt_tokens=272_000, input=2.0, output=3.0, cache_read=0.2, cache_write=2.0, cache_write_1h=3.2
+        cache_write_12h=None,
+        above_prompt_tokens=272_000,
+        input=2.0,
+        output=3.0,
+        cache_read=0.2,
+        cache_write=2.0,
+        cache_write_1h=3.2,
     )
 
 
@@ -357,6 +387,7 @@ def test_price_lines_layer_on_top_of_the_bundled_records() -> None:
     )
     # Cache tiers default to input; every row remembers its pair and that the ini supplied it.
     assert table.resolve("claude", "claude-opus-5", DAY) == pricing.Rates(
+        cache_write_12h=None,
         input=1.0,
         output=1.0,
         cache_read=1.0,

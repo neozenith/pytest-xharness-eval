@@ -46,6 +46,7 @@ def _session(pytester: pytest.Pytester, *records: CellMetrics, analyzers: bool =
 
 
 def _live(pytester: pytest.Pytester, verdict: Verdict = Verdict.PASS, session: str = "s1") -> CellMetrics:
+    pytester.makeini("[pytest]")
     cache = Settings.from_config(pytester.parseconfig()).cache
     return _case_record(cache, suite=SUITE, case="eval_demo", session=session, verdict=verdict)
 
