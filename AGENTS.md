@@ -9,6 +9,8 @@ How this repository organises its documentation, where a doc belongs, how an ADR
 authored, what each file's charter is, is [docs/CONVENTIONS.md](docs/CONVENTIONS.md).
 Consult it before creating, moving or renaming any document.
 
+Follow [TICKETING.md](TICKETING.md) for GitHub identity, issues, branches, PRs, worktrees and cleanup.
+
 ## Commands
 
 Run everything from the repository root.

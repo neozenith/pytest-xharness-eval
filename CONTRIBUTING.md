@@ -61,6 +61,8 @@ by `make adrs` (ADR 0047). Edit the YAML.
 
 ## Naming
 
+Follow [TICKETING.md](TICKETING.md) for issue categories, GitHub identity, branch and PR names, worktrees, and cleanup.
+
 Use the canonical terms in [GLOSSARY.md](GLOSSARY.md) for identifiers, documentation and
 conversation. When a new domain term enters the code, add it to the glossary in the same
 change.

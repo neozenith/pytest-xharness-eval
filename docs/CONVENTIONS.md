@@ -49,6 +49,7 @@ misfiled.
 |------|-----------------------------|----------|--------------|
 | `README.md` | Orientation and routing: what the plugin is, the quickstart, the option tables, where to go next | Consumers | Purpose, options or entry points change |
 | `CONTRIBUTING.md` | Setup, the `make` commands, the release procedure | Contributors | The dev workflow changes |
+| `TICKETING.md` | GitHub identity, issue categories, deduplication, dependencies, WIP naming and completion rules | Contributors and agents | The ticketing workflow changes |
 | `AGENTS.md` (`CLAUDE.md`) | Agent invariants and pointers: commands, layout by purpose, hard boundaries, the change map. No restated conventions another doc owns | Agents | Commands, layout or a hard boundary changes |
 | `ARCHITECTURE.md` | How the system is put together and why, each section led by a dual-density mermaid pair: the pipeline, the layer stack, the hook event model, the capture contracts, the data models (ER), the state machines, and a pointer table of the public interfaces (whose contracts `docs/rollout.md` and `README.md` own) | Both | The structure changes |
 | `GLOSSARY.md` | Ubiquitous language: one canonical term per concept | Both | A domain term enters the code or conversation |
