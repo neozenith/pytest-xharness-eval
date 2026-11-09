@@ -11,6 +11,7 @@ import pytest
 # Our Libraries
 from pytest_xharness_eval.derive import feed, pricing
 from pytest_xharness_eval.derive.catalogue import Feed
+from pytest_xharness_eval.model.runresult import Usage
 
 FEEDS = (
     Feed(harness="claude", provider="anthropic", one_hour_is_five_minute=False),
@@ -33,6 +34,33 @@ def test_an_entry_converts_to_usd_per_mtok_and_repeats_a_missing_one_hour_tier()
 
 def test_an_entry_without_input_and_output_rates_is_no_row() -> None:
     assert feed.row_from("codex", "gpt-7", {"litellm_provider": "openai"}, one_hour_is_five_minute=True) is None
+
+
+def test_twelve_hour_write_rates_survive_feed_and_record_round_trip(tmp_path: Path) -> None:
+    fields = {
+        **OPENAI,
+        "cache_creation_input_token_cost_above_12hr": 5e-06,
+        "input_cost_per_token_above_272k_tokens": 4e-06,
+        "output_cost_per_token_above_272k_tokens": 1.8e-05,
+        "cache_creation_input_token_cost_above_12hr_above_272k_tokens": 1e-05,
+    }
+    rows = feed.live_rows([("codex", "gpt-7-terra")], {"gpt-7-terra": fields}, FEEDS)
+    path = feed.write_live_record(tmp_path, rows, date(2026, 11, 9), "feed.json", ["codex"])
+    (rates,) = pricing.parse_record(path)
+    assert rates.cache_write_12h == 5.0
+    assert rates.long_context is not None and rates.long_context.cache_write_12h == 10.0
+    assert rates.applied("now").cache_write_12h == 5.0
+    assert rates.for_request(Usage(input_tokens=272_000)).cache_write_12h == 5.0
+    assert rates.for_request(Usage(input_tokens=272_001)).cache_write_12h == 10.0
+
+
+def test_absent_twelve_hour_write_rates_are_not_invented() -> None:
+    row = feed.row_from("codex", "gpt-7-terra", OPENAI, one_hour_is_five_minute=True)
+    assert row is not None and "cache_write_12h" not in row.tiers
+    rates = pricing.Rates.of(
+        row.tiers, harness="codex", model=row.model, source="feed", interval=pricing.Interval(None, None)
+    )
+    assert rates.cache_write_12h is None
 
 
 def test_a_cost_field_nobody_models_stops_the_write() -> None:

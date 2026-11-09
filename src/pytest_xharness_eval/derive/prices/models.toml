@@ -94,6 +94,9 @@ one_hour_cache_write_is_five_minute = true
 [codex.excluded]
 "gpt-5.6"       = "unsuffixed id with no line"
 "gpt-5.6-cyber" = "gated"
+"gpt-6-rosalind" = "gated: Rosalind Research trusted-access approval required"
+"gpt-6-cyber" = "gated: Daybreak Red approval required"
+"gpt-6-astra-law" = "gated: selected law firms through Trusted Access"
 
 [codex.models."gpt-5.6-luna"]
 line = "luna"
@@ -114,6 +117,11 @@ released = 2026-07-09
 line = "sol"
 tier = 3
 released = 2026-07-09
+
+[codex.models."gpt-6.1-terra"]
+line = "terra"
+tier = 2
+released = 2026-10-26
 
 [codex.models."gpt-6-sol"]
 line = "sol"

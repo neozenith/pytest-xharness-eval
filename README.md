@@ -112,16 +112,16 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    ```text
    xharness-eval: skills root = /repo/skills, cache = /repo/.xharness_eval_cache
-   xharness-eval: matrix = plugin default (12 of 15 catalogued models, output rate below $50/MTok); a case's models= overrides it
-   collected 12 items
-   skills/<skill>/evals/eval_<case>.py ssssssssssss
+   xharness-eval: matrix = plugin default (13 of 16 catalogued models, output rate below $50/MTok); a case's models= overrides it
+   collected 13 items
+   skills/<skill>/evals/eval_<case>.py sssssssssssss
 
    ============================ agent eval report ============================
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-haiku-4-5-20251001]
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[claude/claude-haiku-5-5]
      ...
      dry-run          -  skills/<skill>/evals/eval_<case>.py::eval_<case>[codex/gpt-6.1-sol]
-     total spend: $0.0000 across 12 cell(s)
+     total spend: $0.0000 across 13 cell(s)
      report: /repo/.xharness_eval_cache/report/report.json
    ```
 
@@ -373,6 +373,8 @@ beside the dated price records. Each model carries three facts that every record
 | `family_tier` | `3` | The model's role in its lineup, 1 the smallest, curated by hand. A number rather than a name, so it survives a lineup change, and frozen at release, so history stays comparable |
 | `released` | `2026-07-24` | The release date |
 
+The Terra line includes `gpt-6.1-terra`, released on 2026-10-26 at family tier 2.
+
 Today's tiers: 1 is Haiku and Luna, 2 is Sonnet and Terra, 3 is Opus and Sol, 4 is Fable
 and Astra. A tier is a role, never a price, which is what lets a report compare every tier 3
 model across providers.
@@ -417,7 +419,7 @@ The ini keys, paths relative to pytest's rootdir:
 | `xharness_report_inline` | `false` | embed every result, log and the tokens into `report/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
 | `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`). A killed run is captured and priced: it **fails** if its session was still active in the 5 minutes before the limit (it ran out of time), and **errors** if it had been silent longer (it stalled) (ADR 0064) |
 | `xharness_keep_workspaces` | `false` | Leave each finished cell's build workspace in place for inspection instead of removing it once its evidence is captured and graded (flag: `--xharness-keep-workspaces`, ADR 0062) |
-| `xharness_prices` | (none) | Price rows that add to or override the bundled price records: `<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..] [long_context_above=<prompt tokens> long_input=.. long_output=.. [long_cache_read=..] [long_cache_write=..] [long_cache_write_1h=..]] [from=YYYY-MM-DD] [to=YYYY-MM-DD]` (ADR 0030, ADR 0050, ADR 0051) |
+| `xharness_prices` | (none) | Price rows that add to or override the bundled price records: `<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..] [cache_write_12h=..] [long_context_above=<prompt tokens> long_input=.. long_output=.. [long_cache_read=..] [long_cache_write=..] [long_cache_write_1h=..] [long_cache_write_12h=..]] [from=YYYY-MM-DD] [to=YYYY-MM-DD]` (ADR 0030, ADR 0050, ADR 0051, ADR 0077) |
 
 ```toml
 [tool.pytest.ini_options]

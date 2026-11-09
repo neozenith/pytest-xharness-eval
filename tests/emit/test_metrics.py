@@ -85,6 +85,7 @@ def test_metrics_record_is_flat_and_complete() -> None:
         "cache_read",
         "cache_write",
         "cache_write_1h",
+        "cache_write_12h",
         "long_context",
         "unit",
         "harness",

@@ -18,6 +18,21 @@ The short-context and long-context pricing subsection was verified on 2026-10-13
 
 ## The one-paragraph answer
 
+### Cache-write lifetimes
+
+OpenAI's [prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching) defines 30-minute and 12-hour write rates for GPT-5.6 and later.
+The rates are total charges, not surcharges on ordinary input.
+The feed and dated records retain `cache_write_12h` at both base and long-context rates.
+A project can override them with `cache_write_12h` and `long_cache_write_12h` in `xharness_prices`.
+An absent published rate remains null in `rates_applied`; it is never inferred from a different lifetime.
+
+The [Codex token-usage protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs) reports total `cache_write_input_tokens` without a lifetime split.
+Those writes price at `cache_write`, the default 30-minute rate for these models.
+The stored 12-hour rate is metadata, not evidence that a capture used that lifetime.
+Mixed-lifetime cost reconstruction requires a capture that reports the split; the current Codex protocol cannot provide it.
+
+### Billed tokens and context size
+
 `peak_context_tokens` is the **largest single prompt** any one model call processed:
 for that call, `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`.
 It is what "context window usage" means to both providers and to Claude Code's own

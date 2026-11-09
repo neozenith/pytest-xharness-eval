@@ -167,6 +167,7 @@
     "applied_at": "<stamp>",
     "cache_read": 0.125,
     "cache_write": 1.25,
+    "cache_write_12h": null,
     "cache_write_1h": 2.0,
     "effective_from": null,
     "effective_to": null,

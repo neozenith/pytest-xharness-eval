@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 #: The feed's current version: what live pricing reads when nothing pins a commit.
 FEED_URL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
 
-TIERS = ("input", "output", "cache_read", "cache_write", "cache_write_1h")
+TIERS = ("input", "output", "cache_read", "cache_write", "cache_write_1h", "cache_write_12h")
 LONG_CONTEXT = "long_context"
 THRESHOLD = "above_prompt_tokens"
 
@@ -49,6 +49,7 @@ LITELLM_FIELD = {
     "cache_read": "cache_read_input_token_cost",
     "cache_write": "cache_creation_input_token_cost",
     "cache_write_1h": "cache_creation_input_token_cost_above_1hr",
+    "cache_write_12h": "cache_creation_input_token_cost_above_12hr",
 }
 LONG_FIELD = re.compile(rf"(?P<field>{'|'.join(LITELLM_FIELD.values())})_above_(?P<k>\d+)k_tokens")
 DECISIONS_FIELD = re.compile(rf"(?:{'|'.join(LITELLM_FIELD.values())})(?:_above_\d+k_tokens)?_decisions")

@@ -130,7 +130,7 @@ WATCHES = (
         # A number after "gpt-" is a generation; a word is a sub-line (gpt-image, gpt-realtime),
         # out of scope by shape. The lookahead stops "gpt-4o" reading as generation 4.
         shape=re.compile(r"gpt-(?P<generation>\d+(?:\.\d+)?)(?![\d.]).*"),
-        grammar=re.compile(r"(?P<family>gpt-\d+(?:\.\d+)?)(?:-[a-z]+)?"),
+        grammar=re.compile(r"(?P<family>gpt-\d+(?:\.\d+)?)(?:-[a-z]+(?:-law)?)?"),
         floor=(5, 6),  # gpt-5.6 and every later generation: gpt-6, gpt-7, gpt-7.1, ...
         one_hour_is_five_minute=True,
     ),

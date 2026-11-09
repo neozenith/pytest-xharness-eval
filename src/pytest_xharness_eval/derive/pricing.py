@@ -50,7 +50,7 @@ PRICES_DIR = Path(__file__).parent / "prices"
 _RECORD_NAME = re.compile(r"prices-(\d{8})\.toml")
 
 # The billed tiers a row states, in USD per million tokens (ADR 0030, ADR 0050).
-LINE_KEYS = ("input", "output", "cache_read", "cache_write", "cache_write_1h")
+LINE_KEYS = ("input", "output", "cache_read", "cache_write", "cache_write_1h", "cache_write_12h")
 # The interval keys an ``xharness_prices`` line may add, as ISO dates.
 DATE_KEYS = ("from", "to")
 # A record row's long-context sub-table, and the threshold key inside it (ADR 0051).
@@ -169,12 +169,13 @@ class LongContext:
     cache_read: float
     cache_write: float
     cache_write_1h: float
+    cache_write_12h: float | None
 
     @classmethod
     def of(cls, above: int, tiers: Mapping[str, float]) -> Self:
         if above <= 0:
             raise PricingError(f"a long-context threshold must be a positive token count, got {above}")
-        return cls(above_prompt_tokens=above, **_tier_values(tiers))
+        return cls(above_prompt_tokens=above, cache_write_12h=tiers.get("cache_write_12h"), **_tier_values(tiers))
 
     def applies(self, usage: Usage) -> bool:
         """Whether this request's prompt is over the threshold (strictly, as providers bill it)."""
@@ -195,6 +196,7 @@ class AppliedRates:
     cache_read: float
     cache_write: float
     cache_write_1h: float
+    cache_write_12h: float | None
     long_context: LongContext | None
     unit: str
     harness: str
@@ -209,7 +211,9 @@ class AppliedRates:
 class Rates:
     """USD per million tokens for the billed tiers, plus which row this is and when it held.
 
-    ``cache_write`` is the 5-minute (default TTL) rate. ``long_context`` is the tier a
+    ``cache_write`` is the provider's default TTL rate (5 minutes for Anthropic, 30 for OpenAI).
+    ``cache_write_12h`` retains the published 12-hour rate, or None when none is stated.
+    ``long_context`` is the tier a
     request over its threshold is billed at, or None where the provider has none (Anthropic
     bills its whole window at one rate). ``harness`` and ``model`` are the pair the row was
     stored under; ``source`` is the record file, or ``xharness_prices``; ``interval`` is when
@@ -221,6 +225,7 @@ class Rates:
     cache_read: float
     cache_write: float
     cache_write_1h: float
+    cache_write_12h: float | None
     long_context: LongContext | None
     harness: str
     model: str
@@ -241,6 +246,7 @@ class Rates:
         """One row with the shared defaulting rules: cache tiers fall back to input, 1h to write x 1.6."""
         return cls(
             **_tier_values(tiers),
+            cache_write_12h=tiers.get("cache_write_12h"),
             long_context=long_context,
             harness=harness,
             model=model,
@@ -261,6 +267,7 @@ class Rates:
             cache_read=self.cache_read,
             cache_write=self.cache_write,
             cache_write_1h=self.cache_write_1h,
+            cache_write_12h=self.cache_write_12h,
             long_context=self.long_context,
             unit=RATE_UNIT,
             harness=self.harness,
@@ -592,7 +599,8 @@ def parse_price_lines(lines: Iterable[str]) -> list[Rates]:
     ``harness/model`` pair a matrix entry names (the model exact or prefix-matched by
     ``resolve``, like any bundled row). ``input`` and ``output`` are required;
     ``cache_read`` and ``cache_write`` default to ``input``; ``cache_write_1h`` defaults
-    to ``cache_write`` x 1.6 (Anthropic's 2.0/1.25 TTL ratio). ``from`` and ``to`` are ISO
+    to ``cache_write`` x 1.6; ``cache_write_12h`` remains None unless explicitly stated.
+    The 1h ratio is Anthropic's 2.0/1.25 TTL ratio. ``from`` and ``to`` are ISO
     dates bounding when the line applies, ``[from, to)``; a line with neither applies on
     every date. ``long_context_above=<prompt tokens>`` with ``long_input`` and
     ``long_output`` (and optionally the other ``long_<tier>`` keys, defaulted the same way)

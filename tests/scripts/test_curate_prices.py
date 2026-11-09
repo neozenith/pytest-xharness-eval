@@ -168,6 +168,13 @@ def test_generations_compare_numerically_not_as_text() -> None:
     assert cp.generation("6") > cp.generation("5.6") and cp.generation("5.6") == (5, 6)
 
 
+def test_a_legal_configuration_fits_the_model_grammar() -> None:
+    entry = FEED["gpt-6-astra"]
+    rows, unpriced, unrecognised = cp.select({"gpt-6-astra-law": entry})
+    assert [(r.harness, r.model) for r in rows] == [("codex", "gpt-6-astra-law")]
+    assert unpriced == unrecognised == []
+
+
 def test_an_id_no_grammar_fits_is_reported_not_guessed() -> None:
     """A dated OpenAI snapshot or a new Claude suffix is a new shape: the run must stop (ADR 0007)."""
     feed = {
@@ -239,7 +246,13 @@ def test_render_is_a_record_the_plugin_loads_with_its_long_context_tier(tmp_path
     astra = loaded[("codex", "gpt-6-astra")]
     assert (astra.input, astra.output, astra.cache_write_1h) == (10.0, 50.0, 12.5)
     assert astra.long_context == pricing.LongContext(
-        above_prompt_tokens=272_000, input=20.0, output=75.0, cache_read=2.0, cache_write=25.0, cache_write_1h=25.0
+        cache_write_12h=None,
+        above_prompt_tokens=272_000,
+        input=20.0,
+        output=75.0,
+        cache_read=2.0,
+        cache_write=25.0,
+        cache_write_1h=25.0,
     )
     assert astra.interval == pricing.Interval(date(2026, 10, 1), None)
     assert loaded[("claude", "claude-sonnet-5-5")].long_context is None

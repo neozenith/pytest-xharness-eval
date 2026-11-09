@@ -1143,6 +1143,20 @@
     },
     {
       "data": {
+        "id": "ADR-0077",
+        "label": "0077",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0077-published-cache-lifetime-rates-are-preserved.md",
+        "title": "Published cache lifetime rates are preserved without inventing usage",
+        "description": "Published cache lifetime rates are preserved without inventing usage",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -3096,6 +3110,16 @@
         "id": "ADR-0076-extends-ADR-0075",
         "source": "ADR-0076",
         "target": "ADR-0075",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0077-extends-ADR-0051",
+        "source": "ADR-0077",
+        "target": "ADR-0051",
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"extends\""
