@@ -52,6 +52,10 @@ class Usage:
     ``cache_write_tokens`` where the harness reports one (Claude does); the
     remainder is priced at the plain cache-write rate.
 
+    ``credits`` is what a credit-metered harness bills instead of tokens: the metered
+    units its session log records, zero for a token-metered one (ADR 0078). A harness
+    records only the unit its log carries, so a Kiro run has credits and no tokens.
+
     Frozen so that "a run's usage is its whole bill" cannot be broken by a second
     fold adding the same subagents twice: the only way to accumulate is
     :meth:`__add__`, and the only caller that does is :meth:`RunResult.folded`
@@ -65,6 +69,7 @@ class Usage:
     reasoning_tokens: int = 0
     cache_write_1h_tokens: int = 0
     cache_write_5m_tokens: int = 0
+    credits: float = 0.0
 
     @property
     def accumulative_billed_tokens(self) -> int:
@@ -86,6 +91,7 @@ class Usage:
             reasoning_tokens=self.reasoning_tokens + other.reasoning_tokens,
             cache_write_1h_tokens=self.cache_write_1h_tokens + other.cache_write_1h_tokens,
             cache_write_5m_tokens=self.cache_write_5m_tokens + other.cache_write_5m_tokens,
+            credits=self.credits + other.credits,
         )
 
     @classmethod

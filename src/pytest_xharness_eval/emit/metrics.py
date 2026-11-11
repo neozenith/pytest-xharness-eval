@@ -161,6 +161,8 @@ class CellMetrics:
     cache_write_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
     cache_write_1h_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
     cache_write_5m_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    # The credits a credit-metered harness billed instead of tokens; 0 for a token-metered one (ADR 0078).
+    credits: float = measured(0.0, MetricKind.SPREAD, Direction.LOWER)
     files_written: int = measured(0, MetricKind.SPREAD, None)
     # How close it came to the window, and how fast it ran (ADR 0024).
     context_window: int | None = fact(None)
@@ -469,6 +471,7 @@ def _usage_figures(result: RunResult) -> dict[str, Any]:
         "cache_write_tokens": u.cache_write_tokens,
         "cache_write_1h_tokens": u.cache_write_1h_tokens,
         "cache_write_5m_tokens": u.cache_write_5m_tokens,
+        "credits": u.credits,
     }
 
 

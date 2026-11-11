@@ -123,6 +123,15 @@ So on OpenAI `input_tokens` is the **whole prompt**, and cached / written tokens
 Cached input is billed at 0.1× the uncached rate on most GPT-5.6 and later models.
 GPT-6.1 Sol uses 0.05×, as its [model page](https://developers.openai.com/api/docs/models/gpt-6.1-sol) states.
 
+### Kiro meters credits, not tokens
+
+Kiro CLI's V3 session log closes each prompt turn with a `usage_summary` record.
+It carries `promptTurnSummaries[].usage` in the unit `credit`, the turn's `requestIds` and its elapsed time.
+No record carries a provider token count: Kiro sends per-request tokens to telemetry only.
+The server applies each model's credit multiplier (`kiro-cli chat --list-models -f json`, `rate_multiplier`) before it reports a turn's credits.
+So the plugin records `usage.credits` per turn, leaves every token tier `0`, and prices credits at the row's `credit` rate in USD per credit (ADR 0078).
+It never estimates tokens from characters, context percentages or credits.
+
 ### Short-context and long-context pricing
 
 For GPT-6.1 Sol, short context includes requests with at most 272,000 input tokens.

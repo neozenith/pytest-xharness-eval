@@ -63,6 +63,14 @@ LINE_LONG_KEYS = tuple(f"long_{t}" for t in LINE_KEYS)
 # tell them from the per-token rates a result written before ADR 0050 carries.
 RATE_UNIT = "usd_per_mtok"
 PER_MTOK = 1_000_000
+# The rate a credit-metered harness's row states instead of, or beside, the token tiers:
+# USD per metered credit, never per million (ADR 0078).
+CREDIT_KEY = "credit"
+CREDIT_UNIT = "usd_per_credit"
+# Every key a row may state: the token tiers plus the credit rate.
+ROW_KEYS = (*LINE_KEYS, CREDIT_KEY)
+# The cost split's keys: the token tiers as billed, then the credits.
+COST_KEYS = ("input", "output", "cache_read", "cache_write_5m", "cache_write_1h", "credits")
 # A per-MTok rate below this is almost certainly a per-token value pasted from an old
 # table; refuse it rather than under-price by a factor of a million.
 _MIN_PER_MTOK = 1e-3
@@ -142,6 +150,10 @@ def prompt_tokens(usage: Usage) -> int:
     return usage.input_tokens + usage.cache_read_tokens + usage.cache_write_tokens
 
 
+# The five token tiers every row resolves to, stated or defaulted.
+_TOKEN_TIERS = ("input", "output", "cache_read", "cache_write", "cache_write_1h")
+
+
 def _tier_values(tiers: Mapping[str, float]) -> dict[str, float]:
     """The five tiers from the stated ones: cache tiers fall back to input, 1h to write x 1.6."""
     base = tiers["input"]
@@ -199,6 +211,8 @@ class AppliedRates:
     cache_write_12h: float | None
     long_context: LongContext | None
     unit: str
+    credit: float | None
+    credit_unit: str
     harness: str
     model: str
     source: str
@@ -218,6 +232,10 @@ class Rates:
     bills its whole window at one rate). ``harness`` and ``model`` are the pair the row was
     stored under; ``source`` is the record file, or ``xharness_prices``; ``interval`` is when
     it was in effect.
+
+    ``credit`` is USD per metered credit, or None where the row prices no credits; a row
+    that states only ``credit`` prices no tokens, and ``prices_tokens`` says so, so usage in
+    a unit the row does not price raises rather than pricing at zero (ADR 0078).
     """
 
     input: float
@@ -231,6 +249,8 @@ class Rates:
     model: str
     source: str
     interval: Interval
+    credit: float | None = None
+    prices_tokens: bool = True
 
     @classmethod
     def of(
@@ -243,16 +263,33 @@ class Rates:
         interval: Interval,
         long_context: LongContext | None = None,
     ) -> Self:
-        """One row with the shared defaulting rules: cache tiers fall back to input, 1h to write x 1.6."""
+        """One row with the shared defaulting rules: cache tiers fall back to input, 1h to write x 1.6.
+
+        ``tiers`` may carry ``credit`` beside the token tiers, or instead of them (ADR 0078).
+        """
+        token_tiers = {k: v for k, v in tiers.items() if k != CREDIT_KEY}
+        priced = bool(token_tiers)
         return cls(
-            **_tier_values(tiers),
-            cache_write_12h=tiers.get("cache_write_12h"),
+            **(_tier_values(token_tiers) if priced else dict.fromkeys(_TOKEN_TIERS, 0.0)),
+            cache_write_12h=token_tiers.get("cache_write_12h"),
             long_context=long_context,
             harness=harness,
             model=model,
             source=source,
             interval=interval,
+            credit=tiers.get(CREDIT_KEY),
+            prices_tokens=priced,
         )
+
+    def check_units(self, usage: Usage) -> None:
+        """Refuse usage in a unit this row does not price: never a silent zero (ADR 0007, ADR 0078)."""
+        where = f"{self.harness}/{self.model} ({self.source})"
+        if usage.credits and self.credit is None:
+            raise PricingError(f"{where}: the run metered {usage.credits} credits but the row states no credit rate")
+        if usage.accumulative_billed_tokens and not self.prices_tokens:
+            raise PricingError(
+                f"{where}: the run billed {usage.accumulative_billed_tokens} tokens but the row prices only credits"
+            )
 
     def for_request(self, usage: Usage) -> TierRates:
         """The tier one request is billed at: the long-context tier if its prompt is over the threshold."""
@@ -270,6 +307,8 @@ class Rates:
             cache_write_12h=self.cache_write_12h,
             long_context=self.long_context,
             unit=RATE_UNIT,
+            credit=self.credit,
+            credit_unit=CREDIT_UNIT,
             harness=self.harness,
             model=self.model,
             source=self.source,
@@ -289,6 +328,7 @@ def _residual(total: Usage, parts: Usage) -> Usage:
         reasoning_tokens=max(total.reasoning_tokens - parts.reasoning_tokens, 0),
         cache_write_1h_tokens=max(total.cache_write_1h_tokens - parts.cache_write_1h_tokens, 0),
         cache_write_5m_tokens=max(total.cache_write_5m_tokens - parts.cache_write_5m_tokens, 0),
+        credits=max(total.credits - parts.credits, 0.0),
     )
 
 
@@ -333,17 +373,19 @@ class CostEstimate:
         against. The tiers are summed unrounded and rounded once, so the total of a run priced
         in parts is the same to the micro-dollar as one priced whole.
         """
-        totals: dict[str, float] = dict.fromkeys(
-            ("input", "output", "cache_read", "cache_write_5m", "cache_write_1h"), 0.0
-        )
+        totals: dict[str, float] = dict.fromkeys(COST_KEYS, 0.0)
         long_calls = 0
         for calls, rates, residual in parts:
             for usage in calls:
+                rates.check_units(usage)
+                totals["credits"] += usage.credits * (rates.credit or 0.0)
                 tier = rates.for_request(usage)
                 long_calls += tier is not rates
                 for key, usd in tier_costs(usage, tier).items():
                     totals[key] += usd
             if residual is not None:
+                rates.check_units(residual)
+                totals["credits"] += residual.credits * (rates.credit or 0.0)
                 for key, usd in tier_costs(residual, rates).items():
                     totals[key] += usd
         return cls(
@@ -448,6 +490,28 @@ def _tiers(raw: Mapping[str, Any], where: str) -> dict[str, float]:
     return {k: _per_mtok(v, f"{where} {k}") for k, v in raw.items()}
 
 
+def _per_credit(value: object, where: str) -> float:
+    """One credit rate, checked: a positive number of USD per credit (ADR 0078)."""
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        raise PricingError(f"{where}: {value!r} is not a number")
+    try:
+        rate = float(value)
+    except ValueError as exc:
+        raise PricingError(f"{where}: {value!r} is not a number") from exc
+    if rate <= 0:
+        raise PricingError(f"{where}: a credit rate is a positive USD figure per credit, got {value!r}")
+    return rate
+
+
+def _row_tiers(raw: Mapping[str, Any], where: str) -> dict[str, float]:
+    """A row's token tiers, its credit rate, or both; a row that states neither is refused (ADR 0078)."""
+    tokens = {k: v for k, v in raw.items() if k != CREDIT_KEY}
+    if CREDIT_KEY not in raw:
+        return _tiers(tokens, where)
+    rows = _tiers(tokens, where) if tokens else {}
+    return {**rows, CREDIT_KEY: _per_credit(raw[CREDIT_KEY], f"{where} {CREDIT_KEY}")}
+
+
 def _long_context(raw: Mapping[str, Any], where: str) -> LongContext:
     """A row's ``long_context`` sub-table: ``above_prompt_tokens`` plus at least ``input`` and ``output``."""
     tiers = dict(raw)
@@ -470,7 +534,7 @@ def _record_row(harness: str, model: str, raw: Any, path: Path, interval: Interv
         raise PricingError(f"{where}: {LONG_CONTEXT_TABLE} must be a table")
     long_context = _long_context(long_raw, f"{where}.{LONG_CONTEXT_TABLE}") if long_raw is not None else None
     return Rates.of(
-        _tiers(tiers, where),
+        _row_tiers(tiers, where),
         harness=harness,
         model=model,
         source=str(path),
@@ -550,7 +614,7 @@ def _parse_line(line: str) -> Rates:
     long_tiers: dict[str, str] = {}
     days: dict[str, date] = {}
     threshold: str | None = None
-    keys = LINE_KEYS + LINE_LONG_KEYS + (LINE_THRESHOLD_KEY,) + DATE_KEYS
+    keys = ROW_KEYS + LINE_LONG_KEYS + (LINE_THRESHOLD_KEY,) + DATE_KEYS
     for part in body.split():
         key, eq, value = part.partition("=")
         if not eq or key not in keys:
@@ -564,7 +628,7 @@ def _parse_line(line: str) -> Rates:
         else:
             tiers[key] = value
     return Rates.of(
-        _tiers(tiers, f"xharness_prices: line {line!r}"),
+        _row_tiers(tiers, f"xharness_prices: line {line!r}"),
         harness=harness,
         model=model,
         source="xharness_prices",
