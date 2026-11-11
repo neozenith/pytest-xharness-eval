@@ -401,6 +401,12 @@ changes exactly when the category of information changes. The catalogue lives in
 | `codex/world_state` | harness_meta | whether the snapshot is full, then each state flag as ✓ / ✗ |
 | `claude/system/compact_boundary` | compaction | Claude Code's compaction marker: the trigger and the token counts before and after |
 | `codex/compacted` | compaction | Codex's replacement history after compacting the thread |
+| `kiro/user` | prompt | the prompt text (a skill case opens with `/<skill>`) |
+| `kiro/assistant/say`, `kiro/assistant/reasoning` | assistant_text, thinking | a streamed chunk of prose or reasoning; a turn joins its chunks |
+| `kiro/tool_call`, `kiro/tool_result` | tool_call, tool_result | the tool name, its arguments and status; the result keyed by `toolCallId` |
+| `kiro/usage_summary` | usage | the turn's credits, request ids and elapsed time: the call record of a credit-metered run (ADR 0078) |
+| `kiro/sub_agent_start`, `kiro/sub_agent_complete` | lifecycle | a subagent's spawn, naming its `sub-executions/<subSessionId>.jsonl` transcript, and its outcome |
+| `kiro/tombstone/summarization` | compaction | Kiro's marker that it summarised the history |
 
 Also catalogued without a live example yet: `claude/system`,
 `codex/response_item/message/system`, `codex/response_item/function_call`,

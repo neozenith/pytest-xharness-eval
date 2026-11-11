@@ -40,7 +40,7 @@
 
 ## What it does
 
-A pytest plugin that runs the `claude` and `codex` CLIs headlessly against a fixture
+A pytest plugin that runs the `claude`, `codex` and `kiro-cli` CLIs headlessly against a fixture
 workspace, captures each run's own session log, prices it, and grades what the agent
 left behind. A skill opts in by adding an `evals/` directory; pytest does the rest.
 
@@ -174,7 +174,7 @@ stock pytest (`-k`, `-x`, `-m eval`, node ids).
 | Option | Effect | Example |
 |--------|--------|---------|
 | path | One skill or all of them | `pytest skills/x/evals`, `pytest skills/*/evals` |
-| `--harness <name>` | Only cells for that harness (`claude` or `codex`), repeatable | `pytest skills/x/evals --harness codex` |
+| `--harness <name>` | Only cells for that harness (`claude`, `codex` or `kiro`), repeatable | `pytest skills/x/evals --harness codex` |
 | `--model <substring>` | Only cells whose model id contains the string, or one exact `harness/model`, repeatable | `pytest skills/x/evals --model opus` |
 | `--effort <rung>` | Only cells at that reasoning rung, repeatable. Matches the *resolved* rung, so `--effort max` selects claude's `max` and codex's `xhigh` alike | `pytest skills/x/evals --effort max` |
 | `--treatment <name>` | Only cells under that treatment, repeatable. `control` names the untreated cell (ADR 0055) | `pytest skills/x/evals --treatment control` |
@@ -210,14 +210,14 @@ the CLI on whatever default its own configuration gives it.
 Each harness declares its own ladder, and three portable aliases name a *position* on it
 rather than a level:
 
-| You write | Position | On `claude` | On `codex` |
-|-----------|----------|-------------|------------|
-| `min` | first rung | `low` | `low` |
-| `mid` | middle rung | `high` | `high` |
-| `max` | last rung | `max` | `max` |
+| You write | Position | On `claude` | On `codex` | On `kiro` |
+|-----------|----------|-------------|------------|-----------|
+| `min` | first rung | `low` | `low` | `low` |
+| `mid` | middle rung | `high` | `high` | `high` |
+| `max` | last rung | `max` | `max` | `max` |
 
-Both shipped CLIs happen to declare the same five rungs (`low, medium, high, xhigh, max`),
-so the aliases resolve identically on each today. That is a fact about these two CLIs and
+Every shipped CLI happens to declare the same rungs (`low, medium, high, xhigh, max`),
+so the aliases resolve identically on each today. That is a fact about these CLIs and
 not a rule: the ladder lives on the harness class, so a third CLI may declare any rungs it
 likes and the aliases keep working by position.
 
@@ -485,8 +485,8 @@ flowchart LR
 
 One cell flows left to right: a case is expanded into cells, each cell gets a fresh
 workspace, the CLI runs, its own log is located and normalised, priced, graded, and
-reported. The hard part is the middle: the two CLIs need different contracts to tie a
-verdict to the right log. [ARCHITECTURE.md](ARCHITECTURE.md) explains both.
+reported. The hard part is the middle: the CLIs need different contracts to tie a
+verdict to the right log. [ARCHITECTURE.md](ARCHITECTURE.md) explains each.
 
 ----
 
@@ -514,7 +514,7 @@ Build, test and release instructions live in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 - [docs/rollout.md](docs/rollout.md): what a rollout leaves you, the `CaseOutput` a grader is handed, every `RunResult` field it can assert on, the bundled `check_*` verifiers, and the goldens convention
 - [docs/token-accounting.md](docs/token-accounting.md): how `accumulative_billed_tokens` (billed across turns) and `peak_context_tokens` (the largest prompt) are derived from what each provider reports, with a worked session
-- [ARCHITECTURE.md](ARCHITECTURE.md): why the two CLIs need different capture
+- [ARCHITECTURE.md](ARCHITECTURE.md): why the CLIs need different capture
   contracts, how pricing works, and the vocabulary the code uses.
 - [AGENTS.md](AGENTS.md): operating instructions and hard boundaries for agents.
 - [docs/adrs/index.md](docs/adrs/index.md): the decision index, generated from the records (ADR 0047).
