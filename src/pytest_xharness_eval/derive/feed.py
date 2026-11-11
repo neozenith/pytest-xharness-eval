@@ -38,6 +38,8 @@ if TYPE_CHECKING:
 FEED_URL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
 
 TIERS = ("input", "output", "cache_read", "cache_write", "cache_write_1h", "cache_write_12h")
+# What a record row may state: the token tiers, then a credit-metered harness's USD per credit (ADR 0078).
+RECORD_KEYS = (*TIERS, "credit")
 LONG_CONTEXT = "long_context"
 THRESHOLD = "above_prompt_tokens"
 
@@ -229,7 +231,7 @@ def render(rows: Iterable[Row], effective_from: date, provenance: Sequence[str],
     order = {h: i for i, h in enumerate(harness_order)}
     for row in sorted(rows, key=lambda r: (order.get(r.harness, len(order)), r.model)):
         lines += ["", f'[{row.harness}."{row.model}"]', *row.comments]
-        lines += [f"{t:<14} = {money(row.tiers[t])}" for t in TIERS if t in row.tiers]
+        lines += [f"{t:<14} = {money(row.tiers[t])}" for t in RECORD_KEYS if t in row.tiers]
         if row.long_context:
             lc = row.long_context
             lines += ["", f'[{row.harness}."{row.model}".{LONG_CONTEXT}]', f"{THRESHOLD} = {int(lc[THRESHOLD])}"]

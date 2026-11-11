@@ -3178,6 +3178,16 @@
         "relation": "extends",
         "note": "the record's status line says \"extends\""
       }
+    },
+    {
+      "data": {
+        "id": "ADR-0078-extends-ADR-0058",
+        "source": "ADR-0078",
+        "target": "ADR-0058",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
     }
   ],
   "layout": {

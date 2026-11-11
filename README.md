@@ -112,7 +112,7 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    ```text
    xharness-eval: skills root = /repo/skills, cache = /repo/.xharness_eval_cache
-   xharness-eval: matrix = plugin default (13 of 16 catalogued models, output rate below $50/MTok); a case's models= overrides it
+   xharness-eval: matrix = plugin default (13 of 22 catalogued models, output rate below $50/MTok; credit-metered models only when named); a case's models= overrides it
    collected 13 items
    skills/<skill>/evals/eval_<case>.py sssssssssssss
 

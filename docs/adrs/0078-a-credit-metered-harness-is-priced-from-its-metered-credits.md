@@ -12,13 +12,14 @@ relates_to:
   - { relation: extends, target: ADR-0019 }
   - { relation: extends, target: ADR-0034 }
   - { relation: extends, target: ADR-0050 }
+  - { relation: extends, target: ADR-0058 }
 generated: { by: human:neozenith, at: 2026-11-11T00:00:00Z }
 ---
 
 # 0078: A credit-metered harness is priced from the credits its session log meters
 
 Status: accepted, 2026-11-11.
-Extends [0007](0007-unpriced-model-aborts-before-spend.md) (pricing fails loud), [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) (the per-call ledger), [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) (the harness class) and [0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md) (dated price records).
+Extends [0007](0007-unpriced-model-aborts-before-spend.md) (pricing fails loud), [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) (the per-call ledger), [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) (the harness class), [0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md) (dated price records) and [0058](0058-the-default-matrix-is-the-catalogue-under-a-cost-limit.md) (the default matrix).
 
 ## Context
 
@@ -43,7 +44,10 @@ Usage in a unit the row does not price stops pricing with a `PricingError`, and 
 An adapter records only the unit its log carries: a Kiro adapter writes credits and leaves every token tier zero.
 It never derives tokens from characters, context percentages or credits.
 Where a dialect meters per turn rather than per request, the adapter folds one `Call` per metered turn.
-It records the turn's request count beside the call, and never divides a turn's credits across its requests.
+It reports the run's request count in its reported usage, and never divides a turn's credits across its requests.
+A credit-only row states no output rate, so the output-rate limit of ADR 0058 cannot judge it.
+A credit-metered harness's models therefore stay out of the plugin-default matrix.
+They run only when a case or the project names them.
 
 ## Consequences
 

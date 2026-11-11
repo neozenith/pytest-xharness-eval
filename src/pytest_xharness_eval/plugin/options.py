@@ -267,7 +267,7 @@ def pytest_report_header(config: pytest.Config) -> list[str]:
         catalogued = len(mx.catalogued(settings.catalogue()))
         source = (
             f"plugin default ({len(default)} of {catalogued} catalogued models, "
-            f"output rate below ${settings.output_rate_limit:g}/MTok)"
+            f"output rate below ${settings.output_rate_limit:g}/MTok; credit-metered models only when named)"
         )
     treatments = settings.treatment_lines
     treated = f"{INI_TREATMENTS} ({len(treatments)} entries)" if treatments else "none"

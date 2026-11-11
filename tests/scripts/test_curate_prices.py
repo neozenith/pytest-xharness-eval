@@ -303,7 +303,9 @@ def _feed_from_bundled(directory: Path, extra: dict[str, dict]) -> dict:
     open_record = cp.open_record(directory)
     assert open_record is not None
     for (harness, model), row in cp.read_rows(open_record).items():
-        provider = {"claude": "anthropic", "codex": "openai"}[harness]
+        provider = {"claude": "anthropic", "codex": "openai"}.get(harness)
+        if provider is None:
+            continue  # a hand-curated row for a harness with no feed, such as Kiro's credit rate (ADR 0078)
         derived = harness == "codex"  # the curator derives OpenAI's 1h tier; the feed never states it
         fields = {cp.LITELLM_FIELD[t]: v / 1e6 for t, v in row.tiers.items() if not (derived and t == "cache_write_1h")}
         if row.long_context:
@@ -397,15 +399,25 @@ def test_an_empty_prices_directory_bootstraps_the_first_record(tmp_path: Path, m
     monkeypatch.setattr(cp, "PRICES_DIR", empty)
     monkeypatch.setattr(cp, "STAGING", tmp_path / "staging")
     feed = tmp_path / "feed.json"
+    # A feedless harness's credit rows cannot come from the feed, so a bootstrap from nothing
+    # refuses while one is catalogued (ADR 0078); the feed-priced catalogue bootstraps alone.
+    bundled = (Path(cp.__file__).parents[2] / "src/pytest_xharness_eval/derive/prices/models.toml").read_text()
+    catalogue_file = tmp_path / "models.toml"
+    catalogue_file.write_text(bundled.split("\n[kiro]")[0], encoding="utf-8")
     source = json.loads(json.dumps(FEED))
     # Every catalogued model must price (ADR 0057), so the bootstrap feed carries their rows too.
     provider = {"claude": "anthropic", "codex": "openai"}
     for harness_name, spec in load_catalogue():
+        if harness_name not in provider:
+            continue  # Kiro has no feed: its credit rows are hand-curated (ADR 0078)
         source[spec.id] = {
             "litellm_provider": provider[harness_name],
             **_per_token(input_cost_per_token=1, output_cost_per_token=2),
         }
     feed.write_text(json.dumps(source), encoding="utf-8")
+    with pytest.raises(pricing.PricingError, match="kiro/claude-haiku-5.5"):
+        cp.main(["--feed", str(feed), "--date", "2026-09-29"])
+    monkeypatch.setattr("pytest_xharness_eval.derive.catalogue.MODELS_FILE", catalogue_file)
     assert cp.main(["--feed", str(feed), "--date", "2026-09-29"]) == 0
     assert [p.name for p in empty.iterdir()] == ["prices-20260929.toml"]
 

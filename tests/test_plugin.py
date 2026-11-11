@@ -82,7 +82,8 @@ def test_header_names_the_skills_root_and_matrix_source(pytester: pytest.Pyteste
     result.stdout.fnmatch_lines(
         [
             "xharness-eval: skills root = *skills, cache = *.xharness_eval_cache",
-            "xharness-eval: matrix = plugin default (13 of 16 catalogued models, output rate below $50/MTok)*",
+            "xharness-eval: matrix = plugin default (13 of 22 catalogued models, output rate below $50/MTok;"
+            " credit-metered models only when named)*",
         ]
     )
 
