@@ -1,0 +1,62 @@
+# Authored record (ADR 0047). The .md beside this file is GENERATED:
+#   make adrs
+# Edit this file, never the markdown.
+id: ADR-0078
+slug: a-credit-metered-harness-is-priced-from-its-metered-credits
+title: A credit-metered harness is priced from the credits its session log meters
+status: accepted
+status_note: |-
+  accepted, 2026-11-11.
+  Extends [0007](0007-unpriced-model-aborts-before-spend.md) (pricing fails loud), [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) (the per-call ledger), [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) (the harness class) and [0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md) (dated price records).
+accepted_on: '2026-11-11'
+last_changed_on: '2026-11-11'
+group: pricing
+tags:
+- pricing
+- harness
+lens: |-
+  Price a run in the unit its provider bills and records, and never invent a unit it did not record.
+  A run billed in credits is real when it metered credits, and costs what those credits cost.
+relates_to:
+- target: ADR-0007
+  relation: extends
+  note: the record's status line says "extends"
+- target: ADR-0019
+  relation: extends
+  note: the record's status line says "extends"
+- target: ADR-0034
+  relation: extends
+  note: the record's status line says "extends"
+- target: ADR-0050
+  relation: extends
+  note: the record's status line says "extends"
+body:
+  context: |-
+      Kiro CLI bills a subscription in credits, not tokens.
+      Its V3 engine writes `$KIRO_HOME/sessions/<workspace>/<session>/messages.jsonl`, where `<workspace>` is the first 16 hex digits of the SHA-256 of the workspace path.
+      Each prompt turn closes with a `usage_summary` record carrying `promptTurnSummaries[].usage` in the unit `credit`, the turn's `requestIds` and its elapsed time.
+      No record carries a provider token count.
+      Kiro sends its per-request token counts to telemetry only, and its profiling opt-in estimates tokens from characters.
+      The server applies each model's credit multiplier before it reports a turn's credits, and `kiro-cli chat --list-models` publishes that multiplier.
+      Kiro sells add-on credits at a published USD price per credit.
+      Every price row so far states USD per million tokens, and `check_run_is_real` fails a run that billed zero tokens.
+      A Kiro run would therefore fail as empty, or be priced as zero, which ADR 0007 forbids.
+  decision: |-
+      `Usage` gains `credits`: the metered credits a call billed, zero for a token-metered harness.
+      A price row may state `credit`, in USD per credit, instead of the per-million-token tiers.
+      A row states token tiers, a credit rate, or both; it never states neither.
+      A run's credits price at its row's credit rate, and its tokens at its row's token tiers.
+      Usage in a unit the row does not price stops pricing with a `PricingError`, and never prices as zero.
+      `check_run_is_real` accepts a run that billed tokens or metered credits, and still fails one that did neither.
+      An adapter records only the unit its log carries: a Kiro adapter writes credits and leaves every token tier zero.
+      It never derives tokens from characters, context percentages or credits.
+      Where a dialect meters per turn rather than per request, the adapter folds one `Call` per metered turn.
+      It records the turn's request count beside the call, and never divides a turn's credits across its requests.
+  consequences: |-
+      Kiro can be added as a harness through the existing class and registry, priced from a dated record at the published per-credit rate.
+      Token-derived metrics (tokens per second, cache share, context tokens) are absent for a credit-metered run rather than estimated.
+      The report shows credits and cost for such a run, and leaves its token views empty.
+      A per-credit rate depends on the plan.
+      The bundled record states the published add-on rate.
+      A project on another plan overrides it with an `xharness_prices` line.
+      A future Kiro release that persists token counts makes token tiers available without revisiting this decision, because a row may state both.

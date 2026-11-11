@@ -1157,6 +1157,20 @@
     },
     {
       "data": {
+        "id": "ADR-0078",
+        "label": "0078",
+        "parent": "group-pricing",
+        "colour": "#a21caf",
+        "file": "0078-a-credit-metered-harness-is-priced-from-its-metered-credits.md",
+        "title": "A credit-metered harness is priced from the credits its session log meters",
+        "description": "A credit-metered harness is priced from the credits its session log meters",
+        "status": "accepted",
+        "group": "pricing",
+        "tags": "pricing, harness"
+      }
+    },
+    {
+      "data": {
         "id": "ADR-0001-superseded_by-ADR-0014",
         "source": "ADR-0001",
         "target": "ADR-0014",
@@ -3120,6 +3134,46 @@
         "id": "ADR-0077-extends-ADR-0051",
         "source": "ADR-0077",
         "target": "ADR-0051",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0078-extends-ADR-0007",
+        "source": "ADR-0078",
+        "target": "ADR-0007",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0078-extends-ADR-0019",
+        "source": "ADR-0078",
+        "target": "ADR-0019",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0078-extends-ADR-0034",
+        "source": "ADR-0078",
+        "target": "ADR-0034",
+        "label": "extends",
+        "relation": "extends",
+        "note": "the record's status line says \"extends\""
+      }
+    },
+    {
+      "data": {
+        "id": "ADR-0078-extends-ADR-0050",
+        "source": "ADR-0078",
+        "target": "ADR-0050",
         "label": "extends",
         "relation": "extends",
         "note": "the record's status line says \"extends\""
