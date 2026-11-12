@@ -17,8 +17,8 @@ here, never silently dropped.
 Detection is textual and deliberately simple: a tool call touches a file when the
 call's arguments contain ``<skill>/<relative path>``. That form is what both
 harnesses see, whether the skill is mounted through ``--add-dir`` (Claude) or
-copied under ``$CODEX_HOME/skills`` (Codex). A ``Skill`` tool invocation of the
-skill counts as loading ``SKILL.md``.
+copied under ``$CODEX_HOME/skills`` (Codex). A call to one of the harness's ``skill_tools``
+naming the skill (Claude's ``Skill``, Kiro's ``disclose_context``) counts as loading ``SKILL.md``.
 
 What a tool call says, though, is what the *model* asked for, and an agent is free to
 assemble the path from a shell variable or a template literal in some wrapper language.
@@ -422,7 +422,7 @@ def _tool_text(
 def _access(tool: str, text: str, skill: str, entry: FileCoverage, shells: Shells) -> Access | None:
     """How one tool call touched one catalogued file, or None if it did not."""
     needle = f"{skill}/{entry.path}"
-    if tool == "Skill" and entry.path == "SKILL.md" and skill in text:
+    if tool in shells.skill_tools and entry.path == "SKILL.md" and skill in text:
         return Access.LOADED
     if needle not in text:
         return None

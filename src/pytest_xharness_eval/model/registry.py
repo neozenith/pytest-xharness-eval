@@ -57,17 +57,25 @@ class Shells:
     runs no shell has no command to attribute, which is a coherent answer rather than a
     missing one. ``commands`` reads the commands out of one call's input, for a CLI whose
     shell tool wraps them (ADR 0066).
+    ``skill_tools`` are the tool names that load a skill by name, which coverage counts as
+    loading its ``SKILL.md``.
     """
 
     tools: frozenset[str] = frozenset()
     persistent: frozenset[str] = frozenset()
     commands: Callable[[Any], list[tuple[str, str | None]]] = harness.Harness.shell_commands
+    skill_tools: frozenset[str] = frozenset()
 
     @classmethod
     def of(cls, name: str) -> Self:
         """The registered harness ``name``'s own vocabulary; an unknown name raises (ADR 0034)."""
         agent = harness.get(name)
-        return cls(tools=agent.shell_tools, persistent=agent.persistent_shells, commands=agent.shell_commands)
+        return cls(
+            tools=agent.shell_tools,
+            persistent=agent.persistent_shells,
+            commands=agent.shell_commands,
+            skill_tools=agent.skill_tools,
+        )
 
 
 def efforts(harness_name: str) -> tuple[str, ...]:

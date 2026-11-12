@@ -423,3 +423,10 @@ def test_the_per_concern_builders_fill_every_field_exactly_once(tmp_path: Path) 
     outcome = Outcome(node="n", verdict=Verdict.PASS, wall_ms=1, started_at="t")
     built = figures(_result("claude-opus-5", Usage(1, 2, 0, 0)), outcome=outcome, cache=CacheLayout(tmp_path))
     assert set(built) == {f.name for f in dataclasses.fields(CellMetrics)}
+
+
+def test_a_credit_metered_run_shows_its_credits_where_tokens_would_be() -> None:
+    """A column of zero tokens would read as an empty run (ADR 0078)."""
+    r = _result("claude-haiku-5.5", Usage(credits=0.0377), harness="kiro")
+    r.turns, r.estimated_cost_usd = 1, 0.0015
+    assert _metrics(r, wall_ms=20_400).status_word().startswith("est $0.0015  0.0377 credits  20.4s  1 turns")

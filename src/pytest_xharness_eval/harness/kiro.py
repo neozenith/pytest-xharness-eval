@@ -19,8 +19,9 @@ The log names neither its own session id nor a concrete model (``reasoningModelI
 router's ``qdev::auto``). Both come from ``session.json`` at run time and from the stored
 ``result.json`` on replay: that pair is the side-channel :class:`KiroSessionLog` carries.
 
-Verified against kiro-cli 3.1.0 from interactive V3 sessions and the CLI's own help and
-bundle; no paid headless run has been made yet (ADR 0002).
+Verified against kiro-cli 3.1.0: interactive V3 sessions, the CLI's help and bundle, and a paid
+headless smoke run on claude-haiku-5.5 and claude-opus-5.5 (the session landed under the private
+home, `session.json` named the requested model, and the skill loaded through `disclose_context`).
 """
 
 from __future__ import annotations
@@ -433,6 +434,9 @@ class KiroHarness(Harness):
     name = "kiro"
     shell_tools = frozenset({"run_command", "execute_bash", "execute_pwsh", "shell"})
     persistent_shells = frozenset()  # each command runs at its own ``cwd``
+    # Kiro loads a skill through ``disclose_context {"name": <skill>}``, never a file read
+    # (verified in a paid kiro-cli 3.1.0 run).
+    skill_tools = frozenset({"disclose_context"})
     efforts = KIRO_EFFORTS
 
     def invoke(self, *, skill: str, task: str) -> str:

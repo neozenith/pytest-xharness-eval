@@ -17,7 +17,7 @@ import pytest
 # Our Libraries
 from pytest_xharness_eval import Usage
 from pytest_xharness_eval import harness as harnesses
-from pytest_xharness_eval.derive import pricing
+from pytest_xharness_eval.derive import pricing, skillcov
 from pytest_xharness_eval.harness import RunError
 from pytest_xharness_eval.harness import kiro as kiro_harness
 from pytest_xharness_eval.harness.threads import SubagentMismatch
@@ -203,3 +203,17 @@ def test_a_skill_is_invoked_as_its_slash_command_and_effort_is_a_flag() -> None:
     assert (KIRO.effort_args("xhigh"), KIRO.effort_args(None)) == (["--effort", "xhigh"], [])
     assert [KIRO.resolve_effort(a) for a in ("min", "mid", "max")] == ["low", "high", "max"]
     assert KIRO.shell_commands({"command": "cat README.md", "cwd": "/w"}) == [("cat README.md", "/w")]
+
+
+def test_a_skill_disclosed_by_name_counts_as_loading_its_skill_md(tmp_path: Path) -> None:
+    """Kiro loads a skill through ``disclose_context``, never a file read (paid kiro-cli 3.1.0 run)."""
+    skill = tmp_path / "skills" / "stamp"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: stamp\n---\n", encoding="utf-8")
+    log = _jsonl(
+        tmp_path / "messages.jsonl",
+        [*tool("01", "d1", "disclose_context", {"name": "stamp"}, f"Skill directory: {skill}"), summary("02", 0.04, 1)],
+    )
+    r = kiro_harness.KiroSessionLog(log, 0, "s", "claude-haiku-5.5", []).to_result(tmp_path, [])
+    coverage = skillcov.annotate("stamp", skillcov.catalog(skill), r)
+    assert [(f.path, f.loaded) for f in coverage.files] == [("SKILL.md", [1])] and coverage.loaded == ["SKILL.md"]

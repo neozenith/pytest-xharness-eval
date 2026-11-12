@@ -613,6 +613,7 @@ class ClaudeHarness(Harness):
     name = "claude"
     shell_tools = frozenset({"Bash"})
     persistent_shells = frozenset({"Bash"})  # one shell process spans the session, so ``cd`` sticks
+    skill_tools = frozenset({"Skill"})
     efforts = CLAUDE_EFFORTS
 
     def invoke(self, *, skill: str, task: str) -> str:
