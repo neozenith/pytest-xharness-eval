@@ -341,3 +341,23 @@ test("aggregateWaterfall reports nothing rather than dividing by zero when no ru
   const { aggregateWaterfall } = await import("@/lib/series");
   expect(aggregateWaterfall([{ session_id: "a", has_ledger: false } as never], {})).toEqual({ runs: 0, columns: [], n: [], min: [], max: [] });
 });
+
+test("cumulativeCostByTurn prices metered credits at the row's per-credit rate (ADR 0078)", async () => {
+  const { cumulativeCostByTurn } = await import("@/lib/series");
+  const zero = {
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
+    cache_write_1h_tokens: 0,
+    cache_write_5m_tokens: 0,
+    reasoning_tokens: 0,
+  };
+  const calls = [
+    { n: 1, at: "t", usage: { ...zero, credits: 1.5 } },
+    { n: 2, at: "t", usage: { ...zero, credits: 0.5 } },
+  ];
+  const rates = { input: 0, output: 0, cache_read: 0, cache_write: 0, cache_write_1h: 0, unit: "usd_per_mtok", credit: 0.04, credit_unit: "usd_per_credit" };
+  const costs = cumulativeCostByTurn({ calls, rates_applied: rates } as never)!;
+  expect(costs.map((c) => Math.round(c * 100))).toEqual([6, 8]);
+});

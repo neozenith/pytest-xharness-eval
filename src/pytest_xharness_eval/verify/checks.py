@@ -47,15 +47,17 @@ def check_run_is_real(output: CaseOutput) -> None:
 
     Zero tokens is the shape an unresolved skill takes: ``/nosuchskill`` comes back as
     "Unknown command" having billed nothing (ADR 0044).
+    A credit-metered harness bills credits instead of tokens, and either unit proves the
+    model ran (ADR 0078).
     """
     run = output.run
     assert run.session_id, "no session id - the run cannot prove which log is its own"
     assert run.session_log, "the run names no session log"
     assert Path(run.session_log).is_file(), f"session log missing: {run.session_log}"
     assert run.exit_code == 0, f"agent CLI exited {run.exit_code}"
-    assert run.usage.accumulative_billed_tokens > 0, (
-        "zero billed tokens - an empty run must never pass. The usual cause is an "
-        "invocation the CLI did not resolve, which costs nothing and does nothing."
+    assert run.usage.accumulative_billed_tokens > 0 or run.usage.credits > 0, (
+        "zero billed tokens and zero metered credits - an empty run must never pass. The usual "
+        "cause is an invocation the CLI did not resolve, which costs nothing and does nothing."
     )
 
 

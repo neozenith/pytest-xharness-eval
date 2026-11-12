@@ -145,3 +145,9 @@ def test_an_unannotated_run_says_so_rather_than_raising_attributeerror(rollout: 
     rollout.run.skill_coverage = None
     with pytest.raises(AssertionError, match="never annotated"):
         verify.check_skill_was_loaded(rollout, "SKILL.md")
+
+
+def test_metered_credits_prove_a_credit_metered_run_happened(rollout: CaseOutput) -> None:
+    """A credit-metered harness bills credits and no tokens; either unit proves the model ran (ADR 0078)."""
+    rollout.run.usage = type(rollout.run.usage)(credits=0.42)
+    verify.check_run_is_real(rollout)

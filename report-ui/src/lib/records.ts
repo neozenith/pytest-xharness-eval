@@ -71,6 +71,28 @@ export const KINDS: Record<string, string> = {
   "codex/event_msg/item_completed/Reasoning": "thinking",
   "codex/event_msg/item_completed/UserMessage": "prompt",
   "codex/event_msg/item_completed/UserMessage/injected": "harness_context",
+  "kiro/user": "prompt",
+  "kiro/agent_note": "harness_context",
+  "kiro/steering_inclusion": "harness_context",
+  "kiro/system": "harness_context",
+  "kiro/assistant/say": "assistant_text",
+  "kiro/assistant/reasoning": "thinking",
+  "kiro/legacy_reasoning_replay": "thinking",
+  "kiro/tool_call": "tool_call",
+  "kiro/tool_result": "tool_result",
+  "kiro/ContextualHookInvoked": "tool_exec",
+  "kiro/tool_revert": "file_change",
+  // Kiro meters each prompt turn in credits here, never tokens (ADR 0078).
+  "kiro/usage_summary": "usage",
+  "kiro/session_start": "session_meta",
+  "kiro/turn_start": "lifecycle",
+  "kiro/turn_end": "lifecycle",
+  "kiro/sub_agent_start": "lifecycle",
+  "kiro/sub_agent_progress": "lifecycle",
+  "kiro/sub_agent_complete": "lifecycle",
+  "kiro/error": "lifecycle",
+  // Kiro's marker that it summarised the history to free the window (ADR 0071).
+  "kiro/tombstone/summarization": "compaction",
 };
 
 /**
@@ -100,6 +122,7 @@ const PREFIX_CATEGORY: [string, string][] = [
   ["codex/event_msg/", "lifecycle"],
   ["codex/response_item/message/", "harness_context"],
   ["codex/response_item/", "harness_meta"],
+  ["kiro/", "harness_meta"],
 ];
 
 const isObj = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -166,10 +189,22 @@ function classifyCodex(r: Rec): string {
   return `codex/${t}`;
 }
 
+function classifyKiro(r: Rec): string {
+  const p = isObj(r.payload) ? r.payload : undefined;
+  if (!p) return "kiro/unknown";
+  const t = String(p.type ?? "unknown");
+  if (t === "assistant") return `kiro/assistant/${String(p.operationType ?? "unknown").toLowerCase()}`;
+  if (t === "session_event") return `kiro/session_event/${String(p.category ?? "unknown")}`;
+  if (t === "tombstone") return `kiro/tombstone/${String(p.kind ?? "unknown")}`;
+  return `kiro/${t}`;
+}
+
+const CLASSIFIERS: Record<string, (r: Rec) => string> = { claude: classifyClaude, codex: classifyCodex, kiro: classifyKiro };
+
 /** The kind of one record: `harness/type[/subtype]`; never throws. */
 export function classify(harness: string, r: unknown): string {
   if (!isObj(r)) return `${harness}/unknown`;
-  return harness === "claude" ? classifyClaude(r) : classifyCodex(r);
+  return (CLASSIFIERS[harness] ?? classifyCodex)(r);
 }
 
 /** The category a kind belongs to; unseen kinds fall back by prefix, then to `unknown`. */
@@ -183,5 +218,7 @@ export function categoryOf(kind: string): string {
 export const isCallRecord = (harness: string, rec: unknown): boolean => {
   if (!isObj(rec)) return false;
   if (harness === "claude") return rec.type === "assistant" && !isSynthetic(isObj(rec.message) ? rec.message : undefined);
+  // Kiro meters a turn, not a request: its usage_summary closes each call (ADR 0078).
+  if (harness === "kiro") return isObj(rec.payload) && rec.payload.type === "usage_summary";
   return rec.type === "event_msg" && isObj(rec.payload) && rec.payload.type === "token_count";
 };

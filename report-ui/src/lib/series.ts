@@ -168,7 +168,8 @@ export function waterfallByLine(result: RunResult, lines: string[] | null): { ro
 /**
  * Cumulative estimated USD after each turn's call, priced with the result's own
  * `rates_applied` exactly as the plugin's `Rates.breakdown` does (USD per million tokens,
- * divided per tier, ADR 0050; an untagged cache write bills at the 5-minute rate, ADR 0019).
+ * divided per tier, ADR 0050; an untagged cache write bills at the 5-minute rate, ADR 0019),
+ * plus any metered credits at the row's USD-per-credit rate (ADR 0078).
  * A record from before ADR 0050 is read per token through `ratesPerMtok`. `null` when the
  * result carries no usable rates, so an unpriced run never draws a zero-cost line.
  */
@@ -177,6 +178,7 @@ export function cumulativeCostByTurn(result: RunResult): number[] | null {
   if (mtok.input === undefined || mtok.output === undefined) return null;
   const long = longContextPerMtok(result.rates_applied);
   // Each call is billed at the tier its own prompt selects, exactly as `pricing.CostEstimate.of` does (ADR 0051).
+  const perCredit = result.rates_applied?.credit ?? 0;
   const usageCost = (u: Usage, tier: TierRates): number => {
     const rate = (t: Tier): number => (tier[t] ?? 0) / 1e6;
     const tagged = u.cache_write_1h_tokens + u.cache_write_5m_tokens;
@@ -186,7 +188,8 @@ export function cumulativeCostByTurn(result: RunResult): number[] | null {
       u.output_tokens * rate("output") +
       u.cache_read_tokens * rate("cache_read") +
       (u.cache_write_5m_tokens + untagged) * rate("cache_write") +
-      u.cache_write_1h_tokens * rate("cache_write_1h")
+      u.cache_write_1h_tokens * rate("cache_write_1h") +
+      (u.credits ?? 0) * perCredit
     );
   };
   const callCost = (u: Usage): number => usageCost(u, tierForCall(u, mtok, long));

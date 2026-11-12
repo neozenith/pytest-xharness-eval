@@ -243,12 +243,17 @@ class Settings:
         A catalogued model with no price row for ``day`` is kept rather than dropped, so the
         price check that follows refuses it by name (ADR 0007): leaving it out here would
         quietly shrink the sweep instead of saying why.
+
+        A row that prices only credits states no output rate for the limit to judge, so a
+        credit-metered model runs only when a case or the project names it (ADR 0078).
         """
         table = self.price_table()
         out = []
         for entry in mx.catalogued(self.catalogue()):
             harness_name, _, model = entry.partition("/")
             rates = table.get(harness_name, model, day)
+            if rates is not None and not rates.prices_tokens:
+                continue
             if rates is None or rates.output < self.output_rate_limit:
                 out.append(entry)
         return out

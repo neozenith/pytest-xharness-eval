@@ -31,6 +31,9 @@ export interface RatesApplied {
   /** The tier a call is billed at, in full, once its prompt exceeds `above_prompt_tokens` (ADR 0051); null or absent where the row has none. */
   long_context?: LongContextRates | null;
   unit?: string;
+  /** USD per metered credit for a credit-metered harness (ADR 0078); null or absent where the row prices no credits. */
+  credit?: number | null;
+  credit_unit?: string;
   harness?: string;
   model?: string;
   source?: string;
@@ -176,6 +179,8 @@ export interface Usage {
   cache_write_1h_tokens: number;
   cache_write_5m_tokens: number;
   reasoning_tokens: number;
+  /** Metered credits a credit-metered harness billed instead of tokens (ADR 0078); absent before it. */
+  credits?: number;
   accumulative_billed_tokens?: number;
 }
 

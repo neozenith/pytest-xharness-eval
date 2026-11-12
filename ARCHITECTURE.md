@@ -3,7 +3,7 @@
 The hard problem in this plugin is not orchestration but evidence. A harness that
 grades the wrong transcript, or an empty one, produces the same green output as one
 that works. Every design choice below exists to make that silent failure impossible,
-for two CLIs whose session-log identity mechanisms differ at the root.
+for CLIs whose session-log identity mechanisms differ at the root.
 
 This page explains the design. For commands see [README.md](README.md); for the
 decisions as records see [docs/adrs/](docs/adrs/index.md); for the words, see
@@ -604,19 +604,19 @@ idle (ADR 0064).
 
 </details>
 
-The two CLIs give the harness different levers, so the correlation between a run and
-its log is established in two different ways.
+The three CLIs give the harness different levers, so the correlation between a run and
+its log is established in two different ways: derivation for Claude, isolation for Codex and Kiro.
 
-| Concern | Claude (`claude` 2.1.237) | Codex (`codex` 0.148.0) |
-|---------|---------------------------|-------------------------|
-| Headless invocation | `claude -p --output-format json` | `codex exec --json` |
-| Log location | `~/.claude/projects/<cwd-slug>/<session-id>.jsonl` | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-<ts>-<id>.jsonl` |
-| Subagent transcripts | `<session-id>/subagents/agent-*.jsonl` beside the log | one more rollout per spawned thread, under the same `CODEX_HOME` |
-| Caller-chosen id | `--session-id <uuid>` | none |
-| Correlation contract | derive the path from the UUID the harness minted | point `CODEX_HOME` at a private directory so exactly one primary rollout can exist |
-| Cost in output | `total_cost_usd` on stdout, absent from the log | absent everywhere |
-| Token accounting | per assistant message `usage` block, repeated on every content-block record of that message | one `token_count` event per model call: `last_token_usage` for the call, `total_token_usage` cumulative |
-| Cache-write TTL | `usage.cache_creation.ephemeral_1h_input_tokens` / `ephemeral_5m_input_tokens` | not billed |
+| Concern | Claude (`claude` 2.1.237) | Codex (`codex` 0.148.0) | Kiro (`kiro-cli` 3.1.0) |
+|---------|---------------------------|-------------------------|-------------------------|
+| Headless invocation | `claude -p --output-format json` | `codex exec --json` | `kiro-cli chat --v3 --no-interactive --trust-all-tools` |
+| Log location | `~/.claude/projects/<cwd-slug>/<session-id>.jsonl` | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-<ts>-<id>.jsonl` | `$KIRO_HOME/sessions/<sha256(workspace)[:16]>/sess_<id>/messages.jsonl`, `session.json` beside it |
+| Subagent transcripts | `<session-id>/subagents/agent-*.jsonl` beside the log | one more rollout per spawned thread, under the same `CODEX_HOME` | `sub-executions/<subSessionId>.jsonl` beside the log, named by `sub_agent_start` |
+| Caller-chosen id | `--session-id <uuid>` | none | none |
+| Correlation contract | derive the path from the UUID the harness minted | point `CODEX_HOME` at a private directory so exactly one primary rollout can exist | point `KIRO_HOME` at a private directory so exactly one session can exist; auth lives outside it |
+| Cost in output | `total_cost_usd` on stdout, absent from the log | absent everywhere | credits per turn in `usage_summary` (ADR 0078) |
+| Token accounting | per assistant message `usage` block, repeated on every content-block record of that message | one `token_count` event per model call: `last_token_usage` for the call, `total_token_usage` cumulative | none: credits only, one `usage_summary` per prompt turn (ADR 0078) |
+| Cache-write TTL | `usage.cache_creation.ephemeral_1h_input_tokens` / `ephemeral_5m_input_tokens` | not billed | not reported |
 
 Two facts were learned from live runs and are encoded in `harness/claude.py` and
 `harness/codex.py`, each beside the dialect it belongs to. First, Claude's cwd slug
@@ -705,18 +705,18 @@ flowchart LR
 
 </details>
 
-| Lever | Claude | Codex |
-|-------|--------|-------|
-| Ambient settings off | `--setting-sources ""` | `--ignore-user-config` |
-| Working directory | process cwd, plus `--add-dir` | `-C <workspace>`, with `--skip-git-repo-check` (the workspace is no repository) |
-| Skill under test in | `--plugin-dir <wrapper of skill dir>` | copied to `$CODEX_HOME/skills/<skill>` |
-| Workspace instructions in, ancestors out | `--add-dir <workspace>` with `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`: reads the workspace's `CLAUDE.md` alone | reads the workspace's `AGENTS.md` from its cwd |
-| Permissions | `--permission-mode bypassPermissions` | `--sandbox workspace-write` |
-| Reasoning budget | `--effort <rung>` | `-c model_reasoning_effort=<rung>` |
+| Lever | Claude | Codex | Kiro |
+|-------|--------|-------|------|
+| Ambient settings off | `--setting-sources ""` | `--ignore-user-config` | a private `KIRO_HOME` (no user settings, agents or steering) |
+| Working directory | process cwd, plus `--add-dir` | `-C <workspace>`, with `--skip-git-repo-check` (the workspace is no repository) | process cwd |
+| Skill under test in | `--plugin-dir <wrapper of skill dir>` | copied to `$CODEX_HOME/skills/<skill>` | copied to `$KIRO_HOME/skills/<skill>`, invoked as `/<skill>` |
+| Workspace instructions in, ancestors out | `--add-dir <workspace>` with `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`: reads the workspace's `CLAUDE.md` alone | reads the workspace's `AGENTS.md` from its cwd | reads the workspace's `AGENTS.md` and `.kiro/steering/`; `--trust-workspace` for this launch only |
+| Permissions | `--permission-mode bypassPermissions` | `--sandbox workspace-write` | `--trust-all-tools` |
+| Reasoning budget | `--effort <rung>` | `-c model_reasoning_effort=<rung>` | `--effort <rung>` |
 
 The reasoning-budget lever is the one that is *not* purely isolation: it is the third
 matrix axis, so a cell either names a rung or deliberately names none and inherits the
-CLI's own default. Both CLIs accept a rung they do not recognise and run at that default
+CLI's own default. Claude and Codex accept a rung they do not recognise and run at that default
 anyway, so the rung is validated at collection rather than trusted at the flag (ADR 0049).
 
 The workspace itself is a plain copy of the fixture tree (or a generated scenario's

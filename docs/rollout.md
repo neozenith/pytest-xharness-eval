@@ -329,7 +329,7 @@ drifted from its rule is found for free.
 | `cost_status` | `CostStatus` | `PRICED` or `UNPRICED`. There is no third state. Compare to the enum member, not the string. |
 | `estimated_cost_usd` | `float \| None` | This plugin's estimate from its own price table. |
 | `cost_by_tier` | `dict[str, float]` | The estimate split by token tier. |
-| `rates_applied` | `AppliedRates \| None` | **A typed record, not a dict.** `.source`, `.harness`, `.model`, `.unit` (`"usd_per_mtok"`), `.effective_from` / `.effective_to` (ISO dates, `None` when open), `.long_context` (a `LongContext` with `.above_prompt_tokens` and the five tier rates, or `None`); the tier rates are USD per MTok (ADR 0050, ADR 0051). `.get()` raises. |
+| `rates_applied` | `AppliedRates \| None` | **A typed record, not a dict.** `.source`, `.harness`, `.model`, `.unit` (`"usd_per_mtok"`), `.credit` (USD per credit, or `None` where the row prices no credits) and `.credit_unit` (`"usd_per_credit"`, ADR 0078), `.effective_from` / `.effective_to` (ISO dates, `None` when open), `.long_context` (a `LongContext` with `.above_prompt_tokens` and the five tier rates, or `None`); the tier rates are USD per MTok (ADR 0050, ADR 0051). `.get()` raises. |
 | `long_context_calls` | `int \| None` | How many calls were billed at the row's long-context tier; `None` while unpriced (ADR 0051). |
 | `harness_reported_cost_usd` | `float \| None` | What the CLI itself claimed (Claude only). Never used to price. |
 
@@ -343,6 +343,7 @@ drifted from its rule is found for free.
 | `usage.output_tokens` | Generated, `reasoning_tokens` included. |
 | `usage.cache_read_tokens` / `cache_write_tokens` | Kept apart because they price ~an order of magnitude apart. |
 | `usage.accumulative_billed_tokens` | The four priced tiers summed over every call. **A spend figure, not a context figure.** |
+| `usage.credits` | Metered credits, for a credit-metered harness (Kiro) that bills credits instead of tokens; its token tiers stay `0`. `0.0` for Claude and Codex (ADR 0078). |
 | `run.baseline_tokens` | The first call's prompt: what the harness loads before the agent acts. |
 | `run.peak_context_tokens` | The largest prompt any one call processed. |
 | `run.context_window` / `context_window_pct` | The window the harness reported, and how close the run came to it. |

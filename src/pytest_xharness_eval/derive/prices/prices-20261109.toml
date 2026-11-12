@@ -376,3 +376,29 @@ cache_read     = 0.10
 cache_write    = 2.50
 cache_write_1h = 2.50
 cache_write_12h = 5.00
+
+[kiro."claude-haiku-5.5"]
+# curate: keep. Kiro bills credits, not tokens (ADR 0078): the published add-on rate of
+# $0.04 per credit (kiro.dev/docs/billing/add-on-credits, 2026-11-11). The model's credit
+# multiplier is applied by Kiro before it reports a turn's credits, so one rate serves all.
+credit         = 0.04
+
+[kiro."claude-sonnet-5.5"]
+# curate: keep. Kiro's add-on credit rate (ADR 0078).
+credit         = 0.04
+
+[kiro."claude-opus-5.5"]
+# curate: keep. Kiro's add-on credit rate (ADR 0078).
+credit         = 0.04
+
+[kiro."gpt-5.6-luna"]
+# curate: keep. Kiro's add-on credit rate (ADR 0078).
+credit         = 0.04
+
+[kiro."gpt-5.6-terra"]
+# curate: keep. Kiro's add-on credit rate (ADR 0078).
+credit         = 0.04
+
+[kiro."gpt-5.6-sol"]
+# curate: keep. Kiro's add-on credit rate (ADR 0078).
+credit         = 0.04

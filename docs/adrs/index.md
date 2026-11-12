@@ -94,6 +94,7 @@ Edit the YAML; never the markdown.
 | [0075](0075-an-analyzer-is-a-checker-over-every-sample.md) | An analyzer is a checker over every sample, run after the sweep and on demand | accepted, 2026-10-18. Extends [0045](0045-the-verifiers-ship-with-the-plugin.md) (a verifier is a function over one rollout), so a check may also be asked of every sample at once. Extends [0071](0071-a-cell-is-judged-by-its-important-metrics-over-its-samples.md) (a cell is judged over its samples), whose samples an analyzer compares across cells and versions. Extends [0074](0074-a-case-may-be-a-scenario-and-its-fixtures-may-be-generated.md) (a case may be a scenario), whose subject version and scenarios it reads. Supersedes two counts that [0039](0039-the-package-listing-is-the-architecture.md) and [0041](0041-the-vocabulary-is-a-domain-noun-and-the-manifest-is-a-manifest.md) pinned. The package root now holds four entry-point modules, and the plugin manifest binds eight hooks. |
 | [0076](0076-a-cell-is-planned-once-and-every-check-is-classified-by-one-rule.md) | A cell is planned once at collection, and every check is classified by one rule | accepted, 2026-10-18. Extends [0074](0074-a-case-may-be-a-scenario-and-its-fixtures-may-be-generated.md) (scenario cases and generated fixtures), whose suite reference, scenario store and case reference it gives one owner each. Extends [0075](0075-an-analyzer-is-a-checker-over-every-sample.md) (the Analyzer), whose modules it renames and whose metric directions it moves onto the record. Every argument of both records stands; only where their code lives changes. |
 | [0077](0077-published-cache-lifetime-rates-are-preserved.md) | Published cache lifetime rates are preserved without inventing usage | accepted, 2026-11-09. Extends [0051](0051-long-context-is-a-tier-priced-per-call-and-records-are-curated.md) with the published 12-hour cache-write rate. |
+| [0078](0078-a-credit-metered-harness-is-priced-from-its-metered-credits.md) | A credit-metered harness is priced from the credits its session log meters | accepted, 2026-11-11. Extends [0007](0007-unpriced-model-aborts-before-spend.md) (pricing fails loud), [0019](0019-per-call-ledger-and-ttl-priced-cache-writes.md) (the per-call ledger), [0034](0034-a-harness-is-a-class-and-the-registry-is-the-only-dispatch.md) (the harness class), [0050](0050-prices-are-dated-records-in-usd-per-mtok-grouped-by-harness.md) (dated price records) and [0058](0058-the-default-matrix-is-the-catalogue-under-a-cost-limit.md) (the default matrix). |
 ## The typed relation graph
 
 Open [graph.html](graph.html) to browse it: records cluster by domain, selecting one renders it beside the graph, and a link inside a record navigates to it.
@@ -300,3 +301,8 @@ The same edge set is [graph.md](graph.md) and, as raw data, [graph.json](graph.j
 - ADR-0076 --extends--> ADR-0074
 - ADR-0076 --extends--> ADR-0075
 - ADR-0077 --extends--> ADR-0051
+- ADR-0078 --extends--> ADR-0007
+- ADR-0078 --extends--> ADR-0019
+- ADR-0078 --extends--> ADR-0034
+- ADR-0078 --extends--> ADR-0050
+- ADR-0078 --extends--> ADR-0058

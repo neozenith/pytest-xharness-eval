@@ -5,7 +5,7 @@ knows nothing about what happens to it afterwards. Four parts:
 
 * :mod:`.base` -- the :class:`Harness` interface, the :class:`SessionLog` it folds, and
   the registry that is the only dispatch on a harness name (ADR 0034).
-* :mod:`.claude` and :mod:`.codex` -- the two shipped dialects. Nothing outside this
+* :mod:`.claude`, :mod:`.codex` and :mod:`.kiro` -- the three shipped dialects. Nothing outside this
   package may name them; the ruff rule in ``pyproject.toml`` enforces it.
 * :mod:`.normalise` -- the dialect-free folding toolkit both adapters build a ledger with.
 * :mod:`.records` -- the catalogue of record kinds and the categories they belong to
@@ -36,6 +36,7 @@ from pytest_xharness_eval.harness.base import (
 )
 from pytest_xharness_eval.harness.claude import CLAUDE, ClaudeHarness, ClaudeSessionLog
 from pytest_xharness_eval.harness.codex import CODEX, CodexHarness, CodexSessionLog
+from pytest_xharness_eval.harness.kiro import KIRO, KiroHarness, KiroSessionLog
 
 __all__ = [
     "CLAUDE",
@@ -46,6 +47,9 @@ __all__ = [
     "ClaudeSessionLog",
     "CodexHarness",
     "CodexSessionLog",
+    "KIRO",
+    "KiroHarness",
+    "KiroSessionLog",
     "Harness",
     "RunError",
     "SessionLog",

@@ -189,7 +189,10 @@ def is_kept(row: Row) -> bool:
 
 
 def merge(new: list[Row], old: dict[tuple[str, str], Row]) -> tuple[list[Row], dict[str, list[str]]]:
-    """The next record's rows, with overrides kept and vanished rows carried; plus a change report."""
+    """The next record's rows, with overrides kept and vanished rows carried; plus a change report.
+
+    Rows under a harness no watch covers are kept as they stand: the feed is not their source.
+    """
     report: dict[str, list[str]] = {"added": [], "repriced": [], "kept": [], "carried": [], "unchanged": []}
     merged: list[Row] = []
     seen = set()
@@ -213,8 +216,14 @@ def merge(new: list[Row], old: dict[tuple[str, str], Row]) -> tuple[list[Row], d
             ]
             report["repriced" if diffs else "unchanged"].append(name + (f" ({', '.join(diffs)})" if diffs else ""))
             merged.append(Row(row.harness, row.model, row.tiers, row.long_context, prior.comments))
+    watched = {w.harness for w in WATCHES}
     for key, prior in old.items():
-        if key not in seen:
+        if key not in seen and key[0] not in watched:
+            # A harness the feed does not price (Kiro bills credits, ADR 0078): its rows are
+            # hand-curated, so they pass through untouched and are no change to report.
+            report["kept"].append(f"{key[0]}/{key[1]}")
+            merged.append(prior)
+        elif key not in seen:
             report["carried"].append(f"{key[0]}/{key[1]}")
             note = "# Carried forward: absent from the LiteLLM feed at this curation."
             merged.append(Row(prior.harness, prior.model, prior.tiers, prior.long_context, [*prior.comments, note]))

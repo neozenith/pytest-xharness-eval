@@ -177,6 +177,10 @@ class Harness(ABC):
     shell_tools: ClassVar[frozenset[str]] = frozenset()
     #: Of those, the ones whose working directory persists between calls.
     persistent_shells: ClassVar[frozenset[str]] = frozenset()
+    #: Tool names this CLI loads a skill with, by name: a call naming the skill under test
+    #: counts as loading its ``SKILL.md`` for coverage (ADR 0022). Empty for a CLI that
+    #: loads a skill only by reading its files, which coverage already sees.
+    skill_tools: ClassVar[frozenset[str]] = frozenset()
 
     @staticmethod
     def shell_commands(tool_input: Any) -> list[tuple[str, str | None]]:

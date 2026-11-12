@@ -42,6 +42,7 @@ def test_bundled_table_prices_each_tier_separately() -> None:
         "cache_read": 0.5,
         "cache_write_5m": 6.25,
         "cache_write_1h": 0.0,
+        "credits": 0.0,
     }
 
 
@@ -427,6 +428,9 @@ def test_a_dated_price_line_overrides_only_inside_its_interval() -> None:
         ("claude/m: input=1 output=-3", "looks like a per-token rate"),
         ("claude/m: input=1 output=1 from=yesterday", "not an ISO date"),
         ("claude/m: input=1 output=1 from=2026-09-01 to=2026-08-01", "is not after"),
+        ("claude/m: credit=0", "positive USD figure per credit"),  # ADR 0078
+        ("claude/m: credit=abc", "is not a number"),
+        ("claude/m: input=5 credit=0.04", "missing required tier"),
     ],
 )
 def test_malformed_price_lines_stop_before_any_spend(line: str, match: str) -> None:
@@ -481,3 +485,15 @@ def test_pricing_in_parts_rounds_once_so_the_total_matches_a_single_model_run() 
     split.subagents = [_subagent([Call(n=i, at="t", usage=u) for i, u in enumerate(calls[2:])], model="claude-opus-5")]
     split.usage = Usage.total(calls)
     assert pricing.price(split, pricing.load_table(), DAY).estimated_cost_usd == whole
+
+
+def test_credits_price_at_the_rows_credit_rate_and_an_unpriced_unit_stops() -> None:
+    """A credit row prices credits; usage in a unit a row does not price never prices as zero (ADR 0078)."""
+    tokens, credits = pricing.parse_price_lines(["claude/a: input=5 output=25", "claude/b: credit=0.04"])
+    r = pricing.price(_result("b", Usage(credits=2.5)), pricing.PriceTable((credits,)), DAY)
+    assert (r.estimated_cost_usd, r.cost_by_tier["credits"]) == pytest.approx((0.1, 0.1))
+    assert r.rates_applied is not None and r.rates_applied.credit_unit == "usd_per_credit"
+    with pytest.raises(pricing.PricingError, match="states no credit rate"):
+        tokens.check_units(Usage(credits=1.0))
+    with pytest.raises(pricing.PricingError, match="prices only credits"):
+        credits.check_units(Usage(1000, 10))

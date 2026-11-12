@@ -137,3 +137,39 @@ released = 2026-09-29
 line = "astra"
 tier = 4
 released = 2026-09-03
+
+# Kiro routes to other providers' models and bills credits, not tokens (ADR 0078). It has no
+# first-party rows in LiteLLM's feed, so it states no `feed_provider`: its rows are curated by
+# hand at the published per-credit rate, and an uncatalogued Kiro model stops at collection.
+# Ids are Kiro's own spelling (`kiro-cli chat --list-models`); release dates are the models'.
+[kiro]
+
+[kiro.models."claude-haiku-5.5"]
+line = "haiku"
+tier = 1
+released = 2026-10-07
+
+[kiro.models."claude-sonnet-5.5"]
+line = "sonnet"
+tier = 2
+released = 2026-09-28
+
+[kiro.models."claude-opus-5.5"]
+line = "opus"
+tier = 3
+released = 2026-09-22
+
+[kiro.models."gpt-5.6-luna"]
+line = "luna"
+tier = 1
+released = 2026-07-09
+
+[kiro.models."gpt-5.6-terra"]
+line = "terra"
+tier = 2
+released = 2026-07-09
+
+[kiro.models."gpt-5.6-sol"]
+line = "sol"
+tier = 3
+released = 2026-07-09

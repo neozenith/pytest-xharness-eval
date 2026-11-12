@@ -90,6 +90,28 @@ KINDS: dict[str, str] = {
     "codex/event_msg/item_completed/Reasoning": "thinking",
     "codex/event_msg/item_completed/UserMessage": "prompt",
     "codex/event_msg/item_completed/UserMessage/injected": "harness_context",
+    "kiro/user": "prompt",
+    "kiro/agent_note": "harness_context",
+    "kiro/steering_inclusion": "harness_context",
+    "kiro/system": "harness_context",
+    "kiro/assistant/say": "assistant_text",
+    "kiro/assistant/reasoning": "thinking",
+    "kiro/legacy_reasoning_replay": "thinking",
+    "kiro/tool_call": "tool_call",
+    "kiro/tool_result": "tool_result",
+    "kiro/ContextualHookInvoked": "tool_exec",
+    "kiro/tool_revert": "file_change",
+    # Kiro meters each prompt turn in credits here, never tokens (ADR 0078).
+    "kiro/usage_summary": "usage",
+    "kiro/session_start": "session_meta",
+    "kiro/turn_start": "lifecycle",
+    "kiro/turn_end": "lifecycle",
+    "kiro/sub_agent_start": "lifecycle",
+    "kiro/sub_agent_progress": "lifecycle",
+    "kiro/sub_agent_complete": "lifecycle",
+    "kiro/error": "lifecycle",
+    # Kiro's marker that it summarised the history to free the window (ADR 0071).
+    "kiro/tombstone/summarization": "compaction",
 }
 
 _LEADING_TAG = re.compile(r"\s*<([A-Za-z_][\w.-]*)[\s>/]")
@@ -118,6 +140,7 @@ _PREFIX_CATEGORY = (
     ("codex/event_msg/", "lifecycle"),
     ("codex/response_item/message/", "harness_context"),
     ("codex/response_item/", "harness_meta"),
+    ("kiro/", "harness_meta"),
 )
 
 

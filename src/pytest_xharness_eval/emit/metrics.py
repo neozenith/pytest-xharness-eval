@@ -161,6 +161,8 @@ class CellMetrics:
     cache_write_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
     cache_write_1h_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
     cache_write_5m_tokens: int = measured(0, MetricKind.SPREAD, Direction.LOWER)
+    # The credits a credit-metered harness billed instead of tokens; 0 for a token-metered one (ADR 0078).
+    credits: float = measured(0.0, MetricKind.SPREAD, Direction.LOWER)
     files_written: int = measured(0, MetricKind.SPREAD, None)
     # How close it came to the window, and how fast it ran (ADR 0024).
     context_window: int | None = fact(None)
@@ -317,15 +319,16 @@ class CellMetrics:
 
         The estimate comes first; where the harness reported its own cost it follows in
         brackets, so drift between the two is visible on every cell.
+        A credit-metered run shows its credits where a token-metered one shows its tokens: it
+        has no tokens to show, and a column of zeros would read as an empty run (ADR 0078).
         """
         cost = f"est ${self.estimated_cost_usd or 0.0:.4f}"
         if self.harness_reported_cost_usd is not None:
             cost += f" (harness ${self.harness_reported_cost_usd:.4f})"
-        word = (
-            f"{cost}  {self.accumulative_billed_tokens:,} accumulative_billed_tokens  "
-            f"{self.baseline_tokens:,} baseline_tokens  {self.wall_ms / 1000:.1f}s  "
-            f"{self.turns} turns  {self.tool_calls} tools"
-        )
+        billed, baseline = self.accumulative_billed_tokens, self.baseline_tokens
+        tokens = f"{billed:,} accumulative_billed_tokens  {baseline:,} baseline_tokens"
+        spent = f"{self.credits:.4f} credits" if self.credits and not self.accumulative_billed_tokens else tokens
+        word = f"{cost}  {spent}  {self.wall_ms / 1000:.1f}s  {self.turns} turns  {self.tool_calls} tools"
         if self.context_window_pct is not None:
             word += f"  ctx {self.context_window_pct:.1f}%"
         if self.skill_files:
@@ -469,6 +472,7 @@ def _usage_figures(result: RunResult) -> dict[str, Any]:
         "cache_write_tokens": u.cache_write_tokens,
         "cache_write_1h_tokens": u.cache_write_1h_tokens,
         "cache_write_5m_tokens": u.cache_write_5m_tokens,
+        "credits": u.credits,
     }
 
 

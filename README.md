@@ -40,7 +40,7 @@
 
 ## What it does
 
-A pytest plugin that runs the `claude` and `codex` CLIs headlessly against a fixture
+A pytest plugin that runs the `claude`, `codex` and `kiro-cli` CLIs headlessly against a fixture
 workspace, captures each run's own session log, prices it, and grades what the agent
 left behind. A skill opts in by adding an `evals/` directory; pytest does the rest.
 
@@ -112,7 +112,7 @@ with `--dry-run` before a sweep. The design rationale lives in
 
    ```text
    xharness-eval: skills root = /repo/skills, cache = /repo/.xharness_eval_cache
-   xharness-eval: matrix = plugin default (13 of 16 catalogued models, output rate below $50/MTok); a case's models= overrides it
+   xharness-eval: matrix = plugin default (13 of 22 catalogued models, output rate below $50/MTok; credit-metered models only when named); a case's models= overrides it
    collected 13 items
    skills/<skill>/evals/eval_<case>.py sssssssssssss
 
@@ -174,7 +174,7 @@ stock pytest (`-k`, `-x`, `-m eval`, node ids).
 | Option | Effect | Example |
 |--------|--------|---------|
 | path | One skill or all of them | `pytest skills/x/evals`, `pytest skills/*/evals` |
-| `--harness <name>` | Only cells for that harness (`claude` or `codex`), repeatable | `pytest skills/x/evals --harness codex` |
+| `--harness <name>` | Only cells for that harness (`claude`, `codex` or `kiro`), repeatable | `pytest skills/x/evals --harness codex` |
 | `--model <substring>` | Only cells whose model id contains the string, or one exact `harness/model`, repeatable | `pytest skills/x/evals --model opus` |
 | `--effort <rung>` | Only cells at that reasoning rung, repeatable. Matches the *resolved* rung, so `--effort max` selects claude's `max` and codex's `xhigh` alike | `pytest skills/x/evals --effort max` |
 | `--treatment <name>` | Only cells under that treatment, repeatable. `control` names the untreated cell (ADR 0055) | `pytest skills/x/evals --treatment control` |
@@ -210,14 +210,14 @@ the CLI on whatever default its own configuration gives it.
 Each harness declares its own ladder, and three portable aliases name a *position* on it
 rather than a level:
 
-| You write | Position | On `claude` | On `codex` |
-|-----------|----------|-------------|------------|
-| `min` | first rung | `low` | `low` |
-| `mid` | middle rung | `high` | `high` |
-| `max` | last rung | `max` | `max` |
+| You write | Position | On `claude` | On `codex` | On `kiro` |
+|-----------|----------|-------------|------------|-----------|
+| `min` | first rung | `low` | `low` | `low` |
+| `mid` | middle rung | `high` | `high` | `high` |
+| `max` | last rung | `max` | `max` | `max` |
 
-Both shipped CLIs happen to declare the same five rungs (`low, medium, high, xhigh, max`),
-so the aliases resolve identically on each today. That is a fact about these two CLIs and
+Every shipped CLI happens to declare the same rungs (`low, medium, high, xhigh, max`),
+so the aliases resolve identically on each today. That is a fact about these CLIs and
 not a rule: the ladder lives on the harness class, so a third CLI may declare any rungs it
 likes and the aliases keep working by position.
 
@@ -419,7 +419,7 @@ The ini keys, paths relative to pytest's rootdir:
 | `xharness_report_inline` | `false` | embed every result, log and the tokens into `report/report.html` so it opens over `file://` (flag: `--xharness-report-inline`) |
 | `xharness_timeout_s` | `600` | Seconds one cell's CLI may run before it is killed (flag: `--xharness-timeout SECONDS`). A killed run is captured and priced: it **fails** if its session was still active in the 5 minutes before the limit (it ran out of time), and **errors** if it had been silent longer (it stalled) (ADR 0064) |
 | `xharness_keep_workspaces` | `false` | Leave each finished cell's build workspace in place for inspection instead of removing it once its evidence is captured and graded (flag: `--xharness-keep-workspaces`, ADR 0062) |
-| `xharness_prices` | (none) | Price rows that add to or override the bundled price records: `<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..] [cache_write_12h=..] [long_context_above=<prompt tokens> long_input=.. long_output=.. [long_cache_read=..] [long_cache_write=..] [long_cache_write_1h=..] [long_cache_write_12h=..]] [from=YYYY-MM-DD] [to=YYYY-MM-DD]` (ADR 0030, ADR 0050, ADR 0051, ADR 0077) |
+| `xharness_prices` | (none) | Price rows that add to or override the bundled price records: `<harness>/<model>: input=<usd/MTok> output=<usd/MTok> [cache_read=..] [cache_write=..] [cache_write_1h=..] [cache_write_12h=..] [credit=<usd/credit>] [long_context_above=<prompt tokens> long_input=.. long_output=.. [long_cache_read=..] [long_cache_write=..] [long_cache_write_1h=..] [long_cache_write_12h=..]] [from=YYYY-MM-DD] [to=YYYY-MM-DD]` (ADR 0030, ADR 0050, ADR 0051, ADR 0077). A credit-metered harness's row states `credit` instead of, or beside, `input`/`output` (ADR 0078) |
 
 ```toml
 [tool.pytest.ini_options]
@@ -485,8 +485,8 @@ flowchart LR
 
 One cell flows left to right: a case is expanded into cells, each cell gets a fresh
 workspace, the CLI runs, its own log is located and normalised, priced, graded, and
-reported. The hard part is the middle: the two CLIs need different contracts to tie a
-verdict to the right log. [ARCHITECTURE.md](ARCHITECTURE.md) explains both.
+reported. The hard part is the middle: the CLIs need different contracts to tie a
+verdict to the right log. [ARCHITECTURE.md](ARCHITECTURE.md) explains each.
 
 ----
 
@@ -514,7 +514,7 @@ Build, test and release instructions live in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 - [docs/rollout.md](docs/rollout.md): what a rollout leaves you, the `CaseOutput` a grader is handed, every `RunResult` field it can assert on, the bundled `check_*` verifiers, and the goldens convention
 - [docs/token-accounting.md](docs/token-accounting.md): how `accumulative_billed_tokens` (billed across turns) and `peak_context_tokens` (the largest prompt) are derived from what each provider reports, with a worked session
-- [ARCHITECTURE.md](ARCHITECTURE.md): why the two CLIs need different capture
+- [ARCHITECTURE.md](ARCHITECTURE.md): why the CLIs need different capture
   contracts, how pricing works, and the vocabulary the code uses.
 - [AGENTS.md](AGENTS.md): operating instructions and hard boundaries for agents.
 - [docs/adrs/index.md](docs/adrs/index.md): the decision index, generated from the records (ADR 0047).

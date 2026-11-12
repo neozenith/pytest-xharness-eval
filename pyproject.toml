@@ -94,6 +94,7 @@ unfixable = []
 # delete this rule if the registry has been abandoned, rather than leaving it to mislead.
 "pytest_xharness_eval.harness.claude".msg = "import pytest_xharness_eval.harness and use harness.get(name); ADR 0034"
 "pytest_xharness_eval.harness.codex".msg = "import pytest_xharness_eval.harness and use harness.get(name); ADR 0034"
+"pytest_xharness_eval.harness.kiro".msg = "import pytest_xharness_eval.harness and use harness.get(name); ADR 0034"
 # Architecture fitness function for ADR 0039: the layers only depend downward, and these
 # three are the ones with something beneath them to invert. The listed layer may be named
 # only by the layers above it, which are named in per-file-ignores below and nowhere else,

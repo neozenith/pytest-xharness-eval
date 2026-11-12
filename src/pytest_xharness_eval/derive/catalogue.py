@@ -105,7 +105,7 @@ def undecided(priced: Iterable[tuple[str, str]], path: Path | None = None) -> li
 
 
 def feeds(path: Path | None = None) -> tuple[Feed, ...]:
-    """Each catalogued harness's place in LiteLLM's feed, in file order."""
+    """Each catalogued harness's place in LiteLLM's feed, in file order; a harness with none is left out (ADR 0078)."""
     path = path or MODELS_FILE
     return tuple(
         Feed(
@@ -114,4 +114,5 @@ def feeds(path: Path | None = None) -> tuple[Feed, ...]:
             one_hour_is_five_minute=bool(table.get("one_hour_cache_write_is_five_minute", False)),
         )
         for harness, table in _read(path).items()
+        if "feed_provider" in table
     )
